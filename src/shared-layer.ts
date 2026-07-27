@@ -123,9 +123,13 @@ export function promoteToShared(tenantDir: string, sharedDir: string): {
         continue;
       }
 
-      fs.cpSync(srcPath, dstPath, { recursive: true });
-      fs.rmSync(srcPath, { recursive: true, force: true });
-      moved.push(`${dir}/${entry.name}`);
+      try {
+        fs.cpSync(srcPath, dstPath, { recursive: true });
+        fs.rmSync(srcPath, { recursive: true, force: true });
+        moved.push(`${dir}/${entry.name}`);
+      } catch (e: any) {
+        kept.push(`${dir}/${entry.name} (复制失败: ${e.message})`);
+      }
     }
   }
 
