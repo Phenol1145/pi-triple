@@ -51,12 +51,32 @@ export interface LaunchOptions {
   extraArgs?: string[];
 }
 
-export async function launchPi(options: LaunchOptions): Promise<number> {
-  const logger = createLogger(process.env.LOG_LEVEL ?? "warn", 2);
-  const platform = detectPlatform();
+export interface PiBuildResult {
+  cmd: string;
+  args: string[];
+  env: Record<string, string>;
+  cwd: string;
+}
 
-  // --- Workspace isolation ---
+/**
+ * 构建 pi 启动参数（不执行），供 fg/bg 共用。
+ * 需要 provider/model 已解析，剩下的工作区/会话目录/共享链接在此处理。
+ */
+export async function buildPiLaunch(tenantId: string, options: {
+  project?: string;
+  provider?: string;
+  model?: string;
+  thinking?: string;
+  tools?: string;
+  excludeTools?: string;
+  continueSession?: boolean;
+  resumeSession?: string;
+  extraArgs?: string[];
+}): Promise<PiBuildResult> {
+  const platform = detectPlatform();
   const dataDir = abs(process.env.DATA_DIR ?? "./.pi-platform-data");
+
+  // workspace isolation
   const workspaceMgr = new WorkspaceManager(
     platform,
     path.join(dataDir, "workspaces"),
@@ -64,13 +84,57 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
     path.join(dataDir, "tenants"),
   );
   const project = options.project ?? "default";
-  const cwd = await workspaceMgr.ensureWorkspace(options.tenantId, project);
+  const cwd = await workspaceMgr.ensureWorkspace(tenantId, project);
+
+  // build pi args
+  const args: string[] = [];
+
+  if (options.provider) args.push("--provider", options.provider);
+  if (options.model) args.push("--model", options.model);
+  if (options.thinking) args.push("--thinking", options.thinking);
+  if (options.tools) args.push("--tools", options.tools);
+  if (options.excludeTools) args.push("--exclude-tools", options.excludeTools);
+
+  const sessionDir = path.join(dataDir, "sessions", tenantId);
+  fs.mkdirSync(sessionDir, { recursive: true });
+  args.push("--session-dir", sessionDir);
+
+  if (options.continueSession) args.push("--continue");
+  if (options.resumeSession) args.push("--resume", options.resumeSession);
+
+  // tenant system prompt
+  const tenantPromptPath = path.join(dataDir, "tenants", tenantId, "PROMPT.md");
+  if (fs.existsSync(tenantPromptPath)) {
+    args.push("--append-system-prompt", tenantPromptPath);
+  }
+
+  if (options.extraArgs) args.push(...options.extraArgs);
+
+  // ensure shared layer links
+  const piConfigDir = abs(path.join(dataDir, "pi-config", tenantId));
+  const sharedDir = abs(path.join(dataDir, "shared"));
+  ensureTenantLinks(piConfigDir, sharedDir);
+
+  return {
+    cmd: process.env.PI_BIN ?? "pi",
+    args,
+    env: {
+      ...process.env,
+      PI_CODING_AGENT_DIR: piConfigDir,
+    },
+    cwd,
+  };
+}
+
+export async function launchPi(options: LaunchOptions): Promise<number> {
+  const logger = createLogger(process.env.LOG_LEVEL ?? "warn", 2);
 
   // --- Model routing ---
   let provider = options.provider;
   let model = options.model;
 
   if (!provider || !model) {
+    const platform = detectPlatform();
     const credentials = new EnvCredentialProvider();
     const modelRouter = new ModelRouter(credentials, logger);
     await modelRouter.initialize();
@@ -79,68 +143,40 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
     model = resolved?.id ?? model;
   }
 
-  // --- Tenant system prompt ---
-  const tenantPromptPath = path.join(dataDir, "tenants", options.tenantId, "PROMPT.md");
-  const hasTenantPrompt = fs.existsSync(tenantPromptPath);
+  // --- Build launch params ---
+  const launch = await buildPiLaunch(options.tenantId, {
+    project: options.project,
+    provider,
+    model,
+    thinking: options.thinking,
+    tools: options.tools,
+    excludeTools: options.excludeTools,
+    continueSession: options.continueSession,
+    resumeSession: options.resumeSession,
+    extraArgs: options.extraArgs,
+  });
 
-  // --- Build pi args ---
-  const args: string[] = [];
-
-  if (provider) args.push("--provider", provider);
-  if (model) args.push("--model", model);
-  if (options.thinking) args.push("--thinking", options.thinking);
-  if (options.tools) args.push("--tools", options.tools);
-  if (options.excludeTools) args.push("--exclude-tools", options.excludeTools);
-
-  // Session management
-  const sessionDir = path.join(dataDir, "sessions", options.tenantId);
-  fs.mkdirSync(sessionDir, { recursive: true });
-  args.push("--session-dir", sessionDir);
-
-  if (options.continueSession) args.push("--continue");
-  if (options.resumeSession) args.push("--resume", options.resumeSession);
-
-  // Tenant prompt injection
-  if (hasTenantPrompt) {
-    args.push("--append-system-prompt", tenantPromptPath);
+  const alias = getTenantAlias(options.tenantId);
+  console.log(`\x1b[36mPi-Triple\x1b[0m · tenant: ${alias} (${options.tenantId.slice(0, 8)}…) · project: ${options.project ?? "default"}`);
+  if (provider && model) {
+    console.log(`Model: ${provider}/${model}`);
   }
-
-  // Extra passthrough args
-  if (options.extraArgs) args.push(...options.extraArgs);
-
-  // --- Launch pi ---
-  const piBin = process.env.PI_BIN ?? "pi";
+  console.log(`Workspace: ${launch.cwd}`);
+  console.log("");
 
   logger.info({
     event: "launch_pi",
     tenantId: options.tenantId,
-    project,
-    cwd,
+    project: launch.cwd,
     provider,
     model,
-    args,
+    args: launch.args,
   });
 
-  const alias = getTenantAlias(options.tenantId);
-  console.log(`\x1b[36mPi-Triple\x1b[0m · tenant: ${alias} (${options.tenantId.slice(0, 8)}…) · project: ${project}`);
-  if (provider && model) {
-    console.log(`Model: ${provider}/${model}`);
-  }
-  console.log(`Workspace: ${cwd}`);
-  console.log("");
-
-  // 确保共享层 symlink 完整（首次启动或租户创建后自动链接）
-  const sharedDir = abs(path.join(dataDir, "shared"));
-  ensureTenantLinks(abs(path.join(dataDir, "pi-config", options.tenantId)), sharedDir);
-
-  const child = spawn(piBin, args, {
-    cwd,
-    stdio: "inherit",  // 直接使用终端，pi 的 TUI 完整渲染
-    env: {
-      ...process.env,
-      // 隔离 pi 配置目录（per-tenant）
-      PI_CODING_AGENT_DIR: abs(path.join(dataDir, "pi-config", options.tenantId)),
-    },
+  const child = spawn(launch.cmd, launch.args, {
+    cwd: launch.cwd,
+    stdio: "inherit",
+    env: launch.env,
   });
 
   return new Promise<number>((resolve) => {

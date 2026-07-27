@@ -16,7 +16,7 @@ import {
   listTenants, createTenant, removeTenant, migrateDirectoryNames,
 } from "./config.js";
 import { runDoctor } from "./doctor.js";
-import { launchPi } from "./launcher.js";
+import { launchPi, buildPiLaunch } from "./launcher.js";
 import { migrate } from "./migrate.js";
 import { initSharedLayer, linkTenantToShared, sharedStatus, promoteToShared, installBundledExtensions } from "./shared-layer.js";
 
@@ -102,12 +102,20 @@ function parseArgs(args: string[]): { command: string; subcommand?: string; flag
 /** 解析用户输入的 tenant flag（alias 或 UUID）→ 返回 UUID 或 null + 打印错误 */
 function resolveOrFail(input: string | undefined, config: PiTripleConfig): string | null {
   if (!input) return getDefaultTenantId(config);
-  const id = resolveTenantId(input, config);
-  if (!id) {
+  const result = resolveTenantId(input, config);
+  if (result.ok) return result.id;
+  if (result.reason === "ambiguous") {
+    console.log(`  \x1b[31m❌ "${input}" 匹配多个租户:\x1b[0m`);
+    for (const c of result.candidates) {
+      const alias = getTenantAlias(c, config);
+      console.log(`      ${alias} (${c})`);
+    }
+    console.log("  请使用更长的 UUID 前缀或别名");
+  } else {
     console.log(`  \x1b[31m❌ 未知租户: "${input}"\x1b[0m`);
-    console.log("  运行 \x1b[36mpit tenant ls\x1b[0m 查看可用租户");
   }
-  return id;
+  console.log("  运行 \x1b[36mpit tenant ls\x1b[0m 查看可用租户\n");
+  return null;
 }
 
 // ─── Commands ────────────────────────────────────────────────
@@ -203,7 +211,7 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
   }
 
   const tenantId = resolveOrFail(flags.tenant, config);
-  if (!tenantId) return;
+  if (!tenantId) { process.exit(1); }
   const tenantConfig = config.tenants[tenantId] ?? {};
 
   await runDoctor("quick");
@@ -276,20 +284,21 @@ async function cmdTenantNew(name?: string, _flags?: Record<string, string>): Pro
     });
   }
 
-  name = name.replace(/[^a-zA-Z0-9_-]/g, "-");
-
-  // 检查别名是否已存在
-  for (const t of listTenants(config)) {
-    if (t.alias === name) {
-      console.log(`  ⚠️  别名 "${name}" 已被租户 ${t.id.slice(0, 8)}… 使用`);
-      return;
+  // createTenant 自动消毒 + 强制唯一检查
+  let id: string;
+  try {
+    id = createTenant(name, {}, config);
+  } catch (err: any) {
+    if (err.message?.startsWith("别名")) {
+      console.log(`  \x1b[31m❌ ${err.message}\x1b[0m`);
+      process.exit(1);
     }
+    throw err;
   }
 
-  const id = createTenant(name, {}, config);
   const tenantDir = path.join(dataDir, "pi-config", id);
 
-  console.log(`  创建租户 "${name}" (${id.slice(0, 8)}…)…\n`);
+  console.log(`  创建租户 "${getTenantAlias(id, config)}" (${id.slice(0, 8)}…)…\n`);
   await migrate({ tenantId: id });
 
   // 自动链接共享层
@@ -300,7 +309,7 @@ async function cmdTenantNew(name?: string, _flags?: Record<string, string>): Pro
   }
 
   console.log(`  ✅ 租户已创建`);
-  console.log(`  启动: pit start --tenant ${name}`);
+  console.log(`  启动: pit start --tenant ${getTenantAlias(id, config)}`);
   console.log("");
 }
 
@@ -310,23 +319,52 @@ function cmdTenantRm(name: string): void {
 
   if (!name) {
     console.log("  用法: pit tenant rm <alias|uuid>");
-    return;
+    process.exit(1);
   }
 
-  const id = resolveTenantId(name, config);
-  if (!id) {
-    console.log(`  ❌ 租户 "${name}" 不存在`);
-    return;
+  const result = resolveTenantId(name, config);
+  if (!result.ok) {
+    if (result.reason === "ambiguous") {
+      console.log(`  \x1b[31m❌ "${name}" 匹配多个租户\x1b[0m`);
+    } else {
+      console.log(`  \x1b[31m❌ 租户 "${name}" 不存在\x1b[0m`);
+    }
+    process.exit(1);
   }
 
+  const id = result.id;
   const alias = getTenantAlias(id, config);
-  const tenantDir = path.join(dataDir, "pi-config", id);
 
-  if (fs.existsSync(tenantDir)) {
-    fs.rmSync(tenantDir, { recursive: true, force: true });
+  // 检查运行中的 tmux 会话
+  const check = spawnSync("tmux", ["has-session", "-t", `pit-${alias}`], { encoding: "utf-8" });
+  if (check.status === 0) {
+    console.log(`  \x1b[33m⚠️  租户 "${alias}" 有运行中的 tmux 会话\x1b[0m`);
+    console.log(`  先执行: pit stop ${alias}`);
+    process.exit(1);
+  }
+
+  // 列出将被删除的目录
+  const dirs = ["pi-config", "sessions", "workspaces", "mailbox"]
+    .map((sub) => path.join(dataDir, sub, id))
+    .filter((d) => fs.existsSync(d));
+
+  if (dirs.length === 0) {
+    removeTenant(id, config);
+    console.log(`  ✅ 租户 "${alias}" (${id.slice(0, 8)}…) 已从配置移除（无数据目录）`);
+    return;
+  }
+
+  console.log(`  将删除租户 "${alias}" (${id.slice(0, 8)}…):\n`);
+  for (const d of dirs) {
+    console.log(`  \x1b[2m  📁 ${path.relative(process.cwd(), d)}\x1b[0m`);
+  }
+  console.log("");
+
+  for (const d of dirs) {
+    fs.rmSync(d, { recursive: true, force: true });
   }
   removeTenant(id, config);
-  console.log(`  ✅ 租户 "${alias}" (${id.slice(0, 8)}…) 已删除`);
+  console.log(`  ✅ 租户 "${alias}" 已删除\n`);
 }
 
 function cmdConfig(subcommand?: string): void {
@@ -348,7 +386,7 @@ function cmdConfig(subcommand?: string): void {
 async function cmdMigrate(flags: Record<string, string>): Promise<void> {
   const config = loadConfig();
   const tenantId = resolveOrFail(flags.tenant, config);
-  if (!tenantId) return;
+  if (!tenantId) { process.exit(1); }
   await migrate({ tenantId, dryRun: flags["dry-run"] === "true" });
 }
 
@@ -362,10 +400,10 @@ function tmuxSessionName(name: string): string {
   return `pit-${name}`;
 }
 
-function cmdStartBg(flags: Record<string, string>, passthrough: string[]): void {
+async function cmdStartBg(flags: Record<string, string>, passthrough: string[]): Promise<void> {
   const config = loadConfig();
   const tenantId = resolveOrFail(flags.tenant, config);
-  if (!tenantId) return;
+  if (!tenantId) { process.exit(1); }
   const alias = getTenantAlias(tenantId, config);
   const name = flags.name ?? `${alias}-${Date.now().toString(36)}`;
   const session = tmuxSessionName(name);
@@ -386,31 +424,43 @@ function cmdStartBg(flags: Record<string, string>, passthrough: string[]): void 
   }
 
   const tenantConfig = config.tenants[tenantId] ?? {};
-  const piArgs: string[] = [];
-  const provider = flags.provider ?? tenantConfig.provider;
-  const model = flags.model ?? tenantConfig.model;
-  if (provider) piArgs.push("--provider", provider);
-  if (model) piArgs.push("--model", model);
-  if (flags.thinking) piArgs.push("--thinking", flags.thinking);
-  if (passthrough.includes("-c")) piArgs.push("--continue");
 
-  const dataDir = resolveDataDir(config);
-  const agentDir = path.join(dataDir, "pi-config", tenantId);
-  const piCmd = `PI_CODING_AGENT_DIR=${agentDir} pi ${piArgs.join(" ")}`;
+  // 复用 launcher 的 buildPiLaunch，避免绕过工作区/会话目录/共享链接
+  const launch = await buildPiLaunch(tenantId, {
+    project: flags.project,
+    provider: flags.provider ?? tenantConfig.provider,
+    model: flags.model ?? tenantConfig.model,
+    thinking: flags.thinking ?? tenantConfig.thinking,
+    tools: tenantConfig.tools,
+    excludeTools: tenantConfig.excludeTools,
+    continueSession: passthrough.includes("-c"),
+    extraArgs: passthrough.filter((a) => a !== "-c" && a !== "--continue"),
+  });
 
-  const result = spawnSync("tmux", [
+  // tmux new-session -d -s pit-{name} -c {cwd} -e KEY=val ... -- pi args...
+  // 使用 -- 分隔符和 -e 传递环境变量，避免 shell 注入
+  const tmuxArgs = [
     "new-session", "-d", "-s", session,
+    "-c", launch.cwd,
     "-x", "200", "-y", "50",
-    piCmd,
-  ], { encoding: "utf-8", env: { ...process.env } });
+  ];
+  for (const [k, v] of Object.entries(launch.env)) {
+    if (k === "PI_CODING_AGENT_DIR" || k === "DATA_DIR" || k === "PI_TENANT") {
+      tmuxArgs.push("-e", `${k}=${v}`);
+    }
+  }
+  tmuxArgs.push("--", launch.cmd, ...launch.args);
+
+  const result = spawnSync("tmux", tmuxArgs, { encoding: "utf-8" });
 
   if (result.status === 0) {
     console.log(`  \x1b[32m✅ 后台会话已启动\x1b[0m`);
-    console.log(`  名称: ${name}  租户: ${alias} (${tenantId.slice(0, 8)}…)`);
+    console.log(`  名称: ${name} · 租户: ${alias} (${tenantId.slice(0, 8)}…) · 工作区: ${launch.cwd}`);
     console.log(`  接入: \x1b[36mpit attach ${name}\x1b[0m`);
     console.log(`  切换: tmux 内 \x1b[2mCtrl+B s\x1b[0m 选择 · \x1b[2mCtrl+B d\x1b[0m 脱离`);
   } else {
     console.log(`  \x1b[31m❌ 启动失败: ${result.stderr}\x1b[0m`);
+    process.exit(1);
   }
 }
 
@@ -423,7 +473,7 @@ function cmdAttach(name: string): void {
   if (check.status !== 0) {
     console.log(`  \x1b[31m❌ 会话 "${name}" 不存在\x1b[0m`);
     console.log("  运行 pit ls 查看可用会话");
-    return;
+    process.exit(1);
   }
 
   const result = spawnSync("tmux", ["attach", "-t", session], {
@@ -491,7 +541,7 @@ async function main() {
       break;
     case "start":
       if (flags.bg === "true") {
-        cmdStartBg(flags, passthrough);
+        await cmdStartBg(flags, passthrough);
       } else {
         await cmdStart(flags, passthrough);
       }

@@ -31,6 +31,7 @@ export interface PiTripleConfig {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ALIAS_RE = /[^a-zA-Z0-9_\-\u4e00-\u9fff]/g;
 
 function defaultConfig(): PiTripleConfig {
   const localId = randomUUID();
@@ -139,28 +140,34 @@ function migrateV1toV2(raw: Record<string, any>): PiTripleConfig {
 
 // ─── 解析 ────────────────────────────────────────────────────
 
+export type TenantResolution =
+  | { ok: true; id: string }
+  | { ok: false; reason: "not_found"; input: string }
+  | { ok: false; reason: "ambiguous"; input: string; candidates: string[] };
+
 /**
  * 将用户输入的别名或 UUID 解析为租户 UUID。
- * 支持前缀匹配 UUID。
+ * 支持前缀匹配 UUID（≥4 字符）。
  */
-export function resolveTenantId(input: string, config?: PiTripleConfig): string | null {
+export function resolveTenantId(input: string, config?: PiTripleConfig): TenantResolution {
   const cfg = config ?? loadConfig();
 
   // 精确 UUID
-  if (cfg.tenants[input]) return input;
+  if (cfg.tenants[input]) return { ok: true, id: input };
 
   // 别名匹配
   for (const [id, tenant] of Object.entries(cfg.tenants)) {
-    if (tenant.alias === input) return id;
+    if (tenant.alias === input) return { ok: true, id };
   }
 
   // UUID 前缀匹配
   if (input.length >= 4) {
     const matches = Object.keys(cfg.tenants).filter((id) => id.startsWith(input));
-    if (matches.length === 1) return matches[0];
+    if (matches.length === 1) return { ok: true, id: matches[0] };
+    if (matches.length > 1) return { ok: false, reason: "ambiguous", input, candidates: matches };
   }
 
-  return null;
+  return { ok: false, reason: "not_found", input };
 }
 
 /** 获取租户别名 */
@@ -186,11 +193,28 @@ export function listTenants(config?: PiTripleConfig): Array<{ id: string; alias:
   }));
 }
 
-/** 创建新租户，返回 UUID */
+/**
+ * 创建新租户，返回 UUID。
+ * 别名强制唯一、消毒（仅保留字母数字/下划线/连字符/中文）。
+ */
 export function createTenant(alias: string, tenantConfig?: Partial<TenantConfig>, config?: PiTripleConfig): string {
   const cfg = config ?? loadConfig();
+
+  // 别名消毒
+  const sanitized = alias.replace(ALIAS_RE, "-");
+  if (sanitized !== alias) {
+    console.log(`  \x1b[33m别名已消毒: "${alias}" → "${sanitized}"\x1b[0m`);
+  }
+
+  // 强制唯一
+  for (const [id, tenant] of Object.entries(cfg.tenants)) {
+    if (tenant.alias === sanitized) {
+      throw new Error(`别名 "${sanitized}" 已被租户 ${id.slice(0, 8)}… 使用`);
+    }
+  }
+
   const id = randomUUID();
-  cfg.tenants[id] = { alias, ...tenantConfig };
+  cfg.tenants[id] = { alias: sanitized, ...tenantConfig };
   saveConfig(cfg);
   return id;
 }

@@ -72,9 +72,16 @@ async function main() {
   // 解析租户
   let tenantId: string;
   if (tenantInput) {
-    const resolved = resolveTenantId(tenantInput, config);
-    if (!resolved) { console.error(`\x1b[31m未知租户: ${tenantInput}\x1b[0m`); process.exit(1); }
-    tenantId = resolved;
+    const result = resolveTenantId(tenantInput, config);
+    if (!result.ok) {
+      if (result.reason === "ambiguous") {
+        console.error(`\x1b[31m"${tenantInput}" 匹配多个租户\x1b[0m`);
+      } else {
+        console.error(`\x1b[31m未知租户: ${tenantInput}\x1b[0m`);
+      }
+      process.exit(1);
+    }
+    tenantId = result.id;
   } else {
     tenantId = getDefaultTenantId(config);
   }
