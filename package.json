@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "cli": "tsx src/cli.ts",
+    "doctor": "tsx src/doctor.ts",
     "tui": "tsx src/cli-pi.ts",
     "tui:legacy": "tsx src/tui/index.tsx",
     "lint": "tsc --noEmit"

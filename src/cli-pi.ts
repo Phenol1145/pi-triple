@@ -12,6 +12,7 @@
  */
 
 import { launchPi } from "./launcher.js";
+import { runDoctor } from "./doctor.js";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -64,6 +65,12 @@ async function main() {
         extraArgs.push(args[i]);
         break;
     }
+  }
+
+  // 启动前快速健康检查
+  const healthy = await runDoctor("quick");
+  if (!healthy) {
+    console.log("  \x1b[33m提示: 运行 npm run doctor 进行完整检查和修复\x1b[0m\n");
   }
 
   const code = await launchPi({
