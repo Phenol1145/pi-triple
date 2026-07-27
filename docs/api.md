@@ -131,6 +131,8 @@ curl -s http://localhost:3000/api/v1/sessions \
 ]
 ```
 
+> 注：`model` 字段来自 session 创建时的 `ModelRouter.resolve()` 结果。如果创建时指定的模型不可用且 failover 失败，`model` 可能显示 `"unknown"`。
+
 ### `GET /api/v1/sessions/:id`
 
 获取单个 Session 详情。
@@ -309,6 +311,20 @@ GET /api/v1/self/version
 
 连接：`ws://localhost:3000/ws`
 
+**认证**：WebSocket 连接也需要 Bearer token。在连接 URL 中传递：
+
+```
+ws://localhost:3000/ws?token=my-token
+```
+
+或在连接请求头中：
+
+```
+Authorization: Bearer my-token
+```
+
+> 注：当前实现通过 Fastify auth hook 验证 token，自动从 Redis `auth:token:{token}` 中提取 `tenantId`。未经认证的 WebSocket 连接将被拒绝。
+
 ### 发送消息
 
 ```json
@@ -328,13 +344,32 @@ GET /api/v1/self/version
 
 ## 错误格式
 
-所有 HTTP 错误响应统一格式：
+各端点返回的错误格式略有不同，常见模式：
 
+**创建 session 限额错误**（429）：
 ```json
-{
-  "error": "错误描述",
-  "statusCode": 401
-}
+{ "error": "Tenant limit (5) reached" }
+```
+
+**认证错误**（401）：
+```json
+{ "error": "Missing authorization" }
+```
+
+**资源不存在**（404）：
+```json
+{ "error": "Not found" }
+```
+
+**abort 错误**：
+- 403 Forbidden：`{ "error": "Forbidden: tenant mismatch" }`（跨租户访问）
+- 404 Not Found：`{ "error": "Session not found: ..." }`
+- 500：其他内部错误
+
+**prompt 错误**（SSE 流内下发）：
+```
+event: error
+data: {"error":"Session is busy"}
 ```
 
 常见状态码：
@@ -344,8 +379,8 @@ GET /api/v1/self/version
 | 200 | 成功 |
 | 201 | 创建成功 |
 | 401 | 认证失败 |
+| 403 | 禁止访问（跨租户） |
 | 404 | 资源不存在 |
-| 409 | Session busy（正在处理中） |
 | 429 | 超出限额（session 数达上限） |
 | 500 | 内部错误 |
 

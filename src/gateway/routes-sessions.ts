@@ -36,9 +36,15 @@ export function registerSessionRoutes(app: FastifyInstance, engine: AgentEngine)
     reply.raw.end();
   });
 
-  app.post("/api/v1/sessions/:id/abort", async (req) => {
-    await engine.abort((req.params as any).id, req.auth.tenantId);
-    return { ok: true };
+  app.post("/api/v1/sessions/:id/abort", async (req, reply) => {
+    try {
+      await engine.abort((req.params as any).id, req.auth.tenantId);
+      return { ok: true };
+    } catch (err: any) {
+      if (String(err).includes("Forbidden")) return reply.status(403).send({ error: String(err) });
+      if (String(err).includes("not found")) return reply.status(404).send({ error: String(err) });
+      return reply.status(500).send({ error: String(err) });
+    }
   });
 
   app.get("/api/v1/sessions/:id", async (req, reply) => {

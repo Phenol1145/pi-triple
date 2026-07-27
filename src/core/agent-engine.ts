@@ -57,6 +57,7 @@ export class AgentEngine {
       lastAccess: now,
       lastCheckpointSeq: 0,
       versionSnapshot: initialSnapshot,
+      model: model?.id ?? "unknown",
     };
 
     this.pool.add(poolSession);
@@ -221,7 +222,7 @@ export class AgentEngine {
       tenantId: s.tenantId,
       project: s.project,
       state: s.state,
-      model: "unknown",
+      model: s.model ?? "unknown",
       createdAt: new Date(s.lastAccess).toISOString(),
       lastAccess: new Date(s.lastAccess).toISOString(),
     }));

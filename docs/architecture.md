@@ -90,9 +90,9 @@ Client → Bearer token → auth hook → Redis GET auth:token:{token}
 async initialize()
   → ModelRuntime.create()（pi SDK）
   → 加载 api key（env var 优先，其次 ~/.pi/agent/auth.json）
-  → 调用 getAvailable() 获取 303 个可用模型
+  → 调用 getAvailable() 获取所有可用模型
   → 自动选择第一个可用模型作为默认
-  → 可用 PI_PLATFORM_PROVIDER / PI_PLATFORM_MODEL env var 覆盖
+  → 可用 PI_PLATFORM_PROVIDER / PI_PLATFORM_MODEL env var 覆盖（需同时设置）
 
 resolve(provider?, model?)
   → 优先使用指定 provider/model
@@ -175,10 +175,11 @@ ensureWorkspace(tenantId, project)
 使用 Redis 的 **append-only entry + snapshot** 模型：
 
 ```
-SessionMeta       → Redis SET（字符串 JSON）
-SessionEntry      → 每个 entry 独立 key: session:entry:{t}:{id}:{seq}
-Snapshot          → 定期写入: session:snapshot:{t}:{id}
-VersionSnapshot   → 每个 turn: session:versions:{t}:{id}
+SessionMeta       → session:{tenant}:{sessionId}:meta（字符串 JSON）
+SessionEntry      → session:{tenant}:{sessionId}:entry:{seq}（独立 key）
+Snapshot          → session:{tenant}:{sessionId}:snapshot:{seq}（定期写入）
+VersionSnapshot   → session:{tenant}:{sessionId}:vsnapshot:{seq}（每 turn）
+SessionIndex      → session-index:{tenant}（ZSET，member 为 {"sessionId","project"}）
 ```
 
 回放时：取最新 snapshot + 其 seq 之后的所有 entry。
@@ -218,8 +219,7 @@ interface PlatformAdapter {
 
 4. pi SDK 内部
    ├── 读取 cwd 目录 → system prompt
-   ├── ModelRouter.resolve() → LLM provider
-   ├── 流式请求 LLM
+   ├── 流式请求 LLM（model 已在 createSession 时通过 ModelRouter.resolve() 选定）
    └── 触发工具调用 → 执行 → subscribe 推送事件
 
 5. AgentEngine 处理事件

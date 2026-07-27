@@ -12,6 +12,7 @@ export interface PoolSession {
   lastAccess: number;
   lastCheckpointSeq: number;
   versionSnapshot: VersionSnapshot | null;
+  model: string;
 }
 
 export interface SessionPoolConfig {

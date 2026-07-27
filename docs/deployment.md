@@ -75,14 +75,23 @@ docker run -d \
 | `REDIS_URL` | `redis://localhost:6379` | Redis 连接 URL |
 | `DATA_DIR` | `./.pi-platform-data`（本地）/ `/data`（Docker） | 数据目录（workspaces/platform/tenants 的父目录） |
 | `LOG_LEVEL` | `info` | pino 日志级别：`trace` / `debug` / `info` / `warn` / `error` |
-| `PI_PLATFORM_PROVIDER` | 自动检测 | 模型提供商覆盖（如 `deepseek`） |
-| `PI_PLATFORM_MODEL` | 自动检测 | 模型 ID 覆盖（如 `deepseek-v4-flash`） |
-| `ANTHROPIC_API_KEY` | - | Anthropic API key |
-| `OPENAI_API_KEY` | - | OpenAI API key |
-| `DEEPSEEK_API_KEY` | - | DeepSeek API key |
-| `GOOGLE_API_KEY` | - | Google Gemini API key |
+| `PI_PLATFORM_PROVIDER` | 自动检测 | 模型提供商覆盖（如 `deepseek`）。需与 `PI_PLATFORM_MODEL` 同时设置 |
+| `PI_PLATFORM_MODEL` | 自动检测 | 模型 ID 覆盖（如 `deepseek-v4-flash`）。需与 `PI_PLATFORM_PROVIDER` 同时设置 |
+| `PI_ANTHROPIC_API_KEY` | - | Anthropic API key（平台层，pi SDK 默认读取） |
+| `PI_OPENAI_API_KEY` | - | OpenAI API key（平台层） |
+| `PI_GOOGLE_API_KEY` | - | Google Gemini API key（平台层，pi SDK 也可用 `GEMINI_API_KEY`） |
+| `PI_OPENROUTER_API_KEY` | - | OpenRouter API key（平台层） |
+| `ANTHROPIC_API_KEY` | - | Anthropic API key（SDK 层直接读取） |
+| `OPENAI_API_KEY` | - | OpenAI API key（SDK 层直接读取） |
+| `DEEPSEEK_API_KEY` | - | DeepSeek API key（SDK 层直接读取） |
+| `GEMINI_API_KEY` | - | Google Gemini API key（SDK 层直接读取） |
 
-**说明**：API key 优先从环境变量读取，其次从 pi SDK 的 `~/.pi/agent/auth.json` 读取。不指定 `PI_PLATFORM_PROVIDER` / `PI_PLATFORM_MODEL` 时，平台自动选择第一个可用模型。
+**说明**：
+- API key 优先从环境变量读取，其次从 pi SDK 的 `~/.pi/agent/auth.json` 读取
+- `PI_*` 前缀的变量是平台层凭证（通过 `EnvCredentialProvider.getApiKey("platform", provider)` 读取）
+- SDK 层支持的变量（如 `ANTHROPIC_API_KEY`、`OPENAI_API_KEY`）会被 pi SDK 的 `ModelRuntime.create()` 自动读取
+- `PI_PLATFORM_PROVIDER` 和 `PI_PLATFORM_MODEL` 必须同时设置，单独设置不会生效
+- 不指定 provider/model 时，平台自动选择第一个可用模型
 
 ---
 
@@ -114,15 +123,21 @@ redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
 ### Redis Key 结构
 
 ```
-auth:token:{token}              → {"tenantId":"...","role":"..."}
-session:meta:{tenant}:{id}       → SessionMeta JSON
-session:entry:{tenant}:{id}:{seq} → SessionEntry JSON
-session:snapshot:{tenant}:{id}   → Snapshot JSON
-session:versions:{tenant}:{id}   → VersionSnapshotRecord JSON
-settings:{tenant}:{project}      → Settings JSON
-workflow:lock:{wfId}             → Fencing token
-workflow:intent:queue            → BullMQ queue
+auth:token:{token}                     → {"tenantId":"...","role":"..."}
+session:{tenant}:{sessionId}:meta       → SessionMeta JSON
+session:{tenant}:{sessionId}:entry:{seq} → SessionEntry JSON
+session:{tenant}:{sessionId}:snapshot:{seq} → Snapshot JSON
+session:{tenant}:{sessionId}:vsnapshot:{seq} → VersionSnapshotRecord JSON
+session-index:{tenant}                  → ZSET (按时间排序的 session 索引)
+settings:{tenant}:{project}             → Settings JSON
+workflow:lock:{wfId}                    → Fencing token
+workflow:intent:queue                   → BullMQ queue
 ```
+
+**说明**：
+- `session-index:{tenant}` 使用 Redis Sorted Set，score 为时间戳，member 为 `{"sessionId":"...","project":"..."}`
+- entry 和 snapshot key 包含序号 `{seq}`，支持按序列号精确读取和重放
+- version snapshot 记录每个 turn 的 skills/prompts/tools 文件 hash 快照
 
 ---
 
@@ -163,12 +178,13 @@ GET /metrics
 
 | 指标名 | 类型 | 标签 | 说明 |
 |--------|------|------|------|
-| `pi_platform_sessions_active` | Gauge | - | 当前活跃 session 数 |
-| `pi_platform_prompt_duration_seconds` | Histogram | - | prompt 处理时长 |
-| `pi_platform_tokens_total` | Counter | `tenant`, `type` | token 用量（input/output） |
-| `pi_platform_tool_calls_total` | Counter | `tenant`, `tool` | 工具调用次数 |
-| `pi_platform_self_modify_total` | Counter | `layer` | 自修改次数（L1/L2/L3） |
-| `process_resident_memory_bytes` | Gauge | - | 进程 RSS 内存 |
+| `pi_sessions_active` | Gauge | - | 当前活跃 session 数 |
+| `pi_prompt_duration_seconds` | Histogram | - | prompt 处理时长 |
+| `pi_tokens_total` | Counter | `tenant`, `type` | token 用量（input/output） |
+| `pi_tool_calls_total` | Counter | `tool`, `tenant` | 工具调用次数 |
+| `pi_workflow_steps_total` | Counter | - | 工作流步骤执行次数 |
+| `pi_self_modify_total` | Counter | `layer` | 自修改次数（L1/L2/L3） |
+| `process_resident_memory_bytes` | Gauge | - | 进程 RSS 内存（来自 prom-client 默认指标） |
 
 ### Prometheus 接入
 

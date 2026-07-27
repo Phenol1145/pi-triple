@@ -37,7 +37,7 @@ export async function createServer(deps: {
         const msg = JSON.parse(raw.toString());
         if (msg.type === "prompt") {
           for await (const event of deps.engine.prompt(msg.sessionId, tenantId, msg.text)) {
-            socket.send(JSON.stringify({ msgType: "event", sessionId: msg.sessionId, event }));
+            socket.send(JSON.stringify({ type: "event", sessionId: msg.sessionId, event }));
           }
           socket.send(JSON.stringify({ type: "done", sessionId: msg.sessionId }));
         } else if (msg.type === "abort") {
