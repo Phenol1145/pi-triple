@@ -1,8 +1,9 @@
 import {
-  createAgentSession,
+  createSession as sdkCreateSession,
   SessionManager,
-  type AgentSession,
-} from "@earendil-works/pi-coding-agent";
+  SDK_EVENTS,
+  type PlatformAgentSession,
+} from "../sdk-adapter/index.js";
 import type { SessionPool, PoolSession } from "./session-pool.js";
 import type { ModelRouter } from "../model-router/router.js";
 import type { WorkspaceManager } from "../workspace/manager.js";
@@ -17,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 export class AgentEngine {
-  private agentSessions = new Map<string, AgentSession>();
+  private agentSessions = new Map<string, PlatformAgentSession>();
 
   constructor(
     private pool: SessionPool,
@@ -37,7 +38,7 @@ export class AgentEngine {
     const cwd = await this.workspaceMgr.ensureWorkspace(opts.tenantId, opts.project);
     const model = this.modelRouter.resolve(opts.provider, opts.model);
 
-    const { session } = await createAgentSession({
+    const { session } = await sdkCreateSession({
       cwd,
       model,
       thinkingLevel: (opts.thinkingLevel as any) ?? "medium",
@@ -119,18 +120,18 @@ export class AgentEngine {
           seq,
           type: event.type,
           data: event as any,
-          terminal: event.type === "agent_end",
+          terminal: event.type === SDK_EVENTS.AGENT_END,
           timestamp: new Date().toISOString(),
         });
 
         // C8: Tool Platform governance — audit + metrics on tool start/end
-        if (event.type === "tool_execution_start") {
+        if (event.type === SDK_EVENTS.TOOL_EXECUTION_START) {
           const toolName = (event as any).toolName ?? "unknown";
           const toolCallId = (event as any).toolCallId ?? "";
           toolStartTimes.set(toolCallId, Date.now());
           this.toolPlatform.recordToolStart(tenantId, toolName, toolCallId);
         }
-        if (event.type === "tool_execution_end") {
+        if (event.type === SDK_EVENTS.TOOL_EXECUTION_END) {
           const toolName = (event as any).toolName ?? "unknown";
           const toolCallId = (event as any).toolCallId ?? "";
           const isError = (event as any).isError ?? false;
@@ -141,7 +142,7 @@ export class AgentEngine {
         }
 
         // C6: Extract token usage from AssistantMessage on message_end
-        if (event.type === "message_end") {
+        if (event.type === SDK_EVENTS.MESSAGE_END) {
           const message = (event as any).message;
           if (message?.usage && typeof message.usage.input === "number") {
             this.metrics.tokensTotal.inc({ tenant: tenantId, type: "input" }, message.usage.input);
@@ -149,7 +150,7 @@ export class AgentEngine {
           }
         }
 
-        if (event.type === "agent_end") done();
+        if (event.type === SDK_EVENTS.AGENT_END) done();
       });
 
       let watchdog = setTimeout(() => {

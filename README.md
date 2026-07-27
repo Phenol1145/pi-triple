@@ -1,6 +1,8 @@
-# pi-platform
+# Pi-Triple
 
 基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) 的多租户 Agent 平台。模块化单体架构，设计目标为内部团队使用的编码 Agent 服务，单机部署，后续可拆分迁移至 Dapr/K8s。
+
+> **SDK 兼容性**：所有 pi SDK 调用通过 `src/sdk-adapter/` 适配层隔离。升级 SDK 时只需修改适配层 + 跑测试，业务代码不受影响。当前适配 `@earendil-works/pi-coding-agent@^0.82.1`。
 
 ## 架构
 

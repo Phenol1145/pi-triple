@@ -1,8 +1,8 @@
-import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { ModelRuntime, type ModelRuntimeInstance } from "../sdk-adapter/index.js";
 import type { CredentialProvider } from "../storage/interfaces.js";
 import type { Logger } from "../observability/logger.js";
 
-type ResolvedModel = ReturnType<ModelRuntime["getModel"]>;
+type ResolvedModel = ReturnType<ModelRuntimeInstance["getModel"]>;
 
 export interface ModelRouterConfig {
   defaultProvider: string;
@@ -17,7 +17,7 @@ const DEFAULT_CONFIG: ModelRouterConfig = {
 };
 
 export class ModelRouter {
-  private runtime: ModelRuntime | null = null;
+  private runtime: ModelRuntimeInstance | null = null;
   private detectedProvider: string | null = null;
   private detectedModel: string | null = null;
 
@@ -53,7 +53,7 @@ export class ModelRouter {
     }
   }
 
-  getRuntime(): ModelRuntime {
+  getRuntime(): ModelRuntimeInstance {
     if (!this.runtime) throw new Error("ModelRouter not initialized");
     return this.runtime;
   }

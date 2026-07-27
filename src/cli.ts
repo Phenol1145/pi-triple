@@ -9,6 +9,7 @@
 import { Redis } from "ioredis";
 import * as readline from "node:readline";
 import { detectPlatform } from "./platform/index.js";
+import { SDK_EVENTS } from "./sdk-adapter/index.js";
 import { createLogger } from "./observability/logger.js";
 import { createMetrics } from "./observability/metrics.js";
 import { AuditWriter } from "./observability/audit.js";
@@ -43,9 +44,9 @@ function printAssistantEvent(ev: Record<string, unknown>): void {
   }
   // Silent for bookkeeping events
   if (
-    ev.type === "message_start" ||
-    ev.type === "message_end" ||
-    ev.type === "turn_start"
+    ev.type === SDK_EVENTS.MESSAGE_START ||
+    ev.type === SDK_EVENTS.MESSAGE_END ||
+    ev.type === SDK_EVENTS.TURN_START
   ) {
     return;
   }
@@ -53,9 +54,9 @@ function printAssistantEvent(ev: Record<string, unknown>): void {
 
 function printToolEvent(eventType: string, ev: Record<string, unknown>): void {
   process.stdout.write("\n");
-  if (eventType === "tool_execution_start") {
+  if (eventType === SDK_EVENTS.TOOL_EXECUTION_START) {
     process.stdout.write(`  🔧 \x1b[33m${ev.toolName ?? "?"}\x1b[0m `);
-  } else if (eventType === "tool_execution_end") {
+  } else if (eventType === SDK_EVENTS.TOOL_EXECUTION_END) {
     const ok = !ev.isError;
     process.stdout.write(`\n  ${ok ? "✅" : "❌"} ${ev.toolName ?? "?"} (${ev.durationMs ?? "?"}ms)\n`);
   }
@@ -64,14 +65,14 @@ function printToolEvent(eventType: string, ev: Record<string, unknown>): void {
 function printEvent(event: { seq: number; type: string; data: Record<string, unknown> }): void {
   const ev = event.data;
   switch (event.type) {
-    case "message_update":
+    case SDK_EVENTS.MESSAGE_UPDATE:
       printAssistantEvent(ev.assistantMessageEvent as Record<string, unknown> ?? ev);
       break;
-    case "tool_execution_start":
-    case "tool_execution_end":
+    case SDK_EVENTS.TOOL_EXECUTION_START:
+    case SDK_EVENTS.TOOL_EXECUTION_END:
       printToolEvent(event.type, ev);
       break;
-    case "agent_end":
+    case SDK_EVENTS.AGENT_END:
       process.stdout.write("\n");
       break;
     default:
