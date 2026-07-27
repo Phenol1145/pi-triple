@@ -1,0 +1,7 @@
+{
+  "maxSessions": 20,
+  "maxSessionsPerTenant": 5,
+  "idleTimeoutMs": 300000,
+  "checkpointEnabled": true,
+  "logLevel": "info"
+}
