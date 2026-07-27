@@ -2,23 +2,19 @@
 /**
  * pit — Pi-Triple 统一 CLI
  *
- * 用法：
- *   pit onboard          首次导引（检查 + 安装 + 创建租户 + 迁移）
- *   pit start            启动 pi（带租户隔离）
- *   pit status           健康检查
- *   pit tenant ls        列出租户
- *   pit tenant new       新建租户（交互式）
- *   pit tenant rm <name> 删除租户
- *   pit config           查看/编辑配置
- *   pit doctor           完整健康检查
- *   pit migrate          迁移扩展
- *   pit help             帮助
+ * 租户使用 UUID + alias 模式：
+ *   所有路径用 UUID，用户交互用 alias。
+ *   resolveTenantId() 将别名解析为 UUID。
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { loadConfig, saveConfig, resolveDataDir, type PiTripleConfig } from "./config.js";
+import {
+  loadConfig, saveConfig, resolveDataDir, type PiTripleConfig,
+  resolveTenantId, getTenantAlias, getDefaultTenantId,
+  listTenants, createTenant, removeTenant, migrateDirectoryNames,
+} from "./config.js";
 import { runDoctor } from "./doctor.js";
 import { launchPi } from "./launcher.js";
 import { migrate } from "./migrate.js";
@@ -46,9 +42,9 @@ function printHelp(): void {
   console.log("    stop <name>        停止后台会话");
   console.log("    status             快速健康检查");
   console.log("    doctor             完整健康检查 + 交互修复");
-  console.log("    tenant ls          列出所有租户");
-  console.log("    tenant new [name]  新建租户");
-  console.log("    tenant rm <name>   删除租户");
+  console.log("    tenant ls          列出所有租户（别名 + UUID）");
+  console.log("    tenant new [alias] 新建租户");
+  console.log("    tenant rm <alias>  删除租户");
   console.log("    update             更新 pi 到最新版");
   console.log("    install <source>    安装 pi 扩展 (--shared 装到共享层)");
   console.log("    remove <source>     卸载 pi 扩展");
@@ -60,18 +56,17 @@ function printHelp(): void {
   console.log("    help               显示帮助");
   console.log("");
   console.log("  选项:");
-  console.log("    --tenant <name>    指定租户（默认读 pi-triple.json）");
-  console.log("    --project <name>   指定项目");
-  console.log("    --model <model>    覆盖模型");
+  console.log("    --tenant <alias|uuid>  指定租户（别名或 UUID）");
+  console.log("    --project <name>       指定项目");
+  console.log("    --model <model>        覆盖模型");
   console.log("");
   console.log("  示例:");
   console.log("    pit start                          # 默认租户启动");
-  console.log("    pit start --bg --name coding         # 后台启动");
+  console.log("    pit start --tenant dev             # 指定租户（别名）");
+  console.log("    pit start --bg --name coding       # 后台启动");
   console.log("    pit attach coding                    # 接入后台会话");
-  console.log("    pit ls                               # 列出所有会话");
-  console.log("    pit stop coding                      # 停止后台会话");
-  console.log("    pit start -- --thinking high       # 透传 pi 参数");
   console.log("    pit tenant new my-team             # 新建租户");
+  console.log("    pit tenant ls                        # 列出租户");
   console.log("");
 }
 
@@ -82,12 +77,11 @@ function parseArgs(args: string[]): { command: string; subcommand?: string; flag
   let subcommand = "";
   let i = 0;
 
-  // 第一个非 -- 参数是 command
   while (i < args.length) {
     const arg = args[i];
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (key === "tenant" || key === "project" || key === "model" || key === "provider" || key === "thinking" || key === "name") {
+      if (["tenant","project","model","provider","thinking","name"].includes(key)) {
         flags[key] = args[++i] ?? "";
       } else {
         flags[key] = "true";
@@ -105,6 +99,17 @@ function parseArgs(args: string[]): { command: string; subcommand?: string; flag
   return { command, subcommand, flags, passthrough };
 }
 
+/** 解析用户输入的 tenant flag（alias 或 UUID）→ 返回 UUID 或 null + 打印错误 */
+function resolveOrFail(input: string | undefined, config: PiTripleConfig): string | null {
+  if (!input) return getDefaultTenantId(config);
+  const id = resolveTenantId(input, config);
+  if (!id) {
+    console.log(`  \x1b[31m❌ 未知租户: "${input}"\x1b[0m`);
+    console.log("  运行 \x1b[36mpit tenant ls\x1b[0m 查看可用租户");
+  }
+  return id;
+}
+
 // ─── Commands ────────────────────────────────────────────────
 
 async function cmdOnboard(flags: Record<string, string>): Promise<void> {
@@ -115,34 +120,33 @@ async function cmdOnboard(flags: Record<string, string>): Promise<void> {
   // Step 1: 健康检查
   console.log("  \x1b[1mStep 1/4\x1b[0m — 环境检查");
   console.log("  " + "─".repeat(40));
-  const healthy = await runDoctor("full");
+  await runDoctor("full");
 
   // Step 2: 初始化配置
   console.log("  \x1b[1mStep 2/4\x1b[0m — 初始化配置");
   console.log("  " + "─".repeat(40));
   const configPath = path.resolve("pi-triple.json");
-  if (fs.existsSync(configPath)) {
-    console.log("  ✅ pi-triple.json 已存在");
-  } else {
-    const config = loadConfig();
+  const config = loadConfig();
+  if (!fs.existsSync(configPath)) {
     saveConfig(config);
-    console.log("  ✅ 已创建 pi-triple.json");
   }
+  console.log("  ✅ pi-triple.json 已就绪 (v2, UUID+alias)");
 
   // Step 3: 创建/确认租户
   console.log("");
   console.log("  \x1b[1mStep 3/4\x1b[0m — 租户环境");
   console.log("  " + "─".repeat(40));
-  const config = loadConfig();
   const dataDir = resolveDataDir(config);
-  const tenantName = flags.tenant ?? config.defaultTenant;
-  const tenantDir = path.join(dataDir, "pi-config", tenantName);
+  const defaultId = getDefaultTenantId(config);
+  const tenantDir = path.join(dataDir, "pi-config", defaultId);
 
   if (fs.existsSync(tenantDir) && fs.existsSync(path.join(tenantDir, "settings.json"))) {
-    console.log(`  ✅ 租户 "${tenantName}" 已存在`);
+    const alias = getTenantAlias(defaultId, config);
+    console.log(`  ✅ 租户 "${alias}" (${defaultId.slice(0, 8)}…) 已存在`);
   } else {
-    console.log(`  创建租户 "${tenantName}"…`);
-    await migrate({ tenantId: tenantName });
+    const alias = getTenantAlias(defaultId, config);
+    console.log(`  创建租户 "${alias}" (${defaultId.slice(0, 8)}…)…`);
+    await migrate({ tenantId: defaultId });
   }
 
   // 安装内置扩展到共享层
@@ -154,21 +158,23 @@ async function cmdOnboard(flags: Record<string, string>): Promise<void> {
   }
   linkTenantToShared(tenantDir, sharedDirOnboard);
 
+  // 迁移旧目录名（alias → UUID）
+  const renamed = migrateDirectoryNames(config);
+  if (renamed.length > 0) {
+    console.log(`  📁 目录迁移: ${renamed.join(", ")}`);
+  }
+
   // Step 4: 验证
   console.log("  \x1b[1mStep 4/4\x1b[0m — 验证");
   console.log("  " + "─".repeat(40));
-  const quickOk = await runDoctor("quick");
+  await runDoctor("quick");
 
   console.log("");
-  if (quickOk) {
-    console.log("  \x1b[32m\x1b[1m🎉 Pi-Triple 准备就绪！\x1b[0m");
-    console.log("");
-    console.log(`  启动: pit start`);
-    console.log(`  帮助: pit help`);
-  } else {
-    console.log("  \x1b[33m⚠️  部分检查未通过，请修复后重试\x1b[0m");
-    console.log("  运行: pit doctor");
-  }
+  console.log("  \x1b[32m\x1b[1m🎉 Pi-Triple 准备就绪！\x1b[0m");
+  console.log("");
+  console.log("  启动: pit start");
+  console.log("  租户: pit tenant ls");
+  console.log("  帮助: pit help");
   console.log("");
 }
 
@@ -179,19 +185,16 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
   const hasArgs = flags.tenant || flags.model || flags.name || flags.bg === "true" || passthrough.length > 0;
   if (!hasArgs && process.stdout.isTTY) {
     const { interactiveStart } = await import("./picker.js");
-    const dataDir = resolveDataDir(config);
-    const configDir = path.join(dataDir, "pi-config");
-    const tenants = fs.existsSync(configDir)
-      ? fs.readdirSync(configDir, { withFileTypes: true })
-          .filter((e) => e.isDirectory())
-          .map((e) => ({ id: e.name, alias: e.name, isDefault: e.name === config.defaultTenant }))
-      : [{ id: config.defaultTenant, alias: config.defaultTenant, isDefault: true }];
+    const tenants = listTenants(config).map((t) => ({
+      id: t.id,
+      alias: t.alias,
+      isDefault: t.isDefault,
+    }));
 
     const choice = await interactiveStart({ tenants });
     flags.tenant = choice.tenant;
     if (choice.bg) flags.bg = "true";
     if (choice.name) flags.name = choice.name;
-    if (choice.model) flags.model = choice.model;
 
     if (choice.bg) {
       cmdStartBg(flags, passthrough);
@@ -199,10 +202,10 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
     }
   }
 
-  const tenantId = flags.tenant ?? config.defaultTenant;
+  const tenantId = resolveOrFail(flags.tenant, config);
+  if (!tenantId) return;
   const tenantConfig = config.tenants[tenantId] ?? {};
 
-  // 快速检查
   await runDoctor("quick");
 
   const code = await launchPi({
@@ -232,44 +235,34 @@ async function cmdDoctor(): Promise<void> {
 function cmdTenantList(): void {
   const config = loadConfig();
   const dataDir = resolveDataDir(config);
-  const configDir = path.join(dataDir, "pi-config");
 
   printBanner();
-  console.log("  租户列表:");
-  console.log("");
+  console.log("  租户列表:\n");
 
-  if (!fs.existsSync(configDir)) {
-    console.log("  (无租户，运行 pit onboard 创建)");
-    console.log("");
+  const tenants = listTenants(config);
+  if (tenants.length === 0) {
+    console.log("  (无租户，运行 pit tenant new 创建)\n");
     return;
   }
 
-  const tenants = fs.readdirSync(configDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
+  for (const t of tenants) {
+    const mark = t.isDefault ? "\x1b[36m*\x1b[0m" : " ";
+    const model = t.config.model ?? "(默认)";
 
-  if (tenants.length === 0) {
-    console.log("  (无租户，运行 pit tenant new 创建)");
-  } else {
-    for (const t of tenants) {
-      const isDefault = t === config.defaultTenant;
-      const mark = isDefault ? "\x1b[36m*\x1b[0m" : " ";
-      const tenantCfg = config.tenants[t];
-      const model = tenantCfg?.model ?? "(默认)";
+    const tenantDir = path.join(dataDir, "pi-config", t.id);
+    const extCount = fs.existsSync(path.join(tenantDir, "extensions"))
+      ? fs.readdirSync(path.join(tenantDir, "extensions")).length : 0;
+    const skillCount = fs.existsSync(path.join(tenantDir, "skills"))
+      ? fs.readdirSync(path.join(tenantDir, "skills")).length : 0;
 
-      // 统计扩展/技能数
-      const extDir = path.join(configDir, t, "extensions");
-      const skillDir = path.join(configDir, t, "skills");
-      const extCount = fs.existsSync(extDir) ? fs.readdirSync(extDir).length : 0;
-      const skillCount = fs.existsSync(skillDir) ? fs.readdirSync(skillDir).length : 0;
-
-      console.log(`  ${mark} \x1b[1m${t}\x1b[0m  model: ${model}  ext: ${extCount}  skills: ${skillCount}${isDefault ? "  \x1b[2m(default)\x1b[0m" : ""}`);
-    }
+    console.log(
+      `  ${mark} \x1b[1m${t.alias}\x1b[0m  \x1b[2m(${t.id.slice(0, 8)}…)\x1b[0m  model: ${model}  ext: ${extCount}  skills: ${skillCount}${t.isDefault ? "  \x1b[2m(default)\x1b[0m" : ""}`
+    );
   }
   console.log("");
 }
 
-async function cmdTenantNew(name?: string, flags?: Record<string, string>): Promise<void> {
+async function cmdTenantNew(name?: string, _flags?: Record<string, string>): Promise<void> {
   const config = loadConfig();
   const dataDir = resolveDataDir(config);
 
@@ -279,21 +272,25 @@ async function cmdTenantNew(name?: string, flags?: Record<string, string>): Prom
     const readline = await import("node:readline");
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     name = await new Promise<string>((resolve) => {
-      rl.question("  租户名称: ", (answer) => { rl.close(); resolve(answer.trim() || "my-team"); });
+      rl.question("  租户别名（如 dev, team）: ", (a) => { rl.close(); resolve(a.trim() || "my-team"); });
     });
   }
 
   name = name.replace(/[^a-zA-Z0-9_-]/g, "-");
-  const tenantDir = path.join(dataDir, "pi-config", name);
 
-  if (fs.existsSync(tenantDir)) {
-    console.log(`  ⚠️  租户 "${name}" 已存在`);
-    return;
+  // 检查别名是否已存在
+  for (const t of listTenants(config)) {
+    if (t.alias === name) {
+      console.log(`  ⚠️  别名 "${name}" 已被租户 ${t.id.slice(0, 8)}… 使用`);
+      return;
+    }
   }
 
-  console.log(`  创建租户 "${name}"…`);
-  console.log("");
-  await migrate({ tenantId: name });
+  const id = createTenant(name, {}, config);
+  const tenantDir = path.join(dataDir, "pi-config", id);
+
+  console.log(`  创建租户 "${name}" (${id.slice(0, 8)}…)…\n`);
+  await migrate({ tenantId: id });
 
   // 自动链接共享层
   const sharedDirPath = path.resolve(process.cwd(), config.sharedDir);
@@ -302,10 +299,7 @@ async function cmdTenantNew(name?: string, flags?: Record<string, string>): Prom
     console.log("  ✅ 已链接共享层");
   }
 
-  // 写入 config
-  config.tenants[name] = {};
-  saveConfig(config);
-  console.log(`  ✅ 已添加到 pi-triple.json`);
+  console.log(`  ✅ 租户已创建`);
   console.log(`  启动: pit start --tenant ${name}`);
   console.log("");
 }
@@ -315,48 +309,48 @@ function cmdTenantRm(name: string): void {
   const dataDir = resolveDataDir(config);
 
   if (!name) {
-    console.log("  用法: pit tenant rm <name>");
+    console.log("  用法: pit tenant rm <alias|uuid>");
     return;
   }
 
-  const tenantDir = path.join(dataDir, "pi-config", name);
-  if (!fs.existsSync(tenantDir)) {
+  const id = resolveTenantId(name, config);
+  if (!id) {
     console.log(`  ❌ 租户 "${name}" 不存在`);
     return;
   }
 
-  fs.rmSync(tenantDir, { recursive: true, force: true });
-  delete config.tenants[name];
-  if (config.defaultTenant === name) {
-    config.defaultTenant = "local";
+  const alias = getTenantAlias(id, config);
+  const tenantDir = path.join(dataDir, "pi-config", id);
+
+  if (fs.existsSync(tenantDir)) {
+    fs.rmSync(tenantDir, { recursive: true, force: true });
   }
-  saveConfig(config);
-  console.log(`  ✅ 租户 "${name}" 已删除`);
+  removeTenant(id, config);
+  console.log(`  ✅ 租户 "${alias}" (${id.slice(0, 8)}…) 已删除`);
 }
 
 function cmdConfig(subcommand?: string): void {
   if (subcommand === "init") {
     const config = loadConfig();
     saveConfig(config);
-    console.log("  ✅ pi-triple.json 已创建");
+    console.log("  ✅ pi-triple.json 已创建 (v2, UUID+alias)");
     console.log(JSON.stringify(config, null, 2));
     return;
   }
 
   const config = loadConfig();
   printBanner();
-  console.log("  配置 (pi-triple.json):");
-  console.log("");
+  console.log("  配置 (pi-triple.json):\n");
   console.log(JSON.stringify(config, null, 2).split("\n").map((l) => "  " + l).join("\n"));
   console.log("");
 }
 
 async function cmdMigrate(flags: Record<string, string>): Promise<void> {
   const config = loadConfig();
-  const tenantId = flags.tenant ?? config.defaultTenant;
+  const tenantId = resolveOrFail(flags.tenant, config);
+  if (!tenantId) return;
   await migrate({ tenantId, dryRun: flags["dry-run"] === "true" });
 }
-
 
 // ─── Tmux Session Management ─────────────────────────────────
 
@@ -370,8 +364,10 @@ function tmuxSessionName(name: string): string {
 
 function cmdStartBg(flags: Record<string, string>, passthrough: string[]): void {
   const config = loadConfig();
-  const tenantId = flags.tenant ?? config.defaultTenant;
-  const name = flags.name ?? `${tenantId}-${Date.now().toString(36)}`;
+  const tenantId = resolveOrFail(flags.tenant, config);
+  if (!tenantId) return;
+  const alias = getTenantAlias(tenantId, config);
+  const name = flags.name ?? `${alias}-${Date.now().toString(36)}`;
   const session = tmuxSessionName(name);
 
   if (!hasTmux()) {
@@ -410,7 +406,7 @@ function cmdStartBg(flags: Record<string, string>, passthrough: string[]): void 
 
   if (result.status === 0) {
     console.log(`  \x1b[32m✅ 后台会话已启动\x1b[0m`);
-    console.log(`  名称: ${name}  租户: ${tenantId}`);
+    console.log(`  名称: ${name}  租户: ${alias} (${tenantId.slice(0, 8)}…)`);
     console.log(`  接入: \x1b[36mpit attach ${name}\x1b[0m`);
     console.log(`  切换: tmux 内 \x1b[2mCtrl+B s\x1b[0m 选择 · \x1b[2mCtrl+B d\x1b[0m 脱离`);
   } else {
@@ -531,7 +527,7 @@ async function main() {
       if (curVer === latestVer) {
         console.log("  \x1b[32m✅ 已是最新版\x1b[0m");
       } else {
-        console.log(`  升级中…`);
+        console.log("  升级中…");
         const r = spawnSync("npm", ["install", "-g", `@earendil-works/pi-coding-agent@${latestVer}`], { stdio: "inherit" });
         if (r.status === 0) console.log(`  \x1b[32m✅ 已升级到 v${latestVer}\x1b[0m`);
         else console.log("  \x1b[31m❌ 升级失败\x1b[0m");
@@ -546,18 +542,19 @@ async function main() {
       const sharedDir = path.resolve(process.cwd(), config2.sharedDir);
       const isShared = flags.shared === "true";
 
-      // 确定目标目录
       let agentDir: string;
       if (isShared) {
         initSharedLayer(sharedDir);
         agentDir = sharedDir;
       } else {
-        const tid = flags.tenant ?? config2.defaultTenant;
+        const tid = resolveOrFail(flags.tenant, config2);
+        if (!tid) { process.exit(1); }
         agentDir = path.join(dataDir, "pi-config", tid);
       }
 
       const piArgs = [command, subcommand, ...passthrough].filter((a): a is string => Boolean(a));
-      console.log(`  ${isShared ? "共享层" : "租户"}  ${agentDir}`);
+      const tenantAlias = isShared ? "shared" : getTenantAlias(flags.tenant ?? getDefaultTenantId(config2), config2);
+      console.log(`  ${isShared ? "共享层" : `租户 ${tenantAlias}`}  ${agentDir}`);
       const r = spawnSync("pi", piArgs, {
         stdio: "inherit",
         env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
@@ -571,29 +568,21 @@ async function main() {
       const sharedDir2 = path.resolve(process.cwd(), config2.sharedDir);
 
       if (subcommand === "init") {
-        // 从默认租户提升到共享层
-        const tenantDir = path.join(dataDir2, "pi-config", config2.defaultTenant);
+        const defaultId = getDefaultTenantId(config2);
+        const tenantDir = path.join(dataDir2, "pi-config", defaultId);
         if (!fs.existsSync(tenantDir)) {
-          console.log(`  ❌ 默认租户 "${config2.defaultTenant}" 不存在，先运行 pit onboard`);
+          console.log(`  ❌ 默认租户目录不存在，先运行 pit onboard`);
           break;
         }
         const { moved, kept } = promoteToShared(tenantDir, sharedDir2);
         console.log(`  ✅ 迁移到共享层: ${moved.length} 项`);
         for (const m of moved) console.log(`    📦 ${m}`);
-        if (kept.length > 0) {
-          console.log(`  保留在租户: ${kept.length} 项`);
-          for (const k of kept) console.log(`    ${k}`);
-        }
-        // 重新链接
+        if (kept.length > 0) console.log(`  保留在租户: ${kept.length} 项`);
         linkTenantToShared(tenantDir, sharedDir2);
         console.log("  ✅ 已链接共享层到默认租户");
-        // 安装内置扩展
         const bundled = installBundledExtensions(sharedDir2);
-        if (bundled.length > 0) {
-          console.log(`  ✅ 已安装内置扩展: ${bundled.join(", ")}`);
-        }
+        if (bundled.length > 0) console.log(`  ✅ 已安装内置扩展: ${bundled.join(", ")}`);
       } else {
-        // status
         const st = sharedStatus(sharedDir2);
         printBanner();
         if (!st.exists) {

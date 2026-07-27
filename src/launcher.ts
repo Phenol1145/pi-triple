@@ -26,6 +26,7 @@ import { EnvCredentialProvider } from "./storage/credential-provider.js";
 import { ModelRouter } from "./model-router/router.js";
 import { WorkspaceManager } from "./workspace/manager.js";
 import { ensureTenantLinks } from "./shared-layer.js";
+import { getTenantAlias } from "./config.js";
 
 export interface LaunchOptions {
   /** Tenant ID (from auth token or "local") */
@@ -120,7 +121,8 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
     args,
   });
 
-  console.log(`\x1b[36mPi-Triple\x1b[0m · tenant: ${options.tenantId} · project: ${project}`);
+  const alias = getTenantAlias(options.tenantId);
+  console.log(`\x1b[36mPi-Triple\x1b[0m · tenant: ${alias} (${options.tenantId.slice(0, 8)}…) · project: ${project}`);
   if (provider && model) {
     console.log(`Model: ${provider}/${model}`);
   }

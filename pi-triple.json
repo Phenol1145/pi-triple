@@ -1,10 +1,15 @@
 {
-  "defaultTenant": "local",
+  "version": 2,
+  "defaultTenant": "ee7cae31-2dee-46bf-90b3-0adeaf62116b",
   "dataDir": "./.pi-platform-data",
   "sharedDir": "./.pi-platform-data/shared",
   "redis": "redis://localhost:6379",
   "gateway": {
     "port": 3000
   },
-  "tenants": {}
+  "tenants": {
+    "ee7cae31-2dee-46bf-90b3-0adeaf62116b": {
+      "alias": "local"
+    }
+  }
 }
