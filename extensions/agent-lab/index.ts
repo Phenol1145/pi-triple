@@ -1,0 +1,643 @@
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { SqliteStore } from "./src/store/store.ts";
+import { CatalogService } from "./src/catalog/catalog.ts";
+import { loadConfig, ensureDataDir, dbPath, saveConfig } from "./src/config-io.ts";
+import { registerTelemetry, createSettleDispatch } from "./src/telemetry/register.ts";
+import { registerInterceptor } from "./src/interceptor/register.ts";
+import { registerCommands } from "./src/commands/register.ts";
+import { SqliteLedger } from "./src/arena/ledger.ts";
+import { EndowmentPolicyV1 } from "./src/arena/policies.ts";
+import type { SchedulerRuntimeLike } from "./src/interceptor/scheduler-bridge.ts";
+import { createSchedulerRuntime } from "./src/runtime/create-scheduler-runtime.ts";
+import { ensureWeightedScorerInstance, syncWeightedScorerAgents, ensureArenaInstance, syncArenaAgents } from "./src/schedulers/bootstrap.ts";
+import type { LabCore } from "./src/core/create-core.ts";
+import type { ModelCaller } from "./src/arena/types.ts";
+import { createModelCaller } from "./src/arena/model-caller.ts";
+import { matchEligibility } from "./src/schedulers/arena-definition.ts";
+import type { ArenaSchedulerParameters } from "./src/schedulers/arena-definition.ts";
+import type { SettleOutcome } from "./src/scheduler/contracts.ts";
+import { OptimizerRegistry } from "./src/optimizer/registry.ts";
+import { weightedTunerDefinition } from "./src/optimizers/weighted-tuner.ts";
+import "./src/optimizers/ws-projector.ts";
+import { buildOptimizerFacade } from "./src/optimizer/facade.ts";
+import type { OptimizerFacade } from "./src/commands/register.ts";
+import { buildExperimentFacade } from "./src/experiment/facade.ts";
+import type { ExperimentFacade } from "./src/commands/register.ts";
+import { runP7Migration, runP7DryRun } from "./src/migrate.ts";
+import { createAutoTrigger, type AutoTrigger } from "./src/optimizer/auto-trigger.ts";
+import { createAutoFlow } from "./src/optimizer/auto-flow.ts";
+import { evaluateShadow } from "./src/optimizer/shadow.ts";
+import { evaluateCanary, decideCanaryAction } from "./src/optimizer/canary-eval.ts";
+
+const DIRECT_PREFIXES = ["deepseek", "moonshotai", "z-ai", "qwen"];
+
+export default async function (pi: ExtensionAPI) {
+  ensureDataDir();
+  const cfg = loadConfig();
+  const store = new SqliteStore(dbPath());
+  const catalog = new CatalogService({ directPrefixes: DIRECT_PREFIXES, ttlMs: cfg.catalogTtlMs });
+  await catalog.refresh().catch((e: Error) => console.error("[agent-lab] initial catalog refresh failed:", e?.message ?? e));
+
+  const endowment = new EndowmentPolicyV1(cfg.arena);
+  const ledger = new SqliteLedger(store.raw, endowment);
+
+  let schedulerCore: LabCore | undefined;
+  let optimizerRegistry: OptimizerRegistry | undefined;
+  let autoTrigger: AutoTrigger | undefined;
+  let autoFlow: ReturnType<typeof createAutoFlow> | undefined;
+
+  for (const t of ledger.staleTasks(cfg.arena.market.staleTaskTimeoutMs)) {
+    ledger.recoverStaleTask(t.taskId);
+  }
+
+  // Reconcile frozen residue from pre-P4a era (frozen>0, no freeze row).
+  // Per-agent: return frozen to balance, zero frozen column, compensating credit_tx.
+  const reconciled = ledger.reconcileFrozenResidue();
+  for (const { agent, frozenBefore } of reconciled) {
+    const event = {
+      eventId: `migration-reconciled-${agent}-${Date.now()}`,
+      eventType: "migration.reconciled",
+      schemaVersion: "1.0",
+      timestamp: Date.now(),
+      identity: { traceId: `migration-reconcile-${Date.now()}` },
+      payload: { agent, frozenBefore, frozenAfter: 0, balanceChange: frozenBefore },
+    };
+    try {
+      if (schedulerCore) {
+        schedulerCore.events.append(event);
+      } else {
+        console.error("[agent-lab] migration.reconciled event unavailable (schedulerCore not ready):", JSON.stringify(event));
+      }
+    } catch (e) {
+      console.error("[agent-lab] failed to emit migration.reconciled event:", e);
+    }
+  }
+  // Audit-only migration.ledger-baseline snapshot (no state change).
+  {
+    const creditsCount = (store.raw.prepare("SELECT COUNT(*) AS c FROM credits").get() as { c: number }).c;
+    const tasksCount = (store.raw.prepare("SELECT COUNT(*) AS c FROM market_tasks").get() as { c: number }).c;
+    const baselineEvent = {
+      eventId: `migration-ledger-baseline-${Date.now()}`,
+      eventType: "migration.ledger-baseline",
+      schemaVersion: "1.0",
+      timestamp: Date.now(),
+      identity: { traceId: `migration-baseline-${Date.now()}` },
+      payload: { creditsCount, tasksCount },
+    };
+    try {
+      if (schedulerCore) {
+        schedulerCore.events.append(baselineEvent);
+      } else {
+        console.error("[agent-lab] migration.ledger-baseline event unavailable (schedulerCore not ready):", JSON.stringify(baselineEvent));
+      }
+    } catch (e) {
+      console.error("[agent-lab] failed to emit migration.ledger-baseline event:", e);
+    }
+  }
+
+  // Lazy scheduler runtime factory — select-mode sidecar (no Delegation V2 bus).
+  // Construction failures are caught and the bridge falls through to legacy classic.
+  let schedulerRuntime: SchedulerRuntimeLike | undefined;
+  let runtimeInitAttempted = false;
+  // Lazy arena model caller: populated from interceptor ctx on first tool_call.
+  let arenaModelCaller: ModelCaller | undefined;
+  const schedulerRuntimeFactory = (): SchedulerRuntimeLike | undefined => {
+    if (!runtimeInitAttempted) {
+      runtimeInitAttempted = true;
+      try {
+        const ports = {
+          candidates: () => catalog.candidates(),
+          aggregates: (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a])),
+          pinLookup: (role: string) => store.getPin(role),
+        };
+        const rt = createSchedulerRuntime(store.raw, {});
+        schedulerCore = rt.core;
+        optimizerRegistry = new OptimizerRegistry(rt.core.definitions, rt.core.repository, rt.core.events);
+
+        // ── Startup guard: clean smoke-round residue from prior crash ──
+        {
+          const arenaRecord = schedulerCore.repository.getInstance("default-arena");
+          if (arenaRecord && arenaRecord.currentRoundId.startsWith("smoke-round-")) {
+            const seq0 = store.raw.prepare(
+              "SELECT id FROM lab_optimization_rounds WHERE scheduler_instance_id = ? AND sequence = 0 LIMIT 1"
+            ).get("default-arena") as { id: string } | undefined;
+            if (seq0) {
+              store.raw.prepare(
+                "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
+              ).run(seq0.id, "default-arena");
+            }
+            store.raw.prepare(
+              "DELETE FROM lab_optimization_rounds WHERE scheduler_instance_id = ? AND id LIKE 'smoke-round-%'"
+            ).run("default-arena");
+            console.error("[agent-lab] startup guard: cleaned smoke-round residue for default-arena");
+          }
+        }
+
+        // Sequential bootstrap: weighted-scorer MUST be active before arena
+        // (arena fallbackChain points to weighted-scorer, validated by ControlPlane).
+        // Wrapped in a single void promise with per-step fail-open catches.
+        void (async () => {
+          const wsResult = await ensureWeightedScorerInstance(
+            rt.core,
+            rt.schedulers,
+            ports,
+            { instanceId: cfg.scheduler?.instanceId },
+          ).catch((err) => {
+            console.error("[agent-lab] weighted-scorer bootstrap failed (fail-open):", err);
+            return null;
+          });
+
+          if (wsResult) {
+            // Arena ports: ledger, candidates, lazy modelCaller
+            const arenaCaller: ModelCaller = {
+              complete: async (modelId: string, prompt: string, timeoutMs: number) => {
+                if (!arenaModelCaller) {
+                  throw new Error("Arena model caller not yet initialized — interceptor must fire first");
+                }
+                return arenaModelCaller.complete(modelId, prompt, timeoutMs);
+              },
+            };
+
+            const arenaPorts = {
+              ledger,
+              candidates: () => catalog.candidates(),
+              modelCaller: arenaCaller,
+            };
+
+            // Arena is always bootstrapped (registered/activated, addressable by
+            // explicit instance id). The catch-all routing binding is only added
+            // in market mode — static per boot; switching /lab mode needs restart.
+            await ensureArenaInstance(rt.core, rt.schedulers, arenaPorts, {
+              wsInstanceId: wsResult.instanceId,
+              ...(cfg.mode === "market"
+                ? { routingBindings: [{ id: "arena-default", priority: 10, match: {} }] }
+                : {}),
+            }).catch((err) => {
+              console.error("[agent-lab] arena bootstrap failed (fail-open):", err);
+            });
+
+            // ── Optimizer bootstrap (fail-open) ──────────────────────────
+            try {
+              optimizerRegistry!.registerOptimizer(weightedTunerDefinition);
+              const wsRec = rt.core.repository.getInstance(wsResult.instanceId);
+              if (wsRec) {
+                try {
+                  optimizerRegistry!.createOptimizerInstance(
+                    { kind: "optimizer", id: "weighted-tuner", version: "1.0.0" },
+                    {
+                      instanceId: "default-weighted-tuner",
+                      config: {},
+                      targetSchedulers: [wsResult.instanceId],
+                    },
+                  );
+                } catch (err: unknown) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  if (!msg.includes("UNIQUE constraint") && !msg.includes("already exists")) {
+                    console.error("[agent-lab] default-weighted-tuner bootstrap failed (fail-open):", err);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("[agent-lab] optimizer bootstrap failed (fail-open):", err);
+            }
+
+            // ── Auto-trigger + auto-flow bootstrap (fail-open) ──────────
+            try {
+              const optimizerCfg = cfg.optimizer;
+              if (optimizerCfg?.autoTrigger?.enabled || optimizerCfg?.shadow?.enabled ||
+                  (optimizerCfg?.canaryPercent ?? 0) > 0 || optimizerCfg?.autoPromote?.enabled ||
+                  optimizerCfg?.autoRollback?.enabled) {
+                const wsInstanceId = wsResult.instanceId;
+
+                // Auto-trigger: throttled fire-and-forget on run recorded
+                autoTrigger = createAutoTrigger({
+                  config: optimizerCfg.autoTrigger,
+                  run: (id: string) => optimizerFacade!.run(id).catch(() => {}),
+                });
+
+                // Auto-flow: orchestration tick
+                autoFlow = createAutoFlow({
+                  repository: rt.core.repository,
+                  events: rt.core.events,
+                  controlPlane: rt.core.controlPlane,
+                  config: optimizerCfg,
+                  evaluateShadow: (proposalId: string) => evaluateShadow({
+                    repository: rt.core.repository,
+                    events: rt.core.events,
+                    db: store.raw,
+                    getCatalogSnapshot: () => catalog.candidates(),
+                    optimizerInstanceId: "default-weighted-tuner",
+                    schedulerInstanceId: wsInstanceId,
+                  }, proposalId),
+                  evaluateCanary: (sid: string) => evaluateCanary({
+                    repository: rt.core.repository,
+                    events: rt.core.events,
+                    db: store.raw,
+                  }, sid),
+                  decideCanaryAction,
+                });
+              }
+            } catch (err) {
+              console.error("[agent-lab] auto-trigger/auto-flow bootstrap failed (fail-open):", err);
+            }
+          }
+        })();
+
+        schedulerRuntime = rt.schedulerRunner;
+      } catch (err) {
+        // fail-open: runtime construction errors leave bridge unavailable
+        console.error("[agent-lab] scheduler runtime init failed (fail-open):", err);
+      }
+    }
+    return schedulerRuntime;
+  };
+
+  const settleDispatch = createSettleDispatch(() => schedulerRuntime);
+  // Lazy auto-trigger hook: captures autoTrigger ref (set during bootstrap).
+  // Fail-open by design: never throws into telemetry handler (L7/I7).
+  registerTelemetry(pi, store, cfg, settleDispatch, () => {
+    try { autoTrigger?.maybeTrigger("default-weighted-tuner"); } catch { /* swallow */ }
+  });
+  // Populate arena model caller from interceptor ctx (needed by arena scheduler bidding).
+  // This runs before the main interceptor so arenaModelCaller is available on first dispatch.
+  pi.on("tool_call", async (_event, ctx) => {
+    if (!arenaModelCaller) {
+      try {
+        arenaModelCaller = createModelCaller(ctx);
+      } catch {
+        // fail-open: arena bidding will error on first use
+      }
+    }
+  });
+
+  registerInterceptor(pi, cfg, schedulerRuntimeFactory);
+
+  // ── Arena smoke: real-bidding verification ───────────────────────
+  const arenaSmoke = async (role: string, cmdCtx: ExtensionContext): Promise<string> => {
+    const evidence: string[] = [];
+    const errors: string[] = [];
+    const traceId = `smoke-${Date.now()}`;
+    const settlementRef = `${traceId}-settlement`;
+
+    function stage(name: string, ...items: string[]) {
+      evidence.push(`\n── ${name} ──`);
+      for (const item of items) evidence.push(item);
+    }
+
+    function failStage(name: string, err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${name}: ${msg}`);
+      evidence.push(`\n── ${name} (FAILED: ${msg}) ──`);
+    }
+
+    const header = [
+      `Arena Smoke: ${role}`,
+      `traceId: ${traceId}`,
+      `注: 真实执行与遥测结算不在本命令范围内`,
+    ];
+
+    // ── Precondition 1: scheduler enabled ──────────────────────────
+    if (!cfg.scheduler?.enabled) {
+      return "预检失败: Scheduler not enabled. Enable with /lab config scheduler.enabled true";
+    }
+
+    // ── Precondition 2: arena instance active ──────────────────────
+    if (!schedulerCore) {
+      return "预检失败: Scheduler core not initialized. Check /lab scheduler status";
+    }
+    const arena = schedulerCore.repository.getInstance("default-arena");
+    if (!arena || arena.status !== "active") {
+      return "预检失败: Arena instance not active. Check /lab scheduler status";
+    }
+
+    // ── Precondition 3: >= 2 catalog candidates ────────────────────
+    const candidates = catalog.candidates();
+    if (candidates.length < 2) {
+      return `预检失败: Need >= 2 catalog candidates, got ${candidates.length}. Try /lab models --refresh`;
+    }
+
+    // ── Precondition 4: modelCaller available ──────────────────────
+    let freshCaller = false;
+    const prevCaller = arenaModelCaller;
+    try {
+      arenaModelCaller = createModelCaller(cmdCtx);
+      freshCaller = true;
+    } catch {
+      if (!arenaModelCaller) {
+        return "预检失败: Model caller not available. Initiate a subagent call first to initialize the model registry connection";
+      }
+      // use existing lazy caller
+    }
+
+    const restoreCaller = () => {
+      if (freshCaller) arenaModelCaller = prevCaller;
+    };
+
+    try {
+      // ── Guard-rail setup: temp round with maxBidders=2, maxCallsPerDispatch=2 ──
+      const currentRound = schedulerCore.repository.getRound(arena.currentRoundId);
+      if (!currentRound) {
+        restoreCaller();
+        return "预检失败: Current round not found for arena instance";
+      }
+
+      const params = currentRound.parameters as ArenaSchedulerParameters;
+      const smokeParams: ArenaSchedulerParameters = {
+        ...params,
+        market: { ...params.market, maxBidders: 2 },
+        bidding: { ...params.bidding, maxCallsPerDispatch: 2 },
+      };
+
+      stage("Guard Rails", `maxBidders: 2 (overridden from ${params.market.maxBidders})`, `maxCallsPerDispatch: 2 (overridden from ${params.bidding.maxCallsPerDispatch})`);
+
+      const tempRoundId = `smoke-round-${traceId}`;
+      schedulerCore.repository.insertRound({
+        id: tempRoundId,
+        schedulerInstanceId: "default-arena",
+        sequence: 9999,
+        parentRoundId: currentRound.id,
+        parameters: smokeParams,
+        optimizer: undefined,
+        proposalId: undefined,
+        status: "active",
+        createdAt: Date.now(),
+        activatedAt: Date.now(),
+      });
+
+      store.raw.prepare(
+        "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
+      ).run(tempRoundId, "default-arena");
+
+      const restoreRound = () => {
+        store.raw.prepare(
+          "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
+        ).run(currentRound.id, "default-arena");
+        store.raw.prepare(
+          "DELETE FROM lab_optimization_rounds WHERE id = ?"
+        ).run(tempRoundId);
+      };
+
+      try {
+        // ── Bidders ──
+        const eligible = candidates.filter((c) =>
+          matchEligibility(params.market.eligibility, c.id)
+        );
+        stage("Bidders",
+          `Catalog candidates: ${candidates.length}, eligible: ${eligible.length}`,
+          ...eligible.map((c) => `  ${c.id} [${c.accessRoute}]`)
+        );
+
+        // ── Pre-dispatch balance snapshot ──
+        const preBalances = new Map<string, number>();
+        for (const c of eligible) {
+          preBalances.set(c.id, ledger.balance(c.id));
+        }
+        stage("Pre-Dispatch Balances",
+          ...eligible.map((c) => `  ${c.id}: ${preBalances.get(c.id)}`)
+        );
+
+        // ── Dispatch ──
+        const rt = schedulerRuntimeFactory();
+        if (!rt) {
+          restoreRound();
+          restoreCaller();
+          return "预检失败: Scheduler runtime unavailable";
+        }
+
+        let dispatchResult;
+        try {
+          dispatchResult = await rt.dispatch({
+            traceId,
+            role,
+            task: `smoke test for ${role}`,
+            mode: "select",
+            settlementRef,
+          });
+        } catch (err) {
+          restoreRound();
+          failStage("Dispatch", err);
+          return [...header, ...evidence, `\nFAILED with partial evidence`].join("\n");
+        }
+
+        stage("Dispatch Result",
+          `status: ${dispatchResult.status}`,
+          ...(dispatchResult.status === "completed"
+            ? [
+                `model: ${dispatchResult.model ?? "N/A"}`,
+                `reason: ${dispatchResult.reason ?? "N/A"}`,
+                `settlementRef: ${dispatchResult.settlementRef ?? "N/A"}`,
+                `roundId: ${dispatchResult.roundId}`,
+                `attempts: ${dispatchResult.attempts.length}`,
+              ]
+            : [
+                `reason/error: ${JSON.stringify(
+                  dispatchResult.status === "abstained"
+                    ? dispatchResult.reason
+                    : dispatchResult.status === "failed"
+                      ? dispatchResult.error
+                      : dispatchResult.target
+                )}`,
+              ])
+        );
+
+        // ── Post-dispatch balance snapshot ──
+        stage("Post-Dispatch Balances",
+          ...eligible.map((c) => {
+            const bal = ledger.balance(c.id);
+            const pre = preBalances.get(c.id) ?? 0;
+            const delta = bal - pre;
+            return `  ${c.id}: ${bal} (delta=${delta >= 0 ? "+" : ""}${delta})`;
+          })
+        );
+
+        // ── Parse attempt-level bid telemetry from events ──
+        if (schedulerCore && dispatchResult.status === "completed") {
+          const events = schedulerCore.events.query({ traceId, limit: 500 });
+
+          const bidCalls = events.filter((e) => e.eventType === "scheduler.arena.bid_call");
+          const stakes = events.filter((e) => e.eventType === "scheduler.arena.stake");
+          const balanceBefores = events.filter((e) => e.eventType === "scheduler.arena.balance_before");
+          const balanceAfters = events.filter((e) => e.eventType === "scheduler.arena.balance_after");
+
+          if (bidCalls.length > 0) {
+            stage("Bid Calls",
+              ...bidCalls.map((e) => {
+                const p = e.payload as { agent?: string };
+                return `  agent=${p.agent ?? "?"} estimated_tokens=${e.metrics?.estimated_tokens ?? "?"} cost=${e.metrics?.estimated_cost_usd ?? "?"}`;
+              })
+            );
+          }
+
+          if (stakes.length > 0) {
+            stage("Parsed Stakes",
+              ...stakes.map((e) => {
+                const p = e.payload as { agent?: string };
+                return `  agent=${p.agent ?? "?"} stake=${e.metrics?.stake ?? "?"}`;
+              })
+            );
+          }
+
+          if (balanceBefores.length > 0) {
+            stage("Balances Before Freeze",
+              ...balanceBefores.map((e) => {
+                const p = e.payload as { agent?: string };
+                return `  agent=${p.agent ?? "?"} balance=${e.metrics?.balance ?? "?"}`;
+              })
+            );
+          }
+
+          if (balanceAfters.length > 0) {
+            stage("Balances After Freeze",
+              ...balanceAfters.map((e) => {
+                const p = e.payload as { agent?: string };
+                return `  agent=${p.agent ?? "?"} balance=${e.metrics?.balance ?? "?"}`;
+              })
+            );
+          }
+
+          // ── Synthetic settle ──
+          if (dispatchResult.settlementRef && rt.settle) {
+            const syntheticOutcome: SettleOutcome = {
+              completion: 1,
+              majorError: false,
+              tokensIn: 0,
+              tokensOut: 0,
+              cost: 0,
+              toolCalls: [],
+              inferenceLatencyMs: 0,
+            };
+
+            try {
+              const settled = await rt.settle(dispatchResult.settlementRef, syntheticOutcome);
+              stage("Synthetic Settle",
+                `status: ${settled ? "settled" : "not settled (may already be settled or task not found)"}`,
+                `outcome: completion=1 majorError=false (synthetic)`
+              );
+
+              // Post-settle balances
+              const postSettle = eligible.map((c) => {
+                const bal = ledger.balance(c.id);
+                const pre = preBalances.get(c.id) ?? 0;
+                const delta = bal - pre;
+                return `  ${c.id}: ${bal} (delta=${delta >= 0 ? "+" : ""}${delta})`;
+              });
+              stage("Balances After Settle", ...postSettle);
+            } catch (err) {
+              failStage("Synthetic Settle", err);
+            }
+          }
+
+          // ── Event trace ──
+          if (events.length > 0) {
+            const traceLines = events.map((e) => {
+              const ts = new Date(e.timestamp).toISOString();
+              const p = e.payload && typeof e.payload === "object" && Object.keys(e.payload as Record<string, unknown>).length > 0
+                ? ` ${JSON.stringify(e.payload)}`
+                : "";
+              return `  ${ts} ${e.eventType}${p}`;
+            });
+            stage(`Event Trace (${events.length} events)`, ...traceLines.slice(0, 40));
+            if (traceLines.length > 40) {
+              evidence.push(`  ... and ${traceLines.length - 40} more events`);
+            }
+          }
+        }
+
+        restoreRound();
+      } catch (err) {
+        restoreRound();
+        throw err;
+      }
+    } finally {
+      restoreCaller();
+    }
+
+    return [...header, ...evidence].join("\n");
+  };
+
+  // ── Optimizer facade (lazy: resolves schedulerCore/optimizerRegistry at call time) ──
+  const optimizerFacade: OptimizerFacade = buildOptimizerFacade({
+    getCore: () => schedulerCore,
+    getRegistry: () => optimizerRegistry,
+    getDb: () => store.raw,
+    getCatalog: () => catalog.candidates(),
+    getOptimizerConfig: () => cfg.optimizer,
+    getAutoTriggerStatus: () => autoTrigger?.status(),
+    onRunTick: (sid: string) => { autoFlow?.tick(sid).catch(() => {}); },
+  });
+
+  // ── Experiment facade (lazy: resolves DB at call time) ──────────
+  const experimentFacade: ExperimentFacade = buildExperimentFacade({
+    getDb: () => store.raw,
+  });
+
+  registerCommands(pi, {
+    store, catalog, cfg, ledger, saveConfig,
+    optimizerFacade,
+    experimentFacade,
+    schedulerRuntime: schedulerRuntimeFactory,
+    getSchedulerEvents: (limit: number) => {
+      if (!schedulerCore) return [];
+      return schedulerCore.events.query({ limit });
+    },
+    syncSchedulerAgents: () => {
+      if (!schedulerCore) return 0;
+      const wsInstanceId = cfg.scheduler?.instanceId ?? "default-weighted-scorer";
+      let added = syncWeightedScorerAgents(schedulerCore, wsInstanceId, catalog.candidates());
+      if (cfg.mode === "market") {
+        try {
+          added += syncArenaAgents(schedulerCore, "default-arena", catalog.candidates());
+        } catch {
+          // arena may not be bootstrapped yet — ignore
+        }
+      }
+      return added;
+    },
+    getEffectiveRouting: () => {
+      if (!schedulerCore) return "bootstrap pending";
+      if (cfg.scheduler?.instanceId) {
+        return `explicit → ${cfg.scheduler.instanceId} (bypasses catch-all)`;
+      }
+      const bindings = schedulerCore.repository.listRoutingBindings();
+      const arenaBinding = bindings.find((b) => b.id === "arena-default" && b.schedulerInstanceId === "default-arena");
+      if (arenaBinding) {
+        return "catch-all → default-arena (market)";
+      }
+      return "catch-all → default-arena (classic — no binding)";
+    },
+    arenaSmoke,
+    runMigration: (dryRun: boolean) => {
+      const ensureArenaBinding = () => {
+        // Force the lazy bootstrap before checking — running /lab migrate
+        // before any dispatch must not strand the binding step.
+        schedulerRuntimeFactory();
+        if (!schedulerCore) return { ok: false, reason: "bootstrap-pending" };
+        const arena = schedulerCore.repository.getInstance("default-arena");
+        if (!arena || arena.status !== "active") {
+          return { ok: false, reason: "arena-bootstrap-pending (async; retry shortly or after any dispatch)" };
+        }
+        try {
+          schedulerCore.controlPlane.setCatchAllBinding("default-arena", true);
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, reason: (err as Error).message };
+        }
+      };
+      return dryRun
+        ? runP7DryRun({
+            cfg,
+            store,
+            ensureArenaBinding,
+            dbPath: dbPath(),
+          })
+        : runP7Migration({
+            cfg,
+            store,
+            ensureArenaBinding,
+            dbPath: dbPath(),
+          });
+    },
+  });
+
+  pi.on("session_shutdown", async () => { try { store.close(); } catch { /* ignore */ } });
+}

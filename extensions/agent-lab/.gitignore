@@ -1,0 +1,6 @@
+.pi-subagents/
+.superpowers/
+.worktrees/
+*.db
+node_modules/
+package-lock.json

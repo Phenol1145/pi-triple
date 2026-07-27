@@ -1,0 +1,481 @@
+import type { EventLog } from "../core/events/event-log.ts";
+import type { LabEvent } from "../core/contracts.ts";
+import { VersionConflictError } from "../core/storage/namespaced-store.ts";
+import type { NamespacedStore } from "../core/storage/namespaced-store.ts";
+import { WorkLoopRegistry } from "./registry.ts";
+import { AgentRuntimeStateStore } from "./state-store.ts";
+import { CheckpointStore } from "./checkpoints.ts";
+import type { CheckpointRecord } from "./checkpoints.ts";
+import { createContextOperations } from "./context.ts";
+import { createInstrumentedModelPort } from "../workloops/model-port.ts";
+import type {
+  WorkLoopImplementation,
+  WorkLoopInput,
+  WorkLoopResult,
+  WorkLoopSDK,
+  ModelPort,
+  ToolPort,
+  ArtifactPort,
+  WorkContext,
+} from "./contracts.ts";
+
+// ── Request ──────────────────────────────────────────────────────────
+
+export interface WorkLoopRunRequest {
+  traceId: string;
+  executionId: string;
+  agentInstanceId: string;
+  optimizationRoundId: string;
+  workLoopId: string;
+  workLoopVersion: string;
+  config: unknown;
+  task: string;
+  signal?: AbortSignal;
+  /** P6a I1: set by SchedulerRunner or experiment entry point for event identity */
+  schedulerInstanceId?: string;
+  /** P6a I1: set by SchedulerRunner or experiment entry point for event identity */
+  dispatchId?: string;
+}
+
+// ── Runner ───────────────────────────────────────────────────────────
+
+export class WorkLoopRunner {
+  private readonly registry: WorkLoopRegistry;
+  private readonly stateStore: AgentRuntimeStateStore;
+  private readonly checkpointStore: CheckpointStore;
+  private readonly eventLog: EventLog;
+  private readonly storage: NamespacedStore;
+  private readonly model: ModelPort;
+  private readonly tools: ToolPort;
+  private readonly artifacts: ArtifactPort;
+
+  /** Per-agent FIFO tail: maps agentInstanceId → tail Promise<WorkLoopResult> */
+  private readonly tails = new Map<string, Promise<WorkLoopResult>>();
+
+  constructor(
+    registry: WorkLoopRegistry,
+    stateStore: AgentRuntimeStateStore,
+    checkpointStore: CheckpointStore,
+    eventLog: EventLog,
+    storage: NamespacedStore,
+    model: ModelPort,
+    tools: ToolPort,
+    artifacts: ArtifactPort,
+  ) {
+    this.registry = registry;
+    this.stateStore = stateStore;
+    this.checkpointStore = checkpointStore;
+    this.eventLog = eventLog;
+    this.storage = storage;
+    this.model = model;
+    this.tools = tools;
+    this.artifacts = artifacts;
+  }
+
+  // ── Public API ───────────────────────────────────────────────────
+
+  /**
+   * Enqueue a run. FIFO single-flight per agent.
+   * Different agents may run concurrently.
+   */
+  async run(request: WorkLoopRunRequest): Promise<WorkLoopResult> {
+    const aid = request.agentInstanceId;
+    const prev = this.tails.get(aid) ?? Promise.resolve(undefined as unknown as WorkLoopResult);
+
+    const tail = prev.then(
+      () => this.executeRun(request),
+      // If the previous run rejected (which shouldn't happen), still proceed
+      () => this.executeRun(request),
+    );
+
+    // Capture the tail and clean up when settled
+    this.tails.set(aid, tail);
+    tail.finally(() => {
+      if (this.tails.get(aid) === tail) {
+        this.tails.delete(aid);
+      }
+    });
+
+    return tail;
+  }
+
+  // ── Internal execution ───────────────────────────────────────────
+
+  private async executeRun(request: WorkLoopRunRequest): Promise<WorkLoopResult> {
+    const {
+      traceId,
+      executionId,
+      agentInstanceId,
+      optimizationRoundId,
+      workLoopId,
+      workLoopVersion,
+      config,
+      task,
+      signal,
+    } = request;
+
+    // Per-run sequence counter for deterministic event IDs
+    let seq = 0;
+    const nextEventId = (eventType: string): string =>
+      `${executionId}:${eventType}:${seq++}`;
+
+    // ── Abort before start ──────────────────────────────────────
+    if (signal?.aborted) {
+      this.emitEvent(
+        nextEventId("agent.cancelled"),
+        "agent.cancelled",
+        null,
+        undefined,
+        request,
+      );
+      return this.emptyResult("cancelled");
+    }
+
+    // ── Resolve implementation ──────────────────────────────────
+    let implementation: WorkLoopImplementation;
+    try {
+      implementation = this.registry.require(workLoopId, workLoopVersion);
+    } catch (err) {
+      this.emitEvent(
+        nextEventId("agent.failed"),
+        "agent.failed",
+        null,
+        undefined,
+        request,
+      );
+      return {
+        status: "failed",
+        error: {
+          standard: {
+            code: "workloop-error",
+            message: err instanceof Error ? err.message : String(err),
+            retryable: false,
+          },
+        },
+        context: this.emptyContext(),
+        state: {},
+      };
+    }
+
+    // ── Load CAS snapshot ───────────────────────────────────────
+    const snapshot = this.stateStore.get(agentInstanceId);
+    if (!snapshot) {
+      this.emitEvent(
+        nextEventId("agent.failed"),
+        "agent.failed",
+        null,
+        undefined,
+        request,
+      );
+      return {
+        status: "failed",
+        error: {
+          standard: {
+            code: "workloop-error",
+            message: `no runtime snapshot for agent: ${agentInstanceId}`,
+            retryable: false,
+          },
+        },
+        context: this.emptyContext(),
+        state: {},
+      };
+    }
+
+    const expectedVersion = snapshot.version;
+    const inputContext = snapshot.value.context;
+    const inputState = snapshot.value.state;
+
+    // ── Emit agent.started ──────────────────────────────────────
+    this.emitLifecycleEvent(
+      nextEventId("agent.started"),
+      "agent.started",
+      request,
+    );
+
+    // ── Build SDK ───────────────────────────────────────────────
+    const sdk = this.buildSDK(request, nextEventId, signal);
+
+    // ── Emit workloop.started ──────────────────────────────────
+    this.emitLifecycleEvent(
+      nextEventId("workloop.started"),
+      "workloop.started",
+      request,
+    );
+
+    // ── Invoke implementation ──────────────────────────────────
+    const input: WorkLoopInput = {
+      traceId,
+      executionId,
+      agentInstanceId,
+      optimizationRoundId,
+      task,
+      context: inputContext,
+      config: config as Readonly<unknown>,
+      state: inputState,
+    };
+
+    let result: WorkLoopResult;
+    try {
+      result = await implementation.run(input, sdk);
+    } catch (err) {
+      // Thrown error → workloop-error
+      if (signal?.aborted) {
+        this.emitLifecycleEvent(
+          nextEventId("agent.cancelled"),
+          "agent.cancelled",
+          request,
+        );
+        return {
+          status: "cancelled",
+          context: inputContext,
+          state: inputState,
+        };
+      }
+
+      this.emitLifecycleEvent(nextEventId("workloop.failed"), "workloop.failed", request);
+      this.emitLifecycleEvent(nextEventId("agent.failed"), "agent.failed", request);
+
+      return {
+        status: "failed",
+        error: {
+          standard: {
+            code: "workloop-error",
+            message: err instanceof Error ? err.message : String(err),
+            retryable: false,
+          },
+        },
+        context: inputContext,
+        state: inputState,
+      };
+    }
+
+    // ── Handle result status ───────────────────────────────────
+
+    if (result.status === "completed") {
+      // Emit workloop.completed
+      this.emitLifecycleEvent(
+        nextEventId("workloop.completed"),
+        "workloop.completed",
+        request,
+      );
+
+      // ── CAS commit ──────────────────────────────────────────
+      try {
+        this.stateStore.commit(
+          agentInstanceId,
+          result.context,
+          result.state,
+          expectedVersion,
+        );
+      } catch (err) {
+        if (err instanceof VersionConflictError) {
+          // Reload winning state
+          const winning = this.stateStore.get(agentInstanceId);
+          this.emitLifecycleEvent(
+            nextEventId("agent.failed"),
+            "agent.failed",
+            request,
+          );
+          return {
+            status: "failed",
+            error: {
+              standard: {
+                code: "state-conflict",
+                message: `CAS conflict: expected version ${expectedVersion}`,
+                retryable: true,
+              },
+            },
+            context: winning?.value.context ?? inputContext,
+            state: winning?.value.state ?? inputState,
+          };
+        }
+        throw err;
+      }
+
+      // Emit agent.completed
+      this.emitLifecycleEvent(
+        nextEventId("agent.completed"),
+        "agent.completed",
+        request,
+      );
+
+      return result;
+    }
+
+    if (result.status === "cancelled" || signal?.aborted) {
+      this.emitLifecycleEvent(
+        nextEventId("agent.cancelled"),
+        "agent.cancelled",
+        request,
+      );
+      return {
+        status: "cancelled",
+        context: result.context ?? inputContext,
+        state: result.state ?? inputState,
+      };
+    }
+
+    // failed / paused → do not commit
+    if (result.status === "failed") {
+      this.emitLifecycleEvent(nextEventId("workloop.failed"), "workloop.failed", request);
+      this.emitLifecycleEvent(nextEventId("agent.failed"), "agent.failed", request);
+    }
+
+    // paused: still emit agent.completed? No — paused is not committed.
+    if (result.status === "paused") {
+      this.emitLifecycleEvent(nextEventId("agent.paused"), "agent.paused", request);
+    }
+
+    return result;
+  }
+
+  // ── SDK factory ──────────────────────────────────────────────────
+
+  private buildSDK(
+    request: WorkLoopRunRequest,
+    nextEventId: (eventType: string) => string,
+    signal?: AbortSignal,
+  ): WorkLoopSDK {
+    const {
+      traceId,
+      executionId,
+      agentInstanceId,
+      optimizationRoundId,
+      workLoopId,
+      workLoopVersion,
+    } = request;
+
+    const storageNs = `agent:${agentInstanceId}:workloop`;
+
+    return {
+      context: createContextOperations(),
+
+      model: createInstrumentedModelPort(this.model, {
+        emit: (
+          eventType: string,
+          payload: unknown,
+          metrics?: Record<string, string | number | boolean | null>,
+        ) => {
+          this.emitEvent(nextEventId(eventType), eventType, payload, metrics, request);
+        },
+      }),
+
+      tools: this.tools,
+
+      artifacts: this.artifacts,
+
+      storage: {
+        get<T>(key: string) {
+          return this._store.get<T>(storageNs, key);
+        },
+        put<T>(key: string, value: T, expectedVersion: number) {
+          return this._store.put<T>(storageNs, key, value, expectedVersion);
+        },
+        _store: this.storage,
+      } as WorkLoopSDK["storage"] & { _store: NamespacedStore },
+
+      checkpoint: {
+        save: async (context: WorkContext, state: unknown, label?: string) => {
+          const checkpointId = crypto.randomUUID();
+          const record: CheckpointRecord = {
+            checkpointId,
+            agentInstanceId,
+            executionId,
+            workLoopId,
+            workLoopVersion,
+            optimizationRoundId,
+            label,
+            context,
+            state,
+            createdAt: Date.now(),
+          };
+          this.checkpointStore.save(agentInstanceId, record);
+
+          this.emitEvent(
+            nextEventId("checkpoint.created"),
+            "checkpoint.created",
+            { checkpointId, label },
+            undefined,
+            request,
+          );
+
+          return { checkpointId };
+        },
+      },
+
+      telemetry: {
+        emit: (
+          eventType: string,
+          payload: unknown,
+          metrics?: Record<string, string | number | boolean | null>,
+        ) => {
+          this.emitEvent(nextEventId(eventType), eventType, payload, metrics, request);
+        },
+      },
+
+      control: {
+        signal: signal ?? new AbortController().signal,
+        throwIfCancelled() {
+          if (signal?.aborted) {
+            throw new DOMException("The operation was aborted", "AbortError");
+          }
+        },
+      },
+    };
+  }
+
+  // ── Event helpers ────────────────────────────────────────────────
+
+  private emitLifecycleEvent(
+    eventId: string,
+    eventType: string,
+    request: WorkLoopRunRequest,
+  ): void {
+    this.emitEvent(eventId, eventType, null, undefined, request);
+  }
+
+  private emitEvent(
+    eventId: string,
+    eventType: string,
+    payload: unknown,
+    metrics: Record<string, string | number | boolean | null> | undefined,
+    request: WorkLoopRunRequest | undefined,
+  ): void {
+    const event: LabEvent = {
+      eventId,
+      eventType,
+      schemaVersion: "1.0",
+      timestamp: Date.now(),
+      identity: {
+        traceId: request?.traceId ?? "",
+        executionId: request?.executionId ?? "",
+        agentInstanceId: request?.agentInstanceId ?? "",
+        optimizationRoundId: request?.optimizationRoundId ?? "",
+        workLoopId: request?.workLoopId ?? "",
+        workLoopVersion: request?.workLoopVersion ?? "",
+        ...(request?.schedulerInstanceId ? { schedulerInstanceId: request.schedulerInstanceId } : {}),
+        ...(request?.dispatchId ? { dispatchId: request.dispatchId } : {}),
+      },
+      payload: payload ?? {},
+      metrics,
+    };
+    this.eventLog.append(event);
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────
+
+  private emptyContext(): WorkContext {
+    return {
+      messages: [],
+      metadata: { contextId: "", sourceRefs: [], artifactRefs: [] },
+    };
+  }
+
+  private emptyResult(status: WorkLoopResult["status"]): WorkLoopResult {
+    return {
+      status,
+      context: this.emptyContext(),
+      state: {},
+    };
+  }
+}
