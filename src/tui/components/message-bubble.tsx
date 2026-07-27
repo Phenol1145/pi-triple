@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { theme } from "../theme.js";
-import { renderMarkdown } from "./markdown.js";
+import { Markdown } from "./markdown.js";
 import { ToolCallView } from "./tool-call-view.js";
 import type { TuiMessage } from "../types.js";
 
@@ -30,7 +30,7 @@ export function MessageBubble({ message, showThinking = false }: MessageBubblePr
               </Text>
             </Box>
           )}
-          <Text>{renderMarkdown(message.content)}</Text>
+          <Markdown content={message.content} />
         </Box>
       );
 

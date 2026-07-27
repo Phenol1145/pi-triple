@@ -648,8 +648,8 @@ export function App({
   // TopBar(3) + InputArea(~3) + StatusBar(3) + borders(~3) ≈ 12
   const chatHeight = Math.max(5, (process.stdout.rows ?? 24) - 12);
 
-  // Slash-command names for autocomplete
-  const slashCompletions = commandRegistry.list().map((c) => c.name);
+  // Command info for pi-style picker
+  const commandInfos = commandRegistry.list().map((c) => ({ name: c.name, description: c.description }));
 
   return (
     <ErrorBoundary>
@@ -675,11 +675,11 @@ export function App({
         <InputArea
           onSubmit={handleInput}
           focused={focus === "input"}
-          completions={slashCompletions}
+          commands={commandInfos}
           placeholder={
             busy
               ? "Agent is working… (input will be queued)"
-              : "Type /help (→ autocomplete), !cmd, or message…"
+              : "Type / for commands, ! for bash, or message…"
           }
         />
 
