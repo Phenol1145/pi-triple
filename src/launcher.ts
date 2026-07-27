@@ -14,6 +14,11 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
+
+/** 确保路径是绝对路径（避免子进程 cwd 不同导致相对路径失效） */
+function abs(p: string): string {
+  return path.resolve(process.cwd(), p);
+}
 import { Redis } from "ioredis";
 import { detectPlatform } from "./platform/index.js";
 import { createLogger } from "./observability/logger.js";
@@ -49,7 +54,7 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
   const platform = detectPlatform();
 
   // --- Workspace isolation ---
-  const dataDir = process.env.DATA_DIR ?? "./.pi-platform-data";
+  const dataDir = abs(process.env.DATA_DIR ?? "./.pi-platform-data");
   const workspaceMgr = new WorkspaceManager(
     platform,
     path.join(dataDir, "workspaces"),
@@ -127,7 +132,7 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
     env: {
       ...process.env,
       // 隔离 pi 配置目录（per-tenant）
-      PI_CODING_AGENT_DIR: path.join(dataDir, "pi-config", options.tenantId),
+      PI_CODING_AGENT_DIR: abs(path.join(dataDir, "pi-config", options.tenantId)),
     },
   });
 
