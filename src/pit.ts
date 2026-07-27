@@ -174,6 +174,31 @@ async function cmdOnboard(flags: Record<string, string>): Promise<void> {
 
 async function cmdStart(flags: Record<string, string>, passthrough: string[]): Promise<void> {
   const config = loadConfig();
+
+  // 无参数时进入交互式选择器
+  const hasArgs = flags.tenant || flags.model || flags.name || flags.bg === "true" || passthrough.length > 0;
+  if (!hasArgs && process.stdout.isTTY) {
+    const { interactiveStart } = await import("./picker.js");
+    const dataDir = resolveDataDir(config);
+    const configDir = path.join(dataDir, "pi-config");
+    const tenants = fs.existsSync(configDir)
+      ? fs.readdirSync(configDir, { withFileTypes: true })
+          .filter((e) => e.isDirectory())
+          .map((e) => ({ id: e.name, alias: e.name, isDefault: e.name === config.defaultTenant }))
+      : [{ id: config.defaultTenant, alias: config.defaultTenant, isDefault: true }];
+
+    const choice = await interactiveStart({ tenants });
+    flags.tenant = choice.tenant;
+    if (choice.bg) flags.bg = "true";
+    if (choice.name) flags.name = choice.name;
+    if (choice.model) flags.model = choice.model;
+
+    if (choice.bg) {
+      cmdStartBg(flags, passthrough);
+      return;
+    }
+  }
+
   const tenantId = flags.tenant ?? config.defaultTenant;
   const tenantConfig = config.tenants[tenantId] ?? {};
 
