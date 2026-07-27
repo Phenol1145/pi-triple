@@ -37,7 +37,7 @@ export function registerSessionRoutes(app: FastifyInstance, engine: AgentEngine)
   });
 
   app.post("/api/v1/sessions/:id/abort", async (req) => {
-    await engine.abort((req.params as any).id);
+    await engine.abort((req.params as any).id, req.auth.tenantId);
     return { ok: true };
   });
 

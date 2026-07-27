@@ -103,7 +103,8 @@ export class AgentEngine {
     let seq = 0;
 
     try {
-      const { iterable, push, done, error } = createBridge<AgentEvent>({ maxQueueSize: 1000 });
+      const bridge = createBridge<AgentEvent>({ maxQueueSize: 1000 });
+      const { iterable, push, done, error } = bridge;
 
       const unsubscribe = session.subscribe((event) => {
         seq++;
@@ -136,6 +137,12 @@ export class AgentEngine {
             unsubscribe();
           }, 120_000);
           yield event;
+          // Bridge overflow: consumer too slow
+          if (bridge.isOverflowed()) {
+            error(new Error("Bridge overflow: consumer too slow"));
+            unsubscribe();
+            break;
+          }
         }
       } finally {
         clearTimeout(watchdog);
@@ -149,10 +156,20 @@ export class AgentEngine {
     }
   }
 
-  async abort(sessionId: string): Promise<void> {
+  async abort(sessionId: string, tenantId: string): Promise<void> {
+    const managed = this.pool.get(sessionId);
+    if (!managed || managed.tenantId !== tenantId) throw new Error("Forbidden: tenant mismatch");
     const session = this.agentSessions.get(sessionId);
     if (session) await session.abort();
   }
+
+  evictSession(sessionId: string): void {
+    const session = this.agentSessions.get(sessionId);
+    if (session) { session.dispose(); this.agentSessions.delete(sessionId); }
+    this.pool.remove(sessionId);
+  }
+
+  getPool(): SessionPool { return this.pool; }
 
   async destroySession(sessionId: string, tenantId: string): Promise<void> {
     const managed = this.pool.get(sessionId);
@@ -185,7 +202,7 @@ export class AgentEngine {
     this.logger.info({ event: "drain_start", activeSessions: this.pool.size });
     for (const session of this.pool.listAll()) {
       if (session.state === "busy") {
-        await this.abort(session.sessionId);
+        await this.abort(session.sessionId, session.tenantId);
       }
       await this.checkpoint(session, session.lastCheckpointSeq);
       const agentSession = this.agentSessions.get(session.sessionId);

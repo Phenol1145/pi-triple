@@ -18,7 +18,9 @@ export class WorkflowOrchestrator {
     const state = await this.loadOrCreateState(def, tenantId);
 
     const lockKey = `workflow:${def.id}:lock`;
-    const acquired = await this.redis.set(lockKey, state.fencingToken, "PX", 600_000, "NX");
+    const fencingToken = await this.redis.incr(`workflow:${def.id}:token`);
+    state.fencingToken = fencingToken;
+    const acquired = await this.redis.set(lockKey, fencingToken, "PX", 600_000, "NX");
     if (!acquired) throw new Error(`Workflow ${def.id} is already being executed`);
 
     try {
@@ -43,7 +45,14 @@ export class WorkflowOrchestrator {
       await this.saveState(state);
       return state;
     } finally {
-      await this.redis.del(lockKey);
+      // Safe unlock: only del if token matches (Lua script)
+      const lua = `
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+          return redis.call("del", KEYS[1])
+        else
+          return 0
+        end`;
+      await this.redis.eval(lua, 1, lockKey, fencingToken);
     }
   }
 
@@ -62,19 +71,28 @@ export class WorkflowOrchestrator {
   private async executeStep(step: WorkflowStep, tenantId: string, state: WorkflowState): Promise<unknown> {
     switch (step.type) {
       case "agent": {
-        const session = await this.engine.createSession({
-          tenantId,
-          project: step.agentConfig.project,
-          provider: step.agentConfig.provider,
-          model: step.agentConfig.model,
-        });
-        if (!session.ok) throw new Error(session.error);
-        const events: unknown[] = [];
-        for await (const event of this.engine.prompt(session.data.sessionId, tenantId, step.prompt)) {
-          events.push(event);
+        let sessionId: string | undefined;
+        try {
+          const session = await this.engine.createSession({
+            tenantId,
+            project: step.agentConfig.project,
+            provider: step.agentConfig.provider,
+            model: step.agentConfig.model,
+          });
+          if (!session.ok) throw new Error(session.error);
+          sessionId = session.data.sessionId;
+          const events: unknown[] = [];
+          for await (const event of this.engine.prompt(session.data.sessionId, tenantId, step.prompt)) {
+            events.push(event);
+          }
+          return { sessionId: session.data.sessionId, eventCount: events.length };
+        } finally {
+          if (sessionId) {
+            await this.engine.destroySession(sessionId, tenantId).catch((err) => {
+              this.logger.warn({ sessionId, error: String(err), event: "destroy_session_failed" });
+            });
+          }
         }
-        await this.engine.destroySession(session.data.sessionId, tenantId);
-        return { sessionId: session.data.sessionId, eventCount: events.length };
       }
 
       case "parallel": {

@@ -41,7 +41,7 @@ export async function createServer(deps: {
           }
           socket.send(JSON.stringify({ type: "done", sessionId: msg.sessionId }));
         } else if (msg.type === "abort") {
-          await deps.engine.abort(msg.sessionId);
+          await deps.engine.abort(msg.sessionId, tenantId);
         }
       } catch (err) {
         socket.send(JSON.stringify({ type: "error", error: String(err) }));

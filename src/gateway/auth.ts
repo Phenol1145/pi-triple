@@ -25,7 +25,11 @@ export function createAuthHook(redis: Redis) {
     if (!raw) {
       return reply.status(401).send({ error: "Invalid token" });
     }
-    const { tenantId, role } = JSON.parse(raw);
-    req.auth = { tenantId, role: role ?? "tenant-agent" };
+    try {
+      const { tenantId, role } = JSON.parse(raw);
+      req.auth = { tenantId, role: role ?? "tenant-agent" };
+    } catch {
+      return reply.status(401).send({ error: "Invalid token data" });
+    }
   };
 }

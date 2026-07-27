@@ -24,8 +24,15 @@ export class RedisSessionStore implements SessionStore {
   async appendEntry(tenant: string, sessionId: string, entry: SessionEntry): Promise<void> {
     const key = this.entryKey(tenant, sessionId, entry.seq);
     await this.redis.set(key, JSON.stringify(entry));
-    await this.redis.hincrby(this.metaKey(tenant, sessionId), "entryCount", 1);
-    await this.redis.hset(this.metaKey(tenant, sessionId), "lastEntrySeq", entry.seq);
+    // Read meta, update, re-SET (avoids WRONGTYPE from mixing string/hash ops)
+    const raw = await this.redis.get(this.metaKey(tenant, sessionId));
+    if (raw) {
+      const meta: SessionMeta = JSON.parse(raw);
+      meta.entryCount = (meta.entryCount ?? 0) + 1;
+      meta.lastEntrySeq = entry.seq;
+      meta.updatedAt = new Date().toISOString();
+      await this.redis.set(this.metaKey(tenant, sessionId), JSON.stringify(meta));
+    }
   }
 
   async getEntries(tenant: string, sessionId: string, fromSeq: number = 1): Promise<SessionEntry[]> {

@@ -53,6 +53,7 @@ async function main() {
     sessionStore, logger, metrics,
   );
   const engine = new AgentEngine(pool, modelRouter, workspaceMgr, sessionStore, toolPlatform, logger, metrics);
+  pool.setOnEvict((sid) => engine.evictSession(sid));
   const orchestrator = new WorkflowOrchestrator(redis, engine, sessionStore, logger, metrics);
 
   const platformDir = workspaceMgr.getPlatformDir();

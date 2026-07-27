@@ -18,6 +18,7 @@ export interface SessionPoolConfig {
   maxSessions: number;
   maxSessionsPerTenant: number;
   idleTimeoutMs: number;
+  onEvict?: (sessionId: string, tenantId: string) => void;
 }
 
 const DEFAULT_CONFIG: SessionPoolConfig = {
@@ -90,8 +91,13 @@ export class SessionPool {
     if (evictable.length === 0) return null;
     const victim = evictable[0];
     this.logger.info({ sessionId: victim.sessionId, event: "session_evicted" });
+    if (this.config.onEvict) this.config.onEvict(victim.sessionId, victim.tenantId);
     this.remove(victim.sessionId);
     return victim.sessionId;
+  }
+
+  setOnEvict(fn: (sessionId: string, tenantId: string) => void): void {
+    this.config.onEvict = fn;
   }
 
   listByTenant(tenantId: string): PoolSession[] {
