@@ -56,8 +56,8 @@ function copyDirRecursive(src: string, dst: string, report: MigrateReport, dryRu
     const srcPath = path.join(src, entry.name);
     const dstPath = path.join(dst, entry.name);
 
-    // 跳过 node_modules 中的 .cache 和临时文件
-    if (entry.name === ".cache" || entry.name === ".pi-subagents") {
+    // 跳过 .git、.cache、临时文件
+    if (entry.name === ".git" || entry.name === ".cache" || entry.name === ".pi-subagents") {
       report.skipped.push(srcPath);
       continue;
     }
@@ -226,7 +226,11 @@ async function main() {
   await migrate({ tenantId, source, dryRun });
 }
 
-main().catch((err) => {
-  console.error("Fatal:", err);
-  process.exit(1);
-});
+// 只在直接执行时运行 main（被 import 时不执行）
+const isDirectRun = process.argv[1]?.endsWith("migrate.ts") || process.argv[1]?.endsWith("migrate.js");
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error("Fatal:", err);
+    process.exit(1);
+  });
+}

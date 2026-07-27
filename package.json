@@ -2,6 +2,9 @@
   "name": "pi-triple",
   "version": "0.1.0",
   "type": "module",
+  "bin": {
+    "pit": "./src/pit.ts"
+  },
   "engines": {
     "node": ">=22"
   },
@@ -14,6 +17,7 @@
     "cli": "tsx src/cli.ts",
     "doctor": "tsx src/doctor.ts",
     "migrate": "tsx src/migrate.ts",
+    "create-tenant": "tsx src/create-tenant.ts",
     "tui": "tsx src/cli-pi.ts",
     "tui:legacy": "tsx src/tui/index.tsx",
     "lint": "tsc --noEmit"
