@@ -40,7 +40,10 @@ function printHelp(): void {
   console.log("");
   console.log("  命令:");
   console.log("    onboard            首次导引（检查→安装→租户→迁移→验证）");
-  console.log("    start [args...]    启动 pi（透传 pi 参数）");
+  console.log("    start [args...]    启动 pi（--bg 后台，--name 命名）");
+  console.log("    attach <name>      接入后台会话（同一终端切换）");
+  console.log("    ls                 列出所有会话（前台+后台）");
+  console.log("    stop <name>        停止后台会话");
   console.log("    status             快速健康检查");
   console.log("    doctor             完整健康检查 + 交互修复");
   console.log("    tenant ls          列出所有租户");
@@ -63,7 +66,10 @@ function printHelp(): void {
   console.log("");
   console.log("  示例:");
   console.log("    pit start                          # 默认租户启动");
-  console.log("    pit start --tenant dev -c          # dev 租户，继续会话");
+  console.log("    pit start --bg --name coding         # 后台启动");
+  console.log("    pit attach coding                    # 接入后台会话");
+  console.log("    pit ls                               # 列出所有会话");
+  console.log("    pit stop coding                      # 停止后台会话");
   console.log("    pit start -- --thinking high       # 透传 pi 参数");
   console.log("    pit tenant new my-team             # 新建租户");
   console.log("");
@@ -81,7 +87,7 @@ function parseArgs(args: string[]): { command: string; subcommand?: string; flag
     const arg = args[i];
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (key === "tenant" || key === "project" || key === "model" || key === "provider" || key === "thinking") {
+      if (key === "tenant" || key === "project" || key === "model" || key === "provider" || key === "thinking" || key === "name") {
         flags[key] = args[++i] ?? "";
       } else {
         flags[key] = "true";
@@ -317,6 +323,132 @@ async function cmdMigrate(flags: Record<string, string>): Promise<void> {
   await migrate({ tenantId, dryRun: flags["dry-run"] === "true" });
 }
 
+
+// ─── Tmux Session Management ─────────────────────────────────
+
+function hasTmux(): boolean {
+  return spawnSync("tmux", ["-V"], { encoding: "utf-8" }).status === 0;
+}
+
+function tmuxSessionName(name: string): string {
+  return `pit-${name}`;
+}
+
+function cmdStartBg(flags: Record<string, string>, passthrough: string[]): void {
+  const config = loadConfig();
+  const tenantId = flags.tenant ?? config.defaultTenant;
+  const name = flags.name ?? `${tenantId}-${Date.now().toString(36)}`;
+  const session = tmuxSessionName(name);
+
+  if (!hasTmux()) {
+    console.log("  \x1b[31m❌ tmux 未安装\x1b[0m");
+    if (process.platform === "darwin") console.log("  安装: brew install tmux");
+    else if (process.platform === "linux") console.log("  安装: sudo apt install tmux");
+    else console.log("  Windows: 请使用 WSL2 安装 tmux");
+    process.exit(1);
+  }
+
+  const check = spawnSync("tmux", ["has-session", "-t", session], { encoding: "utf-8" });
+  if (check.status === 0) {
+    console.log(`  ⚠️  会话 "${name}" 已在运行`);
+    console.log(`  接入: pit attach ${name}`);
+    return;
+  }
+
+  const tenantConfig = config.tenants[tenantId] ?? {};
+  const piArgs: string[] = [];
+  const provider = flags.provider ?? tenantConfig.provider;
+  const model = flags.model ?? tenantConfig.model;
+  if (provider) piArgs.push("--provider", provider);
+  if (model) piArgs.push("--model", model);
+  if (flags.thinking) piArgs.push("--thinking", flags.thinking);
+  if (passthrough.includes("-c")) piArgs.push("--continue");
+
+  const dataDir = resolveDataDir(config);
+  const agentDir = path.join(dataDir, "pi-config", tenantId);
+  const piCmd = `PI_CODING_AGENT_DIR=${agentDir} pi ${piArgs.join(" ")}`;
+
+  const result = spawnSync("tmux", [
+    "new-session", "-d", "-s", session,
+    "-x", "200", "-y", "50",
+    piCmd,
+  ], { encoding: "utf-8", env: { ...process.env } });
+
+  if (result.status === 0) {
+    console.log(`  \x1b[32m✅ 后台会话已启动\x1b[0m`);
+    console.log(`  名称: ${name}  租户: ${tenantId}`);
+    console.log(`  接入: \x1b[36mpit attach ${name}\x1b[0m`);
+    console.log(`  切换: tmux 内 \x1b[2mCtrl+B s\x1b[0m 选择 · \x1b[2mCtrl+B d\x1b[0m 脱离`);
+  } else {
+    console.log(`  \x1b[31m❌ 启动失败: ${result.stderr}\x1b[0m`);
+  }
+}
+
+function cmdAttach(name: string): void {
+  if (!name) { cmdLs(); console.log("  用法: pit attach <name>"); return; }
+  if (!hasTmux()) { console.log("  \x1b[31m❌ tmux 未安装\x1b[0m"); process.exit(1); }
+
+  const session = tmuxSessionName(name);
+  const check = spawnSync("tmux", ["has-session", "-t", session], { encoding: "utf-8" });
+  if (check.status !== 0) {
+    console.log(`  \x1b[31m❌ 会话 "${name}" 不存在\x1b[0m`);
+    console.log("  运行 pit ls 查看可用会话");
+    return;
+  }
+
+  const result = spawnSync("tmux", ["attach", "-t", session], {
+    stdio: "inherit",
+    env: { ...process.env, TERM: process.env.TERM ?? "xterm-256color" },
+  });
+  process.exit(result.status ?? 0);
+}
+
+function cmdLs(): void {
+  printBanner();
+  if (!hasTmux()) { console.log("  tmux 未安装\n"); return; }
+
+  const result = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}:#{session_windows}:#{session_created}"], { encoding: "utf-8" });
+  const sessions = (result.stdout ?? "").trim().split("\n")
+    .filter((l) => l.startsWith("pit-"))
+    .map((l) => {
+      const [full, win, created] = l.split(":");
+      return { name: full.replace(/^pit-/, ""), windows: parseInt(win ?? "1"), created: new Date(parseInt(created ?? "0") * 1000) };
+    });
+
+  if (sessions.length === 0) {
+    console.log("  无后台会话");
+    console.log("  启动: pit start --bg --name coding");
+  } else {
+    console.log("  \x1b[2mNAME              WINDOWS  CREATED\x1b[0m");
+    for (const s of sessions) {
+      const age = formatAge(Date.now() - s.created.getTime());
+      console.log(`  \x1b[1m${s.name.padEnd(18)}\x1b[0m${String(s.windows).padEnd(9)}${age}`);
+    }
+    console.log("\n  接入: \x1b[36mpit attach <name>\x1b[0m · 停止: \x1b[36mpit stop <name>\x1b[0m");
+  }
+  console.log("");
+}
+
+function cmdStop(name: string): void {
+  if (!name) { console.log("  用法: pit stop <name>"); return; }
+  if (name === "--all") {
+    const result = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}"], { encoding: "utf-8" });
+    const pits = (result.stdout ?? "").trim().split("\n").filter((s) => s.startsWith("pit-"));
+    for (const s of pits) { spawnSync("tmux", ["kill-session", "-t", s]); console.log(`  ✅ 已停止 ${s.replace(/^pit-/, "")}`); }
+    if (pits.length === 0) console.log("  无后台会话");
+    return;
+  }
+  const result = spawnSync("tmux", ["kill-session", "-t", tmuxSessionName(name)], { encoding: "utf-8" });
+  console.log(result.status === 0 ? `  ✅ 已停止 "${name}"` : `  \x1b[31m❌ 会话 "${name}" 不存在\x1b[0m`);
+}
+
+function formatAge(ms: number): string {
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  return hours < 24 ? `${hours}h ${mins % 60}m ago` : `${Math.floor(hours / 24)}d ago`;
+}
+
 // ─── Main ────────────────────────────────────────────────────
 
 async function main() {
@@ -328,7 +460,20 @@ async function main() {
       await cmdOnboard(flags);
       break;
     case "start":
-      await cmdStart(flags, passthrough);
+      if (flags.bg === "true") {
+        cmdStartBg(flags, passthrough);
+      } else {
+        await cmdStart(flags, passthrough);
+      }
+      break;
+    case "attach":
+      cmdAttach(subcommand || passthrough[0] || "");
+      break;
+    case "ls":
+      cmdLs();
+      break;
+    case "stop":
+      cmdStop(subcommand || passthrough[0] || "");
       break;
     case "status":
       await cmdStatus();
