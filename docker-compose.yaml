@@ -1,0 +1,39 @@
+services:
+  pi-platform:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - workspaces:/data/workspaces
+      - platform:/data/platform
+      - tenants:/data/tenants
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - PI_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - PI_OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LOG_LEVEL=info
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  workspaces:
+  platform:
+  tenants:
+  redis-data:
