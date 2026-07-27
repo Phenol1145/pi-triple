@@ -155,7 +155,7 @@ export class AgentEngine {
         unsubscribe();
       }, 120_000);
 
-      session.prompt(text).catch((err) => {
+      const promptPromise = session.prompt(text).catch((err) => {
         error(err instanceof Error ? err : new Error(String(err)));
         unsubscribe();
         clearTimeout(watchdog);
@@ -181,6 +181,8 @@ export class AgentEngine {
         unsubscribe();
       }
 
+      // Wait for pi SDK prompt to fully resolve before releasing
+      await promptPromise;
       await this.checkpoint(managed, seq);
     } finally {
       this.pool.markIdle(sessionId);
