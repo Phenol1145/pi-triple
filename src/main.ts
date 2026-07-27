@@ -34,7 +34,7 @@ async function main() {
   const credentials = new EnvCredentialProvider();
   const audit = new AuditWriter(redis);
 
-  const dataDir = process.env.DATA_DIR ?? "/data";
+  const dataDir = process.env.DATA_DIR ?? "./.pi-platform-data";
   const workspaceMgr = new WorkspaceManager(
     platform,
     `${dataDir}/workspaces`,
