@@ -47,6 +47,29 @@ Client → Bearer token → auth hook → Redis GET auth:token:{token}
   → 传递给所有请求处理器
 ```
 
+#### 扩展方式
+
+**添加自定义 API 端点**：采用 Fastify plugin 模式，与现有路由风格一致。
+
+```typescript
+// src/gateway/routes-custom.ts
+export function registerCustomRoutes(app: FastifyInstance, engine: AgentEngine) {
+  app.get("/api/v1/stats", async (req) => ({
+    tenant: req.auth.tenantId,           // auth hook 自动注入
+    sessions: engine.listSessions(req.auth.tenantId).length,
+  }));
+}
+
+// server.ts 中挂载：
+// registerCustomRoutes(app, engine);
+```
+
+- 所有 `/api/v1/*` 路由自动经过 auth hook（Bearer token → tenantId）
+- `/health` 和 `/metrics` 免认证
+- `req.auth: { tenantId, role }` 在所有 handler 中可用
+
+详见 `examples/custom-route/index.ts`。
+
 ### Core Layer
 
 | 模块 | 职责 |
@@ -118,6 +141,29 @@ pi 内置工具 (read, bash, edit, write)
 
 当前 pi 的 `createAgentSession` 直接使用 `toolPlatform.getAllowedTools(tenantId)` 返回的工具列表传入 SDK。治理事件在 `session.subscribe()` 回调中记录（`recordToolStart` / `recordToolEnd`）。
 
+#### 扩展方式
+
+**注册自定义工具**：
+
+```typescript
+// main.ts 中 assembly 阶段
+toolRegistry.registerCustomTool("my-tenant", {
+  name: "weather",
+  description: "查询指定城市的天气",
+  parameters: { type: "object", properties: { city: { type: "string" } }, required: ["city"] },
+  version: 1,
+  idempotent: true,
+  executor: "local",
+});
+```
+
+- 工具名不能与内置工具（`read/bash/edit/write/grep/find/ls`）重名
+- 每个租户有独立的 allowlist：`setTenantAllowlist(tenantId, [...])` 可定制
+- `ToolExecutor` SPI 提供 `execute(request): AsyncIterable<ToolEvent>` + `cancel(toolCallId)` 接口
+- 自定义工具的治理事件（审计 + 指标）通过 `ToolPlatform.recordToolStart/End()` 记录
+
+详见 `examples/custom-tool/index.ts`。
+
 #### WorkflowOrchestrator
 
 ```
@@ -132,6 +178,27 @@ Orchestrator (App 层状态机)
   parallel     → (stub，预留)
   condition    → (stub，预留)
 ```
+
+#### 扩展方式
+
+**定义工作流**：
+
+```typescript
+const reviewFlow: WorkflowDefinition = {
+  id: "code-review",
+  name: "自动代码审查",
+  contentHash: "abc123",
+  steps: [
+    { type: "agent", index: 0, agentConfig: { project: "repo" }, prompt: "审查代码", idempotencyKey: "step-0" },
+    { type: "agent", index: 1, agentConfig: { project: "repo" }, prompt: "根据审查结果生成修复", idempotencyKey: "step-1" },
+    { type: "human-approval", index: 2, question: "是否合并？", timeoutMs: 3600_000 },
+  ],
+};
+
+await orchestrator.execute(reviewFlow, tenantId);
+```
+
+四种步骤类型中 `agent` 和 `human-approval` 可用，`parallel` 和 `condition` 为 stub。工作流执行获取 Redis 分布式锁，Lua 脚本安全释放，`fencingToken` 防止误删。
 
 #### Self-Modify（自修改）
 
@@ -151,6 +218,27 @@ RebuildTrigger.requestRebuild(tenantId, commitHash)
   → kill 旧进程 → npm ci + build → 启动新版本
   → 健康检查 → 失败则回滚到符号链接
 ```
+
+#### 扩展方式
+
+**热加载开发指引**：在 `{DATA_DIR}/platform/` 下创建文件，chokidar 自动检测变更。
+
+```bash
+# L1: 添加 SKILL.md（即时生效，下次 turn 使用）
+mkdir -p .pi-platform-data/platform/skills/my-skill/
+# 写入 SKILL.md（必须包含 # 标题），保存后自动热加载
+
+# L2: 注册新工具（需重启）
+# 在 main.ts 中调用 toolRegistry.registerCustomTool()
+
+# L3: 代码变更（通过 RebuildTrigger + supervisor.sh）
+# 写入 .rebuild-request → supervisor 检测 → A/B 符号链接切换
+```
+
+- 监听目录：`skills/`、`prompts/`、`config/`
+- `SKILL.md` 校验：必须包含 Markdown 标题
+- `settings.json` 校验：必须是合法 JSON
+- 错误文件不覆盖上次成功 hash
 
 #### WorkspaceManager
 
@@ -183,6 +271,38 @@ SessionIndex      → session-index:{tenant}（ZSET，member 为 {"sessionId","p
 ```
 
 回放时：取最新 snapshot + 其 seq 之后的所有 entry。
+
+#### 扩展方式
+
+**替换存储后端**：实现 `SessionStore` 和 `SettingsStore` 接口即可。
+
+接口方法（完整列表）：
+
+```typescript
+interface SessionStore {
+  appendEntry / getEntries / getMeta / saveMeta
+  saveSnapshot / getLatestSnapshot / listSessions
+  deleteSession / saveVersionSnapshot / getLatestVersionSnapshot
+}
+interface SettingsStore {
+  get / set
+}
+interface CredentialProvider {
+  getApiKey(tenant, provider) → Promise<string | null>
+}
+```
+
+替换方式：在 `main.ts` 中改变实例化（其余代码通过接口消费，无需改动）：
+
+```typescript
+// 原: const sessionStore = new RedisSessionStore(redis);
+// 改为:
+const sessionStore = new PostgresSessionStore(pgPool);
+const settingsStore = new VaultSettingsStore();
+const credentials = new DatabaseCredentialProvider(dbPool);
+```
+
+详见 `examples/custom-store/index.ts`（内存版 SessionStore 完整示例）。
 
 #### 跨 OS 抽象（PlatformAdapter）
 

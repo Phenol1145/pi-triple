@@ -128,6 +128,66 @@ pi-platform/
 | C9 | Turn 级版本快照 | ✅ computeHash + saveSnapshot |
 | C10 | 外部 supervisor 回滚 | ✅ supervisor.sh（Docker 入口待接线） |
 
+## 开发者指南
+
+### 开发循环
+
+```bash
+# 1. 修改代码
+vim src/tools/custom/my-tool.ts
+
+# 2. 类型检查
+npx tsc --noEmit
+
+# 3. 跑测试
+npx vitest run
+
+# 4. CLI 快速验证
+npm run cli
+
+# 5. HTTP 验证（需先启动服务）
+npm run dev &
+curl -X POST http://localhost:3000/api/v1/sessions \
+  -H "Authorization: Bearer test-token-123" \
+  -d '{"project":"dev-test"}'
+
+# 6. 提交
+git add -A && git commit -m "feat: ..."
+```
+
+### 扩展点速查
+
+| 想做什么 | 去哪里 | 参考 |
+|----------|--------|------|
+| 添加自定义工具 | `src/tools/` | [architecture.md #ToolPlatform](./docs/architecture.md#toolplatform-c8-治理层) |
+| 添加 API 端点 | `src/gateway/` | [architecture.md #Gateway](./docs/architecture.md#gateway-layer) |
+| 替换存储后端 | `src/storage/` | [architecture.md #存储模型](./docs/architecture.md#存储模型) |
+| 定义工作流 | `src/workflow/` | [architecture.md #WorkflowOrchestrator](./docs/architecture.md#workfloworchestrator) |
+| 添加 Skill/Prompt | `{DATA_DIR}/platform/` | [architecture.md #Self-Modify](./docs/architecture.md#self-modify-自修改) |
+| 添加模型凭证来源 | `src/storage/credential-provider.ts` | 实现 `CredentialProvider` 接口 |
+
+### 示例代码
+
+见 `examples/` 目录，每个示例可直接运行：
+
+```bash
+npx tsx examples/custom-tool/index.ts    # 自定义工具
+npx tsx examples/custom-route/index.ts   # 自定义 API 端点
+npx tsx examples/custom-store/index.ts   # 自定义存储后端
+```
+
+### 设计原则（必读）
+
+| 原则 | 说明 |
+|------|------|
+| DTO 纪律 | 跨模块只传 JSON 可序列化对象，不传 class 实例 |
+| 流式用 AsyncIterable | 不用 callback / EventEmitter，通过 Bridge 桥接 |
+| 错误用判别联合 | `Result<T> = {ok:true, data} \| {ok:false, error}` |
+| 租户隔离 | 所有数据操作带 tenantId，Engine 层强制校验 |
+| 工具是治理层 | 不重写 pi 内置工具，只包装审计/ACL/指标 |
+
+详见 [architecture.md #硬约束详解](./docs/architecture.md#硬约束详解)。
+
 ## 已知限制
 
 - **worker_threads**（C4）：BullMQ worker 在主进程运行，生产环境建议隔离
