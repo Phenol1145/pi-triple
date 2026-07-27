@@ -1,5 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
-import { CommandRegistry, parseInput } from "../../src/tui/commands.js";
+import { CommandRegistry, parseInput, registerBuiltinCommands, type CommandContext } from "../../src/tui/commands.js";
+
+function mockCtx(overrides?: Partial<CommandContext>): CommandContext {
+  return {
+    createSession: vi.fn(),
+    switchSession: vi.fn(),
+    listSessions: () => [],
+    abort: vi.fn(),
+    setModel: vi.fn(),
+    getLastAssistantMessage: () => null,
+    copyToClipboard: vi.fn().mockResolvedValue(false),
+    quit: vi.fn(),
+    print: vi.fn(),
+    ...overrides,
+  };
+}
 
 describe("parseInput", () => {
   it("parses normal text", () => {
@@ -62,6 +77,27 @@ describe("CommandRegistry", () => {
     const reg = new CommandRegistry();
     const handled = await reg.execute("nope", "", {} as any);
     expect(handled).toBe(false);
+  });
+
+  it("copy command prints error when no message", async () => {
+    const reg = new CommandRegistry();
+    registerBuiltinCommands(reg);
+    const ctx = mockCtx({ getLastAssistantMessage: () => null });
+    await reg.execute("copy", "", ctx);
+    expect(ctx.print).toHaveBeenCalledWith("No assistant message to copy.");
+  });
+
+  it("copy command copies message via clipboard", async () => {
+    const reg = new CommandRegistry();
+    registerBuiltinCommands(reg);
+    const copyFn = vi.fn().mockResolvedValue(true);
+    const ctx = mockCtx({
+      getLastAssistantMessage: () => "hello world",
+      copyToClipboard: copyFn,
+    });
+    await reg.execute("copy", "", ctx);
+    expect(copyFn).toHaveBeenCalledWith("hello world");
+    expect(ctx.print).toHaveBeenCalledWith("[copied 11 chars]");
   });
 
   it("lists registered commands", () => {

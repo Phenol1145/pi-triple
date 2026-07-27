@@ -10,6 +10,7 @@ export interface CommandContext {
   abort(): Promise<void>;
   setModel(provider: string, model: string): void;
   getLastAssistantMessage(): string | null;
+  copyToClipboard(text: string): Promise<boolean>;
   quit(): void;
   print(text: string): void;
 }
@@ -139,10 +140,15 @@ export function registerBuiltinCommands(reg: CommandRegistry): void {
     description: "Copy last assistant message to clipboard",
     execute: async (_args, ctx) => {
       const msg = ctx.getLastAssistantMessage();
-      if (msg) {
+      if (!msg) {
+        ctx.print("No assistant message to copy.");
+        return;
+      }
+      const ok = await ctx.copyToClipboard(msg);
+      if (ok) {
         ctx.print(`[copied ${msg.length} chars]`);
       } else {
-        ctx.print("No assistant message to copy.");
+        ctx.print("Clipboard not available on this platform.");
       }
     },
   });

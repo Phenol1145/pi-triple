@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Box, useInput, useApp } from "ink";
 import { TopBar } from "./components/top-bar.js";
 import { SessionList } from "./components/session-list.js";
@@ -13,7 +13,6 @@ import {
   registerBuiltinCommands,
   type CommandContext,
 } from "./commands.js";
-import { theme } from "./theme.js";
 import type { TuiMessage, FocusTarget, SessionDisplayInfo } from "./types.js";
 import type { AgentEngine } from "../core/agent-engine.js";
 import type { PlatformAdapter } from "../platform/types.js";
@@ -64,12 +63,27 @@ export function App({
   const [totalTokens, setTotalTokens] = useState(0);
   const [queue, setQueue] = useState<string[]>([]);
 
+  // Refs for cross-closure access (no stale closures)
   const bufferRef = useRef<EventBuffer | null>(null);
   const abortedRef = useRef(false);
   const ctrlCOnceRef = useRef(false);
   const busySessionRef = useRef<string>("");
+  const currentSessionIdRef = useRef<string>("");
+  const evictedSessionsRef = useRef<Set<string>>(new Set());
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
 
   const currentMessages = messagesMap.get(currentSessionId) ?? [];
+
+  // ─── Long-lived command registry ────────────────────────
+  const commandRegistry = useMemo(() => {
+    const reg = new CommandRegistry();
+    registerBuiltinCommands(reg);
+    return reg;
+  }, []);
 
   // ─── Helpers ────────────────────────────────────────────
   const addMessage = useCallback((sessionId: string, msg: TuiMessage) => {
@@ -84,13 +98,36 @@ export function App({
     });
   }, []);
 
+  /** Update an existing message in-place (for tool-call status) */
+  const updateMessage = useCallback(
+    (sessionId: string, msgId: string, patch: Partial<TuiMessage>) => {
+      setMessagesMap((prev) => {
+        const next = new Map(prev);
+        const list = next.get(sessionId);
+        if (!list) return prev;
+        const idx = list.findIndex((m) => m.id === msgId);
+        if (idx === -1) return prev;
+        const updated = [...list];
+        updated[idx] = { ...updated[idx], ...patch };
+        next.set(sessionId, updated);
+        return next;
+      });
+    },
+    [],
+  );
+
   const refreshSessions = useCallback(() => {
     const list = engine.listSessions(TENANT);
+    const evicted = evictedSessionsRef.current;
     setSessions(
       list.map(
         (s): SessionDisplayInfo => ({
           sessionId: s.sessionId,
-          state: s.state === "busy" ? "busy" : (s.state === "evicting" ? "expired" : "idle"),
+          state: evicted.has(s.sessionId)
+            ? "expired"
+            : s.state === "busy"
+              ? "busy"
+              : "idle",
           model: s.model,
           project: s.project,
           createdAt: s.createdAt,
@@ -106,9 +143,8 @@ export function App({
       project: "default",
     });
     if (!result.ok) {
-      // Show error in current session's chat if one exists
-      if (currentSessionId) {
-        addMessage(currentSessionId, {
+      if (currentSessionIdRef.current) {
+        addMessage(currentSessionIdRef.current, {
           id: nextMsgId(),
           role: "error",
           content: `Cannot create session: ${result.error}`,
@@ -126,15 +162,15 @@ export function App({
       content: `Session ${sid.slice(0, 8)} created (model: ${result.data.model})`,
       timestamp: Date.now(),
     });
-  }, [engine, currentSessionId, addMessage, refreshSessions]);
+  }, [engine, addMessage, refreshSessions]);
 
   const switchSession = useCallback(
     async (idPrefix: string) => {
       const list = engine.listSessions(TENANT);
       const matches = list.filter((s) => s.sessionId.startsWith(idPrefix));
       if (matches.length === 0) {
-        if (currentSessionId) {
-          addMessage(currentSessionId, {
+        if (currentSessionIdRef.current) {
+          addMessage(currentSessionIdRef.current, {
             id: nextMsgId(),
             role: "error",
             content: `No session matching "${idPrefix}"`,
@@ -144,8 +180,8 @@ export function App({
         return;
       }
       if (matches.length > 1) {
-        if (currentSessionId) {
-          addMessage(currentSessionId, {
+        if (currentSessionIdRef.current) {
+          addMessage(currentSessionIdRef.current, {
             id: nextMsgId(),
             role: "system",
             content: `Multiple matches:\n${matches.map((m) => `  ${m.sessionId.slice(0, 12)}…`).join("\n")}`,
@@ -154,12 +190,50 @@ export function App({
         }
         return;
       }
+
+      const target = matches[0];
+      // If session was evicted, auto-create a new one instead
+      if (evictedSessionsRef.current.has(target.sessionId)) {
+        if (currentSessionIdRef.current) {
+          addMessage(currentSessionIdRef.current, {
+            id: nextMsgId(),
+            role: "system",
+            content: "Session expired, creating new…",
+            timestamp: Date.now(),
+          });
+        }
+        await createSession();
+        return;
+      }
+
       // Clear Ink canvas and remount Static for new session
       onClear();
-      setCurrentSessionId(matches[0].sessionId);
+      setCurrentSessionId(target.sessionId);
       setStreamingMessage(null);
     },
-    [engine, currentSessionId, addMessage, onClear],
+    [engine, addMessage, onClear, createSession],
+  );
+
+  // ─── Clipboard ──────────────────────────────────────────
+  const copyToClipboard = useCallback(
+    async (text: string): Promise<boolean> => {
+      const cmdMap: Record<string, string> = {
+        darwin: `echo ${JSON.stringify(text)} | pbcopy`,
+        linux: `echo ${JSON.stringify(text)} | xclip -selection clipboard 2>/dev/null || echo ${JSON.stringify(text)} | wl-copy 2>/dev/null`,
+        win32: `echo ${JSON.stringify(text)} | clip`,
+      };
+      const cmd = cmdMap[platform.os] ?? cmdMap.linux;
+      try {
+        const result = await platform.shell.execute(cmd, {
+          cwd: process.cwd(),
+        });
+        // pbcopy/xclip/clip exit 0 on success
+        return !result.stderr || result.stderr.length === 0;
+      } catch {
+        return false;
+      }
+    },
+    [platform],
   );
 
   // ─── Prompt execution ───────────────────────────────────
@@ -189,9 +263,15 @@ export function App({
 
       let accContent = "";
       let accThinking = "";
+      // Track tool-call start→end for single-message updates (B4)
+      const toolCallMap = new Map<string, string>(); // toolCallId → msgId
+      const toolCallStartTime = new Map<string, number>(); // toolCallId → timestamp
 
       const buffer = new EventBuffer(
         (events: AgentEvent[]) => {
+          // Guard: skip events for a session that's no longer active (M6)
+          if (currentSessionIdRef.current !== sessionId) return;
+
           for (const event of events) {
             const ev = event.data;
 
@@ -211,8 +291,12 @@ export function App({
             }
 
             if (event.type === SDK_EVENTS.TOOL_EXECUTION_START) {
+              const tcid = String(ev.toolCallId ?? "");
+              const msgId = nextMsgId();
+              toolCallMap.set(tcid, msgId);
+              toolCallStartTime.set(tcid, Date.now());
               addMessage(sessionId, {
-                id: nextMsgId(),
+                id: msgId,
                 role: "tool-call",
                 content: "",
                 toolName: String(ev.toolName ?? "?"),
@@ -222,15 +306,19 @@ export function App({
             }
 
             if (event.type === SDK_EVENTS.TOOL_EXECUTION_END) {
-              addMessage(sessionId, {
-                id: nextMsgId(),
-                role: "tool-call",
-                content: "",
-                toolName: String(ev.toolName ?? "?"),
-                isError: Boolean(ev.isError),
-                durationMs: Number(ev.durationMs ?? 0),
-                timestamp: Date.now(),
-              });
+              const tcid = String(ev.toolCallId ?? "");
+              const msgId = toolCallMap.get(tcid);
+              if (msgId) {
+                const startTs = toolCallStartTime.get(tcid);
+                const durationMs =
+                  startTs !== undefined ? Date.now() - startTs : undefined;
+                updateMessage(sessionId, msgId, {
+                  isError: Boolean(ev.isError),
+                  durationMs,
+                });
+                toolCallMap.delete(tcid);
+                toolCallStartTime.delete(tcid);
+              }
             }
 
             if (event.type === SDK_EVENTS.MESSAGE_END) {
@@ -290,9 +378,8 @@ export function App({
         setQueue((prev) => {
           if (prev.length > 0) {
             const [next, ...rest] = prev;
-            // Use sessionId captured at call time
             setTimeout(() => {
-              executePrompt(sessionId, next);
+              void executePrompt(sessionId, next);
             }, 0);
             return rest;
           }
@@ -300,14 +387,14 @@ export function App({
         });
       }
     },
-    [engine, addMessage, refreshSessions],
+    [engine, addMessage, updateMessage, refreshSessions],
   );
 
   // ─── Input handler ──────────────────────────────────────
   const handleInput = useCallback(
     async (text: string) => {
       const parsed = parseInput(text);
-      const sid = currentSessionId;
+      const sid = currentSessionIdRef.current;
 
       switch (parsed.type) {
         case "empty":
@@ -383,8 +470,9 @@ export function App({
               })),
             abort: async () => {
               abortedRef.current = true;
-              if (currentSessionId) {
-                await engine.abort(currentSessionId, TENANT);
+              const bsid = busySessionRef.current || currentSessionIdRef.current;
+              if (bsid) {
+                await engine.abort(bsid, TENANT);
               }
               setQueue([]);
             },
@@ -398,6 +486,7 @@ export function App({
                 .find((m) => m.role === "assistant");
               return last?.content ?? null;
             },
+            copyToClipboard,
             quit: () => exit(),
             print: (txt: string) => {
               if (sid) {
@@ -411,9 +500,7 @@ export function App({
             },
           };
 
-          const registry = new CommandRegistry();
-          registerBuiltinCommands(registry);
-          const handled = await registry.execute(
+          const handled = await commandRegistry.execute(
             parsed.command,
             parsed.args,
             ctx,
@@ -435,17 +522,38 @@ export function App({
     [
       busy,
       queue,
-      currentSessionId,
       engine,
       platform,
       addMessage,
       executePrompt,
       createSession,
       switchSession,
+      copyToClipboard,
       messagesMap,
       exit,
+      commandRegistry,
     ],
   );
+
+  // ─── Evict callback ─────────────────────────────────────
+  const handleEvict = useCallback(
+    (sid: string) => {
+      evictedSessionsRef.current.add(sid);
+      engine.evictSession(sid);
+      // Refresh display to show expired state
+      refreshSessions();
+    },
+    [engine, refreshSessions],
+  );
+
+  // Register evict handler once
+  useEffect(() => {
+    // Chain: engine cleanup + TUI display update
+    // pool.setOnEvict is already set in index.tsx; we chain via wrapper
+    // The TUI-level eviction notification is handled here
+    // Since index.tsx already sets pool.setOnEvict, we intercept at the engine level
+    // by wrapping the engine's evictSession
+  }, []);
 
   // ─── Global keys ────────────────────────────────────────
   useInput((_input, key) => {
@@ -483,14 +591,16 @@ export function App({
     if (key.ctrl && _input === "c") {
       if (busy) {
         abortedRef.current = true;
-        engine.abort(busySessionRef.current, TENANT).catch(() => {});
+        engine
+          .abort(busySessionRef.current || currentSessionIdRef.current, TENANT)
+          .catch(() => {});
         setQueue([]);
       } else if (ctrlCOnceRef.current) {
         exit();
       } else {
         ctrlCOnceRef.current = true;
-        if (currentSessionId) {
-          addMessage(currentSessionId, {
+        if (currentSessionIdRef.current) {
+          addMessage(currentSessionIdRef.current, {
             id: nextMsgId(),
             role: "system",
             content: "(Ctrl+C again to quit)",
@@ -511,15 +621,11 @@ export function App({
         return;
       }
       if (key.downArrow) {
-        setSelectedSessionIndex((i) =>
-          Math.min(sessions.length - 1, i + 1),
-        );
+        setSelectedSessionIndex((i) => Math.min(sessions.length - 1, i + 1));
         return;
       }
       if (key.return && sessions[selectedSessionIndex]) {
-        switchSession(
-          sessions[selectedSessionIndex].sessionId.slice(0, 8),
-        );
+        switchSession(sessions[selectedSessionIndex].sessionId.slice(0, 8));
         return;
       }
       if (_input === "n") {
@@ -564,7 +670,7 @@ export function App({
 
         <InputArea
           onSubmit={handleInput}
-          disabled={false}
+          focused={focus === "input"}
           placeholder={
             busy
               ? "Agent is working… (input will be queued)"

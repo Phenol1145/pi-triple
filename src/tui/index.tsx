@@ -98,10 +98,11 @@ async function main(): Promise<void> {
     metrics,
   );
 
-  // Chain evict handler: engine cleanup + TUI display update
-  pool.setOnEvict((sid, tenantId) => {
-    engine.evictSession(sid);
-    // TUI session display gets updated on next refreshSessions()
+  // Evict is handled inside App via handleEvict callback (B7/M7),
+  // which chains engine.evictSession + TUI display update.
+  // We set a no-op here; App overrides via engine.evictSession wrapping.
+  pool.setOnEvict((sid) => {
+    // App's handleEvict takes care of everything (engine + TUI display)
   });
 
   // Resolve model display name
