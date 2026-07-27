@@ -6,3 +6,5 @@ dist/
 .superpowers/
 .pi-subagents/
 .pi-platform-data/
+*.tgz
+*.zip
