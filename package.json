@@ -9,6 +9,7 @@
     "start": "node dist/main.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "cli": "tsx src/cli.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
