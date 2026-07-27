@@ -22,7 +22,7 @@ import { loadConfig, saveConfig, resolveDataDir, type PiTripleConfig } from "./c
 import { runDoctor } from "./doctor.js";
 import { launchPi } from "./launcher.js";
 import { migrate } from "./migrate.js";
-import { initSharedLayer, linkTenantToShared, sharedStatus, promoteToShared } from "./shared-layer.js";
+import { initSharedLayer, linkTenantToShared, sharedStatus, promoteToShared, installBundledExtensions } from "./shared-layer.js";
 
 const VERSION = "0.1.0";
 
@@ -144,6 +144,15 @@ async function cmdOnboard(flags: Record<string, string>): Promise<void> {
     console.log(`  创建租户 "${tenantName}"…`);
     await migrate({ tenantId: tenantName });
   }
+
+  // 安装内置扩展到共享层
+  const sharedDirOnboard = path.resolve(path.join(dataDir, "shared"));
+  initSharedLayer(sharedDirOnboard);
+  const bundledOnboard = installBundledExtensions(sharedDirOnboard);
+  if (bundledOnboard.length > 0) {
+    console.log(`  ✅ 内置扩展: ${bundledOnboard.join(", ")}`);
+  }
+  linkTenantToShared(tenantDir, sharedDirOnboard);
 
   // Step 4: 验证
   console.log("  \x1b[1mStep 4/4\x1b[0m — 验证");
@@ -553,6 +562,11 @@ async function main() {
         // 重新链接
         linkTenantToShared(tenantDir, sharedDir2);
         console.log("  ✅ 已链接共享层到默认租户");
+        // 安装内置扩展
+        const bundled = installBundledExtensions(sharedDir2);
+        if (bundled.length > 0) {
+          console.log(`  ✅ 已安装内置扩展: ${bundled.join(", ")}`);
+        }
       } else {
         // status
         const st = sharedStatus(sharedDir2);

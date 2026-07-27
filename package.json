@@ -8,6 +8,7 @@
   "files": [
     "dist",
     "config",
+    "extensions",
     "scripts",
     "README.md"
   ],

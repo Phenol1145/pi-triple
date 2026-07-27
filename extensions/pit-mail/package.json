@@ -1,0 +1,8 @@
+{
+  "name": "pit-mail",
+  "version": "0.1.0",
+  "description": "Pi-Triple Intercom — cross-session communication for pi",
+  "main": "index.ts",
+  "keywords": ["pi-extension", "pi-triple", "intercom", "mailbox"],
+  "author": "Pi-Triple"
+}

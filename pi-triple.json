@@ -1,6 +1,7 @@
 {
   "defaultTenant": "local",
   "dataDir": "./.pi-platform-data",
+  "sharedDir": "./.pi-platform-data/shared",
   "redis": "redis://localhost:6379",
   "gateway": {
     "port": 3000

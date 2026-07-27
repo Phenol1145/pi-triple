@@ -145,3 +145,36 @@ export function promoteToShared(tenantDir: string, sharedDir: string): {
 
   return { moved, kept };
 }
+
+/**
+ * 安装随包分发的内置扩展到共享层。
+ * 源目录：包根目录/extensions/（npm install 后可通过 import.meta 或 __dirname 定位）
+ * 目标：sharedDir/extensions/
+ */
+export function installBundledExtensions(sharedDir: string): string[] {
+  const installed: string[] = [];
+
+  // 定位包内 extensions/ 目录
+  // 编译后在 dist/shared-layer.js，包根在上一级
+  const packageRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+  const bundledDir = path.join(packageRoot, "extensions");
+
+  if (!fs.existsSync(bundledDir)) return installed;
+
+  const targetExtDir = path.join(sharedDir, "extensions");
+  fs.mkdirSync(targetExtDir, { recursive: true });
+
+  for (const entry of fs.readdirSync(bundledDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const src = path.join(bundledDir, entry.name);
+    const dst = path.join(targetExtDir, entry.name);
+
+    // 已存在则跳过（不覆盖用户修改）
+    if (fs.existsSync(dst)) continue;
+
+    fs.cpSync(src, dst, { recursive: true });
+    installed.push(entry.name);
+  }
+
+  return installed;
+}
