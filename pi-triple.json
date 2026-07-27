@@ -1,0 +1,9 @@
+{
+  "defaultTenant": "local",
+  "dataDir": "./.pi-platform-data",
+  "redis": "redis://localhost:6379",
+  "gateway": {
+    "port": 3000
+  },
+  "tenants": {}
+}

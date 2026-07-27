@@ -3,8 +3,14 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "pit": "./src/pit.ts"
+    "pit": "./dist/pit.js"
   },
+  "files": [
+    "dist",
+    "config",
+    "scripts",
+    "README.md"
+  ],
   "engines": {
     "node": ">=22"
   },

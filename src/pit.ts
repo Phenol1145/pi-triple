@@ -17,10 +17,12 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { loadConfig, saveConfig, resolveDataDir, type PiTripleConfig } from "./config.js";
 import { runDoctor } from "./doctor.js";
 import { launchPi } from "./launcher.js";
 import { migrate } from "./migrate.js";
+import { initSharedLayer, linkTenantToShared, sharedStatus, promoteToShared } from "./shared-layer.js";
 
 const VERSION = "0.1.0";
 
@@ -44,7 +46,12 @@ function printHelp(): void {
   console.log("    tenant ls          列出所有租户");
   console.log("    tenant new [name]  新建租户");
   console.log("    tenant rm <name>   删除租户");
+  console.log("    update             更新 pi 到最新版");
+  console.log("    install <source>    安装 pi 扩展 (--shared 装到共享层)");
+  console.log("    remove <source>     卸载 pi 扩展");
   console.log("    migrate            迁移 pi 扩展到当前租户");
+  console.log("    shared status       查看共享层状态");
+  console.log("    shared init         初始化共享层（从默认租户提升）");
   console.log("    config             显示当前配置");
   console.log("    config init        初始化 pi-triple.json");
   console.log("    help               显示帮助");
@@ -248,6 +255,13 @@ async function cmdTenantNew(name?: string, flags?: Record<string, string>): Prom
   console.log("");
   await migrate({ tenantId: name });
 
+  // 自动链接共享层
+  const sharedDirPath = path.resolve(process.cwd(), config.sharedDir);
+  if (fs.existsSync(sharedDirPath)) {
+    linkTenantToShared(tenantDir, sharedDirPath);
+    console.log("  ✅ 已链接共享层");
+  }
+
   // 写入 config
   config.tenants[name] = {};
   saveConfig(config);
@@ -328,6 +342,86 @@ async function main() {
       else if (subcommand === "rm") cmdTenantRm(passthrough[0] ?? subcommand);
       else cmdTenantList();
       break;
+    case "update": {
+      console.log("  检查 pi 更新…");
+      const cur = spawnSync("pi", ["--version"], { encoding: "utf-8" });
+      const latest = spawnSync("npm", ["view", "@earendil-works/pi-coding-agent", "version"], { encoding: "utf-8" });
+      const curVer = cur.stdout?.trim() ?? "unknown";
+      const latestVer = latest.stdout?.trim() ?? "unknown";
+      console.log(`  当前: v${curVer}  最新: v${latestVer}`);
+      if (curVer === latestVer) {
+        console.log("  \x1b[32m✅ 已是最新版\x1b[0m");
+      } else {
+        console.log(`  升级中…`);
+        const r = spawnSync("npm", ["install", "-g", `@earendil-works/pi-coding-agent@${latestVer}`], { stdio: "inherit" });
+        if (r.status === 0) console.log(`  \x1b[32m✅ 已升级到 v${latestVer}\x1b[0m`);
+        else console.log("  \x1b[31m❌ 升级失败\x1b[0m");
+      }
+      break;
+    }
+    case "install":
+    case "remove":
+    case "uninstall": {
+      const config2 = loadConfig();
+      const dataDir = resolveDataDir(config2);
+      const sharedDir = path.resolve(process.cwd(), config2.sharedDir);
+      const isShared = flags.shared === "true";
+
+      // 确定目标目录
+      let agentDir: string;
+      if (isShared) {
+        initSharedLayer(sharedDir);
+        agentDir = sharedDir;
+      } else {
+        const tid = flags.tenant ?? config2.defaultTenant;
+        agentDir = path.join(dataDir, "pi-config", tid);
+      }
+
+      const piArgs = [command, subcommand, ...passthrough].filter((a): a is string => Boolean(a));
+      console.log(`  ${isShared ? "共享层" : "租户"}  ${agentDir}`);
+      const r = spawnSync("pi", piArgs, {
+        stdio: "inherit",
+        env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
+      });
+      process.exit(r.status ?? 0);
+      break;
+    }
+    case "shared": {
+      const config2 = loadConfig();
+      const dataDir2 = resolveDataDir(config2);
+      const sharedDir2 = path.resolve(process.cwd(), config2.sharedDir);
+
+      if (subcommand === "init") {
+        // 从默认租户提升到共享层
+        const tenantDir = path.join(dataDir2, "pi-config", config2.defaultTenant);
+        if (!fs.existsSync(tenantDir)) {
+          console.log(`  ❌ 默认租户 "${config2.defaultTenant}" 不存在，先运行 pit onboard`);
+          break;
+        }
+        const { moved, kept } = promoteToShared(tenantDir, sharedDir2);
+        console.log(`  ✅ 迁移到共享层: ${moved.length} 项`);
+        for (const m of moved) console.log(`    📦 ${m}`);
+        if (kept.length > 0) {
+          console.log(`  保留在租户: ${kept.length} 项`);
+          for (const k of kept) console.log(`    ${k}`);
+        }
+        // 重新链接
+        linkTenantToShared(tenantDir, sharedDir2);
+        console.log("  ✅ 已链接共享层到默认租户");
+      } else {
+        // status
+        const st = sharedStatus(sharedDir2);
+        printBanner();
+        if (!st.exists) {
+          console.log("  共享层未初始化。运行: pit shared init");
+        } else {
+          console.log(`  共享层: ${sharedDir2}`);
+          console.log(`  扩展: ${st.extensions}  技能: ${st.skills}  包: ${st.packages}`);
+        }
+        console.log("");
+      }
+      break;
+    }
     case "migrate":
       await cmdMigrate(flags);
       break;

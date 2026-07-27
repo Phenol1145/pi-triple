@@ -25,6 +25,7 @@ import { createLogger } from "./observability/logger.js";
 import { EnvCredentialProvider } from "./storage/credential-provider.js";
 import { ModelRouter } from "./model-router/router.js";
 import { WorkspaceManager } from "./workspace/manager.js";
+import { ensureTenantLinks } from "./shared-layer.js";
 
 export interface LaunchOptions {
   /** Tenant ID (from auth token or "local") */
@@ -125,6 +126,10 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
   }
   console.log(`Workspace: ${cwd}`);
   console.log("");
+
+  // 确保共享层 symlink 完整（首次启动或租户创建后自动链接）
+  const sharedDir = abs(path.join(dataDir, "shared"));
+  ensureTenantLinks(abs(path.join(dataDir, "pi-config", options.tenantId)), sharedDir);
 
   const child = spawn(piBin, args, {
     cwd,
