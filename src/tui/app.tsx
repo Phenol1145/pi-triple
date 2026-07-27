@@ -29,7 +29,6 @@ export interface AppProps {
   model: string;
   version: string;
   sessionLimit: number;
-  onClear: () => void;
 }
 
 let _msgCounter = 0;
@@ -43,7 +42,6 @@ export function App({
   model,
   version,
   sessionLimit,
-  onClear,
 }: AppProps) {
   const { exit } = useApp();
 
@@ -206,12 +204,11 @@ export function App({
         return;
       }
 
-      // Clear Ink canvas and remount Static for new session
-      onClear();
+      // Switch to target session
       setCurrentSessionId(target.sessionId);
       setStreamingMessage(null);
     },
-    [engine, addMessage, onClear, createSession],
+    [engine, addMessage, createSession],
   );
 
   // ─── Clipboard ──────────────────────────────────────────
@@ -647,6 +644,13 @@ export function App({
     Math.max(16, Math.floor((process.stdout.columns ?? 80) * 0.2)),
   );
 
+  // Viewport height for ChatArea: terminal rows minus chrome.
+  // TopBar(3) + InputArea(~3) + StatusBar(3) + borders(~3) ≈ 12
+  const chatHeight = Math.max(5, (process.stdout.rows ?? 24) - 12);
+
+  // Slash-command names for autocomplete
+  const slashCompletions = commandRegistry.list().map((c) => c.name);
+
   return (
     <ErrorBoundary>
       <Box flexDirection="column" height="100%">
@@ -664,17 +668,18 @@ export function App({
             messages={currentMessages}
             streamingMessage={streamingMessage}
             showThinking={showThinking}
-            sessionKey={currentSessionId}
+            height={chatHeight}
           />
         </Box>
 
         <InputArea
           onSubmit={handleInput}
           focused={focus === "input"}
+          completions={slashCompletions}
           placeholder={
             busy
               ? "Agent is working… (input will be queued)"
-              : "Type a message, !cmd, or /help…"
+              : "Type /help (→ autocomplete), !cmd, or message…"
           }
         />
 

@@ -8,6 +8,8 @@ interface InputAreaProps {
   disabled?: boolean;
   focused?: boolean;
   placeholder?: string;
+  /** Slash-command names for → autocomplete */
+  completions?: string[];
 }
 
 export function InputArea({
@@ -15,6 +17,7 @@ export function InputArea({
   disabled = false,
   focused = true,
   placeholder,
+  completions = [],
 }: InputAreaProps) {
   const [lines, setLines] = useState<string[]>([""]);
   const [cursorLine, setCursorLine] = useState(0);
@@ -103,6 +106,32 @@ export function InputArea({
         return;
       }
 
+      // Right Arrow → autocomplete slash commands
+      if (key.rightArrow && completions.length > 0) {
+        const line = lines[cursorLine];
+        if (line.startsWith("/")) {
+          const partial = line.slice(1);
+          const matches = completions.filter((c) => c.startsWith(partial));
+          if (matches.length === 1) {
+            // Unique match: complete to full command + space
+            const newLines = [...lines];
+            newLines[cursorLine] = "/" + matches[0] + " ";
+            setLines(newLines);
+            setCursorCol(newLines[cursorLine].length);
+          } else if (matches.length > 1) {
+            // Multiple matches: complete to longest common prefix
+            const prefix = longestCommonPrefix(matches);
+            if (prefix.length > partial.length) {
+              const newLines = [...lines];
+              newLines[cursorLine] = "/" + prefix;
+              setLines(newLines);
+              setCursorCol(newLines[cursorLine].length);
+            }
+          }
+        }
+        return;
+      }
+
       // Regular character input — insert at cursor position
       if (input && !key.ctrl && !key.meta) {
         const newLines = [...lines];
@@ -160,4 +189,16 @@ export function InputArea({
       )}
     </Box>
   );
+}
+
+/** Longest common prefix of an array of strings */
+function longestCommonPrefix(strs: string[]): string {
+  if (strs.length === 0) return "";
+  let prefix = strs[0];
+  for (const s of strs) {
+    while (!s.startsWith(prefix)) {
+      prefix = prefix.slice(0, -1);
+    }
+  }
+  return prefix;
 }

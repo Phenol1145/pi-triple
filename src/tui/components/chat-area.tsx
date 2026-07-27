@@ -1,44 +1,61 @@
 import React from "react";
-import { Box, Static, Text } from "ink";
+import { Box, Text } from "ink";
 import { MessageBubble } from "./message-bubble.js";
 import { theme } from "../theme.js";
 import type { TuiMessage } from "../types.js";
 
 interface ChatAreaProps {
-  /** Completed messages (rendered in <Static>, terminal-native scrollback) */
+  /** All completed messages */
   messages: TuiMessage[];
-  /** Current streaming message (dynamic area, ≤30fps refresh) */
+  /** Current streaming message (dynamic, ≤30fps refresh) */
   streamingMessage: TuiMessage | null;
   showThinking: boolean;
-  /** Key for remounting Static on session switch */
-  sessionKey: string;
+  /** Available rows for the chat viewport (computed by App) */
+  height: number;
 }
 
+/**
+ * Chat area with simple viewport.
+ *
+ * Instead of <Static> (which renders to terminal scrollback above all
+ * dynamic content and breaks two-column layout), we keep everything in
+ * the Ink dynamic area. Only the last ~N messages that fit in `height`
+ * are shown.
+ */
 export function ChatArea({
   messages,
   streamingMessage,
   showThinking,
-  sessionKey,
+  height,
 }: ChatAreaProps) {
-  return (
-    <Box flexDirection="column" flexGrow={1}>
-      {/* Static region: completed messages, terminal-native scrollback.
-          key={sessionKey} forces remount on session switch so old
-          content is cleared and new session's history renders fresh. */}
-      <Static key={sessionKey} items={messages}>
-        {(msg) => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            showThinking={showThinking}
-          />
-        )}
-      </Static>
+  // Build the visible list: completed messages + optional streaming message.
+  // Estimate each message at ~3 lines (content + padding).
+  // Messages near the end have priority — slice from the tail.
+  const ESTIMATED_MSG_HEIGHT = 3;
+  const streamingOverhead = streamingMessage ? 2 : 0; // content line + cursor
+  const maxVisible = Math.max(
+    3,
+    Math.floor((height - streamingOverhead) / ESTIMATED_MSG_HEIGHT),
+  );
 
-      {/* Dynamic region: current streaming message.
-          Content is plain text during streaming — final markdown
-          rendering is applied when the message moves to the messages
-          array (completed). */}
+  // If too many messages, only show the last maxVisible.
+  const visibleMessages =
+    messages.length > maxVisible
+      ? messages.slice(-maxVisible)
+      : messages;
+
+  return (
+    <Box flexDirection="column" flexGrow={1} overflow="hidden">
+      {visibleMessages.map((msg) => (
+        <MessageBubble
+          key={msg.id}
+          message={msg}
+          showThinking={showThinking}
+        />
+      ))}
+
+      {/* Streaming message: plain text during streaming (final
+          markdown rendering happens when it moves to completed). */}
       {streamingMessage && (
         <Box flexDirection="column">
           {streamingMessage.thinking && showThinking && (

@@ -27,6 +27,16 @@ import { App } from "./app.js";
 import { applyWindowsFallbacks } from "./theme.js";
 
 async function main(): Promise<void> {
+  // ─── Suppress system noise before Ink takes over stdout ───
+  // Node experimental warnings (e.g. SQLite) and stray console.log
+  // from third-party libraries would corrupt the TUI canvas.
+  process.removeAllListeners("warning");
+  process.on("warning", () => {}); // silent
+  const _origLog = console.log;
+  console.log = (...args: unknown[]) => {
+    process.stderr.write(args.map(String).join(" ") + "\n");
+  };
+
   // ─── Degradation check ──────────────────────────────────
   const cols = process.stdout.columns ?? 80;
   const term = process.env.TERM ?? "";
@@ -119,14 +129,13 @@ async function main(): Promise<void> {
   }
 
   // ─── Render ──────────────────────────────────────────────
-  const { clear, waitUntilExit } = render(
+  const { waitUntilExit } = render(
     <App
       engine={engine}
       platform={platform}
       model={modelDisplay}
       version="0.1.0"
       sessionLimit={SESSION_LIMIT}
-      onClear={() => clear()}
     />,
     { exitOnCtrlC: false },
   );
