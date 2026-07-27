@@ -81,7 +81,7 @@ export function sharedStatus(sharedDir: string): {
   const count = (sub: string): number => {
     const p = path.join(sharedDir, sub);
     if (!fs.existsSync(p)) return 0;
-    return fs.readdirSync(p, { withFileTypes: true }).filter((e) => e.isDirectory()).length;
+    return fs.readdirSync(p).filter((n) => !n.startsWith(".")).length;
   };
   return {
     exists: true,
@@ -124,6 +124,16 @@ export function promoteToShared(tenantDir: string, sharedDir: string): {
       }
 
       try {
+        // 处理 symlink：解析为绝对路径后在共享层重建
+        const lstat = fs.lstatSync(srcPath);
+        if (lstat.isSymbolicLink()) {
+          const target = fs.readlinkSync(srcPath);
+          const absTarget = path.resolve(path.dirname(srcPath), target);
+          fs.symlinkSync(absTarget, dstPath);
+          fs.unlinkSync(srcPath);
+          moved.push(`${dir}/${entry.name} (symlink)`);
+          continue;
+        }
         fs.cpSync(srcPath, dstPath, { recursive: true });
         fs.rmSync(srcPath, { recursive: true, force: true });
         moved.push(`${dir}/${entry.name}`);

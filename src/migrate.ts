@@ -66,14 +66,20 @@ function copyDirRecursive(src: string, dst: string, report: MigrateReport, dryRu
     const lstat = fs.lstatSync(srcPath);
     if (lstat.isSymbolicLink()) {
       if (!dryRun) {
-        const linkTarget = fs.readlinkSync(srcPath);
+        // 解析到真实绝对路径（避免相对 symlink 在新位置失效）
+        let realTarget: string;
+        try {
+          realTarget = fs.realpathSync(srcPath);
+        } catch {
+          realTarget = fs.readlinkSync(srcPath); // broken symlink, 保留原始 target
+        }
         try {
           if (fs.existsSync(dstPath) || fs.lstatSync(dstPath)) {
             fs.rmSync(dstPath, { force: true });
           }
         } catch { /* dst doesn't exist, ok */ }
         try {
-          fs.symlinkSync(linkTarget, dstPath);
+          fs.symlinkSync(realTarget, dstPath);
           report.copied.push(`${dstPath} → symlink`);
         } catch (err: any) {
           report.skipped.push(`${srcPath} (symlink 失败: ${err.message})`);
