@@ -37,6 +37,8 @@ function printHelp(): void {
   console.log("  命令:");
   console.log("    onboard            首次导引（检查→安装→租户→迁移→验证）");
   console.log("    start [args...]    启动 pi（--bg 后台，--name 命名）");
+  console.log("    ui                 系统总控 TUI（无参数时也进入）");
+  console.log("    lab                模型调试 TUI（--tenant/--global）");
   console.log("    attach <name>      接入后台会话（同一终端切换）");
   console.log("    ls                 列出所有会话（前台+后台）");
   console.log("    stop <name>        停止后台会话");
@@ -81,7 +83,7 @@ function parseArgs(args: string[]): { command: string; subcommand?: string; flag
     const arg = args[i];
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (["tenant","project","model","provider","thinking","name"].includes(key)) {
+      if (["tenant","project","model","provider","thinking","name","global"].includes(key)) {
         flags[key] = args[++i] ?? "";
       } else {
         flags[key] = "true";
@@ -654,8 +656,33 @@ async function main() {
     case "help":
     case "--help":
     case "-h":
-    case "":
       printHelp();
+      break;
+    case "":
+    case "ui":
+      if (process.stdout.isTTY && process.stdin.isTTY) {
+        const { render } = await import("ink");
+        const React = (await import("react")).default;
+        const { PitApp } = await import("./tui-pit/app.js");
+        render(React.createElement(PitApp), { exitOnCtrlC: false });
+      } else {
+        printHelp();
+      }
+      break;
+    case "lab":
+      if (process.stdout.isTTY && process.stdin.isTTY) {
+        const { render } = await import("ink");
+        const React = (await import("react")).default;
+        const { LabApp } = await import("./tui-lab/app.js");
+        const cfg = loadConfig();
+        const labResolved = flags.tenant ? resolveTenantId(flags.tenant, cfg) : null;
+        const labTenantId = labResolved?.ok ? labResolved.id : getDefaultTenantId(cfg);
+        const labAlias = getTenantAlias(labTenantId, cfg);
+        const labGlobal = flags.global === "true";
+        render(React.createElement(LabApp, { tenantId: labTenantId, tenantAlias: labAlias, globalTelemetry: labGlobal }), { exitOnCtrlC: false });
+      } else {
+        console.log("  lab TUI 需要交互式终端");
+      }
       break;
     case "version":
     case "--version":
