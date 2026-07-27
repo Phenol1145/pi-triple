@@ -10,9 +10,11 @@ import type { SessionStore } from "../storage/interfaces.js";
 import type { ToolPlatform } from "../tools/platform.js";
 import type { Logger } from "../observability/logger.js";
 import type { Metrics } from "../observability/metrics.js";
-import type { AgentEvent, CreateSessionOpts, ManagedSessionInfo, Result } from "./types.js";
+import type { AgentEvent, CreateSessionOpts, ManagedSessionInfo, Result, VersionSnapshot } from "./types.js";
 import { createBridge } from "./async-iterable-bridge.js";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 
 export class AgentEngine {
   private agentSessions = new Map<string, AgentSession>();
@@ -45,6 +47,7 @@ export class AgentEngine {
     });
 
     const now = Date.now();
+    const initialSnapshot = this.computeVersionSnapshot();
     const poolSession: PoolSession = {
       sessionId,
       tenantId: opts.tenantId,
@@ -53,7 +56,7 @@ export class AgentEngine {
       refCount: 0,
       lastAccess: now,
       lastCheckpointSeq: 0,
-      versionSnapshot: null,
+      versionSnapshot: initialSnapshot,
     };
 
     this.pool.add(poolSession);
@@ -106,6 +109,8 @@ export class AgentEngine {
       const bridge = createBridge<AgentEvent>({ maxQueueSize: 1000 });
       const { iterable, push, done, error } = bridge;
 
+      const toolStartTimes = new Map<string, number>(); // toolCallId → start ms
+
       const unsubscribe = session.subscribe((event) => {
         seq++;
         push({
@@ -115,6 +120,33 @@ export class AgentEngine {
           terminal: event.type === "agent_end",
           timestamp: new Date().toISOString(),
         });
+
+        // C8: Tool Platform governance — audit + metrics on tool start/end
+        if (event.type === "tool_execution_start") {
+          const toolName = (event as any).toolName ?? "unknown";
+          const toolCallId = (event as any).toolCallId ?? "";
+          toolStartTimes.set(toolCallId, Date.now());
+          this.toolPlatform.recordToolStart(tenantId, toolName, toolCallId);
+        }
+        if (event.type === "tool_execution_end") {
+          const toolName = (event as any).toolName ?? "unknown";
+          const toolCallId = (event as any).toolCallId ?? "";
+          const isError = (event as any).isError ?? false;
+          const startMs = toolStartTimes.get(toolCallId) ?? Date.now();
+          const durationMs = Date.now() - startMs;
+          toolStartTimes.delete(toolCallId);
+          this.toolPlatform.recordToolEnd(tenantId, toolName, toolCallId, durationMs, isError);
+        }
+
+        // C6: Extract token usage from AssistantMessage on message_end
+        if (event.type === "message_end") {
+          const message = (event as any).message;
+          if (message?.usage && typeof message.usage.input === "number") {
+            this.metrics.tokensTotal.inc({ tenant: tenantId, type: "input" }, message.usage.input);
+            this.metrics.tokensTotal.inc({ tenant: tenantId, type: "output" }, message.usage.output);
+          }
+        }
+
         if (event.type === "agent_end") done();
       });
 
@@ -214,6 +246,51 @@ export class AgentEngine {
 
   private async checkpoint(managed: PoolSession, seq: number): Promise<void> {
     managed.lastCheckpointSeq = seq;
+    // C9: turn-level version snapshot
+    const snapshot = this.computeVersionSnapshot();
+    managed.versionSnapshot = snapshot;
+    // Persist to Redis (fire-and-forget for non-blocking)
+    this.sessionStore.saveVersionSnapshot(managed.tenantId, managed.sessionId, {
+      seq,
+      skills: snapshot.skills,
+      prompts: snapshot.prompts,
+      tools: snapshot.tools,
+      timestamp: snapshot.timestamp,
+    }).catch((err) => {
+      this.logger.warn({ sessionId: managed.sessionId, seq, err: String(err), event: "version_snapshot_save_failed" });
+    });
     this.logger.debug({ sessionId: managed.sessionId, seq, event: "checkpoint" });
+  }
+
+  /** C9: Compute a version snapshot hash for turn-level tracking */
+  private computeVersionSnapshot(): VersionSnapshot {
+    const platformDir = this.workspaceMgr.getPlatformDir();
+    const skillsDir = path.join(platformDir, "skills");
+    const promptsDir = path.join(platformDir, "prompts");
+    const toolsDir = path.join(platformDir, "tools");
+    return {
+      skills: this.listDirHashes(skillsDir),
+      prompts: this.listDirHashes(promptsDir),
+      tools: this.listDirHashes(toolsDir),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /** C9: List files in a directory, sorted, with hash. Returns ["file1:hash", ...] */
+  private listDirHashes(dir: string): string[] {
+    try {
+      const files = fs.readdirSync(dir).sort();
+      return files.map((f) => {
+        try {
+          const content = fs.readFileSync(path.join(dir, f), "utf-8");
+          const h = crypto.createHash("sha256").update(content).digest("hex").slice(0, 12);
+          return `${f}:${h}`;
+        } catch {
+          return f;
+        }
+      });
+    } catch {
+      return [];
+    }
   }
 }

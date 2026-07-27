@@ -16,6 +16,32 @@ export class ToolPlatform {
     return this.registry.getAllowedTools(tenantId);
   }
 
+  /** C8: Record tool execution start — audit + logger */
+  recordToolStart(tenantId: string, toolName: string, toolCallId: string): void {
+    this.logger.info({
+      tenantId,
+      tool: toolName,
+      toolCallId,
+      event: "tool_execution_start",
+    });
+    // Fire-and-forget audit write (non-blocking)
+    this.audit.queryToolCall(tenantId, toolName, "start").catch(() => {});
+  }
+
+  /** C8: Record tool execution end — audit + metrics */
+  recordToolEnd(tenantId: string, toolName: string, toolCallId: string, durationMs: number, isError: boolean): void {
+    this.logger.info({
+      tenantId,
+      tool: toolName,
+      toolCallId,
+      durationMs,
+      isError,
+      event: "tool_execution_end",
+    });
+    this.metrics.toolCallsTotal.inc({ tool: toolName, tenant: tenantId });
+    this.audit.queryToolCall(tenantId, toolName, isError ? "error" : "success").catch(() => {});
+  }
+
   async governExecution(
     request: ToolCallRequest,
     executeFn: () => Promise<ToolResult>,

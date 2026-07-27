@@ -1,6 +1,6 @@
 import type { Redis } from "ioredis";
 import type { SessionStore } from "./interfaces.js";
-import type { SessionMeta, SessionEntry, Snapshot } from "./types.js";
+import type { SessionMeta, SessionEntry, Snapshot, VersionSnapshotRecord } from "./types.js";
 
 export class RedisSessionStore implements SessionStore {
   constructor(private redis: Redis) {}
@@ -15,6 +15,10 @@ export class RedisSessionStore implements SessionStore {
 
   private snapshotKey(tenant: string, sessionId: string, seq: number): string {
     return `session:${tenant}:${sessionId}:snapshot:${seq}`;
+  }
+
+  private vsnapshotKey(tenant: string, sessionId: string, seq: number): string {
+    return `session:${tenant}:${sessionId}:vsnapshot:${seq}`;
   }
 
   private indexKey(tenant: string): string {
@@ -84,6 +88,20 @@ export class RedisSessionStore implements SessionStore {
       if (meta) results.push(meta);
     }
     return results;
+  }
+
+  async saveVersionSnapshot(tenant: string, sessionId: string, record: VersionSnapshotRecord): Promise<void> {
+    await this.redis.set(this.vsnapshotKey(tenant, sessionId, record.seq), JSON.stringify(record));
+  }
+
+  async getLatestVersionSnapshot(tenant: string, sessionId: string): Promise<VersionSnapshotRecord | null> {
+    const meta = await this.getMeta(tenant, sessionId);
+    if (!meta) return null;
+    for (let seq = meta.lastEntrySeq; seq >= 0; seq--) {
+      const raw = await this.redis.get(this.vsnapshotKey(tenant, sessionId, seq));
+      if (raw) return JSON.parse(raw) as VersionSnapshotRecord;
+    }
+    return null;
   }
 
   async deleteSession(tenant: string, sessionId: string): Promise<void> {

@@ -30,4 +30,12 @@ export interface Snapshot {
   createdAt: string;
 }
 
+export interface VersionSnapshotRecord {
+  seq: number;
+  skills: string[];
+  prompts: string[];
+  tools: string[];
+  timestamp: string;
+}
+
 export type Settings = Record<string, unknown>;

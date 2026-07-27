@@ -1,4 +1,4 @@
-import type { SessionMeta, SessionEntry, Snapshot, Settings } from "./types.js";
+import type { SessionMeta, SessionEntry, Snapshot, VersionSnapshotRecord, Settings } from "./types.js";
 
 export interface SessionStore {
   appendEntry(tenant: string, sessionId: string, entry: SessionEntry): Promise<void>;
@@ -9,6 +9,8 @@ export interface SessionStore {
   getLatestSnapshot(tenant: string, sessionId: string): Promise<Snapshot | null>;
   listSessions(tenant: string, project?: string): Promise<SessionMeta[]>;
   deleteSession(tenant: string, sessionId: string): Promise<void>;
+  saveVersionSnapshot(tenant: string, sessionId: string, record: VersionSnapshotRecord): Promise<void>;
+  getLatestVersionSnapshot(tenant: string, sessionId: string): Promise<VersionSnapshotRecord | null>;
 }
 
 export interface SettingsStore {
