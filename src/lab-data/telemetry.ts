@@ -1,0 +1,141 @@
+/**
+ * lab-data/telemetry — 共享 DB 查询（runs 表）
+ */
+
+import type { DatabaseSync } from "node:sqlite";
+
+export interface AggregateRow {
+  role: string;
+  model: string;
+  runs: number;
+  avgSuccess: number;
+  avgLatency: number;
+  totalTokensIn: number;
+  totalTokensOut: number;
+  avgCost: number;
+  toolSuccess: number;
+}
+
+export function aggregateByRole(
+  db: DatabaseSync,
+  role?: string,
+  tenantId?: string,
+  days = 7,
+): AggregateRow[] {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  let sql = `
+    SELECT
+      role,
+      model,
+      COUNT(*) as runs,
+      AVG(CASE WHEN acceptance = 'accepted' THEN 1 ELSE 0 END) as avgSuccess,
+      AVG(completion) as avgLatency,
+      COALESCE(SUM(tokens_in), 0) as totalTokensIn,
+      COALESCE(SUM(tokens_out), 0) as totalTokensOut,
+      COALESCE(AVG(cost), 0) as avgCost,
+      AVG(CASE WHEN tool_success IS NOT NULL THEN tool_success ELSE NULL END) as toolSuccess
+    FROM runs
+    WHERE ts > ?
+  `;
+  const params: (string | number)[] = [cutoff];
+
+  if (role) {
+    sql += ` AND role = ?`;
+    params.push(role);
+  }
+  if (tenantId) {
+    sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
+    params.push(tenantId);
+  }
+
+  sql += ` GROUP BY role, model ORDER BY role, runs DESC LIMIT 1000`;
+
+  try {
+    return db.prepare(sql).all(...params) as unknown as AggregateRow[];
+  } catch {
+    return [];
+  }
+}
+
+export function listRoles(db: DatabaseSync, tenantId?: string, days = 7): string[] {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  let sql = `SELECT DISTINCT role FROM runs WHERE ts > ?`;
+  const params: (string | number)[] = [cutoff];
+
+  if (tenantId) {
+    sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
+    params.push(tenantId);
+  }
+
+  sql += ` ORDER BY role`;
+
+  try {
+    const rows = db.prepare(sql).all(...params) as unknown as Array<{ role: string }>;
+    return rows.map((r) => r.role);
+  } catch {
+    return [];
+  }
+}
+
+export function listModels(db: DatabaseSync): string[] {
+  try {
+    const rows = db.prepare(`SELECT DISTINCT model FROM runs ORDER BY model`).all() as unknown as Array<{
+      model: string;
+    }>;
+    return rows.map((r) => r.model);
+  } catch {
+    return [];
+  }
+}
+
+export interface ComparisonRow {
+  metric: string;
+  modelA: string;
+  modelB: string;
+}
+
+export function modelComparison(
+  db: DatabaseSync,
+  modelA: string,
+  modelB: string,
+  tenantId?: string,
+  days = 7,
+): ComparisonRow[] {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const results: ComparisonRow[] = [];
+
+  const query = (model: string) => {
+    let sql = `
+      SELECT
+        COUNT(*) as runs,
+        AVG(CASE WHEN acceptance = 'accepted' THEN 1 ELSE 0 END) as success,
+        AVG(completion) as latency,
+        COALESCE(AVG(cost), 0) as cost,
+        AVG(CASE WHEN tool_success IS NOT NULL THEN tool_success ELSE NULL END) as toolRate
+      FROM runs
+      WHERE model = ? AND ts > ?
+    `;
+    const params: (string | number)[] = [model, cutoff];
+    if (tenantId) {
+      sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
+      params.push(tenantId);
+    }
+    return db.prepare(sql).get(...params) as unknown as Record<string, number> | undefined;
+  };
+
+  const a = query(modelA);
+  const b = query(modelB);
+
+  const fmt = (v: number | undefined, suffix = "", decimals = 2) => {
+    if (v === undefined || v === null) return "n/a";
+    return v.toFixed(decimals) + suffix;
+  };
+
+  results.push({ metric: "Runs", modelA: fmt(a?.runs, "", 0), modelB: fmt(b?.runs, "", 0) });
+  results.push({ metric: "Success %", modelA: fmt((a?.success ?? 0) * 100, "%", 1), modelB: fmt((b?.success ?? 0) * 100, "%", 1) });
+  results.push({ metric: "Avg Latency (ms)", modelA: fmt(a?.latency, "ms", 0), modelB: fmt(b?.latency, "ms", 0) });
+  results.push({ metric: "Avg Cost/run", modelA: a?.cost != null ? `$${a.cost.toFixed(4)}` : "n/a", modelB: b?.cost != null ? `$${b.cost.toFixed(4)}` : "n/a" });
+  results.push({ metric: "Tool Success %", modelA: fmt((a?.toolRate ?? 0) * 100, "%", 1), modelB: fmt((b?.toolRate ?? 0) * 100, "%", 1) });
+
+  return results;
+}
