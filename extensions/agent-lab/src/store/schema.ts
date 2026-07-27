@@ -34,4 +34,7 @@ CREATE TABLE IF NOT EXISTS config (
  *  with version > current db version in order. */
 export const MIGRATIONS: Array<[number, string]> = [
   [1, `ALTER TABLE runs ADD COLUMN trace_id TEXT`],
+  [2, `ALTER TABLE runs ADD COLUMN tenant_id TEXT`],
+  [3, `ALTER TABLE runs ADD COLUMN session_id TEXT`],
+  [4, `CREATE INDEX IF NOT EXISTS idx_runs_tenant ON runs(tenant_id)`],
 ];

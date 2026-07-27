@@ -14,6 +14,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 
 /** 确保路径是绝对路径（避免子进程 cwd 不同导致相对路径失效） */
 function abs(p: string): string {
@@ -115,12 +116,20 @@ export async function buildPiLaunch(tenantId: string, options: {
   const sharedDir = abs(path.join(dataDir, "shared"));
   ensureTenantLinks(piConfigDir, sharedDir);
 
+  // session + tenant identity
+  const sessionId = randomUUID();
+
   return {
     cmd: process.env.PI_BIN ?? "pi",
     args,
     env: {
       ...process.env,
       PI_CODING_AGENT_DIR: piConfigDir,
+      PI_TENANT: tenantId,
+      PI_TENANT_ALIAS: getTenantAlias(tenantId),
+      PI_SESSION_ID: sessionId,
+      AGENT_LAB_DB_PATH: path.join(sharedDir, "agent-lab", "agent-lab.db"),
+      AGENT_LAB_CONFIG_DIR: path.join(piConfigDir, "agent-lab"),
     },
     cwd,
   };

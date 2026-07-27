@@ -4,7 +4,8 @@ import { join } from "node:path";
 
 export function loadModelScopeAllow(): string[] | undefined {
   try {
-    const raw = readFileSync(join(homedir(), ".pi", "agent", "settings.json"), "utf8");
+    const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+    const raw = readFileSync(join(agentDir, "settings.json"), "utf8");
     const settings = JSON.parse(raw) as { subagents?: { modelScope?: { enforce?: boolean; allow?: unknown } } };
     const scope = settings?.subagents?.modelScope;
     if (scope?.enforce && Array.isArray(scope.allow)) return scope.allow as string[];

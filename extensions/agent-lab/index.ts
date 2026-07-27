@@ -1,7 +1,10 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { SqliteStore } from "./src/store/store.ts";
+import type { Store } from "./src/store/store.ts";
 import { CatalogService } from "./src/catalog/catalog.ts";
-import { loadConfig, ensureDataDir, dbPath, saveConfig } from "./src/config-io.ts";
+import { loadConfig, ensureDataDir, sharedDbPath, localConfigDir, saveConfig } from "./src/config-io.ts";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { registerTelemetry, createSettleDispatch } from "./src/telemetry/register.ts";
 import { registerInterceptor } from "./src/interceptor/register.ts";
 import { registerCommands } from "./src/commands/register.ts";
@@ -34,12 +37,30 @@ const DIRECT_PREFIXES = ["deepseek", "moonshotai", "z-ai", "qwen"];
 export default async function (pi: ExtensionAPI) {
   ensureDataDir();
   const cfg = loadConfig();
-  const store = new SqliteStore(dbPath());
+
+  // Dual store: shared telemetry (runs) + per-tenant config/pin/arena/workloop
+  const sharedStore = new SqliteStore(sharedDbPath());
+  const localDir = localConfigDir();
+  mkdirSync(localDir, { recursive: true });
+  const localStore = new SqliteStore(join(localDir, "agent-lab.db"));
+
+  // Composite store: delegates telemetry ops to sharedStore, config/pin to localStore
+  const store: Store = {
+    appendRun: (r) => sharedStore.appendRun(r),
+    aggregateByRole: (role, tenantId?) => sharedStore.aggregateByRole(role, tenantId),
+    listRoles: (tenantId?) => sharedStore.listRoles(tenantId),
+    getPin: (role) => localStore.getPin(role),
+    setPin: (role, model) => localStore.setPin(role, model),
+    clearPin: (role) => localStore.clearPin(role),
+    getConfig: () => localStore.getConfig(),
+    setConfig: (k, v) => localStore.setConfig(k, v),
+    close: () => { sharedStore.close(); localStore.close(); },
+  };
   const catalog = new CatalogService({ directPrefixes: DIRECT_PREFIXES, ttlMs: cfg.catalogTtlMs });
   await catalog.refresh().catch((e: Error) => console.error("[agent-lab] initial catalog refresh failed:", e?.message ?? e));
 
   const endowment = new EndowmentPolicyV1(cfg.arena);
-  const ledger = new SqliteLedger(store.raw, endowment);
+  const ledger = new SqliteLedger(localStore.raw, endowment);
 
   let schedulerCore: LabCore | undefined;
   let optimizerRegistry: OptimizerRegistry | undefined;
@@ -74,8 +95,8 @@ export default async function (pi: ExtensionAPI) {
   }
   // Audit-only migration.ledger-baseline snapshot (no state change).
   {
-    const creditsCount = (store.raw.prepare("SELECT COUNT(*) AS c FROM credits").get() as { c: number }).c;
-    const tasksCount = (store.raw.prepare("SELECT COUNT(*) AS c FROM market_tasks").get() as { c: number }).c;
+    const creditsCount = (localStore.raw.prepare("SELECT COUNT(*) AS c FROM credits").get() as { c: number }).c;
+    const tasksCount = (localStore.raw.prepare("SELECT COUNT(*) AS c FROM market_tasks").get() as { c: number }).c;
     const baselineEvent = {
       eventId: `migration-ledger-baseline-${Date.now()}`,
       eventType: "migration.ledger-baseline",
@@ -110,7 +131,7 @@ export default async function (pi: ExtensionAPI) {
           aggregates: (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a])),
           pinLookup: (role: string) => store.getPin(role),
         };
-        const rt = createSchedulerRuntime(store.raw, {});
+        const rt = createSchedulerRuntime(localStore.raw, {});
         schedulerCore = rt.core;
         optimizerRegistry = new OptimizerRegistry(rt.core.definitions, rt.core.repository, rt.core.events);
 
@@ -118,15 +139,15 @@ export default async function (pi: ExtensionAPI) {
         {
           const arenaRecord = schedulerCore.repository.getInstance("default-arena");
           if (arenaRecord && arenaRecord.currentRoundId.startsWith("smoke-round-")) {
-            const seq0 = store.raw.prepare(
+            const seq0 = localStore.raw.prepare(
               "SELECT id FROM lab_optimization_rounds WHERE scheduler_instance_id = ? AND sequence = 0 LIMIT 1"
             ).get("default-arena") as { id: string } | undefined;
             if (seq0) {
-              store.raw.prepare(
+              localStore.raw.prepare(
                 "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
               ).run(seq0.id, "default-arena");
             }
-            store.raw.prepare(
+            localStore.raw.prepare(
               "DELETE FROM lab_optimization_rounds WHERE scheduler_instance_id = ? AND id LIKE 'smoke-round-%'"
             ).run("default-arena");
             console.error("[agent-lab] startup guard: cleaned smoke-round residue for default-arena");
@@ -224,7 +245,7 @@ export default async function (pi: ExtensionAPI) {
                   evaluateShadow: (proposalId: string) => evaluateShadow({
                     repository: rt.core.repository,
                     events: rt.core.events,
-                    db: store.raw,
+                    db: localStore.raw,
                     getCatalogSnapshot: () => catalog.candidates(),
                     optimizerInstanceId: "default-weighted-tuner",
                     schedulerInstanceId: wsInstanceId,
@@ -232,7 +253,7 @@ export default async function (pi: ExtensionAPI) {
                   evaluateCanary: (sid: string) => evaluateCanary({
                     repository: rt.core.repository,
                     events: rt.core.events,
-                    db: store.raw,
+                    db: localStore.raw,
                   }, sid),
                   decideCanaryAction,
                 });
@@ -364,15 +385,15 @@ export default async function (pi: ExtensionAPI) {
         activatedAt: Date.now(),
       });
 
-      store.raw.prepare(
+      localStore.raw.prepare(
         "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
       ).run(tempRoundId, "default-arena");
 
       const restoreRound = () => {
-        store.raw.prepare(
+        localStore.raw.prepare(
           "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
         ).run(currentRound.id, "default-arena");
-        store.raw.prepare(
+        localStore.raw.prepare(
           "DELETE FROM lab_optimization_rounds WHERE id = ?"
         ).run(tempRoundId);
       };
@@ -559,7 +580,7 @@ export default async function (pi: ExtensionAPI) {
   const optimizerFacade: OptimizerFacade = buildOptimizerFacade({
     getCore: () => schedulerCore,
     getRegistry: () => optimizerRegistry,
-    getDb: () => store.raw,
+    getDb: () => localStore.raw,
     getCatalog: () => catalog.candidates(),
     getOptimizerConfig: () => cfg.optimizer,
     getAutoTriggerStatus: () => autoTrigger?.status(),
@@ -568,7 +589,7 @@ export default async function (pi: ExtensionAPI) {
 
   // ── Experiment facade (lazy: resolves DB at call time) ──────────
   const experimentFacade: ExperimentFacade = buildExperimentFacade({
-    getDb: () => store.raw,
+    getDb: () => localStore.raw,
   });
 
   registerCommands(pi, {
@@ -628,13 +649,13 @@ export default async function (pi: ExtensionAPI) {
             cfg,
             store,
             ensureArenaBinding,
-            dbPath: dbPath(),
+            dbPath: sharedDbPath(),
           })
         : runP7Migration({
             cfg,
             store,
             ensureArenaBinding,
-            dbPath: dbPath(),
+            dbPath: sharedDbPath(),
           });
     },
   });

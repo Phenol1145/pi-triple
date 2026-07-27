@@ -19,6 +19,7 @@ export function initSharedLayer(sharedDir: string): void {
   for (const dir of SHARED_DIRS) {
     fs.mkdirSync(path.join(sharedDir, dir), { recursive: true });
   }
+  fs.mkdirSync(path.join(sharedDir, "agent-lab"), { recursive: true });
 }
 
 /** 将共享层通过 symlink 挂载到租户目录 */

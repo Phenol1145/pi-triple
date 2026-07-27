@@ -31,6 +31,8 @@ export interface RunRecord {
   signals?: Record<string, unknown>;
   source: "auto" | "manual";
   traceId?: string;
+  tenantId?: string;
+  sessionId?: string;
 }
 
 export interface Aggregate {

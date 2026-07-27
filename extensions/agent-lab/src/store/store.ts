@@ -4,8 +4,8 @@ import { SCHEMA, MIGRATIONS } from "./schema.ts";
 
 export interface Store {
   appendRun(r: RunRecord): void;
-  aggregateByRole(role: string): Aggregate[];
-  listRoles(): string[];
+  aggregateByRole(role: string, tenantId?: string): Aggregate[];
+  listRoles(tenantId?: string): string[];
   getPin(role: string): string | undefined;
   setPin(role: string, model: string): void;
   clearPin(role: string): void;
@@ -18,6 +18,9 @@ export class SqliteStore implements Store {
   private db: DatabaseSync;
   constructor(path: string) {
     this.db = new DatabaseSync(path);
+    this.db.exec("PRAGMA busy_timeout=5000");
+    this.db.exec("PRAGMA journal_mode=WAL");
+    this.db.exec("PRAGMA synchronous=NORMAL");
     this.db.exec(SCHEMA);
     this._applyMigrations();
   }
@@ -43,21 +46,26 @@ export class SqliteStore implements Store {
   get raw(): DatabaseSync { return this.db; }
   appendRun(r: RunRecord): void {
     this.db.prepare(
-      `INSERT INTO runs (ts, role, model, task_category, acceptance, completion, tokens_in, tokens_out, cost, tool_success, turns, interrupted, signals, source, trace_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO runs (ts, role, model, task_category, acceptance, completion, tokens_in, tokens_out, cost, tool_success, turns, interrupted, signals, source, trace_id, tenant_id, session_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       r.ts, r.role, r.model, r.taskCategory ?? null, r.acceptance ?? null, r.completion,
       r.tokensIn ?? null, r.tokensOut ?? null, r.cost ?? null, r.toolSuccess ?? null,
       r.turns ?? null, r.interrupted ?? null, JSON.stringify(r.signals ?? {}), r.source,
-      r.traceId ?? null
+      r.traceId ?? null, r.tenantId ?? null, r.sessionId ?? null
     );
   }
-  aggregateByRole(role: string): Aggregate[] {
-    const rows = this.db.prepare(
-      `SELECT model, role, COUNT(*) AS runs, AVG(completion) AS avgCompletion,
+  aggregateByRole(role: string, tenantId?: string): Aggregate[] {
+    let sql = `SELECT model, role, COUNT(*) AS runs, AVG(completion) AS avgCompletion,
               AVG(COALESCE(cost, 0)) AS avgCost, AVG(COALESCE(tool_success, 1)) AS successRate
-       FROM runs WHERE role = ? GROUP BY model, role`
-    ).all(role) as Array<Record<string, number | string>>;
+       FROM runs WHERE role = ?`;
+    const params: (string | number)[] = [role];
+    if (tenantId) {
+      sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
+      params.push(tenantId);
+    }
+    sql += ` GROUP BY model, role`;
+    const rows = this.db.prepare(sql).all(...params) as Array<Record<string, number | string>>;
     return rows.map((row) => ({
       model: String(row.model),
       role: String(row.role),
@@ -67,8 +75,15 @@ export class SqliteStore implements Store {
       successRate: Number(row.successRate),
     }));
   }
-  listRoles(): string[] {
-    const rows = this.db.prepare(`SELECT DISTINCT role FROM runs ORDER BY role`).all() as Array<{ role: string }>;
+  listRoles(tenantId?: string): string[] {
+    let sql = `SELECT DISTINCT role FROM runs`;
+    const params: string[] = [];
+    if (tenantId) {
+      sql += ` WHERE tenant_id = ? OR tenant_id IS NULL`;
+      params.push(tenantId);
+    }
+    sql += ` ORDER BY role`;
+    const rows = this.db.prepare(sql).all(...params) as Array<{ role: string }>;
     return rows.map((r) => r.role);
   }
   getPin(role: string): string | undefined {
@@ -96,5 +111,8 @@ export class SqliteStore implements Store {
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`
     ).run(key, value);
   }
-  close(): void { this.db.close(); }
+  close(): void {
+    try { this.db.exec("PRAGMA wal_checkpoint(TRUNCATE)"); } catch { /* ok */ }
+    this.db.close();
+  }
 }

@@ -569,13 +569,13 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
     return `角色 ${role} 推荐:\n` + recs.map((s, i) => `${i + 1}. ${s.model.id}  score=${s.score.toFixed(3)}  ${s.reason}`).join("\n");
   }
 
-  function renderStats(role?: string): string {
-    const roles = role ? [role] : store.listRoles();
-    if (roles.length === 0) return "暂无遥测数据。";
+  function renderStats(role?: string, tenantId?: string): string {
+    const roles = role ? [role] : store.listRoles(tenantId);
+    if (roles.length === 0) return tenantId ? `暂无遥测数据（租户过滤激活）。` : "暂无遥测数据。";
     const out: string[] = [];
     for (const r of roles) {
       out.push(`# ${r}`);
-      for (const a of store.aggregateByRole(r)) {
+      for (const a of store.aggregateByRole(r, tenantId)) {
         out.push(`  ${a.model}: runs=${a.runs} avgCompletion=${a.avgCompletion.toFixed(2)} avgCost=${a.avgCost.toFixed(4)} success=${a.successRate.toFixed(2)}`);
       }
     }
@@ -616,7 +616,15 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
       if (cmd === "recommend") {
         ctx.ui.notify("推荐功能已废弃 — 请使用 /lab scheduler status 查看调度器状态，或 /lab optimizer run 触发优化", "warning");
       } else if (cmd === "stats") {
-        ctx.ui.notify(renderStats(argv[1]), "info");
+        const isGlobal = argv.includes("--global");
+        const tenantIdx = argv.indexOf("--tenant");
+        const tenantArg = tenantIdx >= 0 ? argv[tenantIdx + 1] : undefined;
+        // 默认：本租户（从 env），除非显式 --global
+        const effectiveTenantId = isGlobal ? undefined
+          : tenantArg ?? process.env.PI_TENANT ?? undefined;
+        const role = argv[1] && !argv[1].startsWith("--") ? argv[1] : undefined;
+        const label = isGlobal ? " (global)" : effectiveTenantId ? ` (tenant: ${effectiveTenantId.slice(0, 8)}…)` : "";
+        ctx.ui.notify(`Stats${label}:\n${renderStats(role, effectiveTenantId)}`, "info");
       } else if (cmd === "models") {
         if (argv.includes("--refresh")) await catalog.refresh().catch((e: Error) => ctx.ui.notify(`刷新失败: ${e.message}`, "error"));
         const ms = catalog.candidates();
@@ -994,7 +1002,7 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
       } else if (cmd === "doctor") {
         ctx.ui.notify(`Agent Lab 状态:\n候选模型: ${catalog.candidates().length}\n目录新鲜: ${catalog.isFresh}\n角色数: ${store.listRoles().length}\nautoApply: ${cfg.autoApply}`, "info");
       } else {
-        ctx.ui.notify("用法: /lab <recommend|stats|models|log|pin|unpin|config|mode|migrate|arena|scheduler|optimizer|experiment|doctor> ...", "info");
+        ctx.ui.notify("用法: /lab <recommend|stats|models|log|pin|unpin|config|mode|migrate|arena|scheduler|optimizer|experiment|doctor> ...\n  stats [role] [--global] [--tenant <alias|uuid>]", "info");
       }
     },
   });
