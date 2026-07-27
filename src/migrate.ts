@@ -62,20 +62,29 @@ function copyDirRecursive(src: string, dst: string, report: MigrateReport, dryRu
       continue;
     }
 
-    if (entry.isDirectory()) {
-      // 跳过 npm/node_modules 的深层嵌套（太大），用 symlink 代替
-      if (srcPath.includes("npm/node_modules") && !dryRun) {
-        // 对 npm 包目录，创建 symlink 而非复制（节省空间）
+    // 检测 symlink（包括指向目录的 symlink）
+    const lstat = fs.lstatSync(srcPath);
+    if (lstat.isSymbolicLink()) {
+      if (!dryRun) {
+        const linkTarget = fs.readlinkSync(srcPath);
         try {
-          if (!fs.existsSync(dstPath)) {
-            fs.symlinkSync(srcPath, dstPath, "dir");
-            report.copied.push(`${dstPath} → symlink`);
+          if (fs.existsSync(dstPath) || fs.lstatSync(dstPath)) {
+            fs.rmSync(dstPath, { force: true });
           }
-          continue;
-        } catch {
-          // fallback to copy
+        } catch { /* dst doesn't exist, ok */ }
+        try {
+          fs.symlinkSync(linkTarget, dstPath);
+          report.copied.push(`${dstPath} → symlink`);
+        } catch (err: any) {
+          report.skipped.push(`${srcPath} (symlink 失败: ${err.message})`);
         }
+      } else {
+        report.copied.push(`${dstPath} → symlink (dry-run)`);
       }
+      continue;
+    }
+
+    if (entry.isDirectory()) {
       copyDirRecursive(srcPath, dstPath, report, dryRun);
     } else {
       // 跳过非常大的文件（>50MB）
