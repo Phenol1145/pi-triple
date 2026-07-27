@@ -13,12 +13,14 @@
 
 import { launchPi } from "./launcher.js";
 import { runDoctor } from "./doctor.js";
+import { loadConfig, resolveTenantId, getDefaultTenantId } from "./config.js";
 
 async function main() {
   const args = process.argv.slice(2);
+  const config = loadConfig();
 
   // 解析 Pi-Triple 自有参数
-  let tenantId = process.env.PI_TENANT ?? "local";
+  let tenantInput = process.env.PI_TENANT ?? "";
   let project = "default";
   let provider: string | undefined;
   let model: string | undefined;
@@ -32,7 +34,7 @@ async function main() {
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
       case "--tenant":
-        tenantId = args[++i];
+        tenantInput = args[++i];
         break;
       case "--project":
         project = args[++i];
@@ -65,6 +67,16 @@ async function main() {
         extraArgs.push(args[i]);
         break;
     }
+  }
+
+  // 解析租户
+  let tenantId: string;
+  if (tenantInput) {
+    const resolved = resolveTenantId(tenantInput, config);
+    if (!resolved) { console.error(`\x1b[31m未知租户: ${tenantInput}\x1b[0m`); process.exit(1); }
+    tenantId = resolved;
+  } else {
+    tenantId = getDefaultTenantId(config);
   }
 
   // 启动前快速健康检查

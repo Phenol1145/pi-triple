@@ -50,7 +50,7 @@ function Select({ title, items, onSelect, allowCustom = true }: SelectProps) {
       if (filtered[index]) onSelect(filtered[index].value);
       return;
     }
-    if (key.escape) { process.exit(0); return; }
+    if (key.escape || (key.ctrl && input === "c")) { process.exit(130); return; }
     // 输入过滤
     if (input && !key.ctrl && !key.meta && input !== " ") {
       setFilter((f) => f + input);

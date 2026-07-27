@@ -56,46 +56,54 @@ function configPath(): string {
 export function loadConfig(): PiTripleConfig {
   const p = configPath();
   if (!fs.existsSync(p)) return defaultConfig();
+  let raw: any;
   try {
-    const raw = JSON.parse(fs.readFileSync(p, "utf-8"));
-    // v1 → v2 自动迁移
-    if (!raw.version || raw.version < 2) {
-      return migrateV1toV2(raw);
-    }
-    return { ...defaultConfig(), ...raw };
-  } catch {
-    return defaultConfig();
+    raw = JSON.parse(fs.readFileSync(p, "utf-8"));
+  } catch (err) {
+    console.error(`\x1b[31m❌ pi-triple.json 解析失败: ${err}\x1b[0m`);
+    console.error("  请检查配置文件，或从 pi-triple.json.v1.bak 恢复");
+    process.exit(1);
   }
+  if (!raw.version || raw.version < 2) {
+    return migrateV1toV2(raw);
+  }
+  return { ...defaultConfig(), ...raw };
 }
 
 export function saveConfig(config: PiTripleConfig): void {
-  fs.writeFileSync(configPath(), JSON.stringify(config, null, 2) + "\n");
+  const p = configPath();
+  const tmp = p + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + "\n");
+  fs.renameSync(tmp, p);
 }
 
 // ─── V1 → V2 迁移 ───────────────────────────────────────────
 
 function migrateV1toV2(raw: Record<string, any>): PiTripleConfig {
+  // 备份 v1
+  const p = configPath();
+  if (fs.existsSync(p)) fs.copyFileSync(p, p + ".v1.bak");
+
   const config = defaultConfig();
   config.tenants = {};
 
   const oldTenants: Record<string, any> = raw.tenants ?? {};
   const oldDefault: string = raw.defaultTenant ?? "local";
   let newDefaultId = config.defaultTenant;
+  const renames: Array<{ alias: string; uuid: string }> = [];
 
   for (const [name, tenantCfg] of Object.entries(oldTenants)) {
     if (UUID_RE.test(name)) {
-      // 已经是 UUID
       config.tenants[name] = { alias: (tenantCfg as any)?.alias ?? name, ...(tenantCfg as any) };
       if (name === oldDefault) newDefaultId = name;
     } else {
-      // 旧名称 → 生成 UUID
       const id = randomUUID();
       config.tenants[id] = { alias: name, ...(tenantCfg as any) };
+      renames.push({ alias: name, uuid: id });
       if (name === oldDefault) newDefaultId = id;
     }
   }
 
-  // 确保至少有 default tenant
   if (Object.keys(config.tenants).length === 0) {
     config.tenants[config.defaultTenant] = { alias: "local" };
   }
@@ -106,9 +114,26 @@ function migrateV1toV2(raw: Record<string, any>): PiTripleConfig {
   if (raw.redis) config.redis = raw.redis;
   if (raw.gateway) config.gateway = raw.gateway;
 
-  // 自动保存迁移后的配置
-  saveConfig(config);
+  // 先迁移目录，再保存配置（崩溃可重试，不会 split-brain）
+  const dataDir = path.resolve(process.cwd(), process.env.DATA_DIR ?? config.dataDir);
+  for (const { alias, uuid } of renames) {
+    for (const subdir of ["pi-config", "sessions", "workspaces", "mailbox"]) {
+      const oldPath = path.join(dataDir, subdir, alias);
+      const newPath = path.join(dataDir, subdir, uuid);
+      if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
+        try {
+          fs.renameSync(oldPath, newPath);
+        } catch (err: any) {
+          if (err.code === "EXDEV") {
+            fs.cpSync(oldPath, newPath, { recursive: true });
+            fs.rmSync(oldPath, { recursive: true, force: true });
+          } else throw err;
+        }
+      }
+    }
+  }
 
+  saveConfig(config);
   return config;
 }
 
