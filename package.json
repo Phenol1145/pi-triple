@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "cli": "tsx src/cli.ts",
+    "tui": "tsx src/tui/index.tsx",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -21,16 +22,23 @@
     "@sinclair/typebox": "^0.34.52",
     "bullmq": "^5.0.0",
     "chokidar": "^4.0.0",
+    "cli-highlight": "^2.1.11",
     "crypto-js": "^4.2.0",
     "fastify": "^5.0.0",
+    "ink": "^5.2.1",
     "ioredis": "^5.4.0",
     "json-logic-js": "^2.0.0",
+    "marked": "^15.0.12",
     "pino": "^9.0.0",
-    "prom-client": "^15.0.0"
+    "prom-client": "^15.0.0",
+    "react": "^18.3.1",
+    "string-width": "^7.2.0"
   },
   "devDependencies": {
     "@types/json-logic-js": "^2.0.0",
     "@types/node": "^22.0.0",
+    "@types/react": "^18.3.31",
+    "ink-testing-library": "^4.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
