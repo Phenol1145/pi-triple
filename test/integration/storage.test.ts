@@ -244,6 +244,10 @@ describe("RedisSettingsStore", () => {
   });
 
   it("project-scoped settings are independent", async () => {
+    // Flush to avoid pollution from previous tests sharing SETTINGS_TENANT
+    await redis.del(`settings:${SETTINGS_TENANT}`);
+    await redis.del(`settings:${SETTINGS_TENANT}:proj-a`);
+
     await settingsStore.set(SETTINGS_TENANT, { global: true }, undefined);
     await settingsStore.set(SETTINGS_TENANT, { local: true }, "proj-a");
 
