@@ -9,6 +9,7 @@ import path from "node:path";
 export interface PiTripleConfig {
   defaultTenant: string;
   dataDir: string;
+  sharedDir: string;
   redis: string;
   gateway: { port: number };
   tenants: Record<string, TenantConfig>;
@@ -25,6 +26,7 @@ export interface TenantConfig {
 const DEFAULT_CONFIG: PiTripleConfig = {
   defaultTenant: "local",
   dataDir: "./.pi-platform-data",
+  sharedDir: "./.pi-platform-data/shared",
   redis: "redis://localhost:6379",
   gateway: { port: 3000 },
   tenants: {},
