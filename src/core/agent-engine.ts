@@ -44,6 +44,7 @@ export class AgentEngine {
       modelRuntime: this.modelRouter.getRuntime(),
       sessionManager: SessionManager.inMemory(cwd),
       tools: this.toolPlatform.getAllowedTools(opts.tenantId),
+      customTools: this.toolPlatform.getSdkToolDefinitions(opts.tenantId),
     });
 
     const now = Date.now();

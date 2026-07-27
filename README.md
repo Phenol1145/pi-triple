@@ -148,7 +148,7 @@ npm run cli
 # 5. HTTP 验证（需先启动服务）
 npm run dev &
 curl -X POST http://localhost:3000/api/v1/sessions \
-  -H "Authorization: Bearer test-token-123" \
+  -H "Authorization: Bearer test-token" \
   -d '{"project":"dev-test"}'
 
 # 6. 提交
@@ -159,11 +159,11 @@ git add -A && git commit -m "feat: ..."
 
 | 想做什么 | 去哪里 | 参考 |
 |----------|--------|------|
-| 添加自定义工具 | `src/tools/` | [architecture.md #ToolPlatform](./docs/architecture.md#toolplatform-c8-治理层) |
+| 添加自定义工具 | `src/tools/` | [architecture.md #ToolPlatform](./docs/architecture.md#toolplatformc8-治理层) |
 | 添加 API 端点 | `src/gateway/` | [architecture.md #Gateway](./docs/architecture.md#gateway-layer) |
 | 替换存储后端 | `src/storage/` | [architecture.md #存储模型](./docs/architecture.md#存储模型) |
 | 定义工作流 | `src/workflow/` | [architecture.md #WorkflowOrchestrator](./docs/architecture.md#workfloworchestrator) |
-| 添加 Skill/Prompt | `{DATA_DIR}/platform/` | [architecture.md #Self-Modify](./docs/architecture.md#self-modify-自修改) |
+| 添加 Skill/Prompt | `{DATA_DIR}/platform/` | [architecture.md #Self-Modify](./docs/architecture.md#self-modify自修改) |
 | 添加模型凭证来源 | `src/storage/credential-provider.ts` | 实现 `CredentialProvider` 接口 |
 
 ### 示例代码

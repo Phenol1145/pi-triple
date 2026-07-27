@@ -72,7 +72,7 @@ export class MemorySessionStore implements SessionStore {
   }
 
   async listSessions(tenant: string, project?: string): Promise<SessionMeta[]> {
-    const all = [...this.metas.values()].filter((m) => m.tenantId === tenant);
+    const all = Array.from(this.metas.values()).filter((m) => m.tenantId === tenant);
     return project ? all.filter((m) => m.project === project) : all;
   }
 

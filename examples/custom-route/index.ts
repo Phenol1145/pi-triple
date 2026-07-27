@@ -17,7 +17,15 @@
  */
 
 import Fastify from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { AgentEngine } from "../../src/core/agent-engine.js";
+
+// Extend Fastify to include auth hook types
+declare module "fastify" {
+  interface FastifyRequest {
+    auth: { tenantId: string; role: string };
+  }
+}
 
 // ============================================================
 // 第一步：定义自定义路由函数
@@ -33,7 +41,7 @@ export function registerStatsRoutes(app: FastifyInstance, engine: AgentEngine) {
       totalSessions: sessions.length,
       idleSessions: sessions.filter((s) => s.state === "idle").length,
       busySessions: sessions.filter((s) => s.state === "busy").length,
-      projects: [...new Set(sessions.map((s) => s.project))],
+      projects: Array.from(new Set(sessions.map((s) => s.project))),
     };
   });
 

@@ -16,6 +16,11 @@ export class ToolPlatform {
     return this.registry.getAllowedTools(tenantId);
   }
 
+  /** Return SDK-level ToolDefinition[] for createAgentSession({ customTools }) */
+  getSdkToolDefinitions(tenantId: string): any[] {
+    return this.registry.getSdkToolDefinitions(tenantId);
+  }
+
   /** C8: Record tool execution start — audit + logger */
   recordToolStart(tenantId: string, toolName: string, toolCallId: string): void {
     this.logger.info({

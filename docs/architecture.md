@@ -207,7 +207,7 @@ await orchestrator.execute(reviewFlow, tenantId);
 | 层级 | 内容 | 实现 | 生效 |
 |------|------|------|------|
 | L1 热加载 | skills/prompts/settings 文件变更 | `HotReloader`（chokidar） | 即时，下次 turn 生效 |
-| L2 工具注册 | 新增工具定义文件 | `ToolRegistry.registerTool()` | 需重启 |
+| L2 工具注册 | 新增工具定义文件 | `ToolRegistry.registerCustomTool()` | 需重启 |
 | L3 代码变更 | 平台核心代码更新 | `RebuildTrigger` + `supervisor.sh` | 外部 supervisor 接管 |
 
 **L3 流程**：
