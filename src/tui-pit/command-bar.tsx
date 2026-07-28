@@ -1,205 +1,249 @@
 import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 
+/**
+ * CommandBar — 层级渐进式命令补全
+ *
+ * 命令组织为树：
+ *   顶层输入只显示顶层命令（tenant ▸ 表示有子命令）
+ *   输入完整一级 + 空格/Tab → 下钻到子命令层
+ *   叶子命令 + 空格 → 参数补全（completions prop）
+ */
+
 interface CommandBarProps {
   visible: boolean;
   onSubmit: (cmd: string) => void;
   onCancel: () => void;
-  /** 命令名 → 参数候选列表（用于参数补全） */
+  /** "完整命令路径" → 参数候选，如 { "stop": [...], "tenant rm": [...] } */
   completions?: Record<string, string[]>;
 }
 
-interface CmdItem {
+interface CmdNode {
   name: string;
   desc: string;
+  children?: CmdNode[];
 }
 
-const COMMANDS: CmdItem[] = [
+const COMMAND_TREE: CmdNode[] = [
   { name: "pi", desc: "启动前台 pi 会话" },
-  { name: "start", desc: "启动后台会话" },
-  { name: "attach", desc: "接入后台会话" },
-  { name: "stop", desc: "停止会话" },
+  { name: "start", desc: "启动后台会话 <名称> [租户]" },
+  { name: "attach", desc: "接入后台会话 <名称>" },
+  { name: "stop", desc: "停止会话 <名称|--all>" },
   { name: "ls", desc: "列出后台会话" },
   { name: "status", desc: "健康检查" },
-  { name: "tenant ls", desc: "列出租户" },
-  { name: "tenant new", desc: "新建租户" },
-  { name: "tenant rm", desc: "删除租户" },
-  { name: "tenant rename", desc: "重命名租户别名" },
-  { name: "shared status", desc: "共享层状态" },
+  {
+    name: "tenant", desc: "租户管理 ▸",
+    children: [
+      { name: "ls", desc: "列出租户" },
+      { name: "new", desc: "新建租户 <别名>" },
+      { name: "rm", desc: "删除租户 <别名>" },
+      { name: "rename", desc: "重命名 <旧别名> <新别名>" },
+    ],
+  },
+  {
+    name: "shared", desc: "共享层 ▸",
+    children: [
+      { name: "status", desc: "共享层状态" },
+    ],
+  },
   { name: "help", desc: "帮助" },
 ];
 
 const VISIBLE = 6;
 
-export function CommandBar({ visible, onSubmit, onCancel, completions }: CommandBarProps) {
-  const [input, setInput] = useState("");
+/** 当前输入所处层级 */
+interface Level {
+  /** 待展示的条目（命令节点或参数） */
+  items: { name: string; desc: string; hasChildren?: boolean }[];
+  /** 已完成的路径词 */
+  path: string[];
+  /** 当前未完成的词 */
+  partial: string;
+}
 
-  const trimmed = input.trim();
-  const parts = trimmed.split(/\s+/);
-  const cmdName = parts[0] ?? "";
+function resolveLevel(input: string, completions?: Record<string, string[]>): Level {
+  const endsWithSpace = input.endsWith(" ");
+  const words = input.trim().split(/\s+/).filter(Boolean);
 
-  // Parameter mode: user has typed a command name followed by space or a partial arg
-  const isArgMode = (parts.length >= 2) || (parts.length === 1 && trimmed !== cmdName && input.endsWith(" "));
-  const argPrefix = isArgMode ? (parts[parts.length - 1] ?? "") : "";
+  let level: CmdNode[] = COMMAND_TREE;
+  const path: string[] = [];
 
-  // Resolve arg candidates
-  const argCandidates: string[] = [];
-  if (isArgMode && completions) {
-    const keys = [cmdName];
-    // also try multi-word command like "tenant rm"
-    if (parts.length >= 2) {
-      keys.push(`${cmdName} ${parts[1]}`);
-    }
-    for (const k of keys) {
-      const cands = completions[k];
-      if (cands && cands.length > 0) {
-        for (const c of cands) {
-          if (!argCandidates.includes(c)) argCandidates.push(c);
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const isLast = i === words.length - 1;
+    const node = level.find((n) => n.name === word);
+
+    if (node && (!isLast || endsWithSpace)) {
+      // 完整匹配且后面还有词（或末尾空格）→ 下钻
+      path.push(word);
+      if (node.children) {
+        level = node.children;
+        if (isLast && endsWithSpace) {
+          return { items: level.map((n) => ({ ...n, hasChildren: !!n.children })), path, partial: "" };
         }
-        break; // first match wins
+      } else {
+        // 叶子 → 参数模式
+        level = [];
+        if (isLast && endsWithSpace) {
+          const args = completions?.[path.join(" ")] ?? [];
+          return { items: args.map((a) => ({ name: a, desc: "" })), path, partial: "" };
+        }
       }
+    } else if (isLast) {
+      // 未完成的词 → 过滤当前层
+      if (level.length === 0 && path.length > 0) {
+        // 参数模式：过滤参数候选
+        if (endsWithSpace) return { items: [], path, partial: "" };
+        const args = completions?.[path.join(" ")] ?? [];
+        return {
+          items: args.filter((a) => a.startsWith(word)).map((a) => ({ name: a, desc: "" })),
+          path,
+          partial: word,
+        };
+      }
+      const filtered = level.filter((n) => n.name.startsWith(word));
+      return {
+        items: filtered.map((n) => ({ ...n, hasChildren: !!n.children })),
+        path,
+        partial: word,
+      };
+    } else {
+      // 中间词无法匹配 → 无候选
+      return { items: [], path, partial: word };
     }
   }
-  const filteredArgs = argPrefix.length > 0
-    ? argCandidates.filter((c) => c.startsWith(argPrefix))
-    : argCandidates;
 
-  // Command-mode: 逐层披露 — 空输入不展示，输入后才过滤
-  const filteredCmds = trimmed.length === 0
-    ? []
-    : COMMANDS.filter((c) => c.name.startsWith(trimmed) || c.name.includes(trimmed));
+  // 空输入 → 顶层
+  return {
+    items: COMMAND_TREE.map((n) => ({ ...n, hasChildren: !!n.children })),
+    path,
+    partial: "",
+  };
+}
 
-  const [selectedTab, setSelectedTab] = useState(0);
+export function CommandBar({ visible, onSubmit, onCancel, completions }: CommandBarProps) {
+  const [input, setInput] = useState("");
+  const [selectedIdx, setSelectedIdx] = useState(0);
 
-  // Determine which list is active
-  const activeList = isArgMode && filteredArgs.length > 0 ? filteredArgs : filteredCmds;
-  const isArgList = isArgMode && filteredArgs.length > 0;
-  const selected = Math.min(selectedTab, Math.max(0, activeList.length - 1));
+  const lvl = resolveLevel(input, completions);
+  const items = lvl.items;
+  const selected = Math.min(selectedIdx, Math.max(0, items.length - 1));
+
+  /** Tab：补全选中项并下钻（加空格） */
+  function completeSelected() {
+    const item = items[selected];
+    if (!item) return;
+    setInput([...lvl.path, item.name].join(" ") + " ");
+    setSelectedIdx(0);
+  }
 
   useInput((char, key) => {
     if (!visible) return;
+    const maxIdx = Math.max(0, items.length - 1);
 
-    const maxIdx = Math.max(0, activeList.length - 1);
+    if (key.tab) { completeSelected(); return; }
+    if (key.escape) { onCancel(); setInput(""); setSelectedIdx(0); return; }
 
-    // Tab key: autocomplete selected item
-    if (key.tab) {
-      if (isArgList && filteredArgs.length > 0) {
-        // Insert selected arg value + space
-        const prefix = trimmed.slice(0, -argPrefix.length);
-        setInput(prefix + filteredArgs[selected] + " ");
-        setSelectedTab(0);
-      } else if (!isArgList && filteredCmds.length > 0 && typeof filteredCmds[0] === "object") {
-        const cmd = (filteredCmds[selected] as CmdItem).name;
-        setInput(cmd + " ");
-        setSelectedTab(0);
-      }
-      return;
-    }
-
-    // Esc: cancel
-    if (key.escape) { onCancel(); setInput(""); return; }
-
-    // Enter: submit
     if (key.return) {
-      const cmd = trimmed.length > 0 ? trimmed : (typeof activeList[selected] === "object" ? (activeList[selected] as CmdItem).name : String(activeList[selected]));
-      if (cmd.length > 0) {
-        onSubmit(cmd);
+      const trimmed = input.trim();
+      if (trimmed.length > 0) {
+        // 唯一匹配时自动补全：叶子直接提交，有子命令则下钻
+        if (items.length === 1 && lvl.partial.length > 0) {
+          const only = items[0];
+          if (only.hasChildren) {
+            setInput([...lvl.path, only.name].join(" ") + " ");
+            setSelectedIdx(0);
+            return;
+          }
+          onSubmit([...lvl.path, only.name].join(" "));
+        } else {
+          onSubmit(trimmed);
+        }
         setInput("");
-        setSelectedTab(0);
+        setSelectedIdx(0);
       } else {
-        onCancel();
+        // 空输入 Enter：有子命令下钻，否则提交选中命令
+        const item = items[selected];
+        if (item?.hasChildren) {
+          completeSelected();
+        } else if (item) {
+          onSubmit([...lvl.path, item.name].join(" "));
+          setInput("");
+          setSelectedIdx(0);
+        } else {
+          onCancel();
+        }
       }
       return;
     }
 
-    // Up/down: navigate list
-    if (key.upArrow) { setSelectedTab((i) => Math.max(0, i - 1)); return; }
-    if (key.downArrow) { setSelectedTab((i) => Math.min(maxIdx, i + 1)); return; }
+    if (key.upArrow) { setSelectedIdx((i) => Math.max(0, i - 1)); return; }
+    if (key.downArrow) { setSelectedIdx((i) => Math.min(maxIdx, i + 1)); return; }
+    if (key.pageDown) { setSelectedIdx((i) => Math.min(maxIdx, i + VISIBLE)); return; }
+    if (key.pageUp) { setSelectedIdx((i) => Math.max(0, i - VISIBLE)); return; }
 
-    // PageUp/PageDown: faster scrolling
-    if (key.pageDown) { setSelectedTab((i) => Math.min(maxIdx, i + VISIBLE)); return; }
-    if (key.pageUp) { setSelectedTab((i) => Math.max(0, i - VISIBLE)); return; }
-
-    // Backspace
     if (key.backspace || key.delete) {
       setInput((s) => s.slice(0, -1));
-      setSelectedTab(0);
+      setSelectedIdx(0);
       return;
     }
 
-    // Text input
     if (char && !key.ctrl && !key.meta) {
       setInput((s) => s + char);
-      setSelectedTab(0);
+      setSelectedIdx(0);
     }
   });
 
   if (!visible) return null;
 
-  // Render the active list with windowed scrolling
-  function renderList<T>(items: T[], renderItem: (item: T, i: number) => React.ReactNode): React.ReactNode {
-    if (items.length === 0) return null;
-
-    let winStart = 0;
-    if (items.length > VISIBLE) {
-      winStart = Math.max(0, Math.min(selected - Math.floor(VISIBLE / 2), items.length - VISIBLE));
-    }
-    const winEnd = Math.min(winStart + VISIBLE, items.length);
-    const hasAbove = winStart > 0;
-    const hasBelow = winEnd < items.length;
-    const slice = items.slice(winStart, winEnd);
-
-    return (
-      <Box flexDirection="column" marginTop={1}>
-        {hasAbove && <Text dimColor>    ↑ …{winStart} more</Text>}
-        {slice.map((item, i) => renderItem(item, winStart + i))}
-        {hasBelow && <Text dimColor>    ↓ …{items.length - winEnd} more</Text>}
-      </Box>
-    );
+  // 窗口化渲染
+  let winStart = 0;
+  if (items.length > VISIBLE) {
+    winStart = Math.max(0, Math.min(selected - Math.floor(VISIBLE / 2), items.length - VISIBLE));
   }
+  const winEnd = Math.min(winStart + VISIBLE, items.length);
+  const slice = items.slice(winStart, winEnd);
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
-      {/* Input line */}
+      {/* 输入行 */}
       <Box>
         <Text color="cyan">/ </Text>
         <Text>{input}</Text>
         <Text dimColor>█</Text>
       </Box>
 
-      {/* Argument completions */}
-      {isArgList && argCandidates.length > 0 && (
-        <>
-          <Box marginTop={1}>
-            <Text dimColor>{cmdName} 参数：</Text>
-          </Box>
-          {renderList<string>(argCandidates, (c, realIdx) => (
-            <Box key={c}>
-              <Text color={realIdx === selected ? "cyan" : undefined} bold={realIdx === selected}>
-                {realIdx === selected ? "  ❯ " : "    "}
-                {c}
-              </Text>
-            </Box>
-          ))}
-        </>
+      {/* 当前层级提示 */}
+      {lvl.path.length > 0 && (
+        <Box marginTop={1}>
+          <Text dimColor>{lvl.path.join(" ▸ ")} ▸</Text>
+        </Box>
       )}
 
-      {/* Command completions (only when not in arg mode or no args match) */}
-      {!isArgList && (
-        renderList<CmdItem>(filteredCmds, (cmd, realIdx) => (
-          <Box key={cmd.name}>
-            <Text color={realIdx === selected ? "cyan" : undefined} bold={realIdx === selected}>
-              {realIdx === selected ? "  ❯ " : "    "}
-              {cmd.name}
-            </Text>
-            <Text dimColor>  —  {cmd.desc}</Text>
-          </Box>
-        ))
+      {/* 候选列表 */}
+      {items.length > 0 && (
+        <Box flexDirection="column" marginTop={lvl.path.length > 0 ? 0 : 1}>
+          {winStart > 0 && <Text dimColor>    ↑ …{winStart} more</Text>}
+          {slice.map((item, i) => {
+            const realIdx = winStart + i;
+            const isSel = realIdx === selected;
+            return (
+              <Box key={`${realIdx}-${item.name}`}>
+                <Text color={isSel ? "cyan" : undefined} bold={isSel}>
+                  {isSel ? "  ❯ " : "    "}
+                  {item.name}
+                </Text>
+                {item.desc ? <Text dimColor>  —  {item.desc}</Text> : null}
+              </Box>
+            );
+          })}
+          {winEnd < items.length && <Text dimColor>    ↓ …{items.length - winEnd} more</Text>}
+        </Box>
       )}
 
-      {/* Help */}
+      {/* 帮助 */}
       <Box marginTop={1}>
-        <Text dimColor>↑↓ select · PgUp/PgDn · Tab autocomplete · Enter submit · Esc cancel</Text>
+        <Text dimColor>↑↓ select · Tab 下钻/补全 · Enter submit · Esc cancel</Text>
       </Box>
     </Box>
   );

@@ -77,11 +77,10 @@ export function PitApp() {
     } catch { /* tmux not available */ }
     return {
       pi: ["--tenant", ...tenantAliases],
-      start: tenantAliases,
       attach: sessions,
       stop: [...sessions, "--all"],
-      tenant: ["ls", "new", "rm"],
       "tenant rm": tenantAliases,
+      "tenant rename": tenantAliases,
     };
   }, [commandMode]); // refresh when command bar opens
 
