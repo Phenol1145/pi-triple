@@ -220,7 +220,18 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
     }
   }
 
-  const tenantId = resolveOrFail(flags.tenant, config);
+  // 位置参数支持：pit start local → 解析 "local" 为租户名
+  let tenantInput = flags.tenant;
+  let piPassthrough = [...passthrough];
+  if (!tenantInput && piPassthrough.length > 0) {
+    const resolved = resolveTenantId(piPassthrough[0], config);
+    if (resolved.ok) {
+      tenantInput = piPassthrough[0];
+      piPassthrough = piPassthrough.slice(1);  // 移除已用作租户名的参数
+    }
+  }
+
+  const tenantId = resolveOrFail(tenantInput, config);
   if (!tenantId) { process.exit(1); }
   const tenantConfig = config.tenants[tenantId] ?? {};
 
@@ -234,8 +245,8 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
     thinking: flags.thinking ?? tenantConfig.thinking,
     tools: tenantConfig.tools,
     excludeTools: tenantConfig.excludeTools,
-    continueSession: passthrough.includes("-c") || passthrough.includes("--continue"),
-    extraArgs: passthrough.filter((a) => a !== "-c" && a !== "--continue"),
+    continueSession: piPassthrough.includes("-c") || piPassthrough.includes("--continue"),
+    extraArgs: piPassthrough.filter((a) => a !== "-c" && a !== "--continue"),
   });
 
   process.exit(code);
