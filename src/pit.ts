@@ -55,7 +55,7 @@ function printHelp(): void {
   console.log("    tenant new [alias] 新建租户");
   console.log("    tenant rm <alias>  删除租户");
   console.log("    tenant rename <old> <new>  重命名租户别名");
-  console.log("    update             更新 pi 到最新版");
+  console.log("    update             更新 pi 本体（--extensions 扩展包，--all 全部）");
   console.log("    install <source>    安装 pi 扩展 (--shared 装到共享层)");
   console.log("    remove <source>     卸载 pi 扩展");
   console.log("    migrate            迁移 pi 扩展到当前租户");
@@ -673,6 +673,10 @@ async function main() {
       break;
     }
     case "update": {
+      const updateAll = flags.all === "true";
+      const updateExt = flags.extensions === "true" || updateAll;
+
+      // 1. pi 本体
       console.log("  检查 pi 更新…");
       const cur = spawnSync("pi", ["--version"], { encoding: "utf-8" });
       const latest = spawnSync("npm", ["view", "@earendil-works/pi-coding-agent", "version"], { encoding: "utf-8" });
@@ -686,12 +690,45 @@ async function main() {
       const latestVer = latest.stdout?.trim() ?? "unknown";
       console.log(`  当前: v${curVer}  最新: v${latestVer}`);
       if (curVer === latestVer) {
-        console.log("  \x1b[32m✅ 已是最新版\x1b[0m");
+        console.log("  \x1b[32m✅ pi 已是最新版\x1b[0m");
       } else {
         console.log("  升级中…");
         const r = spawnSync("npm", ["install", "-g", `@earendil-works/pi-coding-agent@${latestVer}`], { stdio: "inherit" });
-        if (r.status === 0) { console.log(`  \x1b[32m✅ 已升级到 v${latestVer}\x1b[0m`); }
-        else { console.log("  \x1b[31m❌ 升级失败\x1b[0m"); process.exit(1); }
+        if (r.status === 0) { console.log(`  \x1b[32m✅ pi 已升级到 v${latestVer}\x1b[0m`); }
+        else { console.log("  \x1b[31m❌ pi 升级失败\x1b[0m"); process.exit(1); }
+      }
+
+      // 2. 租户扩展包（pi update --extensions）
+      if (updateExt) {
+        const config = loadConfig();
+        const tenantId = resolveOrFail(flags.tenant, config);
+        if (tenantId) {
+          const dataDir = resolveDataDir(config);
+          const agentDir = path.join(dataDir, "pi-config", tenantId);
+          const alias = getTenantAlias(tenantId, config);
+          console.log(`  更新租户 "${alias}" 扩展包…`);
+          const r = spawnSync("pi", ["update", "--extensions"], {
+            stdio: "inherit",
+            env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
+          });
+          if (r.status !== 0) console.log("  \x1b[33m⚠️  扩展包更新部分失败\x1b[0m");
+        }
+      }
+
+      // 3. bundled 自带扩展重同步（仅 --all）
+      if (updateAll) {
+        const config = loadConfig();
+        const dataDir = resolveDataDir(config);
+        const sharedDir = path.join(dataDir, "shared");
+        const { syncBundledExtensions } = await import("./shared-layer.js");
+        const synced = syncBundledExtensions(sharedDir);
+        if (synced.length > 0) {
+          console.log(`  \x1b[32m✅ 内置扩展已同步\x1b[0m: ${synced.join(", ")}`);
+        }
+      }
+
+      if (!updateExt) {
+        console.log("  \x1b[2m提示: pit update --extensions 更新扩展包 · pit update --all 全部更新\x1b[0m");
       }
       break;
     }

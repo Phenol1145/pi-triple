@@ -192,3 +192,35 @@ export function installBundledExtensions(sharedDir: string): string[] {
 
   return installed;
 }
+
+/**
+ * 覆盖式同步 bundled 扩展（用于 pit update --all）。
+ * 共享层的 bundled 扩展由平台托管，更新时直接覆盖；
+ * 用户自定义扩展不应放在与 bundled 同名的目录。
+ */
+export function syncBundledExtensions(sharedDir: string): string[] {
+  const synced: string[] = [];
+
+  const packageRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+  const bundledDir = path.join(packageRoot, "extensions");
+  if (!fs.existsSync(bundledDir)) return synced;
+
+  const targetExtDir = path.join(sharedDir, "extensions");
+  fs.mkdirSync(targetExtDir, { recursive: true });
+
+  for (const entry of fs.readdirSync(bundledDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const src = path.join(bundledDir, entry.name);
+    const dst = path.join(targetExtDir, entry.name);
+
+    // 目标是 symlink（不應發生）或目录时先删除再复制，保证完全同步
+    try {
+      const st = fs.lstatSync(dst);
+      if (st.isSymbolicLink()) fs.unlinkSync(dst);
+    } catch { /* 不存在 */ }
+    fs.cpSync(src, dst, { recursive: true, force: true });
+    synced.push(entry.name);
+  }
+
+  return synced;
+}
