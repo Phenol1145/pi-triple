@@ -30,7 +30,7 @@ export function getBalances(db: DatabaseSync): BalanceRow[] {
           COALESCE(l.losses, 0) as losses
         FROM credits c
         LEFT JOIN (
-          SELECT winner as agent, COUNT(*) as wins FROM market_tasks WHERE status = 'completed' GROUP BY winner
+          SELECT winner as agent, COUNT(*) as wins FROM market_tasks WHERE status = 'settled' GROUP BY winner
         ) w ON c.agent = w.agent
         LEFT JOIN (
           SELECT winner as agent, COUNT(*) as losses FROM market_tasks WHERE status = 'failed' GROUP BY winner

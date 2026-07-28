@@ -140,7 +140,7 @@ export function ArenaPage({ db, refreshKey, tenantAlias }: Props) {
             columns={SETTLE_COLS}
             rows={settleRows}
             rowColor={(row) => {
-              if (row.status === "completed") return "green";
+              if (row.status === "settled") return "green";
               if (row.status === "failed") return "red";
               return undefined;
             }}

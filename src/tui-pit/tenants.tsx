@@ -138,6 +138,7 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
       <Box marginTop={1} flexDirection="column">
         <Text bold>Select tenant to manage:</Text>
         <SelectList
+          enabled={enabled}
           items={selectItems}
           onSelect={(id) => {
             setDeleteTarget(id);

@@ -28,6 +28,7 @@ export function EventsPage({ db, refreshKey }: Props) {
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [showFilter, setShowFilter] = useState(false);
   const lastTypeCount = useRef(0);
+  const lastEventsRef = useRef<EventRow[]>([]);
 
   useInput((input, key) => {
     if (key.ctrl) return;
@@ -41,13 +42,18 @@ export function EventsPage({ db, refreshKey }: Props) {
   });
 
   const events = useMemo(() => {
-    if (!db || paused) return [];
+    if (!db) return [];
     const result = typeFilter
       ? getRecentEvents(db, 200).filter((e) => e.eventType === typeFilter)
       : getRecentEvents(db, 200);
+    // Cache the latest non-empty result for pause mode
+    if (result.length > 0) lastEventsRef.current = result;
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey, db, typeFilter]);
+
+  // When paused, freeze to the last cached data instead of clearing to []
+  const displayedEvents = paused ? lastEventsRef.current : events;
 
   const eventTypes = useMemo(() => {
     if (!db) return [];
@@ -72,7 +78,7 @@ export function EventsPage({ db, refreshKey }: Props) {
     );
   }
 
-  const rows = events.map((e) => ({
+  const rows = displayedEvents.map((e) => ({
     time: formatTime(e.ts),
     type: e.eventType,
     traceId: truncate(e.traceId, 14),
@@ -86,6 +92,7 @@ export function EventsPage({ db, refreshKey }: Props) {
         <Text dimColor>{paused ? "⏸ PAUSED" : "▶ LIVE"}</Text>
         {typeFilter ? <Text color="cyan">filter: {typeFilter}</Text> : null}
         <Text dimColor>{rows.length} events</Text>
+        {paused && <Text color="yellow"> (frozen)</Text>}
         {eventTypes.length > 0 && (
           <Text dimColor>{eventTypes.length} types</Text>
         )}

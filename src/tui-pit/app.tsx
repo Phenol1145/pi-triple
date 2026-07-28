@@ -15,12 +15,17 @@ const TABS = ["Dashboard", "Tenants", "Sessions", "Extensions", "Config"];
 const DESTRUCTIVE_CMDS = ["tenant rm", "stop", "stop --all"];
 
 export function PitApp() {
-  const { activeTab, setActiveTab, tabIndex } = useTabs(TABS);
   const { columns, rows } = useTerminalSize();
+  const [notification, setNotification] = useState<string | null>(null);
   const [commandMode, setCommandMode] = useState(false);
   const [outputLines, setOutputLines] = useState<string[] | null>(null);
-  const [notification, setNotification] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null);
+
+  // Input gating: pages and tab switching disabled when command bar / output panel / confirm active
+  const gated = !commandMode && !outputLines && !confirmAction;
+
+  // Tab navigation gated by focus state
+  const { activeTab, setActiveTab, tabIndex } = useTabs(TABS, gated);
 
   // Notification auto-dismiss
   React.useEffect(() => {
@@ -144,9 +149,6 @@ export function PitApp() {
       setOutputLines(lines.filter((l) => l.trim().length > 0));
     }
   }
-
-  // Input gating: pages disabled when command bar or output panel active
-  const gated = !commandMode && !outputLines && !confirmAction;
 
   const sharedProps = { width: Math.min(columns, 120), height: rows - 7 };
 

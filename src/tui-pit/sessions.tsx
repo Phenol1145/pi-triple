@@ -136,6 +136,7 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
     return (
       <Box flexDirection="column" gap={1}>
         <SelectList
+          enabled={enabled}
           title="Select tenant to start session"
           items={items}
           onSelect={async (tenantId) => {

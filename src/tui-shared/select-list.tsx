@@ -12,9 +12,10 @@ interface SelectListProps {
   onSelect: (value: string) => void;
   title?: string;
   onCancel?: () => void;
+  enabled?: boolean;
 }
 
-export function SelectList({ items, onSelect, title, onCancel }: SelectListProps) {
+export function SelectList({ items, onSelect, title, onCancel, enabled = true }: SelectListProps) {
   const [index, setIndex] = useState(0);
   const [filter, setFilter] = useState("");
 
@@ -27,6 +28,7 @@ export function SelectList({ items, onSelect, title, onCancel }: SelectListProps
     : items;
 
   useInput((input, key) => {
+    if (!enabled) return;
     if (key.upArrow) {
       setIndex((i) => Math.max(0, i - 1));
       return;

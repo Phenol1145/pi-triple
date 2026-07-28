@@ -3,7 +3,7 @@
  *
  * 5 个 Tab：Telemetry / Arena / Events / Compare / Config
  */
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useEffect, useState } from "react";
 import { Box, useInput } from "ink";
 import type { DatabaseSync } from "node:sqlite";
 import { openDb, sharedDbPath, localDbPath } from "../lab-data/index.js";
@@ -29,24 +29,32 @@ export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
   const { activeTab, tabIndex } = useTabs(TABS);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Open DBs — fail gracefully if not found
-  const sharedDb: DatabaseSync | null = (() => {
+  // Open DBs once via useMemo — avoids connection leak on re-renders
+  const sharedDb: DatabaseSync | null = useMemo(() => {
     try {
       const p = sharedDbPath();
       return openDb(p);
     } catch {
       return null;
     }
-  })();
+  }, []);
 
-  const localDb: DatabaseSync | null = (() => {
+  const localDb: DatabaseSync | null = useMemo(() => {
     try {
       const p = localDbPath(tenantId);
       return openDb(p);
     } catch {
       return null;
     }
-  })();
+  }, [tenantId]);
+
+  // Close DBs on unmount
+  useEffect(() => {
+    return () => {
+      sharedDb?.close();
+      localDb?.close();
+    };
+  }, [sharedDb, localDb]);
 
   const refresh = useCallback(() => {
     setRefreshKey((k) => k + 1);

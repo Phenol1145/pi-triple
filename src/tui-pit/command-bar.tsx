@@ -77,7 +77,7 @@ export function CommandBar({ visible, onSubmit, onCancel }: CommandBarProps) {
     }
 
     // Text input
-    if (char && !key.ctrl && !key.meta && !key.shift) {
+    if (char && !key.ctrl && !key.meta) {
       setInput((s) => s + char);
       setSelectedTab(0);
     }

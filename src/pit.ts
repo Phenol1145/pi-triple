@@ -88,7 +88,7 @@ function parseArgs(args: string[]): { command: string; subcommand?: string; flag
     const arg = args[i];
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (["tenant","project","model","provider","thinking","name","global"].includes(key)) {
+      if (["tenant","project","model","provider","thinking","name"].includes(key)) {
         flags[key] = args[++i] ?? "";
       } else if (key === "json") {
         // --json is boolean, next arg is not a value unless it starts with --
@@ -455,7 +455,7 @@ async function cmdStartBg(flags: Record<string, string>, passthrough: string[]):
     "-x", "200", "-y", "50",
   ];
   for (const [k, v] of Object.entries(launch.env)) {
-    if (k === "PI_CODING_AGENT_DIR" || k === "DATA_DIR" || k === "PI_TENANT") {
+    if (k.startsWith("PI_") || k.startsWith("AGENT_LAB_")) {
       tmuxArgs.push("-e", `${k}=${v}`);
     }
   }
