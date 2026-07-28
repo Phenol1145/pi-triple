@@ -1,213 +1,190 @@
 # Pi-Triple
 
-基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) 的多租户 Agent 平台。模块化单体架构，设计目标为内部团队使用的编码 Agent 服务，单机部署，后续可拆分迁移至 Dapr/K8s。
+基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) 的多租户 Agent 平台。双产品线：
 
-> **SDK 兼容性**：所有 pi SDK 调用通过 `src/sdk-adapter/` 适配层隔离。升级 SDK 时只需修改适配层 + 跑测试，业务代码不受影响。当前适配 `@earendil-works/pi-coding-agent@^0.82.1`。
+| | PTL（Pi-Triple-Lite） | PTH（Pi-Triple-Heavy） |
+|---|----------------------|------------------------|
+| **定位** | 轻量开发/调试工具链 | agent 联邦平台 |
+| **入口** | `pit` CLI | `pth` server（HTTP/SSE/WebSocket） |
+| **运行时** | pi 进程 × tmux | AgentEngine + Redis + BullMQ |
+| **适用** | 本地工作站 · 交互式调试 · 个人/小组 | 服务器部署 · 程序化 API · 集中治理 |
+| **来源** | `src/ptl/` | `src/pth/` |
+| **文档** | [PTL 架构](./docs/ptl/architecture.md) | [PTH 架构](./docs/pth/architecture.md) |
 
-## 架构
+> **SDK 兼容性**：所有 pi SDK 调用通过 `src/shared/sdk-adapter/` 适配层隔离。升级 SDK 时只需修改适配层 + 跑测试，业务代码不受影响。当前适配 `@earendil-works/pi-coding-agent@^0.82.1`。
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                       Clients                           │
-│         HTTP/SSE  │  WebSocket  │  CLI (in-process)     │
-├──────────────────────────┬──────────────────────────────┤
-│            Gateway        │                              │
-│    Fastify + auth hook    │                              │
-├──────────────────────────┼──────────────────────────────┤
-│       Agent Engine        │        Workflow              │
-│   Session Pool (busy/     │   Orchestrator (state        │
-│   idle state machine)     │   machine + BullMQ intents)  │
-├──────────────────────────┼──────────────────────────────┤
-│                        pi SDK                           │
-│       createAgentSession() · ModelRuntime               │
-├───────────┬──────────┬──────────┬──────────┬───────────┤
-│  Model    │  Tool    │Workspace │  Self-   │  Storage   │
-│  Router   │ Platform │ Manager  │  Modify  │  DAL (Redis│
-│           │ (C8:     │          │ (L1/L2/  │  append-   │
-│           │ adapt)   │          │  L3)     │  only)     │
-├───────────┴──────────┴──────────┴──────────┴───────────┤
-│                 Infrastructure                           │
-│  Redis · BullMQ · pino · prom-client · chokidar          │
-└─────────────────────────────────────────────────────────┘
-```
-
-## 快速开始
-
-### 本地运行
+## PTL 快速开始（推荐）
 
 ```bash
-# 1. 安装依赖
+# 1. 全局安装
 git clone <repo> && cd pi-platform
-npm install
+npm install && npm link
 
-# 2. 启动 Redis
-brew services start redis          # macOS
-# 或: redis-server --daemonize yes
+# 2. 导引（检查环境 + 安装提供商 + 创建租户 + 迁移扩展）
+pit onboard
 
-# 3. 设置 API key（至少一个）
-export ANTHROPIC_API_KEY=sk-ant-...
-export OPENAI_API_KEY=sk-...
+# 3. 启动
+pit start                     # tmux 会话，立即接入
+pit start --bg --name coding  # 后台启动
+pit pi                        # 原生前台（无 tmux）
 
-# 4. 启动平台
-npm run dev
-
-# 5. 创建 token 并测试
-redis-cli SET "auth:token:test-token" '{"tenantId":"demo","createdAt":1700000000}'
-
-curl -s -X POST http://localhost:3000/api/v1/sessions \
-  -H "Authorization: Bearer test-token" \
-  -H "Content-Type: application/json" \
-  -d '{"project":"hello"}'
+# 4. 控制面板
+pit                            # pit ui TUI
+pit lab                        # 模型调试 TUI
 ```
 
-### Docker 部署
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-docker-compose up -d
-curl http://localhost:3000/health
-```
-
-### CLI 模式（无 HTTP）
-
-```bash
-npm run cli
-# 进入 REPL：直接输入对话，/help 查看更多命令
-```
-
-### pit CLI（多租户会话管理）
+### pit CLI 命令速查
 
 | 命令 | 说明 |
 |------|------|
 | `pit start` | 创建 tmux 会话并立即接入（默认；`--bg` 纯后台，`--name` 命名） |
 | `pit pi` | 原生前台启动 pi（无 tmux，pi 原生体验） |
-| `pit attach <name>` | 接入已运行的 tmux 会话 |
-| `pit ls` / `pit stop <name>` | 列出 / 停止会话 |
-| `pit` / `pit ui` | 系统总控 TUI |
-| `pit lab` | agent-lab 模型调试 TUI |
+| `pit attach/switch/detach` | 接入 / 瞬移切换 / 脱离会话 |
+| `pit ls / pit stop` | 列出 / 停止会话 |
+| `pit ui` / `pit lab` | 系统控制 / 模型调试 TUI |
+| `pit tenant ls/new/rm/rename` | 租户管理 |
+| `pit config get/set/unset` | 配置读写 |
+| `pit update --all` | 更新 pi + 扩展 + 内置同步 |
+| `pit doctor` / `pit onboard` | 环境诊断 / 首次导引 |
+| `pit install --shared <pkg>` | 安装共享扩展 |
+
+详见 [PTL 架构](./docs/ptl/architecture.md)。
+
+## PTH 服务器模式
+
+```bash
+# 安装依赖 + 启动 Redis
+brew services start redis
+
+# 启动平台
+export ANTHROPIC_API_KEY=sk-ant-...
+npm run pth:dev
+
+# 测试
+curl http://localhost:3000/health
+```
+
+```bash
+# Docker 部署
+docker-compose up -d
+```
+
+详见 [PTH 部署指南](./docs/pth/deployment.md) · [PTH API 参考](./docs/pth/api.md) · [PTH 架构文档](./docs/pth/architecture.md)。
+
+## Roadmap
+
+- [x] PTL：tmux 多会话管理 + pit ui/lab TUI
+- [x] PTL：共享扩展层（symlink 注入，逐项更新）
+- [x] PTL：pit-providers 统一 provider 后端（声明式 JSON + 多 Key failover）
+- [x] PTL：pit-communicate 跨会话通信 + pit-control 会话内控制
+- [ ] **PTL→PTH 桥**：`pit submit` — 将 PTL 的 agent 程序打包提交到 PTH workflow 运行
+- [ ] PTH：Windows 平台适配
+- [ ] PTH：Dapr/K8s Phase 2 迁移
 
 ## 项目结构
 
 ```
 pi-platform/
 ├── src/
-│   ├── main.ts                    # 入口：组装所有模块
-│   ├── cli.ts                     # CLI REPL（直接使用 AgentEngine）
-│   ├── platform/                  # 跨 OS 适配器（POSIX / Win32）
-│   ├── observability/             # pino 日志、Prometheus 指标、审计
-│   ├── storage/                   # Redis 存储层（session/entry/snapshot/settings）
-│   ├── workspace/                 # 工作目录管理（租户隔离、按项目创建）
-│   ├── model-router/              # 模型自动检测 + failover
-│   ├── tools/                     # 工具治理平台（allowlist + 审计 + 指标）
-│   ├── core/                      # AgentEngine / SessionPool / Bridge
-│   ├── gateway/                   # Fastify HTTP + WebSocket
-│   ├── workflow/                  # BullMQ 工作流编排
-│   └── self-modify/               # 热加载 + A/B 重建触发器
-├── test/                          # 58 个测试（单元 36 + 集成 22）
-├── config/                        # settings.json / SYSTEM.md
-├── scripts/supervisor.sh          # A/B 启动 + 健康检查 + 回滚
+│   ├── shared/                    # 双产品共享模块
+│   │   ├── workspace/             # 工作目录隔离
+│   │   ├── platform/              # 跨 OS 适配器（POSIX/Win32）
+│   │   ├── model-router/          # 模型自动检测 + failover
+│   │   ├── sdk-adapter/           # pi SDK 适配层
+│   │   └── observability/         # pino 日志
+│   ├── ptl/                       # Pi-Triple-Lite（pit CLI）
+│   │   ├── pit.ts                 # CLI 入口（bin: pit）
+│   │   ├── pit/                   # 命令模块（args/sessions/onboard/config-cmd/mode/admin）
+│   │   ├── config/                # 配置系统（v2 UUID+alias + RW）
+│   │   ├── tmux.ts                # tmux 会话管理
+│   │   ├── launcher.ts            # pi 进程启动
+│   │   ├── shared-layer.ts        # 共享扩展层（symlink + manifest + prune）
+│   │   ├── doctor.ts              # 环境诊断
+│   │   ├── migrate.ts             # ~/.pi/agent 迁移
+│   │   ├── tui-pit/               # pit ui（Ink TUI）
+│   │   ├── tui-lab/               # lab ui（Ink TUI）
+│   │   └── tui-shared/            # TUI 共享组件 + Screen 布局模板
+│   └── pth/                       # Pi-Triple-Heavy（server）
+│       ├── main.ts                # 服务器入口（bin: pth）
+│       ├── core/                  # AgentEngine / SessionPool / Bridge
+│       ├── gateway/               # Fastify HTTP + WebSocket
+│       ├── workflow/              # BullMQ 工作流编排
+│       ├── tools/                 # 工具治理平台（allowlist + 审计 + 指标）
+│       ├── storage/               # Redis 存储层
+│       ├── self-modify/           # 热加载 + A/B 重建
+│       └── observability/         # Prometheus 指标 + 审计
+├── extensions/                    # bundled 扩展
+│   ├── pit-providers/             # 统一 provider 后端
+│   ├── pit-communicate/           # 跨会话通信
+│   ├── pit-control/               # 会话内控制
+│   └── agent-lab/                 # 模型遥测
+├── test/                          # 208 个测试
+├── docs/
+│   ├── pth/                       # PTH 文档
+│   │   ├── api.md
+│   │   ├── architecture.md
+│   │   └── deployment.md
+│   └── ptl/                       # PTL 文档
+│       └── architecture.md
 ├── Dockerfile
 └── docker-compose.yaml
 ```
 
 ## 技术栈
 
-| 组件 | 版本 | 用途 |
+| 组件 | 用于 | 用途 |
 |------|------|------|
-| Node.js | >=22 | 运行时 |
-| TypeScript | 5.7 | 类型安全 |
-| Fastify | 5.x | HTTP 网关 |
-| @fastify/websocket | 11.x | WebSocket |
-| ioredis | 5.x | Redis 客户端 |
-| bullmq | 5.x | 工作流任务队列 |
-| pi SDK | 0.82 | Agent 执行引擎 |
-| pino | 9.x | 结构化日志 |
-| prom-client | 15.x | Prometheus 指标 |
-| chokidar | 4.x | 文件热加载 |
-| vitest | 3.x | 测试框架 |
-
-## 硬约束
-
-| ID | 约束 | 落实 |
-|----|------|------|
-| C1 | 跨模块 JSON DTO，流式 AsyncIterable | ✅ Result 判别联合 + SSE AsyncIterable |
-| C2 | 无 OS 沙箱，仅 cwd 隔离 | ✅ WorkspaceManager 按租户创建目录 |
-| C3 | BullMQ 仅处理无状态短任务 | ✅ 编排状态机在 App 层 |
-| C4 | BullMQ worker 在 worker_threads | ⚠️ 主进程降级（Phase 1 技术债） |
-| C5 | Token→租户，路径服务端推导 | ✅ auth hook + 服务端 cwd 生成 |
-| C6 | pino + Prometheus | ✅ tokensTotal / toolCallsTotal / sessionsActive |
-| C7 | Engine 层租户校验 | ✅ prompt/abort/destroy 全员校验 |
-| C8 | 工具适配器模式，不重写 pi 工具 | ✅ ToolPlatform 是治理层 |
-| C9 | Turn 级版本快照 | ✅ computeHash + saveSnapshot |
-| C10 | 外部 supervisor 回滚 | ✅ supervisor.sh（Docker 入口待接线） |
+| Node.js >=22 | 全部 | 运行时 |
+| TypeScript 5.7 | 全部 | 类型安全 |
+| pi SDK 0.82 | 全部 | Agent 执行引擎 |
+| React + Ink | PTL | TUI 渲染 |
+| tmux | PTL | 会话管理 |
+| Fastify 5.x | PTH | HTTP 网关 |
+| ioredis 5.x | PTH | Redis 客户端 |
+| bullmq 5.x | PTH | 工作流任务队列 |
+| pino 9.x | PTH | 结构化日志 |
+| prom-client 15.x | PTH | Prometheus 指标 |
+| vitest 3.x | 全部 | 测试框架 |
 
 ## 开发者指南
 
-### 开发循环
+### 快速循环
 
 ```bash
-# 1. 修改代码
-vim src/tools/custom/my-tool.ts
-
-# 2. 类型检查
-npx tsc --noEmit
-
-# 3. 跑测试
-npx vitest run
-
-# 4. CLI 快速验证
-npm run cli
-
-# 5. HTTP 验证（需先启动服务）
-npm run dev &
-curl -X POST http://localhost:3000/api/v1/sessions \
-  -H "Authorization: Bearer test-token" \
-  -d '{"project":"dev-test"}'
-
-# 6. 提交
-git add -A && git commit -m "feat: ..."
+npx tsc --noEmit        # 类型检查
+npx vitest run           # 208 tests
+npm run build && npm link
+cd /tmp && pit tenant ls  # 冒烟测试
 ```
 
-### 扩展点速查
+### 扩展开发
 
-| 想做什么 | 去哪里 | 参考 |
-|----------|--------|------|
-| 添加自定义工具 | `src/tools/` | [architecture.md #ToolPlatform](./docs/architecture.md#toolplatformc8-治理层) |
-| 添加 API 端点 | `src/gateway/` | [architecture.md #Gateway](./docs/architecture.md#gateway-layer) |
-| 替换存储后端 | `src/storage/` | [architecture.md #存储模型](./docs/architecture.md#存储模型) |
-| 定义工作流 | `src/workflow/` | [architecture.md #WorkflowOrchestrator](./docs/architecture.md#workfloworchestrator) |
-| 添加 Skill/Prompt | `{DATA_DIR}/platform/` | [architecture.md #Self-Modify](./docs/architecture.md#self-modify自修改) |
-| 添加模型凭证来源 | `src/storage/credential-provider.ts` | 实现 `CredentialProvider` 接口 |
+| 想做什么 | 参考 |
+|----------|------|
+| 新建 pi 扩展（bundled） | `extensions/pit-providers/` — provider 注册 |
+| 扩展命令 + 参数补全 | `extensions/pit-control/index.ts` — registerCommand + getArgumentCompletions |
+| 跨会话通信 | `extensions/pit-communicate/` — 文件邮箱 + Delivery 决策 |
+| PTH 自定义工具/路由/存储 | `src/pth/` — 接口替换见 [PTH 架构 #扩展方式](./docs/pth/architecture.md) |
+| PTL 加 CLI 命令 | `src/ptl/pit/admin.ts` + 注册到 `src/ptl/pit.ts` switch |
+| TUI 新页面 | 遵循 [Screen 布局模板](./src/ptl/tui-shared/README.md) 5 条规则 |
 
-### 示例代码
-
-见 `examples/` 目录，每个示例可直接运行：
-
-```bash
-npx tsx examples/custom-tool/index.ts    # 自定义工具
-npx tsx examples/custom-route/index.ts   # 自定义 API 端点
-npx tsx examples/custom-store/index.ts   # 自定义存储后端
-```
-
-### 设计原则（必读）
+### 设计原则
 
 | 原则 | 说明 |
 |------|------|
-| DTO 纪律 | 跨模块只传 JSON 可序列化对象，不传 class 实例 |
-| 流式用 AsyncIterable | 不用 callback / EventEmitter，通过 Bridge 桥接 |
+| pi 是引擎 | 不重写 pi 能力，做的是外层治理/编排/体验 |
+| 租户隔离 | PTL：独立 pi 进程 + `PI_CODING_AGENT_DIR`；PTH：Engine 层强制校验 |
 | 错误用判别联合 | `Result<T> = {ok:true, data} \| {ok:false, error}` |
-| 租户隔离 | 所有数据操作带 tenantId，Engine 层强制校验 |
-| 工具是治理层 | 不重写 pi 内置工具，只包装审计/ACL/指标 |
-
-详见 [architecture.md #硬约束详解](./docs/architecture.md#硬约束详解)。
+| 终端切换协议 | `unmountInk()` → `stdin.pause()` → `spawnSync(stdio: "inherit")` → `process.exit(status)` |
+| 零外部依赖（扩展） | bundled 扩展只用 `node:` 内置 + 相对导入 |
 
 ## 已知限制
 
-- **worker_threads**（C4）：BullMQ worker 在主进程运行，生产环境建议隔离
-- **恢复**：`recoverAll()` 为骨架（崩溃后 session 不自动恢复）
-- **工作流**：`parallel` / `condition` 步骤为 stub
-- **工具批准**：`requiresApproval` 定义存在但审批流程未实现
-- **Docker compose** 中 Redis `maxmemory-policy allkeys-lru` 可能导致 session token 意外淘汰，生产环境建议改为 `noeviction` 或 `volatile-lru`
+- **PTL 无 HTTP API**：适合本地工作站交互，不适合程序化/远程访问（→ PTH）
+- **PTH 无 TUI**：适合服务器/API 场景（→ PTL 本地调试 + PTL→PTH 桥）
+- **tmux**：Unix-only（Windows 支持规划中）
+- **PTH 进程限制**：BullMQ worker 在主进程（Phase 1 技术债）
+- **pit-communicate**：单机通信，不支持跨机器
 
 ## License
 
