@@ -52,12 +52,6 @@ function printHeader(): void {
   console.log("");
 }
 
-function printResult(r: CheckResult): void {
-  const icon = icons[r.status];
-  const color = r.status === "ok" ? "\x1b[32m" : r.status === "warn" ? "\x1b[33m" : "\x1b[31m";
-  console.log(`  ${icon} ${color}${r.name}\x1b[0m — ${r.message}`);
-}
-
 async function ask(question: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
@@ -403,32 +397,32 @@ const QUICK_CHECKS: CheckFn[] = [
 ];
 
 export async function runDoctor(mode: "full" | "quick" = "full"): Promise<boolean> {
-  const checks = mode === "full" ? ALL_CHECKS : QUICK_CHECKS;
-
   if (mode === "full") {
     printHeader();
   }
 
-  let allOk = true;
-  const failures: CheckResult[] = [];
+  // 第一遍：通过 runDoctorStructured 获取数据（不重复执行检查逻辑）
+  const report = await runDoctorStructured(mode);
+  renderDoctorPrint(report);
 
-  for (const check of checks) {
-    const result = await check();
-    printResult(result);
-
-    if (result.status === "fail") {
-      allOk = false;
-      failures.push(result);
+  // 交互式修复：仅 full 模式，且存在失败项
+  if (!report.allOk && mode === "full") {
+    // 重新执行检查（仅失败项）以获取带 fix 函数的 CheckResult
+    const failedNames = new Set(report.checks.filter(c => !c.ok).map(c => c.name));
+    const failures: CheckResult[] = [];
+    for (const checkFn of ALL_CHECKS) {
+      const result = await checkFn();
+      if (failedNames.has(result.name) && result.status === "fail") {
+        failures.push(result);
+      }
+    }
+    if (failures.length > 0) {
+      await offerFixes(failures);
     }
   }
 
-  // 交互式修复
-  if (failures.length > 0 && mode === "full") {
-    await offerFixes(failures);
-  }
-
   console.log("");
-  if (allOk) {
+  if (report.allOk) {
     console.log("  \x1b[32m✅ 所有检查通过，Pi-Triple 准备就绪！\x1b[0m");
   } else {
     console.log("  \x1b[33m⚠️  部分检查未通过，某些功能可能不可用。\x1b[0m");
@@ -436,7 +430,7 @@ export async function runDoctor(mode: "full" | "quick" = "full"): Promise<boolea
   }
   console.log("");
 
-  return allOk;
+  return report.allOk;
 }
 
 // 独立运行

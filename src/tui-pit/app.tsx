@@ -124,8 +124,14 @@ export function PitApp() {
     }
 
     if (result.handoff) {
-      // Can't spawn a child to take over terminal from inside Ink
-      setNotification("请退出 TUI 后执行: pit " + result.handoff.args.join(" "));
+      // Handoff: release terminal to child process (like sessions.tsx handoffTerminal)
+      process.stdin.pause();
+      const { spawnSync } = await import("node:child_process");
+      const r = spawnSync(result.handoff.cmd, result.handoff.args, {
+        stdio: "inherit",
+        env: { ...process.env, TERM: process.env.TERM ?? "xterm-256color" },
+      });
+      process.exit(r.status ?? 0);
       return;
     }
 
@@ -139,6 +145,9 @@ export function PitApp() {
     }
   }
 
+  // Input gating: pages disabled when command bar or output panel active
+  const gated = !commandMode && !outputLines && !confirmAction;
+
   const sharedProps = { width: Math.min(columns, 120), height: rows - 7 };
 
   // Render layers
@@ -149,10 +158,10 @@ export function PitApp() {
     content = (
       <Box flexDirection="column">
         <Box minHeight={rows - 12}>
-          {/* Show current page dimmed in background */}
+          {/* Show current page dimmed in background — disabled to avoid input conflict */}
           {tabIndex === 0 && <DashboardPage {...sharedProps} />}
-          {tabIndex === 1 && <TenantsPage {...sharedProps} />}
-          {tabIndex === 2 && <SessionsPage {...sharedProps} />}
+          {tabIndex === 1 && <TenantsPage {...sharedProps} enabled={false} />}
+          {tabIndex === 2 && <SessionsPage {...sharedProps} enabled={false} />}
           {tabIndex === 3 && <ExtensionsPage {...sharedProps} />}
           {tabIndex === 4 && <ConfigPage {...sharedProps} />}
         </Box>
@@ -167,8 +176,8 @@ export function PitApp() {
     content = (
       <Box flexDirection="column" minHeight={rows - 9}>
         {tabIndex === 0 && <DashboardPage {...sharedProps} />}
-        {tabIndex === 1 && <TenantsPage {...sharedProps} />}
-        {tabIndex === 2 && <SessionsPage {...sharedProps} />}
+        {tabIndex === 1 && <TenantsPage {...sharedProps} enabled={gated} />}
+        {tabIndex === 2 && <SessionsPage {...sharedProps} enabled={gated} />}
         {tabIndex === 3 && <ExtensionsPage {...sharedProps} />}
         {tabIndex === 4 && <ConfigPage {...sharedProps} />}
       </Box>

@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useInput, useStdout } from "ink";
 
-export function useTabs(tabs: string[]) {
+export function useTabs(tabs: string[], enabled = true) {
   const [tabIndex, setTabIndex] = useState(0);
   const activeTab = tabs[tabIndex] ?? tabs[0];
 
   useInput((input, key) => {
+    if (!enabled) return;
     if (key.ctrl) return;
     const digit = parseInt(input, 10);
     if (digit >= 1 && digit <= Math.min(tabs.length, 9)) {

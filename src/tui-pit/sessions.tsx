@@ -20,6 +20,7 @@ interface SessionsPageProps {
   width: number;
   height: number;
   unmount?: () => void;
+  enabled?: boolean;
 }
 
 interface TmuxSession {
@@ -63,7 +64,7 @@ export function handoffTerminal(cmd: string, args: string[], unmount?: () => voi
   process.exit(result.status ?? 0);
 }
 
-export function SessionsPage({ width, height: _h, unmount }: SessionsPageProps) {
+export function SessionsPage({ width, height: _h, unmount, enabled = true }: SessionsPageProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [mode, setMode] = useState<"list" | "start-tenant" | "delete-confirm">("list");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -85,6 +86,7 @@ export function SessionsPage({ width, height: _h, unmount }: SessionsPageProps) 
   }));
 
   useInput((input, key) => {
+    if (!enabled) return;
     if (mode === "list") {
       if (key.upArrow) { setSelectedIdx((i) => Math.max(0, i - 1)); return; }
       if (key.downArrow) { setSelectedIdx((i) => Math.min(sessions.length - 1, i + 1)); return; }

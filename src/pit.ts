@@ -560,7 +560,7 @@ async function routeJsonCommand(command: string, subcommand: string | undefined,
     case "tenant":
       if (subcommand === "ls" || subcommand === "list") result = await execTenantLs();
       else if (subcommand === "new") result = await execTenantNew(passthrough[0]);
-      else if (subcommand === "rm") result = await execTenantRm(passthrough[0] ?? subcommand ?? "");
+      else if (subcommand === "rm") result = await execTenantRm(passthrough[0] || "");
       else result = await execTenantLs();
       break;
     case "status":
@@ -611,7 +611,9 @@ async function main() {
   if (mode === "json") {
     const routed = await routeJsonCommand(command, subcommand, flags, passthrough);
     if (routed) return;
-    // fall through to print-mode for unextracted commands
+    // Command not extractable — JSON unsupported
+    emitJsonError("UNSUPPORTED_JSON", `命令 "${command || "(无)"}" 不支持 --json`);
+    process.exit(1);
   }
 
   switch (command) {
@@ -657,7 +659,7 @@ async function main() {
       let tr;
       if (subcommand === "ls" || subcommand === "list") tr = await execTenantLs();
       else if (subcommand === "new") tr = await execTenantNew(passthrough[0]);
-      else if (subcommand === "rm") tr = await execTenantRm(passthrough[0] ?? subcommand ?? "");
+      else if (subcommand === "rm") tr = await execTenantRm(passthrough[0] || "");
       else tr = await execTenantLs();
       doPrintCommand(tr);
       break;
@@ -780,7 +782,7 @@ async function main() {
     default:
       console.log(`  未知命令: ${command}`);
       console.log("  运行 pit help 查看帮助");
-      break;
+      process.exit(1);
   }
 }
 

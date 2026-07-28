@@ -23,11 +23,12 @@ import {
 interface TenantsPageProps {
   width: number;
   height: number;
+  enabled?: boolean;
 }
 
 type Mode = "list" | "new-alias" | "delete-confirm";
 
-export function TenantsPage({ width, height: _h }: TenantsPageProps) {
+export function TenantsPage({ width, height: _h, enabled = true }: TenantsPageProps) {
   const [mode, setMode] = useState<Mode>("list");
   const [aliasInput, setAliasInput] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -36,6 +37,7 @@ export function TenantsPage({ width, height: _h }: TenantsPageProps) {
   const tenants = listTenants(config);
 
   useInput((input, key) => {
+    if (!enabled) return;
     if (mode === "list") {
       if (input === "n") { setMode("new-alias"); setAliasInput(""); return; }
       if (input === "d") return; // handled per-row via select

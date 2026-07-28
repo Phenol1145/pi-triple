@@ -137,6 +137,10 @@ export async function execTenantNew(alias?: string): Promise<CommandResult> {
 }
 
 export async function execTenantRm(input: string): Promise<CommandResult> {
+  if (!input) {
+    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: pit tenant rm <alias|uuid>" } };
+  }
+
   const config = loadConfig();
   const dataDir = resolveDataDir(config);
 
