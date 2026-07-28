@@ -5,13 +5,11 @@ import {
   DataTable,
   SelectList,
   ConfirmDialog,
-  theme,
 } from "../tui-shared/index.js";
 import type { ColumnDef, SelectItem } from "../tui-shared/index.js";
 import {
   loadConfig,
   listTenants,
-  resolveTenantId,
   getTenantAlias,
 } from "../config.js";
 import { buildPiLaunch } from "../launcher.js";

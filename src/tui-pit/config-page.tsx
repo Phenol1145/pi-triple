@@ -1,6 +1,5 @@
 import React from "react";
 import { Box, Text } from "ink";
-import fs from "node:fs";
 import path from "node:path";
 import { loadConfig, resolveDataDir, getTenantAlias } from "../config.js";
 

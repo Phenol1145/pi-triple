@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import { spawnSync } from "node:child_process";
 import { DataTable } from "../tui-shared/index.js";
 import type { ColumnDef } from "../tui-shared/index.js";
-import { loadConfig, listTenants, getTenantAlias, resolveDataDir } from "../config.js";
+import { loadConfig, listTenants } from "../config.js";
 
 /** Non-blocking tmux session reader */
 function readTmuxSessions(): string[] {

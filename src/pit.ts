@@ -294,7 +294,7 @@ async function cmdStartBg(flags: Record<string, string>, passthrough: string[]):
     process.exit(1);
   }
 
-  const check = spawnSync("tmux", ["has-session", "-t", session], { encoding: "utf-8" });
+  const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
   if (check.status === 0) {
     console.log(`  ⚠️  会话 "${name}" 已在运行`);
     console.log(`  接入: pit attach ${name}`);
@@ -347,14 +347,14 @@ function cmdAttach(name: string): void {
   if (!hasTmux()) { console.log("  \x1b[31m❌ tmux 未安装\x1b[0m"); process.exit(1); }
 
   const session = tmuxSessionName(name);
-  const check = spawnSync("tmux", ["has-session", "-t", session], { encoding: "utf-8" });
+  const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
   if (check.status !== 0) {
     console.log(`  \x1b[31m❌ 会话 "${name}" 不存在\x1b[0m`);
     console.log("  运行 pit ls 查看可用会话");
     process.exit(1);
   }
 
-  const result = spawnSync("tmux", ["attach", "-t", session], {
+  const result = spawnSync("tmux", ["attach", "-t", `=${session}`], {
     stdio: "inherit",
     env: { ...process.env, TERM: process.env.TERM ?? "xterm-256color" },
   });
@@ -490,6 +490,12 @@ async function main() {
       console.log("  检查 pi 更新…");
       const cur = spawnSync("pi", ["--version"], { encoding: "utf-8" });
       const latest = spawnSync("npm", ["view", "@earendil-works/pi-coding-agent", "version"], { encoding: "utf-8" });
+      if (cur.status !== 0 || latest.status !== 0) {
+        console.log(`  \x1b[31m❌ 无法检查更新\x1b[0m`);
+        if (cur.status !== 0) console.log(`  pi --version 失败: ${cur.stderr?.trim() || cur.error}`);
+        if (latest.status !== 0) console.log(`  npm view 失败: ${latest.stderr?.trim() || latest.error}`);
+        break;
+      }
       const curVer = cur.stdout?.trim() ?? "unknown";
       const latestVer = latest.stdout?.trim() ?? "unknown";
       console.log(`  当前: v${curVer}  最新: v${latestVer}`);
@@ -498,8 +504,8 @@ async function main() {
       } else {
         console.log("  升级中…");
         const r = spawnSync("npm", ["install", "-g", `@earendil-works/pi-coding-agent@${latestVer}`], { stdio: "inherit" });
-        if (r.status === 0) console.log(`  \x1b[32m✅ 已升级到 v${latestVer}\x1b[0m`);
-        else console.log("  \x1b[31m❌ 升级失败\x1b[0m");
+        if (r.status === 0) { console.log(`  \x1b[32m✅ 已升级到 v${latestVer}\x1b[0m`); }
+        else { console.log("  \x1b[31m❌ 升级失败\x1b[0m"); process.exit(1); }
       }
       break;
     }
@@ -512,17 +518,18 @@ async function main() {
       const isShared = flags.shared === "true";
 
       let agentDir: string;
+      let tid: string | null = null;
       if (isShared) {
         initSharedLayer(sharedDir);
         agentDir = sharedDir;
       } else {
-        const tid = resolveOrFail(flags.tenant, config2);
+        tid = resolveOrFail(flags.tenant, config2);
         if (!tid) { process.exit(1); }
         agentDir = path.join(dataDir, "pi-config", tid);
       }
 
       const piArgs = [command, subcommand, ...passthrough].filter((a): a is string => Boolean(a));
-      const tenantAlias = isShared ? "shared" : getTenantAlias(flags.tenant ?? getDefaultTenantId(config2), config2);
+      const tenantAlias = isShared ? "shared" : getTenantAlias(tid!, config2);
       console.log(`  ${isShared ? "共享层" : `租户 ${tenantAlias}`}  ${agentDir}`);
       const r = spawnSync("pi", piArgs, {
         stdio: "inherit",
@@ -588,6 +595,17 @@ async function main() {
         const { LabApp } = await import("./tui-lab/app.js");
         const cfg = loadConfig();
         const labResolved = flags.tenant ? resolveTenantId(flags.tenant, cfg) : null;
+        if (flags.tenant && (!labResolved || !labResolved.ok)) {
+          const reason = labResolved && !labResolved.ok ? labResolved.reason : "not_found";
+          if (reason === "ambiguous" && labResolved && !labResolved.ok && "candidates" in labResolved) {
+            const candidates = labResolved.candidates.map((c) => `${getTenantAlias(c, cfg)} (${c.slice(0, 8)}…)`).join(", ");
+            console.log(`\x1b[31m❌ "${flags.tenant}" 匹配多个租户: ${candidates}\x1b[0m`);
+          } else {
+            console.log(`\x1b[31m❌ 未知租户: "${flags.tenant}"\x1b[0m`);
+          }
+          console.log("  运行 \x1b[36mpit tenant ls\x1b[0m 查看可用租户\n");
+          process.exit(1);
+        }
         const labTenantId = labResolved?.ok ? labResolved.id : getDefaultTenantId(cfg);
         const labAlias = getTenantAlias(labTenantId, cfg);
         const labGlobal = flags.global === "true";

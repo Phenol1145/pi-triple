@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Box, Text, useInput, useApp } from "ink";
-import { TopBar, TabBar, StatusBar, useTabs, useTerminalSize, ConfirmDialog } from "../tui-shared/index.js";
+import { TopBar, TabBar, StatusBar, useTabs, useTerminalSize } from "../tui-shared/index.js";
 import { DashboardPage } from "./dashboard.js";
 import { TenantsPage } from "./tenants.js";
 import { SessionsPage } from "./sessions.js";
@@ -194,11 +194,13 @@ export function PitApp() {
     if (lines.length <= 3) {
       setNotification(msg);
     } else {
-      setOutputLines(lines.filter((l) => l.trim().length > 0));
+      setOutputLines(lines);
     }
   }
 
-  const sharedProps = { width: Math.min(columns, 120), height: rows - 7 };
+  const safeW = Math.max(40, Math.min(columns, 120));
+  const safeH = Math.max(5, rows - 7);
+  const sharedProps = { width: safeW, height: safeH };
 
   // Render layers
   let content: React.ReactNode;
@@ -207,8 +209,8 @@ export function PitApp() {
   } else if (commandMode) {
     content = (
       <Box flexDirection="column">
-        <Box minHeight={rows - 12}>
-          {/* Show current page dimmed in background — disabled to avoid input conflict */}
+        {/* Show current page dimmed in background — disabled to avoid input conflict */}
+        <Box minHeight={Math.max(5, rows - 12)}>
           {tabIndex === 0 && <DashboardPage {...sharedProps} />}
           {tabIndex === 1 && <TenantsPage {...sharedProps} enabled={false} />}
           {tabIndex === 2 && <SessionsPage {...sharedProps} enabled={false} />}
@@ -224,7 +226,7 @@ export function PitApp() {
     );
   } else {
     content = (
-      <Box flexDirection="column" minHeight={rows - 9}>
+      <Box flexDirection="column" minHeight={Math.max(5, rows - 9)}>
         {tabIndex === 0 && <DashboardPage {...sharedProps} />}
         {tabIndex === 1 && <TenantsPage {...sharedProps} enabled={gated} />}
         {tabIndex === 2 && <SessionsPage {...sharedProps} enabled={gated} />}
@@ -235,7 +237,7 @@ export function PitApp() {
   }
 
   return (
-    <Box flexDirection="column" width={Math.min(columns, 120)} padding={1}>
+    <Box flexDirection="column" width={safeW} padding={1}>
       <TopBar title="Pi-Triple Control" version="0.1.0" />
 
       {!outputLines && !commandMode && <TabBar tabs={TABS} activeTab={activeTab} onSelect={setActiveTab} />}

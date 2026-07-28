@@ -15,7 +15,6 @@ import {
   createTenant,
   removeTenant,
   saveConfig,
-  resolveTenantId,
   getTenantAlias,
   resolveDataDir,
 } from "../config.js";

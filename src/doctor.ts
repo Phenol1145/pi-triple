@@ -140,8 +140,8 @@ const checkPiUpdate: CheckFn = async () => {
     fix: async () => {
       if (await ask(`升级到 v${latestVer}？`)) {
         console.log("  升级中…");
-        const upgrade = tryExec(`npm install -g @earendil-works/pi-coding-agent@${latestVer}`);
-        if (upgrade.ok) {
+        const upgrade = spawnSync("npm", ["install", "-g", `@earendil-works/pi-coding-agent@${latestVer}`], { encoding: "utf-8", timeout: 60_000 });
+        if (upgrade.status === 0) {
           console.log(`  ✅ 已升级到 v${latestVer}`);
           return true;
         }

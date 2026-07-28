@@ -95,7 +95,8 @@ function migrateV1toV2(raw: Record<string, any>): PiTripleConfig {
 
   for (const [name, tenantCfg] of Object.entries(oldTenants)) {
     if (UUID_RE.test(name)) {
-      config.tenants[name] = { alias: (tenantCfg as any)?.alias ?? name, ...(tenantCfg as any) };
+      const existingAlias = (tenantCfg as any)?.alias ?? name;
+      config.tenants[name] = { ...(tenantCfg as any), alias: existingAlias };
       if (name === oldDefault) newDefaultId = name;
     } else {
       const id = randomUUID();
@@ -204,6 +205,9 @@ export function createTenant(alias: string, tenantConfig?: Partial<TenantConfig>
   const sanitized = alias.replace(ALIAS_RE, "-");
   if (sanitized !== alias) {
     console.log(`  \x1b[33m别名已消毒: "${alias}" → "${sanitized}"\x1b[0m`);
+  }
+  if (sanitized.length === 0 || sanitized === "-") {
+    throw new Error(`别名 "${alias}" 消毒后为空，请输入有效别名`);
   }
 
   // 强制唯一

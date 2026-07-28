@@ -95,22 +95,36 @@ export function CommandBar({ visible, onSubmit, onCancel }: CommandBarProps) {
       </Box>
 
       {/* Command list */}
-      {filtered.length > 0 && (
+      {filtered.length > 0 && (() => {
+        const VISIBLE = 6;
+        let winStart = 0;
+        if (filtered.length > VISIBLE) {
+          // keep selected in view, prefer earlier items
+          winStart = Math.max(0, Math.min(selected - Math.floor(VISIBLE / 2), filtered.length - VISIBLE));
+        }
+        const winEnd = Math.min(winStart + VISIBLE, filtered.length);
+        const hasAbove = winStart > 0;
+        const hasBelow = winEnd < filtered.length;
+
+        return (
         <Box flexDirection="column" marginTop={1}>
-          {filtered.slice(0, 6).map((cmd, i) => (
-            <Box key={cmd.name}>
-              <Text color={i === selected ? "cyan" : undefined} bold={i === selected}>
-                {i === selected ? "  ❯ " : "    "}
-                {cmd.name}
-              </Text>
-              <Text dimColor>  —  {cmd.desc}</Text>
-            </Box>
-          ))}
-          {filtered.length > 6 && (
-            <Text dimColor>  …and {filtered.length - 6} more</Text>
-          )}
+          {hasAbove && <Text dimColor>    ↑ …{winStart} more</Text>}
+          {filtered.slice(winStart, winEnd).map((cmd, i) => {
+            const realIdx = winStart + i;
+            return (
+              <Box key={cmd.name}>
+                <Text color={realIdx === selected ? "cyan" : undefined} bold={realIdx === selected}>
+                  {realIdx === selected ? "  ❯ " : "    "}
+                  {cmd.name}
+                </Text>
+                <Text dimColor>  —  {cmd.desc}</Text>
+              </Box>
+            );
+          })}
+          {hasBelow && <Text dimColor>    ↓ …{filtered.length - winEnd} more</Text>}
         </Box>
-      )}
+        );
+      })()}
 
       {/* Help */}
       <Box marginTop={1}>

@@ -43,6 +43,10 @@ export function aggregateByRole(
     sql += ` AND role = ?`;
     params.push(role);
   }
+  // NULL tenant_id = pre-migration legacy rows.
+  //   - Tenant-filtered queries (tenantId provided): INCLUDE legacy rows (OR tenant_id IS NULL)
+  //     so historic data contributes to per-tenant stats.
+  //   - Global queries (tenantId undefined): all rows counted including legacy.
   if (tenantId) {
     sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
     params.push(tenantId);
