@@ -308,6 +308,7 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
     console.log("  原生前台启动（无 tmux）: \x1b[36mpit pi\x1b[0m");
     process.exit(1);
   }
+  configureTmuxServer();
 
   if (flags.bg === "true") {
     await cmdStartBg(flags, passthrough);
@@ -405,6 +406,19 @@ function hasTmux(): boolean {
   return spawnSync("tmux", ["-V"], { encoding: "utf-8" }).status === 0;
 }
 
+/**
+ * 配置 tmux server 全局选项（pi 官方推荐）：
+ * extended-keys on + extended-keys-format csi-u（tmux ≥ 3.5），
+ * 否则 pi 会话内 Shift+Enter 等修饰键失效且 pi 会提示告警。
+ * best-effort：旧版 tmux 不支持时静默跳过。
+ */
+function configureTmuxServer(): void {
+  const fmt = spawnSync("tmux", ["show", "-gv", "extended-keys-format"], { encoding: "utf-8" });
+  if (fmt.status === 0 && fmt.stdout.trim() === "csi-u") return;  // 已配置
+  spawnSync("tmux", ["set-option", "-g", "extended-keys", "on"], { encoding: "utf-8" });
+  spawnSync("tmux", ["set-option", "-g", "extended-keys-format", "csi-u"], { encoding: "utf-8" });
+}
+
 function tmuxSessionName(name: string): string {
   return `pit-${name}`;
 }
@@ -438,6 +452,7 @@ async function cmdStartBg(flags: Record<string, string>, passthrough: string[]):
     else console.log("  Windows: 请使用 WSL2 安装 tmux");
     process.exit(1);
   }
+  configureTmuxServer();
 
   const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
   if (check.status === 0) {
