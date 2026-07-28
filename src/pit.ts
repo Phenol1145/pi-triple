@@ -42,7 +42,8 @@ function printHelp(): void {
   console.log("");
   console.log("  命令:");
   console.log("    onboard            首次导引（检查→安装→租户→迁移→验证）");
-  console.log("    start [args...]    启动 pi（--bg 后台，--name 命名）");
+  console.log("    start [args...]    启动 tmux 会话并接入（--bg 纯后台，--name 命名）");
+  console.log("    pi [args...]       原生前台启动 pi（无 tmux）");
   console.log("    ui                 系统总控 TUI（无参数时也进入）");
   console.log("    lab                模型调试 TUI（--tenant/--global）");
   console.log("    attach <name>      接入后台会话（同一终端切换）");
@@ -70,10 +71,11 @@ function printHelp(): void {
   console.log("    --model <model>        覆盖模型");
   console.log("");
   console.log("  示例:");
-  console.log("    pit start                          # 默认租户启动");
+  console.log("    pit start                          # 默认租户，tmux 接入");
   console.log("    pit start --tenant dev             # 指定租户（别名）");
-  console.log("    pit start --bg --name coding       # 后台启动");
-  console.log("    pit attach coding                    # 接入后台会话");
+  console.log("    pit start --bg --name coding       # 纯后台启动");
+  console.log("    pit pi                             # 原生前台启动（无 tmux）");
+  console.log("    pit attach coding                  # 接入后台会话");
   console.log("    pit tenant new my-team             # 新建租户");
   console.log("    pit tenant ls                        # 列出租户");
   console.log("");
@@ -198,6 +200,78 @@ async function cmdOnboard(flags: Record<string, string>): Promise<void> {
   console.log("");
 }
 
+/** 解析租户（含位置参数）+ 首次启动自动迁移 */
+async function resolveTenantAndMigrate(flags: Record<string, string>, passthrough: string[]): Promise<{ tenantId: string; piPassthrough: string[] } | null> {
+  const config = loadConfig();
+
+  // 位置参数支持：pit start local → 解析 "local" 为租户名
+  let tenantInput = flags.tenant;
+  const piPassthrough = [...passthrough];
+  if (!tenantInput && piPassthrough.length > 0) {
+    const resolved = resolveTenantId(piPassthrough[0], config);
+    if (resolved.ok) {
+      tenantInput = piPassthrough[0];
+      piPassthrough.splice(0, 1);
+    }
+  }
+
+  const tenantId = resolveOrFail(tenantInput, config);
+  if (!tenantId) return null;
+
+  // 首次启动：检测 ~/.pi/agent/ 数据并自动迁移
+  const dataDir = resolveDataDir(config);
+  const tenantConfigDir = path.join(dataDir, "pi-config", tenantId);
+  const classicPiAgentDir = path.join(homedir(), ".pi", "agent");
+  if (fs.existsSync(classicPiAgentDir) && !fs.existsSync(path.join(tenantConfigDir, "settings.json"))) {
+    console.log("");
+    console.log("  \x1b[36m检测到现有 pi 环境 (~/.pi/agent/)\x1b[0m");
+    console.log("  正在迁移扩展和配置...");
+    try {
+      await migrate({ tenantId });
+      const sharedDir = path.join(dataDir, "shared");
+      const { linkTenantToShared: relink } = await import("./shared-layer.js");
+      relink(tenantConfigDir, sharedDir);
+      console.log("  \x1b[32m✅ 迁移完成\x1b[0m");
+    } catch (err: any) {
+      console.log(`  \x1b[33m⚠️  迁移部分失败: ${err.message}\x1b[0m`);
+    }
+    console.log("");
+  }
+
+  return { tenantId, piPassthrough };
+}
+
+/**
+ * pit pi — 原生启动模式（前台直接 spawn pi，无 tmux）
+ */
+async function cmdPi(flags: Record<string, string>, passthrough: string[]): Promise<void> {
+  const r = await resolveTenantAndMigrate(flags, passthrough);
+  if (!r) { process.exit(1); }
+  const { tenantId, piPassthrough } = r;
+  const config = loadConfig();
+  const tenantConfig = config.tenants[tenantId] ?? {};
+
+  await runDoctor("quick");
+
+  const code = await launchPi({
+    tenantId,
+    project: flags.project,
+    provider: flags.provider ?? tenantConfig.provider,
+    model: flags.model ?? tenantConfig.model,
+    thinking: flags.thinking ?? tenantConfig.thinking,
+    tools: tenantConfig.tools,
+    excludeTools: tenantConfig.excludeTools,
+    continueSession: piPassthrough.includes("-c") || piPassthrough.includes("--continue"),
+    extraArgs: piPassthrough.filter((a) => a !== "-c" && a !== "--continue"),
+  });
+
+  process.exit(code);
+}
+
+/**
+ * pit start — 默认 tmux 管理模式：创建 tmux 会话并立即接入。
+ * --bg 时仅后台创建（同 pit start --bg）。
+ */
 async function cmdStart(flags: Record<string, string>, passthrough: string[]): Promise<void> {
   const config = loadConfig();
 
@@ -215,53 +289,39 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
     flags.tenant = choice.tenant;
     if (choice.bg) flags.bg = "true";
     if (choice.name) flags.name = choice.name;
-
-    if (choice.bg) {
-      cmdStartBg(flags, passthrough);
-      return;
-    }
   }
 
-  // 位置参数支持：pit start local → 解析 "local" 为租户名
-  let tenantInput = flags.tenant;
-  let piPassthrough = [...passthrough];
-  if (!tenantInput && piPassthrough.length > 0) {
-    const resolved = resolveTenantId(piPassthrough[0], config);
-    if (resolved.ok) {
-      tenantInput = piPassthrough[0];
-      piPassthrough = piPassthrough.slice(1);  // 移除已用作租户名的参数
-    }
+  if (!hasTmux()) {
+    console.log("  \x1b[31m❌ tmux 未安装 — pit start 需要 tmux\x1b[0m");
+    if (process.platform === "darwin") console.log("  安装: brew install tmux");
+    else if (process.platform === "linux") console.log("  安装: sudo apt install tmux");
+    console.log("  原生前台启动（无 tmux）: \x1b[36mpit pi\x1b[0m");
+    process.exit(1);
   }
 
-  const tenantId = resolveOrFail(tenantInput, config);
-  if (!tenantId) { process.exit(1); }
+  if (flags.bg === "true") {
+    await cmdStartBg(flags, passthrough);
+    return;
+  }
+
+  const r = await resolveTenantAndMigrate(flags, passthrough);
+  if (!r) { process.exit(1); }
+  const { tenantId, piPassthrough } = r;
   const tenantConfig = config.tenants[tenantId] ?? {};
+  const alias = getTenantAlias(tenantId, config);
+  const name = flags.name ?? `${alias}-${Date.now().toString(36)}`;
+  const session = tmuxSessionName(name);
 
-  // 首次启动：检测 ~/.pi/agent/ 数据并自动迁移
-  const dataDir = resolveDataDir(config);
-  const tenantConfigDir = path.join(dataDir, "pi-config", tenantId);
-  const classicPiAgentDir = path.join(homedir(), ".pi", "agent");
-  if (fs.existsSync(classicPiAgentDir) && !fs.existsSync(path.join(tenantConfigDir, "settings.json"))) {
-    console.log("");
-    console.log("  \x1b[36m检测到现有 pi 环境 (~/.pi/agent/)\x1b[0m");
-    console.log("  正在迁移扩展和配置...");
-    try {
-      await migrate({ tenantId });
-      // 重建共享层链接（migrate 不会创建逐项 symlink）
-      const sharedDir = path.join(dataDir, "shared");
-      const { linkTenantToShared: relink } = await import("./shared-layer.js");
-      relink(tenantConfigDir, sharedDir);
-      console.log("  \x1b[32m✅ 迁移完成\x1b[0m");
-    } catch (err: any) {
-      console.log(`  \x1b[33m⚠️  迁移部分失败: ${err.message}\x1b[0m`);
-    }
-    console.log("");
+  const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
+  if (check.status === 0) {
+    console.log(`  ⚠️  会话 "${name}" 已存在，直接接入…`);
+    spawnSync("tmux", ["attach", "-t", `=${session}`], { stdio: "inherit" });
+    return;
   }
 
   await runDoctor("quick");
 
-  const code = await launchPi({
-    tenantId,
+  const launch = await buildPiLaunch(tenantId, {
     project: flags.project,
     provider: flags.provider ?? tenantConfig.provider,
     model: flags.model ?? tenantConfig.model,
@@ -272,7 +332,11 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
     extraArgs: piPassthrough.filter((a) => a !== "-c" && a !== "--continue"),
   });
 
-  process.exit(code);
+  console.log(`  会话: ${name} · 租户: ${alias} · Ctrl+B d 脱离（会话保持运行）`);
+
+  const tmuxArgs = buildTmuxSessionArgs(launch, session, false);
+  const result = spawnSync("tmux", tmuxArgs, { stdio: "inherit" });
+  process.exit(result.status ?? 0);
 }
 
 async function cmdDoctor(): Promise<void> {
@@ -310,6 +374,20 @@ function hasTmux(): boolean {
 
 function tmuxSessionName(name: string): string {
   return `pit-${name}`;
+}
+
+/** 构建 tmux new-session 参数（-e 传 env + -- 分隔，避免 shell 注入） */
+function buildTmuxSessionArgs(launch: { cmd: string; args: string[]; env: Record<string, string>; cwd: string }, session: string, detach: boolean): string[] {
+  const tmuxArgs = ["new-session"];
+  if (detach) tmuxArgs.push("-d");
+  tmuxArgs.push("-s", session, "-c", launch.cwd, "-x", "200", "-y", "50");
+  for (const [k, v] of Object.entries(launch.env)) {
+    if (k.startsWith("PI_") || k.startsWith("AGENT_LAB_")) {
+      tmuxArgs.push("-e", `${k}=${v}`);
+    }
+  }
+  tmuxArgs.push("--", launch.cmd, ...launch.args);
+  return tmuxArgs;
 }
 
 async function cmdStartBg(flags: Record<string, string>, passthrough: string[]): Promise<void> {
@@ -351,17 +429,7 @@ async function cmdStartBg(flags: Record<string, string>, passthrough: string[]):
 
   // tmux new-session -d -s pit-{name} -c {cwd} -e KEY=val ... -- pi args...
   // 使用 -- 分隔符和 -e 传递环境变量，避免 shell 注入
-  const tmuxArgs = [
-    "new-session", "-d", "-s", session,
-    "-c", launch.cwd,
-    "-x", "200", "-y", "50",
-  ];
-  for (const [k, v] of Object.entries(launch.env)) {
-    if (k.startsWith("PI_") || k.startsWith("AGENT_LAB_")) {
-      tmuxArgs.push("-e", `${k}=${v}`);
-    }
-  }
-  tmuxArgs.push("--", launch.cmd, ...launch.args);
+  const tmuxArgs = buildTmuxSessionArgs(launch, session, true);
 
   const result = spawnSync("tmux", tmuxArgs, { encoding: "utf-8" });
 
@@ -476,12 +544,11 @@ async function main() {
     case "onboard":
       await cmdOnboard(flags);
       break;
+    case "pi":
+      await cmdPi(flags, passthrough);
+      break;
     case "start":
-      if (flags.bg === "true") {
-        await cmdStartBg(flags, passthrough);
-      } else {
-        await cmdStart(flags, passthrough);
-      }
+      await cmdStart(flags, passthrough);  // 内部处理 --bg
       break;
     case "attach":
       cmdAttach(subcommand || passthrough[0] || "");

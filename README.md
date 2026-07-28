@@ -75,6 +75,17 @@ npm run cli
 # 进入 REPL：直接输入对话，/help 查看更多命令
 ```
 
+### pit CLI（多租户会话管理）
+
+| 命令 | 说明 |
+|------|------|
+| `pit start` | 创建 tmux 会话并立即接入（默认；`--bg` 纯后台，`--name` 命名） |
+| `pit pi` | 原生前台启动 pi（无 tmux，pi 原生体验） |
+| `pit attach <name>` | 接入已运行的 tmux 会话 |
+| `pit ls` / `pit stop <name>` | 列出 / 停止会话 |
+| `pit` / `pit ui` | 系统总控 TUI |
+| `pit lab` | agent-lab 模型调试 TUI |
+
 ## 项目结构
 
 ```

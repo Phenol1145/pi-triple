@@ -9,33 +9,43 @@ import { ConfigPage } from "./config-page.js";
 import { CommandBar } from "./command-bar.js";
 import { OutputPanel } from "./output-panel.js";
 import type { CommandResult } from "../commands.js";
-import { loadConfig, getDefaultTenantId, listTenants } from "../config.js";
+import { loadConfig, listTenants } from "../config.js";
 import { spawnSync } from "node:child_process";
 
 const TABS = ["Dashboard", "Tenants", "Sessions", "Extensions", "Config"];
 
 const DESTRUCTIVE_CMDS = ["tenant rm", "stop", "stop --all"];
 
-/** TUI-wired bg session start */
+/** TUI-wired bg session start — 与 CLI 同一构建路径 */
 async function execStartBgInTui(name: string, tenantInput: string): Promise<CommandResult> {
   const cfg = loadConfig();
-  const tenantId = tenantInput || getDefaultTenantId(cfg);
-  const sessionName = name || `${tenantId.slice(0, 8)}-${Date.now().toString(36)}`;
-  const { spawnSync } = await import("node:child_process");
-  const { resolve } = await import("node:path");
-  const { resolveDataDir } = await import("../config.js");
+  const { resolveTenantId: rt, getDefaultTenantId: gd, getTenantAlias: ga } = await import("../config.js");
+  const resolved = tenantInput ? rt(tenantInput, cfg) : { ok: true as const, id: gd(cfg) };
+  if (!resolved.ok) {
+    return { ok: false, message: "", error: { code: "TENANT_NOT_FOUND", message: `租户 "${tenantInput}" 不存在` } };
+  }
+  const tenantId = resolved.id;
+  const sessionName = name || `${ga(tenantId, cfg)}-${Date.now().toString(36)}`;
   const tmuxName = `pit-${sessionName}`;
-  const check = spawnSync("tmux", ["has-session", "-t", tmuxName], { encoding: "utf-8" });
+  const check = spawnSync("tmux", ["has-session", "-t", `=${tmuxName}`], { encoding: "utf-8" });
   if (check.status === 0) {
     return { ok: false, message: "", error: { code: "SESSION_EXISTS", message: `会话 "${sessionName}" 已在运行。接入: pit attach ${sessionName}` } };
   }
-  const dataDir = resolveDataDir(cfg);
-  const agentDir = resolve(dataDir, "pi-config", tenantId);
-  const r = spawnSync("tmux", [
-    "new-session", "-d", "-s", tmuxName,
-    "-x", "200", "-y", "50",
-    `PI_CODING_AGENT_DIR=${agentDir} pi`,
-  ], { encoding: "utf-8" });
+  const { buildPiLaunch } = await import("../launcher.js");
+  const tenantConfig = cfg.tenants[tenantId] ?? {};
+  const launch = await buildPiLaunch(tenantId, {
+    provider: tenantConfig.provider,
+    model: tenantConfig.model,
+    thinking: tenantConfig.thinking,
+    tools: tenantConfig.tools,
+    excludeTools: tenantConfig.excludeTools,
+  });
+  const tmuxArgs = ["new-session", "-d", "-s", tmuxName, "-c", launch.cwd, "-x", "200", "-y", "50"];
+  for (const [k, v] of Object.entries(launch.env)) {
+    if (k.startsWith("PI_") || k.startsWith("AGENT_LAB_")) tmuxArgs.push("-e", `${k}=${v}`);
+  }
+  tmuxArgs.push("--", launch.cmd, ...launch.args);
+  const r = spawnSync("tmux", tmuxArgs, { encoding: "utf-8" });
   if (r.status === 0) {
     return { ok: true, message: `✅ 后台会话 "${sessionName}" 已启动\n接入: pit attach ${sessionName}` };
   }
@@ -165,7 +175,7 @@ export function PitApp() {
         else result = await execTenantLs();
         break;
       case "pi":
-        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["start", ...args] } };
+        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["pi", ...args] } };
         break;
       case "start":
         result = await execStartBgInTui(args[0] || "", args[1] || "");
@@ -175,7 +185,7 @@ export function PitApp() {
           ok: true,
           message: [
             "Available commands:",
-            "  pi [args]                 启动前台 pi 会话",
+            "  pi [args]                 原生前台启动 pi（无 tmux）",
             "  start <bg-name> <tenant>   启动后台会话",
             "  attach <name>             接入后台会话",
             "  stop <name>               停止会话",

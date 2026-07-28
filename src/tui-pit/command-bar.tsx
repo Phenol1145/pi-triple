@@ -25,8 +25,8 @@ interface CmdNode {
 }
 
 const COMMAND_TREE: CmdNode[] = [
-  { name: "pi", desc: "启动前台 pi 会话" },
-  { name: "start", desc: "启动后台会话 <名称> [租户]" },
+  { name: "pi", desc: "原生前台启动 pi（无 tmux，离开 TUI）" },
+  { name: "start", desc: "后台 tmux 会话 <名称> [租户]" },
   { name: "attach", desc: "接入后台会话 <名称>" },
   { name: "stop", desc: "停止会话 <名称|--all>" },
   { name: "ls", desc: "列出后台会话" },
