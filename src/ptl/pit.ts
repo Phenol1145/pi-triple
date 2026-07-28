@@ -13,6 +13,10 @@ import { cmdPi, cmdStart, cmdAttach, cmdSwitch, cmdDetach } from "./pit/sessions
 import { cmdConfig } from "./pit/config-cmd.js";
 import { resolveMode, routeJsonCommand, doPrintCommand } from "./pit/mode.js";
 import { cmdMigrate, handleTenantRename, handleUpdate, handleInstallRemove, handleShared } from "./pit/admin.js";
+import { cmdSubmit } from "./bridge/submit.js";
+import { cmdRun } from "./bridge/run.js";
+import { cmdPrograms } from "./bridge/programs.js";
+import { cmdDev } from "./bridge/dev.js";
 import { emitJsonError } from "./output.js";
 import {
   loadConfig, resolveTenantId, getTenantAlias, getDefaultTenantId,
@@ -127,6 +131,18 @@ async function main() {
       break;
     case "config":
       cmdConfig(subcommand, passthrough);
+      break;
+    case "submit":
+      await cmdSubmit(passthrough, flags);
+      break;
+    case "run":
+      await cmdRun(subcommand || passthrough[0] || "", passthrough.slice(1), flags);
+      break;
+    case "programs":
+      await cmdPrograms(flags);
+      break;
+    case "dev":
+      await cmdDev(passthrough[0] || "", passthrough.slice(1), flags);
       break;
     case "help":
     case "--help":

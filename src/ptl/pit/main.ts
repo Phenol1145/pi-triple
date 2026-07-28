@@ -44,6 +44,11 @@ export function printHelp(): void {
   console.log("    config set <key> <value>  修改配置项");
   console.log("    config unset <key> 删除租户可选配置项");
   console.log("    config init        初始化 pi-triple.json");
+  console.log("    submit <dir>       提交 agent 程序到 PTH");
+  console.log("    submit <dir> --dry-run  校验 + 打包（不上传）");
+  console.log("    programs           列出 PTH 上已提交的程序");
+  console.log("    run <name> [k=v...]  远端运行程序（SSE 流式输出）");
+  console.log("    dev <dir>           本地调试程序（pi 交互会话）");
   console.log("    help               显示帮助");
   console.log("");
   console.log("  选项:");
@@ -57,6 +62,10 @@ export function printHelp(): void {
   console.log("    pit start --bg --name coding       # 纯后台启动");
   console.log("    pit pi                             # 原生前台启动（无 tmux）");
   console.log("    pit attach coding                  # 接入后台会话");
+  console.log("    pit config set pth.url http://...  # 连接 PTH");
+  console.log("    pit submit my-agent                 # 提交程序");
+  console.log("    pit run code-reviewer repo=./x pr=42  # 远端运行");
+  console.log("    pit dev my-agent                    # 本地调试");
   console.log("    pit tenant new my-team             # 新建租户");
   console.log("    pit tenant ls                        # 列出租户");
   console.log("");

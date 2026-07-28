@@ -55,6 +55,17 @@ const COMMAND_TREE: CmdNode[] = [
     ],
   },
   { name: "help", desc: "帮助" },
+  {
+    name: "bridge", desc: "PTH 程序 ▸",
+    children: [
+      { name: "submit", desc: "提交程序 <目录>" },
+      { name: "programs", desc: "列出 PTH 程序" },
+      { name: "run", desc: "远端运行 <name> [k=v...]" },
+      { name: "dev", desc: "本地调试 <目录>" },
+    ],
+  },
+  { name: "quit", desc: "退出 pit ui" },
+  { name: "exit", desc: "退出 pit ui（同 quit）" },
 ];
 
 const VISIBLE = 6;

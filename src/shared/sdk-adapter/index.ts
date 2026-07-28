@@ -12,8 +12,14 @@ import {
   createAgentSession as sdkCreateAgentSession,
   ModelRuntime as SdkModelRuntime,
   SessionManager as SdkSessionManager,
+  DefaultResourceLoader as SdkDefaultResourceLoader,
   type AgentSession as SdkAgentSession,
 } from "@earendil-works/pi-coding-agent";
+
+// Re-export ResourceLoader + Skill for PTH program support
+import type { ResourceLoader, Skill } from "@earendil-works/pi-coding-agent";
+export type { ResourceLoader, Skill };
+export { SdkDefaultResourceLoader as DefaultResourceLoader };
 
 // ─── 事件类型常量 ─────────────────────────────────────────────
 /** pi SDK 事件类型名。SDK 升级后若改名，只需改这里。 */

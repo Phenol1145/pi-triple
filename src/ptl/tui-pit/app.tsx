@@ -196,6 +196,18 @@ export function PitApp() {
           : { ok: false, message: "", error: { code: "NOT_IN_TMUX", message: "不在 tmux 会话中" } };
         break;
       }
+      case "submit":
+        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["submit", ...args] } };
+        break;
+      case "programs":
+        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["programs"] } };
+        break;
+      case "run":
+        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["run", ...args] } };
+        break;
+      case "dev":
+        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["dev", ...args] } };
+        break;
       default:
         result = { ok: false, message: "", error: { code: "UNKNOWN_COMMAND", message: `未知命令: ${cmd}。支持: start, status, ls, stop, tenant, shared, attach, help` } };
     }

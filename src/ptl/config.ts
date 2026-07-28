@@ -29,6 +29,7 @@ export interface PiTripleConfig {
   redis: string;
   gateway: { port: number };
   tenants: Record<string, TenantConfig>;  // key = UUID
+  pth?: { url?: string; token?: string };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -90,6 +91,8 @@ export function loadConfig(): PiTripleConfig {
     console.error("  请检查配置文件，或从 pi-triple.json.v1.bak 恢复");
     process.exit(1);
   }
+  // 修正已有文件权限为 0600（token 保护）
+  try { fs.chmodSync(p, 0o600); } catch { /* best-effort */ }
   if (!raw.version || raw.version < 2) {
     return migrateV1toV2(raw);
   }
@@ -99,7 +102,7 @@ export function loadConfig(): PiTripleConfig {
 export function saveConfig(config: PiTripleConfig): void {
   const p = configPath();
   const tmp = p + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + "\n");
+  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
   fs.renameSync(tmp, p);
 }
 
@@ -309,13 +312,20 @@ export function getConfigValue(key: string, config?: PiTripleConfig): string | u
     case "sharedDir": return cfg.sharedDir;
     case "redis": return cfg.redis;
     case "gateway.port": return String(cfg.gateway.port);
+    case "pth.url": return cfg.pth?.url;
+    case "pth.token": return cfg.pth?.token;
     default: return undefined;
   }
 }
 
 /** 列出所有可读写键 */
 export function listConfigKeys(config?: PiTripleConfig): string[] {
-  return ["defaultTenant", "dataDir", "sharedDir", "redis", "gateway.port", "tenants.<alias>.model", "tenants.<alias>.provider", "tenants.<alias>.thinking", "tenants.<alias>.tools", "tenants.<alias>.excludeTools"];
+  return [
+    "defaultTenant", "dataDir", "sharedDir", "redis", "gateway.port",
+    "pth.url", "pth.token",
+    "tenants.<alias>.model", "tenants.<alias>.provider", "tenants.<alias>.thinking",
+    "tenants.<alias>.tools", "tenants.<alias>.excludeTools",
+  ];
 }
 
 /** 写入配置键 */
@@ -358,6 +368,11 @@ export function setConfigValue(key: string, value: string, config?: PiTripleConf
       // 允许修改但不迁移数据（调用方提示）
       (cfg as any)[key] = value;
       break;
+    case "pth.url":
+    case "pth.token":
+      cfg.pth = cfg.pth ?? {};
+      (cfg.pth as any)[key.slice(4)] = value;
+      break;
     default:
       return { ok: false, error: `未知或只读配置键: ${key}（可用: ${listConfigKeys(cfg).join(", ")}）` };
   }
@@ -378,6 +393,16 @@ export function unsetConfigValue(key: string, config?: PiTripleConfig): ConfigSe
       return { ok: false, error: `租户字段只允许: ${[...TENANT_WRITABLE].join(", ")}` };
     }
     delete (cfg.tenants[resolved.id] as any)[field];
+    saveConfig(cfg);
+    return { ok: true };
+  }
+
+  // PTH 连接是可选的
+  if (key === "pth.url" || key === "pth.token") {
+    if (cfg.pth) {
+      delete (cfg.pth as any)[key.slice(4)];
+      if (!cfg.pth.url && !cfg.pth.token) delete (cfg as any).pth;
+    }
     saveConfig(cfg);
     return { ok: true };
   }
