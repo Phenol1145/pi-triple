@@ -8,7 +8,9 @@ interface CommandBarProps {
 }
 
 const COMMANDS = [
+  { name: "pi", desc: "启动前台 pi 会话" },
   { name: "start", desc: "启动后台会话" },
+  { name: "attach", desc: "接入后台会话" },
   { name: "stop", desc: "停止会话" },
   { name: "ls", desc: "列出后台会话" },
   { name: "status", desc: "健康检查" },

@@ -130,6 +130,9 @@ export function PitApp() {
         else if (args[0] === "rm") result = await execTenantRm(args[1]);
         else result = await execTenantLs();
         break;
+      case "pi":
+        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["start", ...args] } };
+        break;
       case "start":
         result = await execStartBgInTui(args[0] || "", args[1] || "");
         break;
@@ -138,7 +141,9 @@ export function PitApp() {
           ok: true,
           message: [
             "Available commands:",
+            "  pi [args]                 启动前台 pi 会话",
             "  start <bg-name> <tenant>   启动后台会话",
+            "  attach <name>             接入后台会话",
             "  stop <name>               停止会话",
             "  ls                        列出后台会话",
             "  status                    健康检查",
