@@ -280,6 +280,111 @@ export function renameTenant(tenantId: string, newAlias: string, config?: PiTrip
   return true;
 }
 
+// ─── 配置键读写（pit config get/set/unset）─────────────────────
+
+/** 租户可写字段 */
+const TENANT_WRITABLE = new Set(["model", "provider", "thinking", "tools", "excludeTools"]);
+
+export interface ConfigSetResult {
+  ok: boolean;
+  error?: string;
+}
+
+/** 读取配置键（点路径），返回字符串形式；不存在返回 undefined */
+export function getConfigValue(key: string, config?: PiTripleConfig): string | undefined {
+  const cfg = config ?? loadConfig();
+  const parts = key.split(".");
+
+  if (parts[0] === "tenants" && parts.length === 3) {
+    const resolved = resolveTenantId(parts[1]!, cfg);
+    if (!resolved.ok) return undefined;
+    const val = (cfg.tenants[resolved.id] as any)?.[parts[2]!];
+    return val === undefined ? undefined : String(val);
+  }
+
+  switch (key) {
+    case "version": return String(cfg.version);
+    case "defaultTenant": return cfg.defaultTenant;
+    case "dataDir": return cfg.dataDir;
+    case "sharedDir": return cfg.sharedDir;
+    case "redis": return cfg.redis;
+    case "gateway.port": return String(cfg.gateway.port);
+    default: return undefined;
+  }
+}
+
+/** 列出所有可读写键 */
+export function listConfigKeys(config?: PiTripleConfig): string[] {
+  return ["defaultTenant", "dataDir", "sharedDir", "redis", "gateway.port", "tenants.<alias>.model", "tenants.<alias>.provider", "tenants.<alias>.thinking", "tenants.<alias>.tools", "tenants.<alias>.excludeTools"];
+}
+
+/** 写入配置键 */
+export function setConfigValue(key: string, value: string, config?: PiTripleConfig): ConfigSetResult {
+  const cfg = config ?? loadConfig();
+  const parts = key.split(".");
+
+  if (parts[0] === "tenants" && parts.length === 3) {
+    const resolved = resolveTenantId(parts[1]!, cfg);
+    if (!resolved.ok) return { ok: false, error: `租户 "${parts[1]}" 不存在` };
+    const field = parts[2]!;
+    if (!TENANT_WRITABLE.has(field)) {
+      return { ok: false, error: `租户字段只允许: ${[...TENANT_WRITABLE].join(", ")}` };
+    }
+    (cfg.tenants[resolved.id] as any)[field] = value;
+    saveConfig(cfg);
+    return { ok: true };
+  }
+
+  switch (key) {
+    case "defaultTenant": {
+      const resolved = resolveTenantId(value, cfg);
+      if (!resolved.ok) return { ok: false, error: `租户 "${value}" 不存在` };
+      cfg.defaultTenant = resolved.id;
+      break;
+    }
+    case "redis":
+      cfg.redis = value;
+      break;
+    case "gateway.port": {
+      const port = parseInt(value, 10);
+      if (!Number.isInteger(port) || port < 1 || port > 65535 || String(port) !== value.trim()) {
+        return { ok: false, error: "gateway.port 必须是 1-65535 的整数" };
+      }
+      cfg.gateway.port = port;
+      break;
+    }
+    case "dataDir":
+    case "sharedDir":
+      // 允许修改但不迁移数据（调用方提示）
+      (cfg as any)[key] = value;
+      break;
+    default:
+      return { ok: false, error: `未知或只读配置键: ${key}（可用: ${listConfigKeys(cfg).join(", ")}）` };
+  }
+  saveConfig(cfg);
+  return { ok: true };
+}
+
+/** 删除配置键（仅租户可选字段） */
+export function unsetConfigValue(key: string, config?: PiTripleConfig): ConfigSetResult {
+  const cfg = config ?? loadConfig();
+  const parts = key.split(".");
+
+  if (parts[0] === "tenants" && parts.length === 3) {
+    const resolved = resolveTenantId(parts[1]!, cfg);
+    if (!resolved.ok) return { ok: false, error: `租户 "${parts[1]}" 不存在` };
+    const field = parts[2]!;
+    if (!TENANT_WRITABLE.has(field)) {
+      return { ok: false, error: `租户字段只允许: ${[...TENANT_WRITABLE].join(", ")}` };
+    }
+    delete (cfg.tenants[resolved.id] as any)[field];
+    saveConfig(cfg);
+    return { ok: true };
+  }
+
+  return { ok: false, error: `顶层键为必填，不可删除: ${key}` };
+}
+
 // ─── 路径 ────────────────────────────────────────────────────
 
 export function resolveDataDir(config?: PiTripleConfig): string {
