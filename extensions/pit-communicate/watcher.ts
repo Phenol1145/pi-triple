@@ -1,14 +1,14 @@
 /**
  * Pi-Triple Intercom — Watcher
  *
- * chokidar 监听 pending/ 目录，检测新消息即触发 Delivery.process()。
- * 去重由 Delivery.processedIds 保证。启动时处理已有 pending。
+ * fs.watch 监听 pending/ 目录（零外部依赖），检测新消息即触发 Delivery.process()。
+ * 原子发布（tmp + rename）保证文件出现时内容完整；15s 轮询兜底丢事件场景。
+ * 去重由 Delivery.processedIds 保证，重复 dispatch 安全。
  */
-import { watch, type FSWatcher } from "chokidar";
-import path from "node:path";
 import fs from "node:fs";
+import path from "node:path";
 import type { Mailbox } from "./mailbox.js";
-import type { Delivery, DeliveryDecision } from "./delivery.js";
+import type { Delivery } from "./delivery.js";
 import { validateMessage } from "./protocol.js";
 
 /**
@@ -24,8 +24,11 @@ export interface WatcherSideEffects {
   onAcceptAndInject(content: string, msgId: string): void;
 }
 
+const POLL_INTERVAL_MS = 15000;
+
 export class Watcher {
-  private fsWatcher: FSWatcher | null = null;
+  private fsWatcher: fs.FSWatcher | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private sideEffects: WatcherSideEffects | null = null;
 
   constructor(
@@ -38,23 +41,29 @@ export class Watcher {
   }
 
   start(): void {
-    this.fsWatcher = watch(this.mailbox.pendingDir, {
-      ignoreInitial: true,
-      awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
-      depth: 0,
-      ignorePermissionErrors: true,
-    });
+    // fs.watch：rename 事件捕获原子发布（tmp → msg-*.json）
+    try {
+      this.fsWatcher = fs.watch(this.mailbox.pendingDir, (eventType, filename) => {
+        if (eventType !== "rename" || !filename) return;
+        if (!filename.startsWith("msg-") || !filename.endsWith(".json")) return;
+        // 原子 rename 后文件已完整，微小延迟避免极端竞态
+        const filePath = path.join(this.mailbox.pendingDir, filename);
+        setTimeout(() => this.handleFile(filePath), 50);
+      });
+      this.fsWatcher.on("error", (err) => {
+        // 静默处理（避免未捕获错误导致扩展崩溃）
+        process.stderr.write(`[pit-communicate watcher] ${err.message}\n`);
+      });
+    } catch (err: any) {
+      process.stderr.write(`[pit-communicate watcher] fs.watch 不可用，仅轮询: ${err.message}\n`);
+    }
 
-    this.fsWatcher.on("add", (filePath) => this.handleFile(filePath));
-    this.fsWatcher.on("error", (err) => {
-      // 静默处理（避免未捕获错误导致扩展崩溃）
-      process.stderr.write(`[pit-communicate watcher] ${err.message}\n`);
-    });
+    // 轮询兜底：fs.watch 在某些场景（网络盘/高负载）会丢事件
+    this.pollTimer = setInterval(() => this.scanAll(), POLL_INTERVAL_MS);
+    this.pollTimer.unref?.();
 
     // 启动时处理已有 pending
-    for (const msg of this.mailbox.readPending()) {
-      this.dispatch(msg);
-    }
+    this.scanAll();
   }
 
   stop(): void {
@@ -62,18 +71,26 @@ export class Watcher {
       this.fsWatcher.close();
       this.fsWatcher = null;
     }
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+
+  /** 全量扫描 pending（启动时 + 轮询兜底） */
+  private scanAll(): void {
+    for (const msg of this.mailbox.readPending()) {
+      this.dispatch(msg);
+    }
   }
 
   private handleFile(filePath: string): void {
-    const base = path.basename(filePath);
-    if (!base.startsWith("msg-") || !base.endsWith(".json")) return;
-
     try {
       const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"));
       const msg = validateMessage(raw);
       if (msg) this.dispatch(msg);
     } catch {
-      // 原子写入的 tmp 阶段文件，等 rename 后的 add 事件
+      // 文件已被处理/移走，或读取竞态——轮询会兜底
     }
   }
 

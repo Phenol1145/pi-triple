@@ -81,19 +81,29 @@ function printHelp(): void {
   console.log("");
 }
 
-function parseArgs(args: string[]): { command: string; subcommand?: string; flags: Record<string, string>; passthrough: string[] } {
+/** 有子命令语义的命令白名单（第二个位置参数 = subcommand） */
+const SUBCOMMAND_COMMANDS = new Set(["tenant", "shared"]);
+
+export function parseArgs(args: string[]): { command: string; subcommand?: string; flags: Record<string, string>; passthrough: string[] } {
   const flags: Record<string, string> = {};
   const passthrough: string[] = [];
   let command = "";
   let subcommand = "";
   let i = 0;
 
+  const VALUED_FLAGS = new Set(["tenant", "project", "model", "provider", "thinking", "name"]);
+
   while (i < args.length) {
     const arg = args[i];
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (["tenant","project","model","provider","thinking","name"].includes(key)) {
-        flags[key] = args[++i] ?? "";
+      if (VALUED_FLAGS.has(key)) {
+        const val = args[i + 1];
+        if (val === undefined || val.startsWith("--")) {
+          throw new Error(`flag --${key} requires a value`);
+        }
+        flags[key] = val;
+        i++;
       } else if (key === "json") {
         // --json is boolean, next arg is not a value unless it starts with --
         flags[key] = "true";
@@ -102,7 +112,7 @@ function parseArgs(args: string[]): { command: string; subcommand?: string; flag
       }
     } else if (!command) {
       command = arg;
-    } else if (!subcommand && !arg.startsWith("-")) {
+    } else if (!subcommand && !arg.startsWith("-") && SUBCOMMAND_COMMANDS.has(command)) {
       subcommand = arg;
     } else {
       passthrough.push(arg);
@@ -304,6 +314,14 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
     return;
   }
 
+  // 非 TTY 下 attach 模式无意义 → 早报错引导
+  if (!process.stdout.isTTY) {
+    console.log("  \x1b[31m❌ pit start（接入模式）需要交互终端\x1b[0m");
+    console.log("  纯后台:   pit start --bg --name <name>");
+    console.log("  原生前台: pit pi");
+    process.exit(1);
+  }
+
   const r = await resolveTenantAndMigrate(flags, passthrough);
   if (!r) { process.exit(1); }
   const { tenantId, piPassthrough } = r;
@@ -332,6 +350,21 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
     extraArgs: piPassthrough.filter((a) => a !== "-c" && a !== "--continue"),
   });
 
+  const insideTmux = !!process.env.TMUX;
+
+  if (insideTmux) {
+    // tmux 嵌套：创建 detached 会话后 switch-client 切换
+    const create = spawnSync("tmux", buildTmuxSessionArgs(launch, session, true), { encoding: "utf-8" });
+    if (create.status !== 0) {
+      console.log(`  \x1b[31m❌ 创建会话失败: ${create.stderr}\x1b[0m`);
+      process.exit(1);
+    }
+    console.log(`  会话: ${name} · 租户: ${alias} · 切换到新会话…`);
+    spawnSync("tmux", ["switch-client", "-t", `=${session}`], { stdio: "inherit" });
+    return;
+  }
+
+  // 非嵌套：直接接入
   console.log(`  会话: ${name} · 租户: ${alias} · Ctrl+B d 脱离（会话保持运行）`);
 
   const tmuxArgs = buildTmuxSessionArgs(launch, session, false);
@@ -434,6 +467,14 @@ async function cmdStartBg(flags: Record<string, string>, passthrough: string[]):
   const result = spawnSync("tmux", tmuxArgs, { encoding: "utf-8" });
 
   if (result.status === 0) {
+    // 存活检查：pi 可能启动即崩（扩展错误等），会话会秒退
+    spawnSync("sleep", ["1"]);
+    const alive = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
+    if (alive.status !== 0) {
+      console.log(`  \x1b[31m❌ 会话 "${name}" 启动后立即退出\x1b[0m`);
+      console.log("  排查: pit pi --tenant " + alias + "  （前台模式查看启动错误）");
+      process.exit(1);
+    }
     console.log(`  \x1b[32m✅ 后台会话已启动\x1b[0m`);
     console.log(`  名称: ${name} · 租户: ${alias} (${tenantId.slice(0, 8)}…) · 工作区: ${launch.cwd}`);
     console.log(`  接入: \x1b[36mpit attach ${name}\x1b[0m`);
@@ -525,7 +566,21 @@ function doPrintCommand(result: Awaited<ReturnType<typeof execTenantLs>>): void 
 
 async function main() {
   const args = process.argv.slice(2);
-  const { command, subcommand, flags, passthrough } = parseArgs(args);
+  let command: string;
+  let subcommand: string | undefined;
+  let flags: Record<string, string>;
+  let passthrough: string[];
+
+  try {
+    const parsed = parseArgs(args);
+    command = parsed.command;
+    subcommand = parsed.subcommand;
+    flags = parsed.flags;
+    passthrough = parsed.passthrough;
+  } catch (err: any) {
+    console.log(`  \x1b[31m❌ 参数错误: ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
 
   // Mode resolution (print / json / interactive)
   const mode = resolveMode(command, flags);
