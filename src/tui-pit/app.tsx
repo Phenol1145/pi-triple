@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Box, Text, useInput, useApp } from "ink";
-import { TopBar, TabBar, StatusBar, useTabs, useTerminalSize } from "../tui-shared/index.js";
+import { Screen, useTabs, useTerminalSize } from "../tui-shared/index.js";
 import { DashboardPage } from "./dashboard.js";
 import { TenantsPage } from "./tenants.js";
 import { SessionsPage } from "./sessions.js";
@@ -150,6 +150,19 @@ export function PitApp() {
         if (args[0] === "ls" || args[0] === "list") result = await execTenantLs();
         else if (args[0] === "new") result = await execTenantNew(args[1]);
         else if (args[0] === "rm") result = await execTenantRm(args[1]);
+        else if (args[0] === "rename") {
+          const { loadConfig: lc, resolveTenantId: rt, renameTenant: rn } = await import("../config.js");
+          const cfg = lc();
+          const resolved = rt(args[1] ?? "", cfg);
+          if (!resolved.ok) result = { ok: false, message: "", error: { code: "TENANT_NOT_FOUND", message: `租户 "${args[1]}" 不存在` } };
+          else if (!args[2]) result = { ok: false, message: "", error: { code: "INVALID_ARGS", message: "用法: tenant rename <旧别名> <新别名>" } };
+          else {
+            const ok = rn(resolved.id, args[2], cfg);
+            result = ok
+              ? { ok: true, message: `✅ 租户别名: ${args[1]} → ${args[2]}` }
+              : { ok: false, message: "", error: { code: "RENAME_FAILED", message: "重命名失败（别名重复或无效）" } };
+          }
+        }
         else result = await execTenantLs();
         break;
       case "pi":
@@ -229,14 +242,13 @@ export function PitApp() {
   const safeH = Math.max(5, rows - 7);
   const sharedProps = { width: safeW, height: safeH };
 
-  // Render layers
+  // ── Content 层 ─────────────────────────────────────────
   let content: React.ReactNode;
   if (outputLines) {
     content = <OutputPanel lines={outputLines} onClose={() => setOutputLines(null)} />;
   } else if (commandMode) {
     content = (
       <Box flexDirection="column">
-        {/* Show current page dimmed in background — disabled to avoid input conflict */}
         <Box minHeight={Math.max(5, rows - 12)}>
           {tabIndex === 0 && <DashboardPage {...sharedProps} />}
           {tabIndex === 1 && <TenantsPage {...sharedProps} enabled={false} />}
@@ -264,29 +276,31 @@ export function PitApp() {
     );
   }
 
-  return (
-    <Box flexDirection="column" width={safeW} padding={1}>
-      <TopBar title="Pi-Triple Control" version="0.1.0" />
-
-      {!outputLines && !commandMode && <TabBar tabs={TABS} activeTab={activeTab} onSelect={setActiveTab} />}
-
-      {content}
-
-      {/* Confirm dialog overlay */}
+  // ── Tips 层：确认框 + 通知 + 快捷键提示 ─────────────────
+  const tipsExtra = (
+    <>
       {confirmAction && (
-        <Box borderStyle="round" borderColor="yellow" padding={1} marginTop={1}>
+        <Box borderStyle="round" borderColor="yellow" paddingX={1}>
           <Text bold>{confirmAction.message} (y/n)</Text>
         </Box>
       )}
+      {notification && <Text>{notification}</Text>}
+    </>
+  );
 
-      {/* Notification toast */}
-      {notification && (
-        <Box marginTop={1}>
-          <Text>{notification}</Text>
-        </Box>
-      )}
-
-      <StatusBar hints={`[1-5] Tab · [/] Command · [q] Quit${outputLines ? " · [Esc] Back" : ""}`} />
-    </Box>
+  return (
+    <Screen
+      title="Pi-Triple Control"
+      version="0.1.0"
+      tabs={outputLines || commandMode ? undefined : TABS}
+      activeTab={activeTab}
+      onTabSelect={setActiveTab}
+      hints={`[1-5] Tab · [/] Command · [q] Quit${outputLines ? " · [Esc] Back" : ""}`}
+    >
+      <Box flexDirection="column" width={safeW} paddingX={1}>
+        {content}
+        {tipsExtra}
+      </Box>
+    </Screen>
   );
 }

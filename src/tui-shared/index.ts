@@ -1,5 +1,6 @@
 export { theme } from "./theme.js";
 export { useTabs, useRefresh, useTerminalSize } from "./hooks.js";
+export { Screen } from "./layout.js";
 export { TopBar } from "./top-bar.js";
 export { TabBar } from "./tab-bar.js";
 export { StatusBar } from "./status-bar.js";

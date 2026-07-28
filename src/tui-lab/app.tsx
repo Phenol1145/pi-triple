@@ -7,10 +7,7 @@ import React, { useCallback, useMemo, useEffect, useState } from "react";
 import { Box, useInput } from "ink";
 import type { DatabaseSync } from "node:sqlite";
 import { openReadOnlyOrNull, sharedDbPath, localDbPath } from "../lab-data/index.js";
-import { useTabs, useRefresh } from "../tui-shared/hooks.js";
-import { TopBar } from "../tui-shared/top-bar.js";
-import { TabBar } from "../tui-shared/tab-bar.js";
-import { StatusBar } from "../tui-shared/status-bar.js";
+import { useTabs, useRefresh, Screen } from "../tui-shared/index.js";
 import { TelemetryPage } from "./telemetry.js";
 import { ArenaPage } from "./arena.js";
 import { EventsPage } from "./events.js";
@@ -72,37 +69,32 @@ export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
   const effectiveTenant = globalTelemetry ? undefined : tenantId;
 
   return (
-    <Box flexDirection="column" padding={1}>
-      <TopBar
-        title="Agent Lab Monitor"
-        status={`tenant: ${tenantAlias}${globalTelemetry ? " (global)" : ""} | DB: ${sharedDb ? "connected" : "offline"}`}
-      />
-
-      <TabBar tabs={TABS} activeTab={activeTab} onSelect={() => {}} />
-
-      <Box flexDirection="column" marginTop={1} minHeight={15}>
-        {activeTab === "Telemetry" && (
-          <TelemetryPage
-            db={sharedDb}
-            tenantId={effectiveTenant}
-            refreshKey={refreshKey}
-          />
-        )}
-        {activeTab === "Arena" && (
-          <ArenaPage db={localDb} refreshKey={refreshKey} tenantAlias={tenantAlias} />
-        )}
-        {activeTab === "Events" && (
-          <EventsPage db={localDb} refreshKey={refreshKey} />
-        )}
-        {activeTab === "Compare" && (
-          <ComparePage db={sharedDb} tenantId={effectiveTenant} refreshKey={refreshKey} />
-        )}
-        {activeTab === "Config" && (
-          <LabConfigPage db={localDb} refreshKey={refreshKey} />
-        )}
-      </Box>
-
-      <StatusBar hints={`[1-${TABS.length}] Tab  [r] Refresh  [q] Quit`} />
-    </Box>
+    <Screen
+      title="Agent Lab Monitor"
+      status={`tenant: ${tenantAlias}${globalTelemetry ? " (global)" : ""} | DB: ${sharedDb ? "connected" : "offline"}`}
+      tabs={TABS}
+      activeTab={activeTab}
+      hints={`[1-${TABS.length}] Tab  [r] Refresh  [q] Quit`}
+    >
+      {activeTab === "Telemetry" && (
+        <TelemetryPage
+          db={sharedDb}
+          tenantId={effectiveTenant}
+          refreshKey={refreshKey}
+        />
+      )}
+      {activeTab === "Arena" && (
+        <ArenaPage db={localDb} refreshKey={refreshKey} tenantAlias={tenantAlias} />
+      )}
+      {activeTab === "Events" && (
+        <EventsPage db={localDb} refreshKey={refreshKey} />
+      )}
+      {activeTab === "Compare" && (
+        <ComparePage db={sharedDb} tenantId={effectiveTenant} refreshKey={refreshKey} />
+      )}
+      {activeTab === "Config" && (
+        <LabConfigPage db={localDb} refreshKey={refreshKey} />
+      )}
+    </Screen>
   );
 }
