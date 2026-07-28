@@ -150,6 +150,10 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
           [Enter] select to delete · Press 's' on the select screen to set as default · [n] new
         </Text>
       </Box>
+
+      <Box marginTop={1}>
+        <Text dimColor>[n] 新建 · [d] 删除 · [s] 设为默认 · / 命令模式</Text>
+      </Box>
     </Box>
   );
 }

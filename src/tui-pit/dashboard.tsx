@@ -85,6 +85,10 @@ export function DashboardPage({ width, height: _h }: DashPageProps) {
           ))
         )}
       </Box>
+
+      <Box marginTop={1}>
+        <Text dimColor>按 1-5 切换 Tab · / 执行命令 · q 退出</Text>
+      </Box>
     </Box>
   );
 }

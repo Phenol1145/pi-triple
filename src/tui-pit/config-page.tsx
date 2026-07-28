@@ -71,6 +71,10 @@ export function ConfigPage({ width, height: _h }: ConfigPageProps) {
           Edit: pit config   |   View raw: cat pi-triple.json
         </Text>
       </Box>
+
+      <Box marginTop={1}>
+        <Text dimColor>编辑 pi-triple.json 修改配置 · / 命令模式</Text>
+      </Box>
     </Box>
   );
 }

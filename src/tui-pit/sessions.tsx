@@ -186,6 +186,10 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
         <Text dimColor>  - Attaching hands off terminal (pit TUI exits)</Text>
         <Text dimColor>  - Inside tmux: Ctrl+B s to switch sessions, Ctrl+B d to detach</Text>
       </Box>
+
+      <Box marginTop={1}>
+        <Text dimColor>[s] 启动 · [a] 接入 · [x] 停止 · / 命令模式</Text>
+      </Box>
     </Box>
   );
 }
