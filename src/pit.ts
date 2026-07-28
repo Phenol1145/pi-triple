@@ -10,6 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { homedir } from "node:os";
 import {
   loadConfig, saveConfig, resolveDataDir, type PiTripleConfig,
   resolveTenantId, getTenantAlias, getDefaultTenantId,
@@ -234,6 +235,27 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
   const tenantId = resolveOrFail(tenantInput, config);
   if (!tenantId) { process.exit(1); }
   const tenantConfig = config.tenants[tenantId] ?? {};
+
+  // 首次启动：检测 ~/.pi/agent/ 数据并自动迁移
+  const dataDir = resolveDataDir(config);
+  const tenantConfigDir = path.join(dataDir, "pi-config", tenantId);
+  const classicPiAgentDir = path.join(homedir(), ".pi", "agent");
+  if (fs.existsSync(classicPiAgentDir) && !fs.existsSync(path.join(tenantConfigDir, "settings.json"))) {
+    console.log("");
+    console.log("  \x1b[36m检测到现有 pi 环境 (~/.pi/agent/)\x1b[0m");
+    console.log("  正在迁移扩展和配置...");
+    try {
+      await migrate({ tenantId });
+      // 重建共享层链接（migrate 不会创建逐项 symlink）
+      const sharedDir = path.join(dataDir, "shared");
+      const { linkTenantToShared: relink } = await import("./shared-layer.js");
+      relink(tenantConfigDir, sharedDir);
+      console.log("  \x1b[32m✅ 迁移完成\x1b[0m");
+    } catch (err: any) {
+      console.log(`  \x1b[33m⚠️  迁移部分失败: ${err.message}\x1b[0m`);
+    }
+    console.log("");
+  }
 
   await runDoctor("quick");
 

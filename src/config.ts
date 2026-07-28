@@ -8,6 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -33,13 +34,21 @@ export interface PiTripleConfig {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ALIAS_RE = /[^a-zA-Z0-9_\-\u4e00-\u9fff]/g;
 
+// ─── Global paths ────────────────────────────────────────────
+
+/** 全局配置目录：~/.pi-triple/（可由 PI_TRIPLE_HOME 环境变量覆盖） */
+export function pitHome(): string {
+  return process.env.PI_TRIPLE_HOME ?? path.join(homedir(), ".pi-triple");
+}
+
 function defaultConfig(): PiTripleConfig {
+  const home = pitHome();
   const localId = randomUUID();
   return {
     version: 2,
     defaultTenant: localId,
-    dataDir: "./.pi-platform-data",
-    sharedDir: "./.pi-platform-data/shared",
+    dataDir: path.join(home, "data"),
+    sharedDir: path.join(home, "data", "shared"),
     redis: "redis://localhost:6379",
     gateway: { port: 3000 },
     tenants: {
@@ -51,12 +60,28 @@ function defaultConfig(): PiTripleConfig {
 // ─── Load / Save ─────────────────────────────────────────────
 
 function configPath(): string {
-  return path.resolve(process.cwd(), "pi-triple.json");
+  // 全局配置优先（~/.pi-triple/pi-triple.json），cwd 作为 fallback
+  const homeConfig = path.join(pitHome(), "pi-triple.json");
+  if (fs.existsSync(homeConfig)) return homeConfig;
+  const cwdConfig = path.resolve(process.cwd(), "pi-triple.json");
+  if (fs.existsSync(cwdConfig)) return cwdConfig;
+  return homeConfig;
 }
 
 export function loadConfig(): PiTripleConfig {
   const p = configPath();
-  if (!fs.existsSync(p)) return defaultConfig();
+  if (!fs.existsSync(p)) {
+    // 首次启动：检测是否有旧 cwd 配置，自动迁移
+    const migrated = migrateCwdToHome();
+    if (migrated) return loadConfig(); // 递归加载迁移后的配置
+    return defaultConfig();
+  }
+
+  // 如果加载的是 cwd 配置但 ~/.pi-triple/ 不存在，迁移
+  const homeConfig = path.join(pitHome(), "pi-triple.json");
+  if (p !== homeConfig && !fs.existsSync(homeConfig)) {
+    migrateCwdToHome();
+  }
   let raw: any;
   try {
     raw = JSON.parse(fs.readFileSync(p, "utf-8"));
@@ -117,7 +142,8 @@ function migrateV1toV2(raw: Record<string, any>): PiTripleConfig {
   if (raw.gateway) config.gateway = raw.gateway;
 
   // 先迁移目录，再保存配置（崩溃可重试，不会 split-brain）
-  const dataDir = path.resolve(process.cwd(), process.env.DATA_DIR ?? config.dataDir);
+  const configDir2 = path.dirname(configPath());
+  const dataDir = path.resolve(configDir2, process.env.DATA_DIR ?? config.dataDir);
   for (const { alias, uuid } of renames) {
     for (const subdir of ["pi-config", "sessions", "workspaces", "mailbox"]) {
       const oldPath = path.join(dataDir, subdir, alias);
@@ -243,13 +269,68 @@ export function removeTenant(tenantId: string, config?: PiTripleConfig): boolean
 
 export function resolveDataDir(config?: PiTripleConfig): string {
   const cfg = config ?? loadConfig();
-  return path.resolve(process.cwd(), process.env.DATA_DIR ?? cfg.dataDir);
+  // 相对于配置文件所在目录解析
+  const p = configPath();
+  const configDir = path.dirname(p);
+  return path.resolve(configDir, process.env.DATA_DIR ?? cfg.dataDir);
 }
 
+// ─── 一次性迁移：cwd → ~/.pi-triple/ ─────────────────────────
+
 /**
- * 迁移目录名：alias → UUID。
- * 在 loadConfig v1→v2 迁移后调用。
+ * 如果存在 ~/pi-platform/pi-triple.json（旧 cwd 配置）
+ * 但 ~/.pi-triple/pi-triple.json 不存在，
+ * 自动复制到 ~/.pi-triple/。
  */
+function migrateCwdToHome(): boolean {
+  const homeConfig = path.join(pitHome(), "pi-triple.json");
+  if (fs.existsSync(homeConfig)) return false; // 已存在，跳过
+
+  // 检测几个常见的旧配置位置
+  const candidates = [
+    path.join(homedir(), "pi-platform", "pi-triple.json"),
+    path.join(homedir(), "pi-triple", "pi-triple.json"),
+    path.join(homedir(), "pi-platform", "pi-triple.json"),
+  ];
+
+  for (const src of candidates) {
+    if (!fs.existsSync(src)) continue;
+
+    // 复制配置文件
+    const homeDir = pitHome();
+    fs.mkdirSync(homeDir, { recursive: true });
+    fs.copyFileSync(src, homeConfig);
+
+    // 如果旧 dataDir 是相对路径，更新为绝对路径
+    try {
+      const raw = JSON.parse(fs.readFileSync(homeConfig, "utf-8"));
+      let changed = false;
+      if (raw.dataDir && !path.isAbsolute(raw.dataDir) && !raw.dataDir.startsWith("~")) {
+        const oldDataDir = path.resolve(path.dirname(src), raw.dataDir);
+        const newDataDir = path.join(homeDir, "data");
+        if (fs.existsSync(oldDataDir) && oldDataDir !== newDataDir) {
+          // 复制数据目录
+          fs.cpSync(oldDataDir, newDataDir, { recursive: true });
+        }
+        raw.dataDir = newDataDir;
+        raw.sharedDir = path.join(newDataDir, "shared");
+        changed = true;
+      }
+      if (changed) {
+        const tmp = homeConfig + ".tmp";
+        fs.writeFileSync(tmp, JSON.stringify(raw, null, 2) + "\n");
+        fs.renameSync(tmp, homeConfig);
+      }
+    } catch { /* 解析失败，保留原样 */ }
+
+    console.log(`  \x1b[32m✅ 配置已迁移: ${src} → ${homeConfig}\x1b[0m`);
+    return true;
+  }
+
+  return false;
+}
+
+/** 迁移目录名：alias → UUID（已废弃，由 migrateV1toV2 内联处理） */
 export function migrateDirectoryNames(config: PiTripleConfig): string[] {
   const dataDir = resolveDataDir(config);
   const migrated: string[] = [];

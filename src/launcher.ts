@@ -27,7 +27,7 @@ import { EnvCredentialProvider } from "./storage/credential-provider.js";
 import { ModelRouter } from "./model-router/router.js";
 import { WorkspaceManager } from "./workspace/manager.js";
 import { ensureTenantLinks } from "./shared-layer.js";
-import { getTenantAlias } from "./config.js";
+import { getTenantAlias, resolveDataDir } from "./config.js";
 
 export interface LaunchOptions {
   /** Tenant ID (from auth token or "local") */
@@ -75,7 +75,7 @@ export async function buildPiLaunch(tenantId: string, options: {
   extraArgs?: string[];
 }): Promise<PiBuildResult> {
   const platform = detectPlatform();
-  const dataDir = abs(process.env.DATA_DIR ?? "./.pi-platform-data");
+  const dataDir = abs(resolveDataDir());
 
   // workspace isolation
   const workspaceMgr = new WorkspaceManager(
