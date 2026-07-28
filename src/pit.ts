@@ -19,6 +19,11 @@ import { runDoctor } from "./doctor.js";
 import { launchPi, buildPiLaunch } from "./launcher.js";
 import { migrate } from "./migrate.js";
 import { initSharedLayer, linkTenantToShared, sharedStatus, promoteToShared, installBundledExtensions } from "./shared-layer.js";
+import { emitJson, emitJsonError, ERR } from "./output.js";
+import {
+  execTenantLs, execTenantNew, execTenantRm,
+  execStatus, execLs, execStop, execSharedStatus,
+} from "./commands.js";
 
 const VERSION = "0.1.0";
 
@@ -85,6 +90,9 @@ function parseArgs(args: string[]): { command: string; subcommand?: string; flag
       const key = arg.slice(2);
       if (["tenant","project","model","provider","thinking","name","global"].includes(key)) {
         flags[key] = args[++i] ?? "";
+      } else if (key === "json") {
+        // --json is boolean, next arg is not a value unless it starts with --
+        flags[key] = "true";
       } else {
         flags[key] = "true";
       }
@@ -531,11 +539,80 @@ function formatAge(ms: number): string {
   return hours < 24 ? `${hours}h ${mins % 60}m ago` : `${Math.floor(hours / 24)}d ago`;
 }
 
+// ─── Mode Resolution ─────────────────────────────────────────
+
+type PitMode = "interactive" | "interactive-lab" | "print" | "json" | "fatal";
+
+function resolveMode(command: string, flags: Record<string, string>): PitMode {
+  if (flags.json === "true" && ["", "ui", "lab"].includes(command)) {
+    emitJsonError(ERR.TUI_NO_JSON, "TUI 命令不支持 --json");
+    return "fatal";
+  }
+  if (flags.json === "true") return "json";
+  if ((command === "" || command === "ui") && process.stdout.isTTY && process.stdin.isTTY) return "interactive";
+  if (command === "lab" && process.stdout.isTTY && process.stdin.isTTY) return "interactive-lab";
+  return "print";
+}
+
+async function routeJsonCommand(command: string, subcommand: string | undefined, flags: Record<string, string>, passthrough: string[]): Promise<boolean> {
+  let result;
+  switch (command) {
+    case "tenant":
+      if (subcommand === "ls" || subcommand === "list") result = await execTenantLs();
+      else if (subcommand === "new") result = await execTenantNew(passthrough[0]);
+      else if (subcommand === "rm") result = await execTenantRm(passthrough[0] ?? subcommand ?? "");
+      else result = await execTenantLs();
+      break;
+    case "status":
+    case "doctor":
+      result = await execStatus();
+      break;
+    case "ls":
+      result = await execLs();
+      break;
+    case "stop":
+      result = await execStop(subcommand || passthrough[0] || "");
+      break;
+    case "shared":
+      if (subcommand === "status") result = await execSharedStatus();
+      else return false;
+      break;
+    default:
+      return false;  // fall through to print mode
+  }
+
+  if (result.ok) {
+    emitJson(result.data ?? {});
+  } else {
+    emitJsonError(result.error?.code ?? "UNKNOWN", result.error?.message ?? "Unknown error", result.error?.candidates);
+    process.exit(1);
+  }
+  return true;
+}
+
+function doPrintCommand(result: Awaited<ReturnType<typeof execTenantLs>>): void {
+  printBanner();
+  console.log(result.message);
+  console.log("");
+  if (!result.ok) process.exit(1);
+}
+
 // ─── Main ────────────────────────────────────────────────────
 
 async function main() {
   const args = process.argv.slice(2);
   const { command, subcommand, flags, passthrough } = parseArgs(args);
+
+  // Mode resolution (print / json / interactive)
+  const mode = resolveMode(command, flags);
+  if (mode === "fatal") { process.exit(1); return; }  // error already emitted
+
+  // Route extracted commands through commands.ts + mode dispatch
+  if (mode === "json") {
+    const routed = await routeJsonCommand(command, subcommand, flags, passthrough);
+    if (routed) return;
+    // fall through to print-mode for unextracted commands
+  }
 
   switch (command) {
     case "onboard":
@@ -551,24 +628,40 @@ async function main() {
     case "attach":
       cmdAttach(subcommand || passthrough[0] || "");
       break;
-    case "ls":
-      cmdLs();
+    case "ls": {
+      const lr = await execLs();
+      printBanner();
+      console.log(lr.message);
+      console.log("");
       break;
-    case "stop":
-      cmdStop(subcommand || passthrough[0] || "");
+    }
+    case "stop": {
+      const sr = await execStop(subcommand || passthrough[0] || "");
+      if (sr.ok) console.log(sr.message);
+      else console.log(`  \x1b[31m❌ ${sr.error?.message}\x1b[0m`);
+      if (!sr.ok) process.exit(1);
       break;
-    case "status":
-      await cmdStatus();
+    }
+    case "status": {
+      const sr = await execStatus();
+      printBanner();
+      console.log(sr.message);
+      console.log("");
+      if (!sr.ok) process.exit(1);
       break;
+    }
     case "doctor":
       await cmdDoctor();
       break;
-    case "tenant":
-      if (subcommand === "ls" || subcommand === "list") cmdTenantList();
-      else if (subcommand === "new") await cmdTenantNew(passthrough[0], flags);
-      else if (subcommand === "rm") cmdTenantRm(passthrough[0] ?? subcommand);
-      else cmdTenantList();
+    case "tenant": {
+      let tr;
+      if (subcommand === "ls" || subcommand === "list") tr = await execTenantLs();
+      else if (subcommand === "new") tr = await execTenantNew(passthrough[0]);
+      else if (subcommand === "rm") tr = await execTenantRm(passthrough[0] ?? subcommand ?? "");
+      else tr = await execTenantLs();
+      doPrintCommand(tr);
       break;
+    }
     case "update": {
       console.log("  检查 pi 更新…");
       const cur = spawnSync("pi", ["--version"], { encoding: "utf-8" });
@@ -635,14 +728,9 @@ async function main() {
         const bundled = installBundledExtensions(sharedDir2);
         if (bundled.length > 0) console.log(`  ✅ 已安装内置扩展: ${bundled.join(", ")}`);
       } else {
-        const st = sharedStatus(sharedDir2);
+        const ssr = await execSharedStatus();
         printBanner();
-        if (!st.exists) {
-          console.log("  共享层未初始化。运行: pit shared init");
-        } else {
-          console.log(`  共享层: ${sharedDir2}`);
-          console.log(`  扩展: ${st.extensions}  技能: ${st.skills}  包: ${st.packages}`);
-        }
+        console.log(ssr.message);
         console.log("");
       }
       break;

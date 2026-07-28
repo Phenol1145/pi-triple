@@ -17,6 +17,18 @@ import * as readline from "node:readline";
 
 // ─── Types ───────────────────────────────────────────────────
 
+export interface DoctorCheck {
+  name: string;
+  ok: boolean;
+  message: string;
+  fixable: boolean;
+}
+
+export interface DoctorReport {
+  checks: DoctorCheck[];
+  allOk: boolean;
+}
+
 interface CheckResult {
   name: string;
   status: "ok" | "warn" | "fail";
@@ -318,6 +330,57 @@ const checkGit: CheckFn = async () => {
   };
 };
 
+// ─── Structured Runner (no console.log, no interactive fix) ─
+
+export async function runDoctorStructured(mode: "full" | "quick" = "full"): Promise<DoctorReport> {
+  const checks: DoctorCheck[] = [];
+  const fns = mode === "full" ? ALL_CHECKS : QUICK_CHECKS;
+
+  for (const fn of fns) {
+    const result = await fn();
+    checks.push({
+      name: result.name,
+      ok: result.status === "ok" || result.status === "warn",
+      message: result.message,
+      fixable: result.status === "fail",
+    });
+  }
+
+  return {
+    checks,
+    allOk: checks.every((c) => c.ok),
+  };
+}
+
+// ─── Print Renderer ──────────────────────────────────────────
+
+function renderDoctorPrint(report: DoctorReport): void {
+  for (const c of report.checks) {
+    const icon = c.ok ? icons.ok : icons.fail;
+    const color = c.ok ? "\x1b[32m" : "\x1b[31m";
+    console.log(`  ${icon} ${color}${c.name}\x1b[0m — ${c.message}`);
+  }
+}
+
+// ─── Interactive Fix Runner ──────────────────────────────────
+
+async function offerFixes(failures: CheckResult[]): Promise<void> {
+  console.log("");
+  console.log(`  \x1b[33m发现 ${failures.length} 个问题需要修复\x1b[0m`);
+  console.log("");
+
+  for (const f of failures) {
+    if (f.fix) {
+      const fixed = await f.fix();
+      if (fixed) {
+        console.log("");
+      }
+    } else if (f.fixDescription) {
+      console.log(`  ${icons.arrow} ${f.name}: ${f.fixDescription}`);
+    }
+  }
+}
+
 // ─── Runner ──────────────────────────────────────────────────
 
 const ALL_CHECKS: CheckFn[] = [
@@ -361,21 +424,7 @@ export async function runDoctor(mode: "full" | "quick" = "full"): Promise<boolea
 
   // 交互式修复
   if (failures.length > 0 && mode === "full") {
-    console.log("");
-    console.log(`  \x1b[33m发现 ${failures.length} 个问题需要修复\x1b[0m`);
-    console.log("");
-
-    for (const f of failures) {
-      if (f.fix) {
-        const fixed = await f.fix();
-        if (fixed) {
-          // 重新检查
-          console.log("");
-        }
-      } else if (f.fixDescription) {
-        console.log(`  ${icons.arrow} ${f.name}: ${f.fixDescription}`);
-      }
-    }
+    await offerFixes(failures);
   }
 
   console.log("");
