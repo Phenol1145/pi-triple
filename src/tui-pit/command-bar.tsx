@@ -34,10 +34,10 @@ export function CommandBar({ visible, onSubmit, onCancel }: CommandBarProps) {
   useInput((char, key) => {
     if (!visible) return;
 
-    // Tab key: autocomplete to first matching command
+    // Tab key: autocomplete to selected command
     if (key.tab) {
       if (filtered.length > 0) {
-        setInput(filtered[0].name + " ");
+        setInput(filtered[selected].name + " ");
         setSelectedTab(0);
       }
       return;

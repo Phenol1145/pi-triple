@@ -6,7 +6,7 @@
 import React, { useCallback, useMemo, useEffect, useState } from "react";
 import { Box, useInput } from "ink";
 import type { DatabaseSync } from "node:sqlite";
-import { openDb, sharedDbPath, localDbPath } from "../lab-data/index.js";
+import { openReadOnlyOrNull, sharedDbPath, localDbPath } from "../lab-data/index.js";
 import { useTabs, useRefresh } from "../tui-shared/hooks.js";
 import { TopBar } from "../tui-shared/top-bar.js";
 import { TabBar } from "../tui-shared/tab-bar.js";
@@ -33,7 +33,7 @@ export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
   const sharedDb: DatabaseSync | null = useMemo(() => {
     try {
       const p = sharedDbPath();
-      return openDb(p);
+      return openReadOnlyOrNull(p);
     } catch {
       return null;
     }
@@ -42,7 +42,7 @@ export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
   const localDb: DatabaseSync | null = useMemo(() => {
     try {
       const p = localDbPath(tenantId);
-      return openDb(p);
+      return openReadOnlyOrNull(p);
     } catch {
       return null;
     }

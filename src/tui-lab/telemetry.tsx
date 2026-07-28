@@ -9,7 +9,6 @@ import type { DatabaseSync } from "node:sqlite";
 import { aggregateByRole } from "../lab-data/telemetry.js";
 import { DataTable } from "../tui-shared/data-table.js";
 import type { ColumnDef } from "../tui-shared/data-table.js";
-import { SparkLine } from "../tui-shared/spark-line.js";
 
 interface Props {
   db: DatabaseSync | null;
@@ -102,13 +101,11 @@ export function TelemetryPage({ db, tenantId, refreshKey }: Props) {
 
 /** Render a SparkLine inside a string slot for DataTable */
 function renderSpark(data: number[]): string {
-  // We can't embed real React components in DataTable strings directly,
-  // but SparkLine has a short ASCII representation:
-  if (data.length === 0) return "(no data)";
+  if (data.length === 0) return "n/a";
   const SPARK = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
   const min = Math.min(...data);
   const max = Math.max(...data);
-  if (max - min < 0.01) return SPARK[3]?.repeat(Math.min(data.length, 30)) ?? "";
+  if (max - min < 0.01) return "n/a";
   let result = "";
   for (const val of data) {
     const pct = Math.max(0, Math.min(1, (val - min) / (max - min)));

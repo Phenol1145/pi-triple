@@ -26,7 +26,7 @@ interface TenantsPageProps {
   enabled?: boolean;
 }
 
-type Mode = "list" | "new-alias" | "delete-confirm";
+type Mode = "list" | "new-alias" | "delete-confirm" | "set-default-confirm";
 
 export function TenantsPage({ width, height: _h, enabled = true }: TenantsPageProps) {
   const [mode, setMode] = useState<Mode>("list");
@@ -121,6 +121,23 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
             setDeleteTarget(null);
           }}
           onCancel={() => { setMode("list"); setDeleteTarget(null); }}
+        />
+      </Box>
+    );
+  }
+
+  if (mode === "set-default-confirm") {
+    return (
+      <Box flexDirection="column" gap={1}>
+        <SelectList
+          enabled={enabled}
+          title="Select tenant to set as default"
+          items={selectItems}
+          onSelect={(id) => {
+            handleSetDefault(id);
+            setMode("list");
+          }}
+          onCancel={() => setMode("list")}
         />
       </Box>
     );

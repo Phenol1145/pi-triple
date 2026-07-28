@@ -77,6 +77,7 @@ export function ComparePage({ db, tenantId, refreshKey }: Props) {
             setModelA(v);
             setStep("select-b");
           }}
+          onCancel={() => { /* Esc exits compare, not the gated app */ }}
         />
       </Box>
     );
@@ -96,6 +97,7 @@ export function ComparePage({ db, tenantId, refreshKey }: Props) {
             setModelB(v);
             setStep("compare");
           }}
+          onCancel={() => { setStep("select-a"); setModelA(""); }}
         />
       </Box>
     );

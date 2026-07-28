@@ -154,9 +154,20 @@ const checkPiUpdate: CheckFn = async () => {
 
 const checkRedis: CheckFn = async () => {
   const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
-  const url = new URL(redisUrl);
-  const host = url.hostname;
-  const port = parseInt(url.port || "6379", 10);
+  let host: string;
+  let port: number;
+  try {
+    const url = new URL(redisUrl);
+    host = url.hostname;
+    port = parseInt(url.port || "6379", 10);
+  } catch {
+    return {
+      name: "Redis",
+      status: "fail",
+      message: `${redisUrl} 不是有效的 URL`,
+      fixDescription: "设置 REDIS_URL=redis://localhost:6379",
+    };
+  }
 
   const reachable = await new Promise<boolean>((resolve) => {
     const socket = net.createConnection({ host, port, timeout: 3000 });

@@ -3,10 +3,10 @@
  *
  * 数据源：per-tenant DB（lab_events 表）
  */
-import React, { useMemo, useRef, useEffect, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { DatabaseSync } from "node:sqlite";
-import { getRecentEvents, getEventTypes } from "../lab-data/events.js";
+import { getRecentEvents, getEventsByType, getEventTypes } from "../lab-data/events.js";
 import type { EventRow } from "../lab-data/events.js";
 import { DataTable } from "../tui-shared/data-table.js";
 import type { ColumnDef } from "../tui-shared/data-table.js";
@@ -27,7 +27,6 @@ export function EventsPage({ db, refreshKey }: Props) {
   const [paused, setPaused] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [showFilter, setShowFilter] = useState(false);
-  const lastTypeCount = useRef(0);
   const lastEventsRef = useRef<EventRow[]>([]);
 
   useInput((input, key) => {
@@ -44,9 +43,8 @@ export function EventsPage({ db, refreshKey }: Props) {
   const events = useMemo(() => {
     if (!db) return [];
     const result = typeFilter
-      ? getRecentEvents(db, 200).filter((e) => e.eventType === typeFilter)
+      ? getEventsByType(db, typeFilter, 200)
       : getRecentEvents(db, 200);
-    // Cache the latest non-empty result for pause mode
     if (result.length > 0) lastEventsRef.current = result;
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,18 +55,9 @@ export function EventsPage({ db, refreshKey }: Props) {
 
   const eventTypes = useMemo(() => {
     if (!db) return [];
-    const types = getEventTypes(db);
-    lastTypeCount.current = types.length;
-    return types;
+    return getEventTypes(db);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, refreshKey]);
-
-  // Auto-filter: select first type on first load
-  useEffect(() => {
-    if (eventTypes.length > 0 && lastTypeCount.current === eventTypes.length && lastTypeCount.current > 0) {
-      // Optional: auto-select first type
-    }
-  }, [eventTypes.length]);
 
   if (!db) {
     return (

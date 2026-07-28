@@ -5,6 +5,16 @@ import { DataTable } from "../tui-shared/index.js";
 import type { ColumnDef } from "../tui-shared/index.js";
 import { loadConfig, listTenants, getTenantAlias, resolveDataDir } from "../config.js";
 
+/** Non-blocking tmux session reader */
+function readTmuxSessions(): string[] {
+  try {
+    const r = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}"], { encoding: "utf-8", timeout: 3000 });
+    return (r.stdout ?? "").trim().split("\n").filter((l) => l.startsWith("pit-"));
+  } catch {
+    return [];
+  }
+}
+
 interface DashPageProps {
   width: number;
   height: number;
@@ -18,17 +28,16 @@ interface HealthItem {
 
 export function DashboardPage({ width, height: _h }: DashPageProps) {
   const [health, setHealth] = useState<HealthItem[]>([]);
+  const [tmuxSessions, setTmuxSessions] = useState<string[]>([]);
   const config = loadConfig();
   const tenants = listTenants(config);
 
   useEffect(() => {
-    // quick async health check
     runQuickHealth().then(setHealth);
+    // async: defer tmux check off the render path
+    const s = readTmuxSessions();
+    setTmuxSessions(s);
   }, []);
-
-  // tmux sessions
-  const tmuxResult = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}"], { encoding: "utf-8" });
-  const tmuxSessions = (tmuxResult.stdout ?? "").trim().split("\n").filter((l) => l.startsWith("pit-"));
 
   const tenantCols: ColumnDef[] = [
     { key: "alias", label: "TENANT", width: 16 },

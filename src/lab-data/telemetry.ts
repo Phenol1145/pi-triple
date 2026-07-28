@@ -126,16 +126,28 @@ export function modelComparison(
   const a = query(modelA);
   const b = query(modelB);
 
-  const fmt = (v: number | undefined, suffix = "", decimals = 2) => {
+  const fmt = (v: number | undefined | null, suffix = "", decimals = 2) => {
     if (v === undefined || v === null) return "n/a";
     return v.toFixed(decimals) + suffix;
   };
 
+  const fmtPct = (row: Record<string, number> | undefined, field: string) => {
+    if (!row || row.runs === 0) return "n/a";
+    const v = row[field];
+    if (v === undefined || v === null) return "n/a";
+    return (v * 100).toFixed(1) + "%";
+  };
+
+  const fmtCost = (row: Record<string, number> | undefined) => {
+    if (!row || row.runs === 0 || row.cost == null) return "n/a";
+    return "$" + row.cost.toFixed(4);
+  };
+
   results.push({ metric: "Runs", modelA: fmt(a?.runs, "", 0), modelB: fmt(b?.runs, "", 0) });
-  results.push({ metric: "Success %", modelA: fmt((a?.success ?? 0) * 100, "%", 1), modelB: fmt((b?.success ?? 0) * 100, "%", 1) });
-  results.push({ metric: "Avg Latency (ms)", modelA: fmt(a?.latency, "ms", 0), modelB: fmt(b?.latency, "ms", 0) });
-  results.push({ metric: "Avg Cost/run", modelA: a?.cost != null ? `$${a.cost.toFixed(4)}` : "n/a", modelB: b?.cost != null ? `$${b.cost.toFixed(4)}` : "n/a" });
-  results.push({ metric: "Tool Success %", modelA: fmt((a?.toolRate ?? 0) * 100, "%", 1), modelB: fmt((b?.toolRate ?? 0) * 100, "%", 1) });
+  results.push({ metric: "Success %", modelA: fmtPct(a, "success"), modelB: fmtPct(b, "success") });
+  results.push({ metric: "Avg Latency (ms)", modelA: !a || a.runs === 0 ? "n/a" : fmt(a.latency, "ms", 0), modelB: !b || b.runs === 0 ? "n/a" : fmt(b.latency, "ms", 0) });
+  results.push({ metric: "Avg Cost/run", modelA: fmtCost(a), modelB: fmtCost(b) });
+  results.push({ metric: "Tool Success %", modelA: fmtPct(a, "toolRate"), modelB: fmtPct(b, "toolRate") });
 
   return results;
 }

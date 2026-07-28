@@ -131,7 +131,7 @@ describe("telemetry", () => {
     expect(listModels(emptyDb)).toEqual([]);
     const cmp = modelComparison(emptyDb, "X", "Y");
     expect(cmp.length).toBe(5);
-    expect(cmp[0].modelA).toBe("0"); // empty DB = 0 runs
+    expect(cmp[0].modelA).toBe("0"); // empty DB: COUNT=0 → "0"
     emptyDb.close();
   });
 });

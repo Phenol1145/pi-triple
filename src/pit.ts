@@ -13,12 +13,12 @@ import { spawnSync } from "node:child_process";
 import {
   loadConfig, saveConfig, resolveDataDir, type PiTripleConfig,
   resolveTenantId, getTenantAlias, getDefaultTenantId,
-  listTenants, createTenant, removeTenant, migrateDirectoryNames,
+  listTenants, migrateDirectoryNames,
 } from "./config.js";
 import { runDoctor } from "./doctor.js";
 import { launchPi, buildPiLaunch } from "./launcher.js";
 import { migrate } from "./migrate.js";
-import { initSharedLayer, linkTenantToShared, sharedStatus, promoteToShared, installBundledExtensions } from "./shared-layer.js";
+import { initSharedLayer, linkTenantToShared, promoteToShared, installBundledExtensions } from "./shared-layer.js";
 import { emitJson, emitJsonError, ERR } from "./output.js";
 import {
   execTenantLs, execTenantNew, execTenantRm,
@@ -241,140 +241,8 @@ async function cmdStart(flags: Record<string, string>, passthrough: string[]): P
   process.exit(code);
 }
 
-async function cmdStatus(): Promise<void> {
-  printBanner();
-  await runDoctor("quick");
-}
-
 async function cmdDoctor(): Promise<void> {
   await runDoctor("full");
-}
-
-function cmdTenantList(): void {
-  const config = loadConfig();
-  const dataDir = resolveDataDir(config);
-
-  printBanner();
-  console.log("  租户列表:\n");
-
-  const tenants = listTenants(config);
-  if (tenants.length === 0) {
-    console.log("  (无租户，运行 pit tenant new 创建)\n");
-    return;
-  }
-
-  for (const t of tenants) {
-    const mark = t.isDefault ? "\x1b[36m*\x1b[0m" : " ";
-    const model = t.config.model ?? "(默认)";
-
-    const tenantDir = path.join(dataDir, "pi-config", t.id);
-    const extCount = fs.existsSync(path.join(tenantDir, "extensions"))
-      ? fs.readdirSync(path.join(tenantDir, "extensions")).length : 0;
-    const skillCount = fs.existsSync(path.join(tenantDir, "skills"))
-      ? fs.readdirSync(path.join(tenantDir, "skills")).length : 0;
-
-    console.log(
-      `  ${mark} \x1b[1m${t.alias}\x1b[0m  \x1b[2m(${t.id.slice(0, 8)}…)\x1b[0m  model: ${model}  ext: ${extCount}  skills: ${skillCount}${t.isDefault ? "  \x1b[2m(default)\x1b[0m" : ""}`
-    );
-  }
-  console.log("");
-}
-
-async function cmdTenantNew(name?: string, _flags?: Record<string, string>): Promise<void> {
-  const config = loadConfig();
-  const dataDir = resolveDataDir(config);
-
-  printBanner();
-
-  if (!name) {
-    const readline = await import("node:readline");
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    name = await new Promise<string>((resolve) => {
-      rl.question("  租户别名（如 dev, team）: ", (a) => { rl.close(); resolve(a.trim() || "my-team"); });
-    });
-  }
-
-  // createTenant 自动消毒 + 强制唯一检查
-  let id: string;
-  try {
-    id = createTenant(name, {}, config);
-  } catch (err: any) {
-    if (err.message?.startsWith("别名")) {
-      console.log(`  \x1b[31m❌ ${err.message}\x1b[0m`);
-      process.exit(1);
-    }
-    throw err;
-  }
-
-  const tenantDir = path.join(dataDir, "pi-config", id);
-
-  console.log(`  创建租户 "${getTenantAlias(id, config)}" (${id.slice(0, 8)}…)…\n`);
-  await migrate({ tenantId: id });
-
-  // 自动链接共享层
-  const sharedDirPath = path.resolve(process.cwd(), config.sharedDir);
-  if (fs.existsSync(sharedDirPath)) {
-    linkTenantToShared(tenantDir, sharedDirPath);
-    console.log("  ✅ 已链接共享层");
-  }
-
-  console.log(`  ✅ 租户已创建`);
-  console.log(`  启动: pit start --tenant ${getTenantAlias(id, config)}`);
-  console.log("");
-}
-
-function cmdTenantRm(name: string): void {
-  const config = loadConfig();
-  const dataDir = resolveDataDir(config);
-
-  if (!name) {
-    console.log("  用法: pit tenant rm <alias|uuid>");
-    process.exit(1);
-  }
-
-  const result = resolveTenantId(name, config);
-  if (!result.ok) {
-    if (result.reason === "ambiguous") {
-      console.log(`  \x1b[31m❌ "${name}" 匹配多个租户\x1b[0m`);
-    } else {
-      console.log(`  \x1b[31m❌ 租户 "${name}" 不存在\x1b[0m`);
-    }
-    process.exit(1);
-  }
-
-  const id = result.id;
-  const alias = getTenantAlias(id, config);
-
-  // 检查运行中的 tmux 会话
-  const check = spawnSync("tmux", ["has-session", "-t", `pit-${alias}`], { encoding: "utf-8" });
-  if (check.status === 0) {
-    console.log(`  \x1b[33m⚠️  租户 "${alias}" 有运行中的 tmux 会话\x1b[0m`);
-    console.log(`  先执行: pit stop ${alias}`);
-    process.exit(1);
-  }
-
-  // 列出将被删除的目录
-  const dirs = ["pi-config", "sessions", "workspaces", "mailbox"]
-    .map((sub) => path.join(dataDir, sub, id))
-    .filter((d) => fs.existsSync(d));
-
-  if (dirs.length === 0) {
-    removeTenant(id, config);
-    console.log(`  ✅ 租户 "${alias}" (${id.slice(0, 8)}…) 已从配置移除（无数据目录）`);
-    return;
-  }
-
-  console.log(`  将删除租户 "${alias}" (${id.slice(0, 8)}…):\n`);
-  for (const d of dirs) {
-    console.log(`  \x1b[2m  📁 ${path.relative(process.cwd(), d)}\x1b[0m`);
-  }
-  console.log("");
-
-  for (const d of dirs) {
-    fs.rmSync(d, { recursive: true, force: true });
-  }
-  removeTenant(id, config);
-  console.log(`  ✅ 租户 "${alias}" 已删除\n`);
 }
 
 function cmdConfig(subcommand?: string): void {
@@ -475,7 +343,7 @@ async function cmdStartBg(flags: Record<string, string>, passthrough: string[]):
 }
 
 function cmdAttach(name: string): void {
-  if (!name) { cmdLs(); console.log("  用法: pit attach <name>"); return; }
+  if (!name) { console.log("  用法: pit attach <name>"); return; }
   if (!hasTmux()) { console.log("  \x1b[31m❌ tmux 未安装\x1b[0m"); process.exit(1); }
 
   const session = tmuxSessionName(name);
@@ -491,52 +359,6 @@ function cmdAttach(name: string): void {
     env: { ...process.env, TERM: process.env.TERM ?? "xterm-256color" },
   });
   process.exit(result.status ?? 0);
-}
-
-function cmdLs(): void {
-  printBanner();
-  if (!hasTmux()) { console.log("  tmux 未安装\n"); return; }
-
-  const result = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}:#{session_windows}:#{session_created}"], { encoding: "utf-8" });
-  const sessions = (result.stdout ?? "").trim().split("\n")
-    .filter((l) => l.startsWith("pit-"))
-    .map((l) => {
-      const [full, win, created] = l.split(":");
-      return { name: full.replace(/^pit-/, ""), windows: parseInt(win ?? "1"), created: new Date(parseInt(created ?? "0") * 1000) };
-    });
-
-  if (sessions.length === 0) {
-    console.log("  无后台会话");
-    console.log("  启动: pit start --bg --name coding");
-  } else {
-    console.log("  \x1b[2mNAME              WINDOWS  CREATED\x1b[0m");
-    for (const s of sessions) {
-      const age = formatAge(Date.now() - s.created.getTime());
-      console.log(`  \x1b[1m${s.name.padEnd(18)}\x1b[0m${String(s.windows).padEnd(9)}${age}`);
-    }
-    console.log("\n  接入: \x1b[36mpit attach <name>\x1b[0m · 停止: \x1b[36mpit stop <name>\x1b[0m");
-  }
-  console.log("");
-}
-
-function cmdStop(name: string): void {
-  if (!name) { console.log("  用法: pit stop <name>"); return; }
-  if (name === "--all") {
-    const result = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}"], { encoding: "utf-8" });
-    const pits = (result.stdout ?? "").trim().split("\n").filter((s) => s.startsWith("pit-"));
-    for (const s of pits) { spawnSync("tmux", ["kill-session", "-t", s]); console.log(`  ✅ 已停止 ${s.replace(/^pit-/, "")}`); }
-    if (pits.length === 0) console.log("  无后台会话");
-    return;
-  }
-  const result = spawnSync("tmux", ["kill-session", "-t", tmuxSessionName(name)], { encoding: "utf-8" });
-  console.log(result.status === 0 ? `  ✅ 已停止 "${name}"` : `  \x1b[31m❌ 会话 "${name}" 不存在\x1b[0m`);
-}
-
-function formatAge(ms: number): string {
-  const mins = Math.floor(ms / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  return hours < 24 ? `${hours}h ${mins % 60}m ago` : `${Math.floor(hours / 24)}d ago`;
 }
 
 // ─── Mode Resolution ─────────────────────────────────────────

@@ -6,18 +6,20 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 /**
- * 打开 SQLite 数据库（read-write + 只发 SELECT）。
- * WAL 模式 + busy_timeout 支持多进程安全读。
+ * 打开 SQLite 数据库。先尝试只读模式，失败再 fallback 读写。
+ * 如果文件不存在则跳过只读尝试直接创建（WAL + busy_timeout）。
  */
 export function openDb(filePath: string): DatabaseSync {
-  // 确保父目录存在（首次可能没有 agent-lab/ 目录）
-  const dir = path.dirname(filePath);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+  if (existsSync(filePath)) {
+    try {
+      return new DatabaseSync(filePath, { readOnly: true });
+    } catch {
+      // readOnly failed (e.g. WAL without -shm), fallback to read-write
+    }
   }
 
   const db = new DatabaseSync(filePath);
@@ -25,6 +27,19 @@ export function openDb(filePath: string): DatabaseSync {
   db.exec("PRAGMA journal_mode=WAL");
   db.exec("PRAGMA synchronous=NORMAL");
   return db;
+}
+
+/**
+ * 尝试只读打开，文件不存在或不可读时返回 null。
+ * TUI 监控页面用这个，避免在共享层创建空 DB。
+ */
+export function openReadOnlyOrNull(filePath: string): DatabaseSync | null {
+  if (!existsSync(filePath)) return null;
+  try {
+    return new DatabaseSync(filePath, { readOnly: true });
+  } catch {
+    return null;
+  }
 }
 
 /** 共享 telemetry DB 路径 */

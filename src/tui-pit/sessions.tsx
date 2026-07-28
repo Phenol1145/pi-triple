@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
 import { spawnSync } from "node:child_process";
 import {
@@ -68,8 +68,12 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [mode, setMode] = useState<"list" | "start-tenant" | "delete-confirm">("list");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<TmuxSession[]>([]);
 
-  const sessions = listTmuxSessions();
+  // Defer tmux I/O off the render path
+  useEffect(() => { setSessions(listTmuxSessions()); }, []);
+  const refreshSessions = () => setSessions(listTmuxSessions());
+
   const config = loadConfig();
   const tenants = listTenants(config);
 
@@ -100,6 +104,7 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
         return;
       }
       if (input === "s") { setMode("start-tenant"); return; }
+      if (input === "r") { refreshSessions(); return; }
     }
     if (mode === "delete-confirm" && key.escape) {
       setMode("list");
@@ -117,6 +122,7 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
           message={`Stop session "${deleteTarget}"?`}
           onConfirm={() => {
             spawnSync("tmux", ["kill-session", "-t", `pit-${deleteTarget}`]);
+            refreshSessions();
             setMode("list");
             setDeleteTarget(null);
           }}
@@ -167,7 +173,7 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
     <Box flexDirection="column" gap={1}>
       <Box justifyContent="space-between">
         <Text bold underline>Background Sessions ({sessions.length})</Text>
-        <Text dimColor>[s] start  [a] attach  [x] stop</Text>
+        <Text dimColor>[s] start  [a] attach  [x] stop  [r] refresh</Text>
       </Box>
 
       {sessions.length === 0 ? (

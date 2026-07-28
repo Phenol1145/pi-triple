@@ -10,7 +10,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   loadConfig, resolveDataDir,
-  resolveTenantId, getTenantAlias, getDefaultTenantId,
+  resolveTenantId, getTenantAlias,
   listTenants, createTenant, removeTenant,
 } from "./config.js";
 import { runDoctorStructured, type DoctorReport } from "./doctor.js";
@@ -273,71 +273,6 @@ export async function execStop(name: string): Promise<CommandResult> {
     return { ok: true, message: `  ✅ 已停止 "${name}"`, data: { stopped: [name] } };
   }
   return { ok: false, message: "", error: { code: ERR.SESSION_NOT_FOUND, message: `会话 "${name}" 不存在` } };
-}
-
-export async function execStartBg(name: string, tenantInput?: string): Promise<CommandResult> {
-  if (!hasTmux()) {
-    return { ok: false, message: "", error: { code: ERR.TMUX_NOT_INSTALLED, message: "tmux 未安装" } };
-  }
-
-  const config = loadConfig();
-  const tenantId = tenantInput
-    ? (resolveTenantId(tenantInput, config).ok ? (resolveTenantId(tenantInput, config) as { ok: true; id: string }).id : "")
-    : getDefaultTenantId(config);
-
-  if (tenantInput && !resolveTenantId(tenantInput, config).ok) {
-    const r = resolveTenantId(tenantInput, config);
-    if (!r.ok) {
-      return {
-        ok: false,
-        message: "",
-        error: { code: r.reason === "ambiguous" ? ERR.TENANT_AMBIGUOUS : ERR.TENANT_NOT_FOUND, message: `租户 "${tenantInput}" 不存在` },
-      };
-    }
-  }
-
-  const alias = getTenantAlias(tenantId, config);
-  const sessionName = name || `${alias}-${Date.now().toString(36)}`;
-  const session = tmuxSessionName(sessionName);
-
-  const check = spawnSync("tmux", ["has-session", "-t", session], { encoding: "utf-8" });
-  if (check.status === 0) {
-    return {
-      ok: false,
-      message: "",
-      error: { code: ERR.HANDOFF_REQUIRED, message: `会话 "${sessionName}" 已在运行。接入: pit attach ${sessionName}` },
-    };
-  }
-
-  const { buildPiLaunch } = await import("./launcher.js");
-  const launch = await buildPiLaunch(tenantId, {
-    provider: config.tenants[tenantId]?.provider,
-    model: config.tenants[tenantId]?.model,
-    continueSession: false,
-    extraArgs: [],
-  });
-
-  const tmuxArgs = [
-    "new-session", "-d", "-s", session,
-    "-c", launch.cwd,
-    "-x", "200", "-y", "50",
-  ];
-  for (const [k, v] of Object.entries(launch.env)) {
-    if (k === "PI_CODING_AGENT_DIR" || k === "DATA_DIR" || k === "PI_TENANT") {
-      tmuxArgs.push("-e", `${k}=${v}`);
-    }
-  }
-  tmuxArgs.push("--", launch.cmd, ...launch.args);
-
-  const result = spawnSync("tmux", tmuxArgs, { encoding: "utf-8" });
-  if (result.status === 0) {
-    return {
-      ok: true,
-      message: `  \x1b[32m✅ 后台会话已启动\x1b[0m\n  名称: ${sessionName} · 租户: ${alias} (${tenantId.slice(0, 8)}…)\n  接入: \x1b[36mpit attach ${sessionName}\x1b[0m`,
-      data: { name: sessionName, tenantId: tenantId.slice(0, 8), alias },
-    };
-  }
-  return { ok: false, message: "", error: { code: ERR.HANDOFF_REQUIRED, message: `启动失败: ${result.stderr}` } };
 }
 
 export async function execSharedStatus(): Promise<CommandResult> {
