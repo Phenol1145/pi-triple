@@ -125,8 +125,11 @@ export function PitApp() {
       return;
     }
 
-    // Quit
-    if (input === "q" && !key.ctrl) process.exit(0);
+    // Quit：/quit 命令（避免误触）；Ctrl+C 始终可用
+    if (input === "q" && !key.ctrl) {
+      setNotification("按 q 已停用——输入 /quit 退出（Ctrl+C 也可）");
+      return;
+    }
   });
 
   // Execute command from TUI
@@ -181,6 +184,10 @@ export function PitApp() {
       case "start":
         result = await execStartBgInTui(args[0] || "", args[1] || "");
         break;
+      case "quit":
+      case "exit":
+        process.exit(0);
+        break;
       case "help":
         result = {
           ok: true,
@@ -197,6 +204,9 @@ export function PitApp() {
             "  tenant rm <alias>         删除租户",
             "  shared status             共享层状态",
             "  help                      此帮助",
+            "  quit                      退出 pit ui",
+            "  switch <name>             切换会话（tmux 内）",
+            "  detach                    脱离当前会话",
           ].join("\n"),
         };
         break;
@@ -316,7 +326,7 @@ export function PitApp() {
       tabs={outputLines || commandMode ? undefined : TABS}
       activeTab={activeTab}
       onTabSelect={setActiveTab}
-      hints={`[1-5] Tab · [/] Command · [q] Quit${outputLines ? " · [Esc] Back" : ""}`}
+      hints={`[1-5] Tab · [/] Command · /quit 退出${outputLines ? " · [Esc] Back" : ""}`}
     >
       <Box flexDirection="column" width={commandMode ? undefined : safeW} paddingX={1}>
         {content}
