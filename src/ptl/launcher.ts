@@ -20,11 +20,11 @@ import { randomUUID } from "node:crypto";
 function abs(p: string): string {
   return path.resolve(process.cwd(), p);
 }
-import { detectPlatform } from "./platform/index.js";
-import { createLogger } from "./observability/logger.js";
-import { EnvCredentialProvider } from "./storage/credential-provider.js";
-import { ModelRouter } from "./model-router/router.js";
-import { WorkspaceManager } from "./workspace/manager.js";
+import { detectPlatform } from "../shared/platform/index.js";
+import { createLogger } from "../shared/observability/logger.js";
+import { EnvCredentialProvider } from "../shared/credential-provider.js";
+import { ModelRouter } from "../shared/model-router/router.js";
+import { WorkspaceManager } from "../shared/workspace/manager.js";
 import { ensureTenantLinks } from "./shared-layer.js";
 import { getTenantAlias, resolveDataDir } from "./config.js";
 
@@ -142,7 +142,7 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
   let model = options.model;
 
   if (!provider || !model) {
-    const platform = detectPlatform();
+
     const credentials = new EnvCredentialProvider();
     const modelRouter = new ModelRouter(credentials, logger);
     await modelRouter.initialize();

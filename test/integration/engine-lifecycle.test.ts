@@ -3,19 +3,19 @@ import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";
 import { Redis } from "ioredis";
-import { detectPlatform } from "../../src/platform/index.js";
-import { createLogger } from "../../src/observability/logger.js";
-import { createMetrics } from "../../src/observability/metrics.js";
-import { AuditWriter } from "../../src/observability/audit.js";
-import { RedisSessionStore } from "../../src/storage/redis-session-store.js";
-import { EnvCredentialProvider } from "../../src/storage/credential-provider.js";
-import { WorkspaceManager } from "../../src/workspace/manager.js";
-import { ModelRouter } from "../../src/model-router/router.js";
-import { ToolRegistry } from "../../src/tools/registry.js";
-import { ToolPlatform } from "../../src/tools/platform.js";
-import { SessionPool, type SessionPoolConfig } from "../../src/core/session-pool.js";
-import { AgentEngine } from "../../src/core/agent-engine.js";
-import type { AgentEvent, ManagedSessionInfo, Result } from "../../src/core/types.js";
+import { detectPlatform } from "../../src/shared/platform/index.js";
+import { createLogger } from "../../src/shared/observability/logger.js";
+import { createMetrics } from "../../src/pth/observability/metrics.js";
+import { AuditWriter } from "../../src/pth/observability/audit.js";
+import { RedisSessionStore } from "../../src/pth/storage/redis-session-store.js";
+import { EnvCredentialProvider } from "../../src/shared/credential-provider.js";
+import { WorkspaceManager } from "../../src/shared/workspace/manager.js";
+import { ModelRouter } from "../../src/shared/model-router/router.js";
+import { ToolRegistry } from "../../src/pth/tools/registry.js";
+import { ToolPlatform } from "../../src/pth/tools/platform.js";
+import { SessionPool, type SessionPoolConfig } from "../../src/pth/core/session-pool.js";
+import { AgentEngine } from "../../src/pth/core/agent-engine.js";
+import type { AgentEvent, ManagedSessionInfo, Result } from "../../src/pth/core/types.js";
 
 // ── helpers ──────────────────────────────────────────────────────────
 

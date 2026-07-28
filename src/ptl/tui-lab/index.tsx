@@ -7,7 +7,7 @@
  *   pit lab --tenant dev      # 指定租户
  *   pit lab --global          # Telemetry 全局，Arena/Events 仍需选租户
  */
-import React from "react";
+
 import { render } from "ink";
 import { LabApp } from "./app.js";
 import { loadConfig, getDefaultTenantId, resolveTenantId, getTenantAlias } from "../config.js";

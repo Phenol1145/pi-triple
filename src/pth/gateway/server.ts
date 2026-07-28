@@ -4,7 +4,7 @@ import type { Redis } from "ioredis";
 import type { AgentEngine } from "../core/agent-engine.js";
 import type { ToolPlatform } from "../tools/platform.js";
 import type { Metrics } from "../observability/metrics.js";
-import type { Logger } from "../observability/logger.js";
+import type { Logger } from "../../shared/observability/logger.js";
 import { createAuthHook } from "./auth.js";
 import { registerSessionRoutes } from "./routes-sessions.js";
 import { registerSelfRoutes } from "./routes-self.js";

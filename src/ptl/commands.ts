@@ -7,13 +7,13 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+
 import {
   loadConfig, resolveDataDir,
   resolveTenantId, getTenantAlias,
   listTenants, createTenant, removeTenant,
 } from "./config.js";
-import { runDoctorStructured, type DoctorReport } from "./doctor.js";
+import { runDoctorStructured } from "./doctor.js";
 import { sharedStatus } from "./shared-layer.js";
 import { ERR } from "./output.js";
 import {
@@ -25,7 +25,7 @@ import {
   formatAge,
   startPitSession,
 } from "./tmux.js";
-import { buildPiLaunch } from "./launcher.js";
+
 
 // ─── Types ───────────────────────────────────────────────────
 

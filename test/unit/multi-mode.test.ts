@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { emitJson, emitJsonError, ERR } from "../../src/output.js";
+import { emitJson, emitJsonError, ERR } from "../../src/ptl/output.js";
 import {
   execTenantLs,
   execTenantRm,
@@ -9,7 +9,7 @@ import {
   execStatus,
   execSharedStatus,
   type CommandResult,
-} from "../../src/commands.js";
+} from "../../src/ptl/commands.js";
 
 // ─── output.ts ───────────────────────────────────────────────
 

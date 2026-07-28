@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ModelRouter } from "../../src/model-router/router.js";
+import { ModelRouter } from "../../src/shared/model-router/router.js";
 
 describe("ModelRouter", () => {
   let router: ModelRouter;

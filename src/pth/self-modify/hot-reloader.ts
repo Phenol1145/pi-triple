@@ -2,7 +2,7 @@ import { watch, type FSWatcher } from "chokidar";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Logger } from "../observability/logger.js";
+import type { Logger } from "../../shared/observability/logger.js";
 import type { Metrics } from "../observability/metrics.js";
 
 export interface ReloadResult {

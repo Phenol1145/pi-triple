@@ -15,7 +15,7 @@ import {
   killPitSession,
   buildTmuxSessionArgs,
   startPitSession,
-} from "../../src/tmux.js";
+} from "../../src/ptl/tmux.js";
 
 describe("tmux module", () => {
   beforeEach(() => {

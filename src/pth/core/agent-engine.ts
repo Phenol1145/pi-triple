@@ -3,13 +3,13 @@ import {
   SessionManager,
   SDK_EVENTS,
   type PlatformAgentSession,
-} from "../sdk-adapter/index.js";
+} from "../../shared/sdk-adapter/index.js";
 import type { SessionPool, PoolSession } from "./session-pool.js";
-import type { ModelRouter } from "../model-router/router.js";
-import type { WorkspaceManager } from "../workspace/manager.js";
+import type { ModelRouter } from "../../shared/model-router/router.js";
+import type { WorkspaceManager } from "../../shared/workspace/manager.js";
 import type { SessionStore } from "../storage/interfaces.js";
 import type { ToolPlatform } from "../tools/platform.js";
-import type { Logger } from "../observability/logger.js";
+import type { Logger } from "../../shared/observability/logger.js";
 import type { Metrics } from "../observability/metrics.js";
 import type { AgentEvent, CreateSessionOpts, ManagedSessionInfo, Result, VersionSnapshot } from "./types.js";
 import { createBridge } from "./async-iterable-bridge.js";

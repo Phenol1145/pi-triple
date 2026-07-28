@@ -1,5 +1,5 @@
 import { ModelRuntime, type ModelRuntimeInstance } from "../sdk-adapter/index.js";
-import type { CredentialProvider } from "../storage/interfaces.js";
+import type { CredentialProvider } from "../credential-provider.js";
 import type { Logger } from "../observability/logger.js";
 
 type ResolvedModel = ReturnType<ModelRuntimeInstance["getModel"]>;

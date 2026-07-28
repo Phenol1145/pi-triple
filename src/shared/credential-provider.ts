@@ -1,4 +1,6 @@
-import type { CredentialProvider } from "./interfaces.js";
+export interface CredentialProvider {
+  getApiKey(tenant: string, provider: string): Promise<string | null>;
+}
 
 export class EnvCredentialProvider implements CredentialProvider {
   private envMap: Record<string, string>;

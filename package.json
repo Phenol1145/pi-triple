@@ -3,13 +3,12 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "pit": "./dist/pit.js"
+    "pit": "./dist/ptl/pit.js",
+    "pth": "./dist/pth/main.js"
   },
   "files": [
     "dist",
-    "config",
     "extensions",
-    "scripts",
     "README.md"
   ],
   "engines": {
@@ -17,11 +16,11 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsx watch src/main.ts",
-    "start": "node dist/main.js",
+    "pit:dev": "tsx src/ptl/pit.ts",
+    "pth:dev": "tsx watch src/pth/main.ts",
+    "pth:start": "node dist/pth/main.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cli": "tsx src/cli.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -36,7 +35,6 @@
     "fastify": "^5.0.0",
     "ink": "^5.2.1",
     "ioredis": "^5.4.0",
-    "json-logic-js": "^2.0.0",
     "marked": "^15.0.12",
     "pino": "^9.0.0",
     "prom-client": "^15.0.0",
@@ -44,7 +42,6 @@
     "string-width": "^7.2.0"
   },
   "devDependencies": {
-    "@types/json-logic-js": "^2.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.31",
     "ink-testing-library": "^4.0.0",

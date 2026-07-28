@@ -8,7 +8,7 @@ import {
   getConfigValue,
   setConfigValue,
   unsetConfigValue,
-} from "../../src/config.js";
+} from "../../src/ptl/config.js";
 
 describe("config get/set/unset", () => {
   let tmpHome: string;

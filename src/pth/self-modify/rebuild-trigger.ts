@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Logger } from "../observability/logger.js";
+import type { Logger } from "../../shared/observability/logger.js";
 import type { AuditWriter } from "../observability/audit.js";
 
 export class RebuildTrigger {
