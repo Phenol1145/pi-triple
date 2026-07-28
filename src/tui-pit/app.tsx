@@ -281,6 +281,7 @@ export function PitApp() {
           onSubmit={(s) => { setCommandMode(false); executeCommand(s); }}
           onCancel={() => setCommandMode(false)}
           completions={completions}
+          width={Math.max(60, Math.min(columns - 2, 140))}
         />
       </Box>
     );
@@ -317,7 +318,7 @@ export function PitApp() {
       onTabSelect={setActiveTab}
       hints={`[1-5] Tab · [/] Command · [q] Quit${outputLines ? " · [Esc] Back" : ""}`}
     >
-      <Box flexDirection="column" width={safeW} paddingX={1}>
+      <Box flexDirection="column" width={commandMode ? undefined : safeW} paddingX={1}>
         {content}
         {tipsExtra}
       </Box>

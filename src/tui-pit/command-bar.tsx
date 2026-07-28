@@ -16,6 +16,8 @@ interface CommandBarProps {
   onCancel: () => void;
   /** "完整命令路径" → 参数候选，如 { "stop": [...], "tenant rm": [...] } */
   completions?: Record<string, string[]>;
+  /** 可用宽度（终端列数），用于截断长描述 */
+  width?: number;
 }
 
 interface CmdNode {
@@ -123,7 +125,7 @@ function resolveLevel(input: string, completions?: Record<string, string[]>): Le
   };
 }
 
-export function CommandBar({ visible, onSubmit, onCancel, completions }: CommandBarProps) {
+export function CommandBar({ visible, onSubmit, onCancel, completions, width = 80 }: CommandBarProps) {
   const [input, setInput] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
 
@@ -206,8 +208,12 @@ export function CommandBar({ visible, onSubmit, onCancel, completions }: Command
   const winEnd = Math.min(winStart + VISIBLE, items.length);
   const slice = items.slice(winStart, winEnd);
 
+  // 名称列宽：最长命令名 + 缩进，描述截断到剩余宽度
+  const nameCol = Math.min(18, Math.max(...items.map((i) => i.name.length), 8) + 2);
+  const descMax = Math.max(10, width - nameCol - 8);
+
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width}>
       {/* 输入行 */}
       <Box>
         <Text color="cyan">/ </Text>
@@ -229,13 +235,16 @@ export function CommandBar({ visible, onSubmit, onCancel, completions }: Command
           {slice.map((item, i) => {
             const realIdx = winStart + i;
             const isSel = realIdx === selected;
+            const marker = isSel ? "❯ " : "  ";
+            const namePadded = item.name.padEnd(nameCol);
             return (
               <Box key={`${realIdx}-${item.name}`}>
                 <Text color={isSel ? "cyan" : undefined} bold={isSel}>
-                  {isSel ? "  ❯ " : "    "}
-                  {item.name}
+                  {"  "}{marker}{namePadded}
                 </Text>
-                {item.desc ? <Text dimColor>  —  {item.desc}</Text> : null}
+                {item.desc ? (
+                  <Text dimColor wrap="truncate">{item.desc.length > descMax ? item.desc.slice(0, descMax - 1) + "…" : item.desc}</Text>
+                ) : null}
               </Box>
             );
           })}
