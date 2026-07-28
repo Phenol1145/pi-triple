@@ -10,6 +10,7 @@
  */
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { Mailbox } from "./mailbox.js";
 import { Presence } from "./presence.js";
@@ -32,7 +33,7 @@ function resolveMailboxRoot(): string {
     const dataDir = path.resolve(agentDir, "..", "..");
     return path.join(dataDir, "mailbox");
   }
-  return path.resolve(".pi-platform-data", "mailbox");
+  return path.join(process.env.PI_TRIPLE_HOME ?? path.join(os.homedir(), ".pi-triple"), "data", "mailbox");
 }
 
 function resolveTenantId(): string {

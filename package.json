@@ -22,11 +22,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "cli": "tsx src/cli.ts",
-    "doctor": "tsx src/doctor.ts",
-    "migrate": "tsx src/migrate.ts",
-    "create-tenant": "tsx src/create-tenant.ts",
-    "tui": "tsx src/cli-pi.ts",
-    "tui:legacy": "tsx src/tui/index.tsx",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

@@ -39,18 +39,10 @@ export function linkTenantToShared(tenantDir: string, sharedDir: string): void {
       }
     } catch { /* 不存在 */ }
 
-    // 逐个共享项创建 symlink
+    // 逐个共享项创建相对 symlink（跳过已存在的）
     for (const entry of fs.readdirSync(sharedSubDir, { withFileTypes: true })) {
       const linkPath = path.join(tenantSubDir, entry.name);
-
-      // 已存在（租户自有或已链接）则跳过
-      try { fs.lstatSync(linkPath); continue; } catch { /* 不存在，继续 */ }
-    }
-
-    // 重新遍历创建（上面只是检查）
-    for (const entry of fs.readdirSync(sharedSubDir, { withFileTypes: true })) {
-      const linkPath = path.join(tenantSubDir, entry.name);
-      try { fs.lstatSync(linkPath); continue; } catch { /* ok */ }
+      try { fs.lstatSync(linkPath); continue; } catch { /* ok，不存在 */ }
 
       const target = path.join(sharedSubDir, entry.name);
       const relTarget = path.relative(tenantSubDir, target);
@@ -197,6 +189,7 @@ export function installBundledExtensions(sharedDir: string): string[] {
  * 覆盖式同步 bundled 扩展（用于 pit update --all）。
  * 共享层的 bundled 扩展由平台托管，更新时直接覆盖；
  * 用户自定义扩展不应放在与 bundled 同名的目录。
+ * 也负责剪枝：.bundled-manifest 记录平台托管名单，旧 bundled 中已移除的条目自动删除。
  */
 export function syncBundledExtensions(sharedDir: string): string[] {
   const synced: string[] = [];
@@ -208,19 +201,56 @@ export function syncBundledExtensions(sharedDir: string): string[] {
   const targetExtDir = path.join(sharedDir, "extensions");
   fs.mkdirSync(targetExtDir, { recursive: true });
 
-  for (const entry of fs.readdirSync(bundledDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const src = path.join(bundledDir, entry.name);
-    const dst = path.join(targetExtDir, entry.name);
+  // 1. 当前 bundled 名单
+  const bundledEntries = new Set(
+    fs.readdirSync(bundledDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name),
+  );
 
-    // 目标是 symlink（不應發生）或目录时先删除再复制，保证完全同步
+  // 2. 读旧 manifest，剪枝：删除"曾在旧 manifest 但不在新 bundled"的共享层条目
+  const manifestPath = path.join(targetExtDir, ".bundled-manifest");
+  const oldManifest = readManifest(manifestPath);
+  for (const name of oldManifest) {
+    if (!bundledEntries.has(name)) {
+      const p = path.join(targetExtDir, name);
+      try { fs.rmSync(p, { recursive: true, force: true }); } catch { /* ok */ }
+    }
+  }
+
+  // 3. 覆盖式同步 bundled → 共享层
+  for (const name of bundledEntries) {
+    const src = path.join(bundledDir, name);
+    const dst = path.join(targetExtDir, name);
+
+    // 目标存在：非目录跳过（不能覆盖），symlink 先删
     try {
       const st = fs.lstatSync(dst);
       if (st.isSymbolicLink()) fs.unlinkSync(dst);
     } catch { /* 不存在 */ }
     fs.cpSync(src, dst, { recursive: true, force: true });
-    synced.push(entry.name);
+    synced.push(name);
   }
 
+  // 4. 写新 manifest
+  writeManifest(manifestPath, [...bundledEntries]);
+
   return synced;
+}
+
+/** 读 .bundled-manifest（纯文本，每行一个目录名） */
+function readManifest(path: string): Set<string> {
+  try {
+    const content = fs.readFileSync(path, "utf-8");
+    return new Set(content.split("\n").map((l) => l.trim()).filter(Boolean).filter((l) => !l.startsWith("#")));
+  } catch {
+    return new Set();
+  }
+}
+
+/** 写 .bundled-manifest */
+function writeManifest(path: string, entries: string[]): void {
+  try {
+    fs.writeFileSync(path, entries.join("\n") + "\n", "utf-8");
+  } catch { /* best-effort */ }
 }

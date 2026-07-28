@@ -20,7 +20,6 @@ import { randomUUID } from "node:crypto";
 function abs(p: string): string {
   return path.resolve(process.cwd(), p);
 }
-import { Redis } from "ioredis";
 import { detectPlatform } from "./platform/index.js";
 import { createLogger } from "./observability/logger.js";
 import { EnvCredentialProvider } from "./storage/credential-provider.js";

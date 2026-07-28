@@ -13,46 +13,20 @@ import {
   getTenantAlias,
 } from "../config.js";
 import { buildPiLaunch } from "../launcher.js";
+import {
+  listPitSessions,
+  formatAge,
+  killPitSession,
+  buildTmuxSessionArgs,
+  startPitSession,
+  type PitSession,
+} from "../tmux.js";
 
 interface SessionsPageProps {
   width: number;
   height: number;
   unmount?: () => void;
   enabled?: boolean;
-}
-
-interface TmuxSession {
-  name: string;
-  windows: number;
-  created: Date;
-}
-
-function hasTmux(): boolean {
-  return spawnSync("tmux", ["-V"], { encoding: "utf-8" }).status === 0;
-}
-
-function listTmuxSessions(): TmuxSession[] {
-  if (!hasTmux()) return [];
-  const result = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}:#{session_windows}:#{session_created}"], { encoding: "utf-8" });
-  return (result.stdout ?? "")
-    .trim()
-    .split("\n")
-    .filter((l) => l.startsWith("pit-"))
-    .map((l) => {
-      const [full, win, created] = l.split(":");
-      return {
-        name: full.replace(/^pit-/, ""),
-        windows: parseInt(win ?? "1", 10),
-        created: new Date(parseInt(created ?? "0", 10) * 1000),
-      };
-    });
-}
-
-function formatAge(ms: number): string {
-  const mins = Math.floor(ms / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  return hours < 24 ? `${hours}h ${mins % 60}m ago` : `${Math.floor(hours / 24)}d ago`;
 }
 
 export function handoffTerminal(cmd: string, args: string[], unmount?: () => void) {
@@ -66,11 +40,11 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [mode, setMode] = useState<"list" | "start-tenant" | "delete-confirm">("list");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<TmuxSession[]>([]);
+  const [sessions, setSessions] = useState<PitSession[]>([]);
 
   // Defer tmux I/O off the render path
-  useEffect(() => { setSessions(listTmuxSessions()); }, []);
-  const refreshSessions = () => setSessions(listTmuxSessions());
+  useEffect(() => { setSessions(listPitSessions()); }, []);
+  const refreshSessions = () => setSessions(listPitSessions());
 
   const config = loadConfig();
   const tenants = listTenants(config);
@@ -124,7 +98,7 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
         <ConfirmDialog
           message={`Stop session "${deleteTarget}"?`}
           onConfirm={() => {
-            spawnSync("tmux", ["kill-session", "-t", `pit-${deleteTarget}`]);
+            killPitSession(deleteTarget);
             refreshSessions();
             setMode("list");
             setDeleteTarget(null);
@@ -149,22 +123,13 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
           title="Select tenant to start session"
           items={items}
           onSelect={async (tenantId) => {
+            const alias = getTenantAlias(tenantId, config);
+            const name = `${alias}-${Date.now().toString(36)}`;
             const launch = await buildPiLaunch(tenantId, {});
-            handoffTerminal(
-              "tmux",
-              [
-                "new-session",
-                "-s",
-                `pit-${getTenantAlias(tenantId, config)}-${Date.now().toString(36)}`,
-                "-c",
-                launch.cwd,
-                "-x", "200", "-y", "50",
-                "--",
-                launch.cmd,
-                ...launch.args,
-              ],
-              unmount,
-            );
+            // B4 fix: use buildTmuxSessionArgs to inject PI_/AGENT_LAB_ env vars
+            const session = `pit-${name}`;
+            const args = buildTmuxSessionArgs(launch, session, false);
+            handoffTerminal("tmux", args, unmount);
           }}
           onCancel={() => setMode("list")}
         />

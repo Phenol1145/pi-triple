@@ -16,6 +16,16 @@ import {
 import { runDoctorStructured, type DoctorReport } from "./doctor.js";
 import { sharedStatus } from "./shared-layer.js";
 import { ERR } from "./output.js";
+import {
+  hasTmux,
+  hasPitSession,
+  listPitSessions,
+  sessionsForTenant,
+  killPitSession,
+  formatAge,
+  startPitSession,
+} from "./tmux.js";
+import { buildPiLaunch } from "./launcher.js";
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -25,23 +35,6 @@ export interface CommandResult {
   data?: any;
   error?: { code: string; message: string; candidates?: string[] };
   handoff?: { cmd: string; args: string[] };
-}
-
-// ─── Helpers ─────────────────────────────────────────────────
-
-function hasTmux(): boolean {
-  return spawnSync("tmux", ["-V"], { encoding: "utf-8" }).status === 0;
-}
-
-function tmuxSessionName(name: string): string {
-  return `pit-${name}`;
-}
-
-function formatAge(ms: number): string {
-  const mins = Math.floor(ms / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  return hours < 24 ? `${hours}h ${mins % 60}m ago` : `${Math.floor(hours / 24)}d ago`;
 }
 
 // ─── Commands ────────────────────────────────────────────────
@@ -159,13 +152,13 @@ export async function execTenantRm(input: string): Promise<CommandResult> {
   const id = result.id;
   const alias = getTenantAlias(id, config);
 
-  // Check running tmux sessions
-  const check = spawnSync("tmux", ["has-session", "-t", `pit-${alias}`], { encoding: "utf-8" });
-  if (check.status === 0) {
+  // Check running tmux sessions (B3 fix: prefix match, not exact alias match)
+  const running = sessionsForTenant(alias);
+  if (running.length > 0) {
     return {
       ok: false,
       message: "",
-      error: { code: ERR.HANDOFF_REQUIRED, message: `租户 "${alias}" 有运行中的会话，先执行: pit stop ${alias}` },
+      error: { code: ERR.HANDOFF_REQUIRED, message: `租户 "${alias}" 有 ${running.length} 个运行中的会话 (${running.map((s) => s.replace(/^pit-/, "")).join(", ")})，先执行: pit stop --all 或逐个停止` },
     };
   }
 
@@ -213,17 +206,7 @@ export async function execStatus(): Promise<CommandResult> {
 }
 
 export async function execLs(): Promise<CommandResult> {
-  if (!hasTmux()) {
-    return { ok: true, message: "  tmux 未安装", data: { sessions: [] } };
-  }
-
-  const result = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}:#{session_windows}:#{session_created}"], { encoding: "utf-8" });
-  const sessions = (result.stdout ?? "").trim().split("\n")
-    .filter((l) => l.startsWith("pit-"))
-    .map((l) => {
-      const [full, win, created] = l.split(":");
-      return { name: full.replace(/^pit-/, ""), windows: parseInt(win ?? "1"), created: new Date(parseInt(created ?? "0") * 1000) };
-    });
+  const sessions = listPitSessions();
 
   if (sessions.length === 0) {
     return { ok: true, message: "  无后台会话\n  启动: pit start --bg --name coding", data: { sessions: [] } };
@@ -250,15 +233,14 @@ export async function execStop(name: string): Promise<CommandResult> {
   }
 
   if (name === "--all") {
-    const result = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}"], { encoding: "utf-8" });
-    const pits = (result.stdout ?? "").trim().split("\n").filter((s) => s.startsWith("pit-"));
+    const pits = listPitSessions();
     if (pits.length === 0) {
       return { ok: true, message: "  无后台会话", data: { stopped: [] } };
     }
     const stopped: string[] = [];
     for (const s of pits) {
-      spawnSync("tmux", ["kill-session", "-t", s]);
-      stopped.push(s.replace(/^pit-/, ""));
+      killPitSession(s.name);
+      stopped.push(s.name);
     }
     return {
       ok: true,
@@ -267,12 +249,56 @@ export async function execStop(name: string): Promise<CommandResult> {
     };
   }
 
-  const session = tmuxSessionName(name);
-  const result = spawnSync("tmux", ["kill-session", "-t", session], { encoding: "utf-8" });
-  if (result.status === 0) {
+  if (killPitSession(name)) {
     return { ok: true, message: `  ✅ 已停止 "${name}"`, data: { stopped: [name] } };
   }
   return { ok: false, message: "", error: { code: ERR.SESSION_NOT_FOUND, message: `会话 "${name}" 不存在` } };
+}
+
+/** 启动后台 tmux 会话（供 TUI / CLI 共用） */
+export async function execStartBg(
+  name: string,
+  tenantInput: string,
+  extraArgs: string[] = [],
+): Promise<CommandResult> {
+  if (!hasTmux()) {
+    return { ok: false, message: "", error: { code: ERR.TMUX_NOT_INSTALLED, message: "tmux 未安装" } };
+  }
+  const config = loadConfig();
+  const resolved = tenantInput
+    ? resolveTenantId(tenantInput, config)
+    : { ok: true as const, id: config.defaultTenant };
+  if (!resolved.ok) {
+    return { ok: false, message: "", error: { code: ERR.TENANT_NOT_FOUND, message: `租户 "${tenantInput}" 不存在` } };
+  }
+  const tenantId = resolved.id;
+  const alias = getTenantAlias(tenantId, config);
+  const sessionName = name || `${alias}-${Date.now().toString(36)}`;
+
+  if (hasPitSession(name)) {
+    return { ok: false, message: "", error: { code: "SESSION_EXISTS", message: `会话 "${name}" 已在运行。接入: pit attach ${name}` } };
+  }
+
+  const tenantConfig = config.tenants[tenantId] ?? {};
+  const { buildPiLaunch: bpl } = await import("./launcher.js");
+  const launch = await bpl(tenantId, {
+    provider: tenantConfig.provider,
+    model: tenantConfig.model,
+    thinking: tenantConfig.thinking,
+    tools: tenantConfig.tools,
+    excludeTools: tenantConfig.excludeTools,
+    extraArgs,
+  });
+
+  const result = startPitSession(launch, sessionName, true);
+  if (result.status === 0) {
+    return {
+      ok: true,
+      message: `✅ 后台会话 "${sessionName}" 已启动\n接入: pit attach ${sessionName}`,
+      data: { name: sessionName, tenantId, alias },
+    };
+  }
+  return { ok: false, message: "", error: { code: "TMUX_ERROR", message: `启动失败: ${result.stderr}` } };
 }
 
 export async function execSharedStatus(): Promise<CommandResult> {

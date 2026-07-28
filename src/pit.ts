@@ -19,9 +19,18 @@ import {
 } from "./config.js";
 import { runDoctor } from "./doctor.js";
 import { launchPi, buildPiLaunch } from "./launcher.js";
+import { emitJson, emitJsonError, ERR } from "./output.js";
+import {
+  hasTmux,
+  configureTmuxServer,
+  tmuxSessionName,
+  buildTmuxSessionArgs,
+  hasPitSession,
+  killPitSession,
+  startPitSession,
+} from "./tmux.js";
 import { migrate } from "./migrate.js";
 import { initSharedLayer, linkTenantToShared, promoteToShared, installBundledExtensions } from "./shared-layer.js";
-import { emitJson, emitJsonError, ERR } from "./output.js";
 import {
   execTenantLs, execTenantNew, execTenantRm,
   execStatus, execLs, execStop, execSharedStatus,
@@ -447,43 +456,6 @@ async function cmdMigrate(flags: Record<string, string>): Promise<void> {
   await migrate({ tenantId, dryRun: flags["dry-run"] === "true" });
 }
 
-// ─── Tmux Session Management ─────────────────────────────────
-
-function hasTmux(): boolean {
-  return spawnSync("tmux", ["-V"], { encoding: "utf-8" }).status === 0;
-}
-
-/**
- * 配置 tmux server 全局选项（pi 官方推荐）：
- * extended-keys on + extended-keys-format csi-u（tmux ≥ 3.5），
- * 否则 pi 会话内 Shift+Enter 等修饰键失效且 pi 会提示告警。
- * best-effort：旧版 tmux 不支持时静默跳过。
- */
-function configureTmuxServer(): void {
-  const fmt = spawnSync("tmux", ["show", "-gv", "extended-keys-format"], { encoding: "utf-8" });
-  if (fmt.status === 0 && fmt.stdout.trim() === "csi-u") return;  // 已配置
-  spawnSync("tmux", ["set-option", "-g", "extended-keys", "on"], { encoding: "utf-8" });
-  spawnSync("tmux", ["set-option", "-g", "extended-keys-format", "csi-u"], { encoding: "utf-8" });
-}
-
-function tmuxSessionName(name: string): string {
-  return `pit-${name}`;
-}
-
-/** 构建 tmux new-session 参数（-e 传 env + -- 分隔，避免 shell 注入） */
-function buildTmuxSessionArgs(launch: { cmd: string; args: string[]; env: Record<string, string>; cwd: string }, session: string, detach: boolean): string[] {
-  const tmuxArgs = ["new-session"];
-  if (detach) tmuxArgs.push("-d");
-  tmuxArgs.push("-s", session, "-c", launch.cwd, "-x", "200", "-y", "50");
-  for (const [k, v] of Object.entries(launch.env)) {
-    if (k.startsWith("PI_") || k.startsWith("AGENT_LAB_")) {
-      tmuxArgs.push("-e", `${k}=${v}`);
-    }
-  }
-  tmuxArgs.push("--", launch.cmd, ...launch.args);
-  return tmuxArgs;
-}
-
 async function cmdStartBg(flags: Record<string, string>, passthrough: string[]): Promise<void> {
   const config = loadConfig();
   const tenantId = resolveOrFail(flags.tenant, config);
@@ -501,8 +473,7 @@ async function cmdStartBg(flags: Record<string, string>, passthrough: string[]):
   }
   configureTmuxServer();
 
-  const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
-  if (check.status === 0) {
+  if (hasPitSession(name)) {
     console.log(`  ⚠️  会话 "${name}" 已在运行`);
     console.log(`  接入: pit attach ${name}`);
     return;
@@ -522,17 +493,12 @@ async function cmdStartBg(flags: Record<string, string>, passthrough: string[]):
     extraArgs: passthrough.filter((a) => a !== "-c" && a !== "--continue"),
   });
 
-  // tmux new-session -d -s pit-{name} -c {cwd} -e KEY=val ... -- pi args...
-  // 使用 -- 分隔符和 -e 传递环境变量，避免 shell 注入
-  const tmuxArgs = buildTmuxSessionArgs(launch, session, true);
-
-  const result = spawnSync("tmux", tmuxArgs, { encoding: "utf-8" });
+  const result = startPitSession(launch, name, true);
 
   if (result.status === 0) {
-    // 存活检查：pi 可能启动即崩（扩展错误等），会话会秒退
+    // 存活检查：pi 可能启动即崩（扩展错误等），会话秒退
     spawnSync("sleep", ["1"]);
-    const alive = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
-    if (alive.status !== 0) {
+    if (!hasPitSession(name)) {
       console.log(`  \x1b[31m❌ 会话 "${name}" 启动后立即退出\x1b[0m`);
       console.log("  排查: pit pi --tenant " + alias + "  （前台模式查看启动错误）");
       process.exit(1);

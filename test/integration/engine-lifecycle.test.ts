@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import os from "node:os";
+import fs from "node:fs";
+import path from "node:path";
 import { Redis } from "ioredis";
 import { detectPlatform } from "../../src/platform/index.js";
 import { createLogger } from "../../src/observability/logger.js";
@@ -55,7 +58,7 @@ beforeAll(async () => {
   const sessionStore = new RedisSessionStore(redis);
   const credentials = new EnvCredentialProvider();
   const audit = new AuditWriter(redis);
-  const dataDir = "./.pi-platform-data/test";
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "pit-test-"));
   const workspaceMgr = new WorkspaceManager(
     platform,
     `${dataDir}/workspaces`,
@@ -140,7 +143,8 @@ describe("AgentEngine session lifecycle", () => {
     const sessionStore = new RedisSessionStore(r);
     const credentials = new EnvCredentialProvider();
     const audit = new AuditWriter(r);
-    const workspaceMgr = new WorkspaceManager(platform, "./.pi-platform-data/test/workspaces", "./.pi-platform-data/test/platform", "./.pi-platform-data/test/tenants");
+    const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "pit-test-"));
+    const workspaceMgr = new WorkspaceManager(platform, path.join(testDataDir, "workspaces"), path.join(testDataDir, "platform"), path.join(testDataDir, "tenants"));
 
     const pool = new SessionPool(
       { maxSessions: 100, maxSessionsPerTenant: 2, idleTimeoutMs: 300_000 },
@@ -181,7 +185,8 @@ describe("AgentEngine session lifecycle", () => {
     const sessionStore = new RedisSessionStore(r);
     const credentials = new EnvCredentialProvider();
     const audit = new AuditWriter(r);
-    const workspaceMgr = new WorkspaceManager(platform, "./.pi-platform-data/test/workspaces", "./.pi-platform-data/test/platform", "./.pi-platform-data/test/tenants");
+    const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "pit-test-"));
+    const workspaceMgr = new WorkspaceManager(platform, path.join(testDataDir, "workspaces"), path.join(testDataDir, "platform"), path.join(testDataDir, "tenants"));
 
     const pool = new SessionPool(
       { maxSessions: 2, maxSessionsPerTenant: 10, idleTimeoutMs: 300_000 },

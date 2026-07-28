@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Box, Text, useInput, useApp } from "ink";
+import { spawnSync } from "node:child_process";
 import { Screen, useTabs, useTerminalSize } from "../tui-shared/index.js";
 import { DashboardPage } from "./dashboard.js";
 import { TenantsPage } from "./tenants.js";
@@ -10,48 +11,13 @@ import { CommandBar } from "./command-bar.js";
 import { OutputPanel } from "./output-panel.js";
 import type { CommandResult } from "../commands.js";
 import { loadConfig, listTenants } from "../config.js";
-import { spawnSync } from "node:child_process";
+import { listPitSessions, startPitSession } from "../tmux.js";
 
 const TABS = ["Dashboard", "Tenants", "Sessions", "Extensions", "Config"];
 
 const DESTRUCTIVE_CMDS = ["tenant rm", "stop", "stop --all"];
 
 /** TUI-wired bg session start — 与 CLI 同一构建路径 */
-async function execStartBgInTui(name: string, tenantInput: string): Promise<CommandResult> {
-  const cfg = loadConfig();
-  const { resolveTenantId: rt, getDefaultTenantId: gd, getTenantAlias: ga } = await import("../config.js");
-  const resolved = tenantInput ? rt(tenantInput, cfg) : { ok: true as const, id: gd(cfg) };
-  if (!resolved.ok) {
-    return { ok: false, message: "", error: { code: "TENANT_NOT_FOUND", message: `租户 "${tenantInput}" 不存在` } };
-  }
-  const tenantId = resolved.id;
-  const sessionName = name || `${ga(tenantId, cfg)}-${Date.now().toString(36)}`;
-  const tmuxName = `pit-${sessionName}`;
-  const check = spawnSync("tmux", ["has-session", "-t", `=${tmuxName}`], { encoding: "utf-8" });
-  if (check.status === 0) {
-    return { ok: false, message: "", error: { code: "SESSION_EXISTS", message: `会话 "${sessionName}" 已在运行。接入: pit attach ${sessionName}` } };
-  }
-  const { buildPiLaunch } = await import("../launcher.js");
-  const tenantConfig = cfg.tenants[tenantId] ?? {};
-  const launch = await buildPiLaunch(tenantId, {
-    provider: tenantConfig.provider,
-    model: tenantConfig.model,
-    thinking: tenantConfig.thinking,
-    tools: tenantConfig.tools,
-    excludeTools: tenantConfig.excludeTools,
-  });
-  const tmuxArgs = ["new-session", "-d", "-s", tmuxName, "-c", launch.cwd, "-x", "200", "-y", "50"];
-  for (const [k, v] of Object.entries(launch.env)) {
-    if (k.startsWith("PI_") || k.startsWith("AGENT_LAB_")) tmuxArgs.push("-e", `${k}=${v}`);
-  }
-  tmuxArgs.push("--", launch.cmd, ...launch.args);
-  const r = spawnSync("tmux", tmuxArgs, { encoding: "utf-8" });
-  if (r.status === 0) {
-    return { ok: true, message: `✅ 后台会话 "${sessionName}" 已启动\n接入: pit attach ${sessionName}` };
-  }
-  return { ok: false, message: "", error: { code: "TMUX_ERROR", message: `启动失败: ${r.stderr}` } };
-}
-
 export function PitApp() {
   const { columns, rows } = useTerminalSize();
   const { exit: unmountInk } = useApp();
@@ -78,13 +44,7 @@ export function PitApp() {
   const completions = useMemo<Record<string, string[]>>(() => {
     const cfg = loadConfig();
     const tenantAliases = listTenants(cfg).map((t) => t.alias);
-    let sessions: string[] = [];
-    try {
-      const out = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}"], { encoding: "utf-8" });
-      sessions = (out.stdout ?? "").trim().split("\n")
-        .filter((s) => s.startsWith("pit-"))
-        .map((s) => s.replace(/^pit-/, ""));
-    } catch { /* tmux not available */ }
+    const sessions = listPitSessions().map((s) => s.name);
     return {
       pi: ["--tenant", ...tenantAliases],
       attach: sessions,
@@ -156,7 +116,7 @@ export function PitApp() {
 
     try {
     // Route to commands.ts functions
-    const { execTenantLs, execTenantNew, execTenantRm, execStatus, execLs, execStop, execSharedStatus } = await import("../commands.js");
+    const { execTenantLs, execTenantNew, execTenantRm, execStatus, execLs, execStop, execSharedStatus, execStartBg } = await import("../commands.js");
 
     switch (cmd) {
       case "tenant":
@@ -182,7 +142,7 @@ export function PitApp() {
         result = { ok: true, message: "", handoff: { cmd: "pit", args: ["pi", ...args] } };
         break;
       case "start":
-        result = await execStartBgInTui(args[0] || "", args[1] || "");
+        result = await execStartBg(args[0] || "", args[1] || "");
         break;
       case "quit":
       case "exit":
