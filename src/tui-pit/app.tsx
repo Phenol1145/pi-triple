@@ -88,6 +88,7 @@ export function PitApp() {
     return {
       pi: ["--tenant", ...tenantAliases],
       attach: sessions,
+      switch: sessions,
       stop: [...sessions, "--all"],
       "tenant rm": tenantAliases,
       "tenant rename": tenantAliases,
@@ -215,6 +216,16 @@ export function PitApp() {
       case "attach":
         result = { ok: true, message: "", handoff: { cmd: "pit", args: ["attach", ...args] } };
         break;
+      case "switch":
+        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["switch", ...args] } };
+        break;
+      case "detach": {
+        const r2 = spawnSync("tmux", ["detach-client"], { encoding: "utf-8" });
+        result = r2.status === 0
+          ? { ok: true, message: "已脱离当前会话" }
+          : { ok: false, message: "", error: { code: "NOT_IN_TMUX", message: "不在 tmux 会话中" } };
+        break;
+      }
       default:
         result = { ok: false, message: "", error: { code: "UNKNOWN_COMMAND", message: `未知命令: ${cmd}。支持: start, status, ls, stop, tenant, shared, attach, help` } };
     }

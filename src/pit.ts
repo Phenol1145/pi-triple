@@ -47,6 +47,8 @@ function printHelp(): void {
   console.log("    ui                 系统总控 TUI（无参数时也进入）");
   console.log("    lab                模型调试 TUI（--tenant/--global）");
   console.log("    attach <name>      接入后台会话（同一终端切换）");
+  console.log("    switch <name>      切换会话（tmux 内瞬移，外则 attach）");
+  console.log("    detach             脱离当前会话（保持运行）");
   console.log("    ls                 列出所有会话（前台+后台）");
   console.log("    stop <name>        停止后台会话");
   console.log("    status             快速健康检查");
@@ -519,6 +521,32 @@ function cmdAttach(name: string): void {
   process.exit(result.status ?? 0);
 }
 
+/** pit switch — tmux 内 switch-client 瞬移；tmux 外退化为 attach */
+function cmdSwitch(name: string): void {
+  if (!name) { console.log("  用法: pit switch <name>"); return; }
+  if (!process.env.TMUX) {
+    // 不在 tmux 中：等同 attach
+    cmdAttach(name);
+    return;
+  }
+  const session = tmuxSessionName(name);
+  const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
+  if (check.status !== 0) {
+    console.log(`  \x1b[31m❌ 会话 "${name}" 不存在\x1b[0m`);
+    process.exit(1);
+  }
+  spawnSync("tmux", ["switch-client", "-t", `=${session}`], { stdio: "inherit" });
+}
+
+/** pit detach — 脱离当前 tmux 会话（会话保持运行） */
+function cmdDetach(): void {
+  if (!process.env.TMUX) {
+    console.log("  \x1b[33m⚠️  不在 tmux 会话中，无需 detach\x1b[0m");
+    return;
+  }
+  spawnSync("tmux", ["detach-client"], { stdio: "inherit" });
+}
+
 // ─── Mode Resolution ─────────────────────────────────────────
 
 type PitMode = "interactive" | "interactive-lab" | "print" | "json" | "fatal";
@@ -622,6 +650,12 @@ async function main() {
       break;
     case "attach":
       cmdAttach(subcommand || passthrough[0] || "");
+      break;
+    case "switch":
+      cmdSwitch(passthrough[0] || "");
+      break;
+    case "detach":
+      cmdDetach();
       break;
     case "ls": {
       const lr = await execLs();

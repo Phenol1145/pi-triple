@@ -28,6 +28,8 @@ const COMMAND_TREE: CmdNode[] = [
   { name: "pi", desc: "原生前台启动 pi（无 tmux，离开 TUI）" },
   { name: "start", desc: "后台 tmux 会话 <名称> [租户]" },
   { name: "attach", desc: "接入后台会话 <名称>" },
+  { name: "switch", desc: "切换会话（tmux 内瞬移）<名称>" },
+  { name: "detach", desc: "脱离当前会话（保持运行）" },
   { name: "stop", desc: "停止会话 <名称|--all>" },
   { name: "ls", desc: "列出后台会话" },
   { name: "status", desc: "健康检查" },

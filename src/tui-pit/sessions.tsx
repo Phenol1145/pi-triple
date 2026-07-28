@@ -93,7 +93,12 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
       if (key.upArrow) { setSelectedIdx((i) => Math.max(0, i - 1)); return; }
       if (key.downArrow) { setSelectedIdx((i) => Math.min(sessions.length - 1, i + 1)); return; }
       if (input === "a" && sessions[selectedIdx]) {
-        handoffTerminal("tmux", ["attach", "-t", `pit-${sessions[selectedIdx].name}`], unmount);
+        // tmux 内：switch-client 瞬移（ pit ui 保持运行）；tmux 外：attach（handoff）
+        if (process.env.TMUX) {
+          spawnSync("tmux", ["switch-client", "-t", `=pit-${sessions[selectedIdx].name}`]);
+        } else {
+          handoffTerminal("tmux", ["attach", "-t", `pit-${sessions[selectedIdx].name}`], unmount);
+        }
         return;
       }
       if (input === "x" && sessions[selectedIdx]) {
@@ -181,15 +186,15 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
           <DataTable columns={sessionCols} rows={sessionRows} />
 
           <Box marginTop={1}>
-            <Text dimColor>↑↓ select · [a] attach · [x] stop · [s] start new</Text>
+            <Text dimColor>↑↓ select · [a] attach/switch · [x] stop · [s] start new</Text>
           </Box>
         </>
       )}
 
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>Hints:</Text>
-        <Text dimColor>  - Attaching hands off terminal (pit TUI exits)</Text>
-        <Text dimColor>  - Inside tmux: Ctrl+B s to switch sessions, Ctrl+B d to detach</Text>
+        <Text dimColor>  - Inside tmux: [a] switches instantly (pit ui keeps running)</Text>
+        <Text dimColor>  - Outside tmux: [a] attaches (pit ui exits) · pit detach 脱离</Text>
       </Box>
 
       <Box marginTop={1}>

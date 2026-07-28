@@ -5,7 +5,9 @@
  *   /control start <name>     Start a background pi session (tmux)
  *   /control stop <name>      Kill a background session
  *   /control ls               List all pit-managed tmux sessions
+ *   /control switch <name>    Switch terminal to another session (in-tmux)
  *   /control attach <name>    Instructions to attach (cannot attach from within pi)
+ *   /control detach           Detach current terminal (session keeps running)
  *   /control ui               Open pit UI in a new tmux window
  *   /control name <name>      Set current session display name
  *   /control status           Show current session + tmux status
@@ -47,7 +49,9 @@ export default function pitControl(api: any) {
     { value: "start", label: "start <name>", description: "启动后台 pi 会话" },
     { value: "stop", label: "stop <name>", description: "停止后台会话" },
     { value: "ls", label: "ls", description: "列出所有后台会话" },
+    { value: "switch", label: "switch <name>", description: "切换到另一个会话（tmux 内瞬移）" },
     { value: "attach", label: "attach <name>", description: "接入后台会话" },
+    { value: "detach", label: "detach", description: "脱离当前会话（保持运行）" },
     { value: "ui", label: "ui", description: "打开 pit 控制面板" },
     { value: "name", label: "name <name>", description: "设置会话名称" },
     { value: "status", label: "status", description: "会话状态" },
@@ -65,8 +69,8 @@ export default function pitControl(api: any) {
         return filtered.length > 0 ? filtered : null;
       }
 
-      // second level: session name for start/stop/attach
-      if (["start", "stop", "attach"].includes(parts[0]!) && parts.length === 2) {
+      // second level: session name for start/stop/attach/switch
+      if (["start", "stop", "attach", "switch"].includes(parts[0]!) && parts.length === 2) {
         if (!hasTmux()) return null;
         const p2 = parts[1] ?? "";
         const sessions = listPitSessions().filter((s) => s.startsWith(p2));
@@ -94,15 +98,15 @@ export default function pitControl(api: any) {
           return;
         }
 
-        const piCmd = agentDir
-          ? `PI_CODING_AGENT_DIR=${agentDir} pi`
-          : "pi";
+        const tmuxArgs = ["new-session", "-d", "-s", tmuxName(name), "-x", "200", "-y", "50"];
+        if (agentDir) tmuxArgs.push("-e", `PI_CODING_AGENT_DIR=${agentDir}`);
+        if (process.env.PI_TENANT) tmuxArgs.push("-e", `PI_TENANT=${process.env.PI_TENANT}`);
+        if (process.env.PI_TENANT_ALIAS) tmuxArgs.push("-e", `PI_TENANT_ALIAS=${process.env.PI_TENANT_ALIAS}`);
+        if (process.env.AGENT_LAB_DB_PATH) tmuxArgs.push("-e", `AGENT_LAB_DB_PATH=${process.env.AGENT_LAB_DB_PATH}`);
+        if (process.env.AGENT_LAB_CONFIG_DIR) tmuxArgs.push("-e", `AGENT_LAB_CONFIG_DIR=${process.env.AGENT_LAB_CONFIG_DIR}`);
+        tmuxArgs.push("--", "pi");
 
-        const r = spawnSync("tmux", [
-          "new-session", "-d", "-s", tmuxName(name),
-          "-x", "200", "-y", "50",
-          piCmd,
-        ], { encoding: "utf-8" });
+        const r = spawnSync("tmux", tmuxArgs, { encoding: "utf-8" });
 
         if (r.status === 0) {
           ctx.ui.notify(`\x1b[32m✅ Background session "${name}" started\x1b[0m`);
@@ -131,6 +135,26 @@ export default function pitControl(api: any) {
         return;
       }
 
+      // ── switch ─────────────────────────────
+      if (cmd === "switch") {
+        const name = rest[0];
+        if (!name) { ctx.ui.notify("Usage: /control switch <name>", "warning"); return; }
+        if (!process.env.TMUX) { ctx.ui.notify("Not inside tmux — use: pit attach " + name, "warning"); return; }
+        if (!sessionExists(name)) {
+          ctx.ui.notify(`Session "${name}" not found`, "warning");
+          return;
+        }
+        spawnSync("tmux", ["switch-client", "-t", `=${tmuxName(name)}`], { encoding: "utf-8" });
+        return;
+      }
+
+      // ── detach ─────────────────────────────
+      if (cmd === "detach") {
+        if (!process.env.TMUX) { ctx.ui.notify("Not inside tmux — nothing to detach", "warning"); return; }
+        spawnSync("tmux", ["detach-client"], { encoding: "utf-8" });
+        return;
+      }
+
       // ── ls ───────────────────────────────────
       if (cmd === "ls") {
         if (!hasTmux()) { ctx.ui.notify("tmux not installed", "error"); return; }
@@ -156,8 +180,8 @@ export default function pitControl(api: any) {
           for (const s of pits) {
             lines.push(`  \x1b[1m${s.name.padEnd(16)}\x1b[0m${s.win}w  ${s.age} ago`);
           }
-          lines.push("\nAttach: \x1b[2mCtrl+B d, then:\x1b[0m pit attach <name>");
-          lines.push("Switch: \x1b[2mCtrl+B s\x1b[0m within tmux");
+          lines.push("\nSwitch: /control switch <name>  (in-tmux instant jump)");
+          lines.push("Detach: /control detach  ·  Attach: pit attach <name>");
           ctx.ui.notify(lines.join("\n"));
           ctx.ui.setWidget("pit-sessions", lines, { placement: "aboveEditor" });
         }
