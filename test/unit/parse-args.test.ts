@@ -48,3 +48,12 @@ describe("parseArgs", () => {
     expect(r.passthrough).toEqual(["coding"]);
   });
 });
+
+describe("parseArgs config 子命令", () => {
+  it("pit config get redis → get 是 subcommand，redis 进 passthrough", () => {
+    const r = parseArgs(["config", "get", "redis"]);
+    expect(r.command).toBe("config");
+    expect(r.subcommand).toBe("get");
+    expect(r.passthrough).toEqual(["redis"]);
+  });
+});

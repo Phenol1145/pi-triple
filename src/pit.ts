@@ -88,7 +88,7 @@ function printHelp(): void {
 }
 
 /** 有子命令语义的命令白名单（第二个位置参数 = subcommand） */
-const SUBCOMMAND_COMMANDS = new Set(["tenant", "shared"]);
+const SUBCOMMAND_COMMANDS = new Set(["tenant", "shared", "config"]);
 
 export function parseArgs(args: string[]): { command: string; subcommand?: string; flags: Record<string, string>; passthrough: string[] } {
   const flags: Record<string, string> = {};
