@@ -265,6 +265,21 @@ export function removeTenant(tenantId: string, config?: PiTripleConfig): boolean
   return true;
 }
 
+/** 重命名租户别名 */
+export function renameTenant(tenantId: string, newAlias: string, config?: PiTripleConfig): boolean {
+  const cfg = config ?? loadConfig();
+  if (!cfg.tenants[tenantId]) return false;
+  const sanitized = newAlias.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fff]/g, "-");
+  if (!sanitized) return false;
+  // 检查别名重复
+  for (const [id, t] of Object.entries(cfg.tenants)) {
+    if (id !== tenantId && t.alias === sanitized) return false;
+  }
+  cfg.tenants[tenantId].alias = sanitized;
+  saveConfig(cfg);
+  return true;
+}
+
 // ─── 路径 ────────────────────────────────────────────────────
 
 export function resolveDataDir(config?: PiTripleConfig): string {

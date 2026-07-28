@@ -14,7 +14,7 @@ import { homedir } from "node:os";
 import {
   loadConfig, saveConfig, resolveDataDir, type PiTripleConfig,
   resolveTenantId, getTenantAlias, getDefaultTenantId,
-  listTenants, migrateDirectoryNames,
+  listTenants, migrateDirectoryNames, renameTenant,
 } from "./config.js";
 import { runDoctor } from "./doctor.js";
 import { launchPi, buildPiLaunch } from "./launcher.js";
@@ -53,6 +53,7 @@ function printHelp(): void {
   console.log("    tenant ls          列出所有租户（别名 + UUID）");
   console.log("    tenant new [alias] 新建租户");
   console.log("    tenant rm <alias>  删除租户");
+  console.log("    tenant rename <old> <new>  重命名租户别名");
   console.log("    update             更新 pi 到最新版");
   console.log("    install <source>    安装 pi 扩展 (--shared 装到共享层)");
   console.log("    remove <source>     卸载 pi 扩展");
@@ -515,6 +516,21 @@ async function main() {
       if (subcommand === "ls" || subcommand === "list") tr = await execTenantLs();
       else if (subcommand === "new") tr = await execTenantNew(passthrough[0]);
       else if (subcommand === "rm") tr = await execTenantRm(passthrough[0] || "");
+      else if (subcommand === "rename") {
+        const oldName = passthrough[0] ?? "";
+        const newName = passthrough[1] ?? "";
+        if (!oldName || !newName) {
+          console.log("  用法: pit tenant rename <旧别名> <新别名>");
+          process.exit(1);
+        }
+        const cfg = loadConfig();
+        const resolved = resolveTenantId(oldName, cfg);
+        if (!resolved.ok) { console.log(`  \x1b[31m❌ 租户 "${oldName}" 不存在\x1b[0m`); process.exit(1); }
+        const ok = renameTenant(resolved.id, newName, cfg);
+        if (ok) console.log(`  ✅ 租户别名: ${oldName} → ${newName}`);
+        else console.log(`  \x1b[31m❌ 重命名失败（别名重复或无效）\x1b[0m`);
+        break;
+      }
       else tr = await execTenantLs();
       doPrintCommand(tr);
       break;
