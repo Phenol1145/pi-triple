@@ -226,6 +226,53 @@ export default function pitMail(api: any /* ExtensionAPI */) {
   // ── Register /pit command ────────────────────────────────
   api.registerCommand("pit", {
     description: "Pi-Triple Intercom — cross-session communication",
+    getArgumentCompletions: (prefix: string) => {
+      const parts = prefix.trim().split(/\s+/);
+      const subCmds = [
+        { value: "send", label: "send <name> <msg>", description: "发送消息" },
+        { value: "ask", label: "ask <name> <q>", description: "提问并等待回复" },
+        { value: "share", label: "share <name> <file>", description: "分享文件" },
+        { value: "broadcast", label: "broadcast <msg>", description: "广播消息" },
+        { value: "inbox", label: "inbox", description: "查看待处理消息" },
+        { value: "accept", label: "accept <#>", description: "接收消息" },
+        { value: "reject", label: "reject <#>", description: "拒绝消息" },
+        { value: "ps", label: "ps", description: "列出注册会话" },
+        { value: "sessions", label: "sessions", description: "列出后台会话" },
+        { value: "start", label: "start <name>", description: "启动后台会话" },
+        { value: "stop", label: "stop <name>", description: "停止后台会话" },
+        { value: "mode", label: "mode <manual|auto|hybrid>", description: "设置审核模式" },
+        { value: "name", label: "name <name>", description: "设置会话名称" },
+        { value: "status", label: "status", description: "通信状态" },
+        { value: "help", label: "help", description: "帮助" },
+      ];
+
+      // 第一级：子命令补全
+      if (parts.length <= 1) {
+        const p = parts[0] ?? "";
+        const filtered = subCmds.filter((c) => c.value.startsWith(p));
+        return filtered.length > 0 ? filtered : null;
+      }
+
+      // 第二级：会话名补全（send/ask/share/stop）
+      const cmd2 = parts[0];
+      if (["send", "ask", "share", "stop"].includes(cmd2) && parts.length === 2) {
+        const entries = registry.list();
+        const names = entries.map((e: any) => e.name).filter(Boolean);
+        const p2 = parts[1] ?? "";
+        const filtered = names.filter((n: string) => n.startsWith(p2));
+        return filtered.length > 0 ? filtered.map((n: string) => ({ value: n, label: n })) : null;
+      }
+
+      // mode 参数补全
+      if (cmd2 === "mode" && parts.length === 2) {
+        const modes = ["manual", "auto", "hybrid"];
+        const p3 = parts[1] ?? "";
+        const filtered = modes.filter((m) => m.startsWith(p3));
+        return filtered.length > 0 ? filtered.map((m) => ({ value: m, label: m })) : null;
+      }
+
+      return null;
+    },
     handler: async (args: string, ctx: any /* ExtensionCommandContext */) => {
       const [cmd, ...rest] = args.trim().split(/\s+/);
       const argStr = rest.join(" ");
