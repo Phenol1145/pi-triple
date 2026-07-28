@@ -17,6 +17,7 @@ import {
   saveConfig,
   getTenantAlias,
   resolveDataDir,
+  renameTenant,
 } from "../config.js";
 
 interface TenantsPageProps {
@@ -25,13 +26,15 @@ interface TenantsPageProps {
   enabled?: boolean;
 }
 
-type Mode = "list" | "new-alias" | "delete-confirm" | "set-default-confirm";
+type Mode = "list" | "new-alias" | "delete-confirm" | "set-default-confirm" | "rename-select" | "rename-input";
 
 export function TenantsPage({ width, height: _h, enabled = true }: TenantsPageProps) {
   const [mode, setMode] = useState<Mode>("list");
   const [aliasInput, setAliasInput] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleteAlias, setDeleteAlias] = useState("");
+  const [renameTarget, setRenameTarget] = useState<string | null>(null);
+  const [renameAlias, setRenameAlias] = useState("");
   const config = loadConfig();
   const tenants = listTenants(config);
 
@@ -39,6 +42,7 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
     if (!enabled) return;
     if (mode === "list") {
       if (input === "n") { setMode("new-alias"); setAliasInput(""); return; }
+      if (input === "r") { setMode("rename-select"); return; }
       if (input === "d") return; // handled per-row via select
       if (input === "s") return; // handled per-row via select
       if (key.escape && mode === "list") return; // parent handles quit
@@ -57,6 +61,20 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
       if (key.escape) { setMode("list"); setAliasInput(""); return; }
       if (key.backspace) { setAliasInput((s) => s.slice(0, -1)); return; }
       if (input && !key.ctrl && !key.meta) { setAliasInput((s) => s + input); return; }
+    }
+    if (mode === "rename-input") {
+      if (key.return) {
+        if (renameAlias.trim() && renameTarget) {
+          renameTenant(renameTarget, renameAlias.trim(), loadConfig());
+          setMode("list");
+          setRenameTarget(null);
+          setRenameAlias("");
+        }
+        return;
+      }
+      if (key.escape) { setMode("list"); setRenameTarget(null); setRenameAlias(""); return; }
+      if (key.backspace) { setRenameAlias((s) => s.slice(0, -1)); return; }
+      if (input && !key.ctrl && !key.meta) { setRenameAlias((s) => s + input); return; }
     }
   });
 
@@ -142,6 +160,38 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
     );
   }
 
+  if (mode === "rename-select") {
+    return (
+      <Box flexDirection="column" gap={1}>
+        <SelectList
+          enabled={enabled}
+          title="Select tenant to rename"
+          items={selectItems}
+          onSelect={(id) => {
+            setRenameTarget(id);
+            setRenameAlias(getTenantAlias(id, config));
+            setMode("rename-input");
+          }}
+          onCancel={() => setMode("list")}
+        />
+      </Box>
+    );
+  }
+
+  if (mode === "rename-input") {
+    return (
+      <Box flexDirection="column" gap={1}>
+        <Text bold>Rename Tenant</Text>
+        <Box>
+          <Text color={theme.primary}>New alias: </Text>
+          <Text>{renameAlias}</Text>
+          <Text dimColor>█</Text>
+        </Box>
+        <Text dimColor>Enter to confirm, Esc to cancel</Text>
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" gap={1}>
       <Box justifyContent="space-between">
@@ -169,7 +219,7 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>[n] 新建 · [d] 删除 · [s] 设为默认 · / 命令模式</Text>
+        <Text dimColor>[n] 新建 · [r] 重命名 · [d] 删除 · [s] 设为默认 · / 命令模式</Text>
       </Box>
     </Box>
   );

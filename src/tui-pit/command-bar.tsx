@@ -24,6 +24,7 @@ const COMMANDS: CmdItem[] = [
   { name: "tenant ls", desc: "列出租户" },
   { name: "tenant new", desc: "新建租户" },
   { name: "tenant rm", desc: "删除租户" },
+  { name: "tenant rename", desc: "重命名租户别名" },
   { name: "shared status", desc: "共享层状态" },
   { name: "help", desc: "帮助" },
 ];
@@ -63,9 +64,9 @@ export function CommandBar({ visible, onSubmit, onCancel, completions }: Command
     ? argCandidates.filter((c) => c.startsWith(argPrefix))
     : argCandidates;
 
-  // Command-mode: filter COMMANDS
+  // Command-mode: 逐层披露 — 空输入不展示，输入后才过滤
   const filteredCmds = trimmed.length === 0
-    ? COMMANDS
+    ? []
     : COMMANDS.filter((c) => c.name.startsWith(trimmed) || c.name.includes(trimmed));
 
   const [selectedTab, setSelectedTab] = useState(0);
