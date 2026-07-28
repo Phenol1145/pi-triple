@@ -48,7 +48,7 @@ export class Watcher {
     this.fsWatcher.on("add", (filePath) => this.handleFile(filePath));
     this.fsWatcher.on("error", (err) => {
       // 静默处理（避免未捕获错误导致扩展崩溃）
-      process.stderr.write(`[pit-mail watcher] ${err.message}\n`);
+      process.stderr.write(`[pit-communicate watcher] ${err.message}\n`);
     });
 
     // 启动时处理已有 pending

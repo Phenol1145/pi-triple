@@ -1,0 +1,10 @@
+{
+  "name": "pit-control",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pi-Triple session control — manage background pi sessions from within pi",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

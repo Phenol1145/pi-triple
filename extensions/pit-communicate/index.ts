@@ -1,5 +1,5 @@
 /**
- * Pi-Triple Intercom — pit-mail extension
+ * Pi-Triple Intercom — pit-communicate extension
  *
  * 注册 /pit 命令，提供跨会话通信：
  *   send/ask/share/broadcast  — 发送

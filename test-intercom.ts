@@ -1,19 +1,19 @@
 /**
- * pit-mail 端到端测试
+ * pit-communicate 端到端测试
  * 运行: npx tsx test-intercom.ts
  */
 import fs from "node:fs";
 import path from "node:path";
 
 // 直接导入 .ts 文件
-const ext = ".pi-platform-data/shared/extensions/pit-mail";
+const ext = ".pi-platform-data/shared/extensions/pit-communicate";
 const { Mailbox } = await import(`./${ext}/mailbox.ts`);
 const { createMessage, validateMessage } = await import(`./${ext}/protocol.ts`);
 const { Presence } = await import(`./${ext}/presence.ts`);
 const { Registry } = await import(`./${ext}/registry.ts`);
 const { Delivery } = await import(`./${ext}/delivery.ts`);
 
-const root = `/tmp/pit-mail-test-${Date.now()}`;
+const root = `/tmp/pit-communicate-test-${Date.now()}`;
 let passed = 0;
 let failed = 0;
 
