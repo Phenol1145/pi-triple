@@ -4,10 +4,11 @@
  * 5 个 Tab：Telemetry / Arena / Events / Compare / Config
  */
 import React, { useCallback, useMemo, useEffect, useState } from "react";
-import { Box, useInput } from "ink";
+import { Box, Text, useInput } from "ink";
 import type { DatabaseSync } from "node:sqlite";
 import { openReadOnlyOrNull, sharedDbPath, localDbPath } from "../lab-data/index.js";
-import { useTabs, useRefresh, Screen } from "../tui-shared/index.js";
+import { useTabs, useRefresh, Screen, useTerminalSize } from "../tui-shared/index.js";
+import { CommandBar, type CmdNode } from "../tui-pit/command-bar.js";
 import { TelemetryPage } from "./telemetry.js";
 import { ArenaPage } from "./arena.js";
 import { EventsPage } from "./events.js";
@@ -22,8 +23,27 @@ interface Props {
 
 const TABS = ["Telemetry", "Arena", "Events", "Compare", "Config"];
 
+/** lab 命令树（精简版） */
+const LAB_COMMANDS: CmdNode[] = [
+  { name: "refresh", desc: "立即刷新数据" },
+  { name: "quit", desc: "退出 lab" },
+  { name: "exit", desc: "退出 lab（同 quit）" },
+];
+
 export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
-  const { activeTab, tabIndex } = useTabs(TABS);
+  const { columns } = useTerminalSize();
+  const [commandMode, setCommandMode] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
+
+  // 通知自动消失
+  useEffect(() => {
+    if (notification) {
+      const t = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [notification]);
+
+  const { activeTab, tabIndex } = useTabs(TABS, !commandMode);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Open DBs once via useMemo — avoids connection leak on re-renders
@@ -62,7 +82,20 @@ export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") process.exit(130);
-    if (input === "q" && !key.ctrl) process.exit(0);
+
+    // 命令模式：CommandBar 处理所有输入
+    if (commandMode) return;
+
+    if ((input === "/" || input === ":") && !key.ctrl && !key.meta) {
+      setCommandMode(true);
+      return;
+    }
+
+    // q 不再直接退出——统一 /quit
+    if (input === "q" && !key.ctrl) {
+      setNotification("按 q 已停用——输入 /quit 退出（Ctrl+C 也可）");
+      return;
+    }
     if (input === "r" && !key.ctrl) refresh();
   });
 
@@ -74,7 +107,7 @@ export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
       status={`tenant: ${tenantAlias}${globalTelemetry ? " (global)" : ""} | DB: ${sharedDb ? "connected" : "offline"}`}
       tabs={TABS}
       activeTab={activeTab}
-      hints={`[1-${TABS.length}] Tab  [r] Refresh  [q] Quit`}
+      hints={`[1-${TABS.length}] Tab  [r] Refresh  [/] Command  /quit 退出`}
     >
       {activeTab === "Telemetry" && (
         <TelemetryPage
@@ -95,6 +128,23 @@ export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
       {activeTab === "Config" && (
         <LabConfigPage db={localDb} refreshKey={refreshKey} />
       )}
+
+      {commandMode && (
+        <CommandBar
+          visible={commandMode}
+          commands={LAB_COMMANDS}
+          width={Math.max(50, Math.min(columns - 2, 120))}
+          onSubmit={(s) => {
+            setCommandMode(false);
+            const cmd = s.trim().split(/\s+/)[0];
+            if (cmd === "quit" || cmd === "exit") process.exit(0);
+            if (cmd === "refresh") refresh();
+          }}
+          onCancel={() => setCommandMode(false)}
+        />
+      )}
+
+      {notification && <Text>{notification}</Text>}
     </Screen>
   );
 }

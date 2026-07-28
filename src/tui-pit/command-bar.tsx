@@ -18,6 +18,8 @@ interface CommandBarProps {
   completions?: Record<string, string[]>;
   /** 可用宽度（终端列数），用于截断长描述 */
   width?: number;
+  /** 自定义命令树（默认 pit 命令树） */
+  commands?: CmdNode[];
 }
 
 interface CmdNode {
@@ -25,6 +27,8 @@ interface CmdNode {
   desc: string;
   children?: CmdNode[];
 }
+
+export type { CmdNode };
 
 const COMMAND_TREE: CmdNode[] = [
   { name: "pi", desc: "原生前台启动 pi（无 tmux，离开 TUI）" },
@@ -65,11 +69,11 @@ interface Level {
   partial: string;
 }
 
-function resolveLevel(input: string, completions?: Record<string, string[]>): Level {
+function resolveLevel(input: string, completions: Record<string, string[]> | undefined, tree: CmdNode[]): Level {
   const endsWithSpace = input.endsWith(" ");
   const words = input.trim().split(/\s+/).filter(Boolean);
 
-  let level: CmdNode[] = COMMAND_TREE;
+  let level: CmdNode[] = tree;
   const path: string[] = [];
 
   for (let i = 0; i < words.length; i++) {
@@ -119,17 +123,17 @@ function resolveLevel(input: string, completions?: Record<string, string[]>): Le
 
   // 空输入 → 顶层
   return {
-    items: COMMAND_TREE.map((n) => ({ ...n, hasChildren: !!n.children })),
+    items: tree.map((n) => ({ ...n, hasChildren: !!n.children })),
     path,
     partial: "",
   };
 }
 
-export function CommandBar({ visible, onSubmit, onCancel, completions, width = 80 }: CommandBarProps) {
+export function CommandBar({ visible, onSubmit, onCancel, completions, width = 80, commands }: CommandBarProps) {
   const [input, setInput] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
 
-  const lvl = resolveLevel(input, completions);
+  const lvl = resolveLevel(input, completions, commands ?? COMMAND_TREE);
   const items = lvl.items;
   const selected = Math.min(selectedIdx, Math.max(0, items.length - 1));
 
