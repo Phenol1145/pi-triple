@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Box, Text, useInput, useApp } from "ink";
 import { TopBar, TabBar, StatusBar, useTabs, useTerminalSize } from "../tui-shared/index.js";
 import { DashboardPage } from "./dashboard.js";
@@ -9,7 +9,8 @@ import { ConfigPage } from "./config-page.js";
 import { CommandBar } from "./command-bar.js";
 import { OutputPanel } from "./output-panel.js";
 import type { CommandResult } from "../commands.js";
-import { loadConfig, getDefaultTenantId } from "../config.js";
+import { loadConfig, getDefaultTenantId, listTenants } from "../config.js";
+import { spawnSync } from "node:child_process";
 
 const TABS = ["Dashboard", "Tenants", "Sessions", "Extensions", "Config"];
 
@@ -62,6 +63,27 @@ export function PitApp() {
       return () => clearTimeout(t);
     }
   }, [notification]);
+
+  // Command completions for parameter autocomplete
+  const completions = useMemo<Record<string, string[]>>(() => {
+    const cfg = loadConfig();
+    const tenantAliases = listTenants(cfg).map((t) => t.alias);
+    let sessions: string[] = [];
+    try {
+      const out = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}"], { encoding: "utf-8" });
+      sessions = (out.stdout ?? "").trim().split("\n")
+        .filter((s) => s.startsWith("pit-"))
+        .map((s) => s.replace(/^pit-/, ""));
+    } catch { /* tmux not available */ }
+    return {
+      pi: ["--tenant", ...tenantAliases],
+      start: tenantAliases,
+      attach: sessions,
+      stop: [...sessions, "--all"],
+      tenant: ["ls", "new", "rm"],
+      "tenant rm": tenantAliases,
+    };
+  }, [commandMode]); // refresh when command bar opens
 
   // Global input handling
   useInput((input, key) => {
@@ -226,6 +248,7 @@ export function PitApp() {
           visible={commandMode}
           onSubmit={(s) => { setCommandMode(false); executeCommand(s); }}
           onCancel={() => setCommandMode(false)}
+          completions={completions}
         />
       </Box>
     );

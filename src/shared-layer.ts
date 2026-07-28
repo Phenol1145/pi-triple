@@ -2,7 +2,7 @@
  * Pi-Triple 共享扩展层
  *
  * 消除多租户间 extensions/skills/packages 的重复存储。
- * 共享目录存放公共扩展，租户通过 `_shared` symlink 引用。
+ * 共享目录存放公共扩展，租户通过逐项 symlink 引用。
  */
 
 import fs from "node:fs";
@@ -26,40 +26,53 @@ export function initSharedLayer(sharedDir: string): void {
 export function linkTenantToShared(tenantDir: string, sharedDir: string): void {
   for (const dir of SHARED_DIRS) {
     const tenantSubDir = path.join(tenantDir, dir);
-    const linkPath = path.join(tenantSubDir, "_shared");
+    const sharedSubDir = path.join(sharedDir, dir);
 
     fs.mkdirSync(tenantSubDir, { recursive: true });
+    if (!fs.existsSync(sharedSubDir)) continue;
 
-    // 检查是否已有 symlink（lstatSync 对不存在路径会抛异常）
-    let alreadyLinked = false;
+    // 移除旧的 _shared 目录级 symlink（迁移）
+    const oldLink = path.join(tenantSubDir, "_shared");
     try {
-      if (fs.lstatSync(linkPath).isSymbolicLink()) {
-        alreadyLinked = true;
+      if (fs.lstatSync(oldLink).isSymbolicLink()) {
+        fs.unlinkSync(oldLink);
       }
-    } catch {
-      // 不存在，继续
+    } catch { /* 不存在 */ }
+
+    // 逐个共享项创建 symlink
+    for (const entry of fs.readdirSync(sharedSubDir, { withFileTypes: true })) {
+      const linkPath = path.join(tenantSubDir, entry.name);
+
+      // 已存在（租户自有或已链接）则跳过
+      try { fs.lstatSync(linkPath); continue; } catch { /* 不存在，继续 */ }
     }
-    if (alreadyLinked) continue;
 
-    // 计算相对路径（更 portable）
-    const target = path.join(sharedDir, dir);
-    const relTarget = path.relative(tenantSubDir, target);
+    // 重新遍历创建（上面只是检查）
+    for (const entry of fs.readdirSync(sharedSubDir, { withFileTypes: true })) {
+      const linkPath = path.join(tenantSubDir, entry.name);
+      try { fs.lstatSync(linkPath); continue; } catch { /* ok */ }
 
-    fs.symlinkSync(relTarget, linkPath, "dir");
+      const target = path.join(sharedSubDir, entry.name);
+      const relTarget = path.relative(tenantSubDir, target);
+      fs.symlinkSync(relTarget, linkPath, entry.isDirectory() ? "dir" : "file");
+    }
   }
 }
 
-/** 移除租户的共享层链接 */
+/** 移除租户的共享层链接（只删 symlink，不删租户自有文件） */
 export function unlinkTenantFromShared(tenantDir: string): void {
   for (const dir of SHARED_DIRS) {
-    const linkPath = path.join(tenantDir, dir, "_shared");
+    const tenantSubDir = path.join(tenantDir, dir);
     try {
-      if (fs.lstatSync(linkPath).isSymbolicLink()) {
-        fs.unlinkSync(linkPath);
+      for (const entry of fs.readdirSync(tenantSubDir, { withFileTypes: true })) {
+        const fullPath = path.join(tenantSubDir, entry.name);
+        try {
+          if (fs.lstatSync(fullPath).isSymbolicLink()) {
+            fs.unlinkSync(fullPath);
+          }
+        } catch { /* ok */ }
       }
-    } catch {
-      // 不存在，跳过
-    }
+    } catch { /* 目录不存在 */ }
   }
 }
 
@@ -112,7 +125,7 @@ export function promoteToShared(tenantDir: string, sharedDir: string): {
     if (!fs.existsSync(srcDir)) continue;
 
     for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
-      if (entry.name === "_shared") continue; // 跳过已有 symlink
+      if (entry.name.startsWith("_")) continue; // 跳过内部文件
 
       const srcPath = path.join(srcDir, entry.name);
       const dstPath = path.join(dstDir, entry.name);
