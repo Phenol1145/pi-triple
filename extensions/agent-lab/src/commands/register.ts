@@ -22,6 +22,7 @@ interface Deps {
   syncSchedulerAgents?: () => number;
   getEffectiveRouting?: () => string;
   arenaSmoke?: (role: string, cmdCtx: ExtensionContext) => Promise<string>;
+  bench?: (cmdCtx: ExtensionContext, n?: number) => Promise<string>;
   optimizerFacade?: OptimizerFacade;
   experimentFacade?: ExperimentFacade;
   runMigration?: (dryRun: boolean) => MigrationReport;
@@ -559,7 +560,7 @@ export function renderExperimentCompare(result: ExperimentCompareResult): string
 // ── Command registration ────────────────────────────────────────────
 
 export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
-  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, arenaSmoke, optimizerFacade, experimentFacade, runMigration } = deps;
+  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, arenaSmoke, bench, optimizerFacade, experimentFacade, runMigration } = deps;
 
   const aggsFor = (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a]));
 
@@ -709,6 +710,13 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
         } else {
           ctx.ui.notify("用法: /lab arena <credits|history|task|doctor|post|smoke> ...", "info");
         }
+      } else if (cmd === "bench") {
+        if (!bench) { ctx.ui.notify("bench unavailable — enable scheduler first", "error"); return; }
+        const n = argv[1] ? Number(argv[1]) : 8;
+        try {
+          const output = await bench(ctx, Number.isFinite(n) && n > 0 ? n : 8);
+          ctx.ui.notify(output, "info");
+        } catch (err) { ctx.ui.notify(`bench failed: ${(err as Error).message}`, "error"); }
       } else if (cmd === "scheduler") {
         const sub = argv[1];
         if (sub === "status") {

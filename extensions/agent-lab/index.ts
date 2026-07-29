@@ -19,6 +19,9 @@ import { createModelCaller } from "./src/arena/model-caller.ts";
 import { matchEligibility } from "./src/schedulers/arena-definition.ts";
 import type { ArenaSchedulerParameters } from "./src/schedulers/arena-definition.ts";
 import type { SettleOutcome } from "./src/scheduler/contracts.ts";
+import { runBench, type BenchPorts } from "./src/bench/run.ts";
+import { loadHumanEval } from "./src/bench/humaneval.ts";
+import { renderBenchReport, writeBenchJson } from "./src/bench/report.ts";
 import { OptimizerRegistry } from "./src/optimizer/registry.ts";
 import { weightedTunerDefinition } from "./src/optimizers/weighted-tuner.ts";
 import "./src/optimizers/ws-projector.ts";
@@ -576,6 +579,43 @@ export default async function (pi: ExtensionAPI) {
     return [...header, ...evidence].join("\n");
   };
 
+  // ── bench (arena × HumanEval closed loop) ─────────────────────
+  const bench = async (cmdCtx: ExtensionContext, n: number): Promise<string> => {
+    if (!cfg.scheduler?.enabled) return "预检失败: Scheduler not enabled. /lab config scheduler.enabled true";
+    if (!schedulerCore) return "预检失败: Scheduler core not initialized. /lab scheduler status";
+    const arena = schedulerCore.repository.getInstance("default-arena");
+    if (!arena || arena.status !== "active") return "预检失败: Arena instance not active. /lab scheduler status";
+    if (catalog.candidates().length < 2) return "预检失败: Need >= 2 catalog candidates. /lab models --refresh";
+
+    const prevCaller = arenaModelCaller;
+    let fresh = false;
+    try { arenaModelCaller = createModelCaller(cmdCtx); fresh = true; } catch { if (!arenaModelCaller) return "预检失败: Model caller unavailable — initiate a subagent call first"; }
+    const restore = () => { if (fresh) arenaModelCaller = prevCaller; };
+
+    try {
+      const tasks = await loadHumanEval(n);
+      if (tasks.length === 0) return "预检失败: 无 HumanEval 任务（下载/缓存失败）";
+      const rt = schedulerRuntimeFactory();
+      if (!rt) return "预检失败: Scheduler runtime unavailable";
+      const round = schedulerCore.repository.getRound(arena.currentRoundId);
+      const eligibility = (round?.parameters as { market?: { eligibility?: string } })?.market?.eligibility ?? "all";
+      const ports: BenchPorts = {
+        dispatch: (req) => rt.dispatch(req),
+        settle: (ref, o) => rt.settle(ref, o),
+        balance: (a) => ledger.balance(a),
+        getTask: (id) => ledger.getTask(id),
+        candidates: () => catalog.candidates(),
+        eligibility,
+        matchEligibility: (p, id) => matchEligibility(p, id),
+        executeModel: (m, p) => arenaModelCaller!.complete(m, p, 60000),
+        genTimeoutMs: 60000, judgeTimeoutMs: 10000,
+      };
+      const report = await runBench(ports, tasks);
+      const file = writeBenchJson(localConfigDir(), report);
+      return renderBenchReport(report) + `\n\n报告已写入: ${file}`;
+    } finally { restore(); }
+  };
+
   // ── Optimizer facade (lazy: resolves schedulerCore/optimizerRegistry at call time) ──
   const optimizerFacade: OptimizerFacade = buildOptimizerFacade({
     getCore: () => schedulerCore,
@@ -627,6 +667,7 @@ export default async function (pi: ExtensionAPI) {
       return "catch-all → default-arena (classic — no binding)";
     },
     arenaSmoke,
+    bench,
     runMigration: (dryRun: boolean) => {
       const ensureArenaBinding = () => {
         // Force the lazy bootstrap before checking — running /lab migrate
