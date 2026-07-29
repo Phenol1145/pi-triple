@@ -25,7 +25,10 @@ npm install && npm link
 # 2. 导引（检查环境 + 安装提供商 + 创建租户 + 迁移扩展）
 pit onboard
 
-# 3. 启动
+# 3. 创建模板（首次）
+pit template new local
+
+# 4. 启动
 pit start                     # tmux 会话，立即接入
 pit start --bg --name coding  # 后台启动
 pit pi                        # 原生前台（无 tmux）
@@ -46,7 +49,7 @@ pit lab                        # 模型调试 TUI
 | `pit ui` / `pit lab` | 系统控制 / 模型调试 TUI |
 | `pit flow run/approve/reject/set/edit...` | pit-flow 波次工作流引擎 |
 | `pit submit/run/dev/programs` | PTL→PTH 桥（agent 程序提交/运行） |
-| `pit tenant ls/new/rm/rename` | 租户管理 |
+| `pit template ls/new/rm/rename` | 模板管理 |
 | `pit config get/set/unset` | 配置读写 |
 | `pit update --all` | 更新 pi + 扩展 + 内置同步 |
 | `pit doctor` / `pit onboard` | 环境诊断 / 首次导引 |
@@ -160,7 +163,7 @@ pi-platform/
 npx tsc --noEmit        # 类型检查（不产出 dist）
 npx vitest run           # 447 tests（直跑 TS）
 npm run build && npm link # ★ pit/pth bin 跑 dist/，端到端验证前必须 build
-cd /tmp && pit tenant ls  # 冒烟测试
+cd /tmp && pit template ls  # 冒烟测试
 ```
 
 > ⚠️ `tsc --noEmit` 与 vitest 都不产出/不依赖 dist，会掩盖“改了 src 未重建”的问题；CLI 冒烟前务必 `npm run build`。
@@ -181,7 +184,7 @@ cd /tmp && pit tenant ls  # 冒烟测试
 | 原则 | 说明 |
 |------|------|
 | pi 是引擎 | 不重写 pi 能力，做的是外层治理/编排/体验 |
-| 租户隔离 | PTL：独立 pi 进程 + `PI_CODING_AGENT_DIR`；PTH：Engine 层强制校验 |
+| 模板隔离 | PTL：独立 pi 进程 + `PI_TEMPLATE`/`PI_CODING_AGENT_DIR`；PTH：Engine 层强制校验 |
 | 错误用判别联合 | `Result<T> = {ok:true, data} \| {ok:false, error}` |
 | 终端切换协议 | `unmountInk()` → `stdin.pause()` → `spawnSync(stdio: "inherit")` → `process.exit(status)` |
 | 零外部依赖（扩展） | bundled 扩展只用 `node:` 内置 + 相对导入 |

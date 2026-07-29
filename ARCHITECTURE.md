@@ -52,12 +52,12 @@ pi-platform/
 │   │   ├── flow/                  #   ★ pit-flow 波次工作流引擎（见下）
 │   │   ├── bridge/                #   ★ PTL→PTH 桥（submit/run/dev/programs + ustar 打包）
 │   │   ├── lab-data/              #   ★ lab 遥测数据层（SQLite：runs/arena/events）
-│   │   ├── config.ts              #   配置系统（v2 UUID+alias，~/.pi-triple）
+│   │   ├── config.ts              #   配置系统（v2 UUID+alias，模板）
 │   │   ├── tmux.ts                #   tmux 会话管理（命名/构建/存活/csi-u）
 │   │   ├── launcher.ts            #   pi 进程启动参数构建
 │   │   ├── shared-layer.ts        #   共享扩展层（symlink + manifest + prune）
 │   │   ├── doctor.ts / migrate.ts #   环境诊断 / ~/.pi/agent 迁移
-│   │   ├── tui-pit/               #   pit ui（Dashboard/Tenants/Sessions/Extensions/Config）
+│   │   ├── tui-pit/               #   pit ui（Dashboard/Templates/Sessions/Extensions/Config）
 │   │   ├── tui-lab/               #   lab ui（Telemetry/Arena/Events/Compare/Config）
 │   │   └── tui-shared/            #   TUI 组件库 + Screen 布局模板 + 层级命令栏
 │   │
@@ -99,7 +99,7 @@ pi-platform/
 
 ### 1. pi 进程编排（tmux 多会话）
 
-PTL **不实现自己的 agent runtime**——它启动真正的 pi 进程，每个租户一套隔离的 pi 配置目录（extensions/skills/settings/models/sessions/workspaces）。tmux 作为运行时载体：后台保活、`switch-client` 瞬移切换、`-e KEY=VAL` 传环境（无 shell 注入）。
+PTL **不实现自己的 agent runtime**——它启动真正的 pi 进程，每个模板一套隔离的 pi 配置目录（extensions/skills/settings/models/sessions/workspaces）。tmux 作为运行时载体：后台保活、`switch-client` 瞬移切换、`-e KEY=VAL` 传环境（无 shell 注入）。
 
 - `pit start`（默认 tmux 管理）/ `pit pi`（原生前台逃生舱）
 - 关键模块：`tmux.ts` · `launcher.ts` · `pit/sessions.ts`
@@ -134,7 +134,7 @@ LangGraph 风格的本地工作流引擎，声明式 JSON 图（节点 + 条件�
 
 ### 4. lab 遥测数据层（`src/ptl/lab-data/`）
 
-`pit lab` TUI 的数据底座。SQLite（WAL + busy_timeout）：共享 `runs` DB（跨租户调用遥测）+ per-tenant arena/events/config。模块：`telemetry.ts` · `arena.ts` · `events.ts` · `open-db.ts` · `schema.ts`。
+`pit lab` TUI 的数据底座。SQLite（WAL + busy_timeout）：共享 `runs` DB（跨模板调用遥测）+ per-template arena/events/config。模块：`telemetry.ts` · `arena.ts` · `events.ts` · `open-db.ts` · `schema.ts`。
 
 ### 5. 双 TUI + 共享组件（`tui-pit/` · `tui-lab/` · `tui-shared/`）
 
@@ -173,7 +173,7 @@ Gateway（Fastify + auth + SSE）
 | **workflow** | pi 内编排 pit-flow；`/flow` 命令 + `flow_run/flow_status/flow_ls` 工具 + gate 通知（shell 调 `pit flow` CLI） |
 | **agent-lab** | 记录每次 LLM 调用 token/cost/latency；共享 SQLite DB；`/lab stats` |
 
-共享层机制：bundled 扩展安装到 `~/.pi-triple/data/shared/extensions/`，逐项 symlink 注入各租户目录（一处更新全局可见）；`.bundled-manifest` 标记平台托管，`pit update --all` 覆盖式同步。
+共享层机制：bundled 扩展安装到 `~/.pi-triple/data/shared/extensions/`，逐项 symlink 注入各模板目录（一处更新全局可见）；`.bundled-manifest` 标记平台托管，`pit update --all` 覆盖式同步。
 
 ---
 
@@ -186,7 +186,7 @@ Gateway（Fastify + auth + SSE）
 ├── pi-triple.json            # v2 配置（UUID+alias），全局唯一；cwd 的 pi-triple.json 为项目级覆盖
 ├── providers.json            # provider 声明（pit-providers 消费）
 └── data/
-    ├── pi-config/<uuid>/     # 租户 pi 配置（extensions/skills/settings/models/auth/agent-lab）
+    ├── pi-config/<uuid>/     # 模板 pi 配置（extensions/skills/settings/models/auth/agent-lab）
     ├── sessions/<uuid>/      # pi session 文件
     ├── workspaces/<uuid>/    # agent 工作目录
     ├── shared/               # 共享扩展/技能 + agent-lab.db

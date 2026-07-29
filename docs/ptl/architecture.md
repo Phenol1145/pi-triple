@@ -5,29 +5,29 @@
 
 ## 设计哲学
 
-PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己的 agent runtime，不跑服务进程，不做请求路由——只做一件事：**让多个 pi 进程以租户隔离的方式，在 tmux 里高效并行**。
+PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己的 agent runtime，不跑服务进程，不做请求路由——只做一件事：**让多个 pi 进程以模板隔离的方式，在 tmux 里高效并行**。
 
 **核心原则**：
 - **pi 是引擎，PTL 是壳**：不多包装一层 API 把 pi 变成 SDK，而是启动真正的 pi 进程，享受原生 TUI 体验
-- **租户 = 隔离的 pi 环境**：每个租户有独立的配置目录（extensions/skills/settings/models）、session 目录、workspace
+- **模板 = agent 配置蓝图**：每个模板有独立的配置目录（extensions/skills/settings/models）、session 目录、workspace
 - **tmux 是运行时载体**：多会话复用同一个终端，后台保活，`switch-client` 瞬移切换
-- **共享层 = 不复制代码**：共享扩展/技能通过逐项 symlink 注入租户目录，一处更新全局可见
+- **共享层 = 不复制代码**：共享扩展/技能通过逐项 symlink 注入模板目录，一处更新全局可见
 
 ## 架构概览
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      pit CLI（入口）                         │
-│  pit onboard/start/pi/ui/lab/tenant/config/doctor/install... │
+│  pit onboard/start/pi/ui/lab/template/config/doctor/install… │
 ├──────────────────────────────────────────────────────────────┤
 │  pit TUI (Ink)               │  pi 进程 × N (tmux)          │
 │  ┌──────────┐ ┌────────────┐ │  ┌────────┐ ┌────────┐      │
 │  │ pit ui   │ │ lab ui     │ │  │ process│ │ process│ ...  │
-│  │ 控制面板  │ │ 模型调试   │ │  │ tenant │ │ tenant │      │
+│  │ 控制面板  │ │ 模型调试   │ │  │ tmpl   │ │ tmpl   │      │
 │  └──────────┘ └────────────┘ │  │ A      │ │ B      │      │
 ├──────────────────────────────┤  └────────┘ └────────┘      │
 │  共享层 (shared/)             │                              │
-│  extensions/ skills/ git/    │  pi 配置（per-tenant）        │
+│  extensions/ skills/ git/    │  pi 配置（per-template）      │
 │  npm/ agent-lab/             │  extensions/ skills/          │
 ├──────────────────────────────┤  settings.json models.json    │
 │  ~/.pi-triple/               │  sessions/ workspaces/        │
@@ -38,7 +38,7 @@ PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己
 │       ├── sessions/<uuid>/                                   │
 │       ├── workspaces/<uuid>/                                 │
 │       ├── shared/                                            │
-│       └── mailbox/<uuid>/                                    │
+│       ├── mailbox/<uuid>/                                    │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -54,7 +54,7 @@ PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己
 | | `pit switch` / `pit detach` | 瞬移/脱离（tmux 内） |
 | **TUI** | `pit` / `pit ui` | 系统总控 TUI |
 | | `pit lab` | agent-lab 模型调试 TUI |
-| **租户** | `pit tenant ls/new/rm/rename` | UUID + alias 管理 |
+| **模板** | `pit template ls/new/rm/rename` | UUID + alias 管理（agent 配置蓝图） |
 | **配置** | `pit config/get/set/unset` | 读写 pi-triple.json |
 | **扩展** | `pit install/remove/update` | pi 扩展管理 |
 | | `pit shared status/init` | 共享层操作 |
@@ -81,15 +81,15 @@ pit                             → 交互 TTY → pit ui TUI
 ## tmux 会话生命周期
 
 ```
-pit start --tenant local
+pit start --template local
   │
   ├─ configureTmuxServer()           ← set-option -g extended-keys on | csi-u
-  ├─ resolveTenantAndMigrate()       ← 租户别名→UUID + 首次自动迁移 ~/.pi/agent
+  ├─ resolveTemplateAndMigrate()     ← 模板别名→UUID + 首次自动迁移 ~/.pi/agent
   ├─ runDoctor("quick")             ← Node.js/pi/Redis/API key 快速检查
-  ├─ buildPiLaunch(tenantId, opts)  ← 构建 pi 命令+env（PI_CODING_AGENT_DIR 等）
+  ├─ buildPiLaunch(templateId, opts)  ← 构建 pi 命令+env（PI_CODING_AGENT_DIR 等）
   │
   ├─ tmux new-session -s pit-<name> -c <cwd>
-  │    -e PI_CODING_AGENT_DIR=... -e PI_TENANT=...
+  │    -e PI_CODING_AGENT_DIR=... -e PI_TEMPLATE=...
   │    -- pi [args]
   │
   └─ 前端 attach 模式：tmux attach（终端接管）
@@ -118,13 +118,13 @@ pit start --tenant local
         ├── pit-communicate → ../../../shared/extensions/pit-communicate
         ├── pit-control → ../../../shared/extensions/pit-control
         ├── agent-lab → ../../../shared/extensions/agent-lab
-        └── my-custom.ts   ← 租户自有扩展（不是 symlink）
+        └── my-custom.ts   ← 模板自有扩展（不是 symlink）
 ```
 
 ### 关键函数
 
-- `linkTenantToShared(tenantDir, sharedDir)` — 为每个共享扩展创建逐项 symlink（不覆盖租户自有文件），同时清理旧的 `_shared` 目录级 symlink（v1→v2 迁移）
-- `ensureTenantLinks(tenantDir, sharedDir)` — launcher 启动 pi 前调用
+- `linkTemplateToShared(templateDir, sharedDir)` — 为每个共享扩展创建逐项 symlink（不覆盖模板自有文件），同时清理旧的 `_shared` 目录级 symlink（v1→v2 迁移）
+- `ensureTenantLinks(templateDir, sharedDir)` — launcher 启动 pi 前调用
 - `installBundledExtensions(sharedDir)` — 首次安装 bundled 扩展到共享层（不覆盖已有）
 - `syncBundledExtensions(sharedDir)` — `pit update --all` 覆盖式同步（平台托管）
 - `.bundled-manifest` 文件 — 记录平台托管扩展名列表，`syncBundledExtensions` 据此剪枝
@@ -138,7 +138,7 @@ pit start --tenant local
 ├── pi-triple.json           ← v2 配置（UUID+alias），全局唯一
 ├── providers.json           ← provider 声明（pit-providers 扩展消费）
 └── data/
-    ├── pi-config/<uuid>/    ← 租户 pi 配置
+    ├── pi-config/<uuid>/    ← 模板 pi 配置
     │   ├── extensions/      ← （含 _shared symlink）
     │   ├── skills/
     │   ├── git/ npm/
@@ -146,7 +146,7 @@ pit start --tenant local
     │   ├── models.json
     │   ├── presets.json
     │   ├── auth.json
-    │   └── agent-lab/       ← 租户本地 config/pin/arena/workloop
+    │   └── agent-lab/       ← 模板本地 config/pin/arena/workloop
     ├── shared/
     │   ├── extensions/      ← 共享扩展
     │   ├── skills/
@@ -181,9 +181,9 @@ pit start --tenant local
 - **审核模式**：`manual`（默认，人工 `/pit accept`）/ `auto`（自动注入下轮）/ `hybrid`
 - **会话注册**：每个 pi 进程启动时自动注册到 `registry.json`
 - **文件分享**：`/pit share <name> <file>`（store-and-forward）
-- **审计**：所有消息写入 `audit/{tenantId}/{sessionId}/` 不可变日志
+- **审计**：所有消息写入 `audit/{templateId}/{sessionId}/` 不可变日志
 
-mailbox 路径：`~/.pi-triple/data/mailbox/<uuid>/`（租户隔离）。
+mailbox 路径：`~/.pi-triple/data/mailbox/<uuid>/`（模板隔离）。
 
 ### pit-control — 会话内控制
 
@@ -203,8 +203,8 @@ pi 内直接管理 tmux 会话。替代 `Ctrl+B d/s`。
 记录每次 LLM 调用的 token/cost/latency，提供选型数据。
 
 - **共享 DB**：`~/.pi-triple/data/shared/agent-lab/agent-lab.db`（SQLite WAL）
-- **本地 DB**：per-tenant arena/workloop/config/pin
-- **`/lab stats`**：支持 `--tenant <alias>` / `--global` 聚合
+- **本地 DB**：per-template arena/workloop/config/pin
+- **`/lab stats`**：支持 `--template <alias>` / `--global` 聚合
 
 ### workflow — pi 内流程编排
 
@@ -269,7 +269,7 @@ pit programs            ← 列出 PTH 上的程序
 
 ## lab 遥测数据层
 
-`src/ptl/lab-data/` —— `pit lab` TUI 的数据底座。SQLite（WAL + busy_timeout）：共享 `runs` DB（跨租户 LLM 调用遥测）+ per-tenant arena/events/config。模块：`telemetry.ts` · `arena.ts` · `events.ts` · `open-db.ts` · `schema.ts`。
+`src/ptl/lab-data/` —— `pit lab` TUI 的数据底座。SQLite（WAL + busy_timeout）：共享 `runs` DB（跨模板 LLM 调用遥测）+ per-template arena/events/config。模块：`telemetry.ts` · `arena.ts` · `events.ts` · `open-db.ts` · `schema.ts`。
 
 ## TUI 模板规范
 
@@ -277,7 +277,7 @@ PTL 包含两个 Ink TUI：
 
 | TUI | 命令 | Tab 主题 |
 |-----|------|---------|
-| pit ui | `pit` / `pit ui` | Dashboard / Tenants / Sessions / Extensions / Config |
+| pit ui | `pit` / `pit ui` | Dashboard / Templates / Sessions / Extensions / Config |
 | lab ui | `pit lab` | Telemetry / Arena / Events / Compare / Config |
 
 两者共用统一的 `Screen` 布局模板和 `tui-shared/` 组件库。规范详见 `src/ptl/tui-shared/README.md`。核心契约：
