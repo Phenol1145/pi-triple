@@ -72,7 +72,7 @@ export function listPitSessions(): PitSession[] {
     });
 }
 
-/** 按租户别名获取运行中会话列表（B3 修复：前缀匹配而非精确匹配） */
+/** 按模板别名获取运行中会话列表（B3 修复：前缀匹配而非精确匹配） */
 export function sessionsForTenant(templateAlias: string): string[] {
   if (!hasTmux()) return [];
   const prefix = `pit-${templateAlias}-`;

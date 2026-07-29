@@ -32,7 +32,7 @@ export type { CmdNode };
 
 const COMMAND_TREE: CmdNode[] = [
   { name: "pi", desc: "原生前台启动 pi（无 tmux，离开 TUI）" },
-  { name: "start", desc: "后台 tmux 会话 <名称> [租户]" },
+  { name: "start", desc: "后台 tmux 会话 <名称> [模板]" },
   { name: "attach", desc: "接入后台会话 <名称>" },
   { name: "switch", desc: "切换会话（tmux 内瞬移）<名称>" },
   { name: "detach", desc: "脱离当前会话（保持运行）" },
@@ -40,11 +40,11 @@ const COMMAND_TREE: CmdNode[] = [
   { name: "ls", desc: "列出后台会话" },
   { name: "status", desc: "健康检查" },
   {
-    name: "template", desc: "租户管理 ▸",
+    name: "template", desc: "模板管理 ▸",
     children: [
-      { name: "ls", desc: "列出租户" },
-      { name: "new", desc: "新建租户 <别名>" },
-      { name: "rm", desc: "删除租户 <别名>" },
+      { name: "ls", desc: "列出模板" },
+      { name: "new", desc: "新建模板 <别名>" },
+      { name: "rm", desc: "删除模板 <别名>" },
       { name: "rename", desc: "重命名 <旧别名> <新别名>" },
     ],
   },

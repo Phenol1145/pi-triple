@@ -103,7 +103,7 @@ export function ExtensionsPage({ width, height: _h }: ExtensionsPageProps) {
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>共享层扩展自动对所有租户可用 · pit install 安装新扩展</Text>
+        <Text dimColor>共享层扩展自动对所有模板可用 · pit install 安装新扩展</Text>
       </Box>
     </Box>
   );

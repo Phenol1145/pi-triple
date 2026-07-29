@@ -2,8 +2,8 @@
  * Pi-Triple Migrate — 将现有 pi 配置/扩展/技能迁移到 Pi-Triple
  *
  * 用法：
- *   npm run migrate                  # 迁移到默认租户 "local"
- *   npm run migrate -- --tenant dev  # 迁移到指定租户
+ *   npm run migrate                  # 迁移到默认模板 "local"
+ *   npm run migrate -- --tenant dev  # 迁移到指定模板
  *   npm run migrate -- --source /custom/pi/agent  # 自定义源目录
  *   npm run migrate -- --dry-run     # 只预览，不复制
  */
@@ -125,7 +125,7 @@ export async function migrate(options: Partial<MigrateOptions> & { templateId?: 
   console.log("");
   console.log(`  源:   ${source}`);
   console.log(`  目标: ${target}`);
-  console.log(`  租户: ${templateId}`);
+  console.log(`  模板: ${templateId}`);
   if (dryRun) console.log("  \x1b[33m模式: 预览 (dry-run)\x1b[0m");
   console.log("");
 

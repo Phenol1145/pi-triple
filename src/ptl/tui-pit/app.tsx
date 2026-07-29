@@ -127,12 +127,12 @@ export function PitApp() {
           const { loadConfig: lc, resolveTemplateId: rt, renameTemplate: rn } = await import("../config.js");
           const cfg = lc();
           const resolved = rt(args[1] ?? "", cfg);
-          if (!resolved.ok) result = { ok: false, message: "", error: { code: "TENANT_NOT_FOUND", message: `租户 "${args[1]}" 不存在` } };
+          if (!resolved.ok) result = { ok: false, message: "", error: { code: "TENANT_NOT_FOUND", message: `模板 "${args[1]}" 不存在` } };
           else if (!args[2]) result = { ok: false, message: "", error: { code: "INVALID_ARGS", message: "用法: template rename <旧别名> <新别名>" } };
           else {
             const ok = rn(resolved.id, args[2], cfg);
             result = ok
-              ? { ok: true, message: `✅ 租户别名: ${args[1]} → ${args[2]}` }
+              ? { ok: true, message: `✅ 模板别名: ${args[1]} → ${args[2]}` }
               : { ok: false, message: "", error: { code: "RENAME_FAILED", message: "重命名失败（别名重复或无效）" } };
           }
         }
@@ -159,9 +159,9 @@ export function PitApp() {
             "  stop <name>               停止会话",
             "  ls                        列出后台会话",
             "  status                    健康检查",
-            "  template ls                 列出租户",
-            "  template new <alias>        新建租户",
-            "  template rm <alias>         删除租户",
+            "  template ls                 列出模板",
+            "  template new <alias>        新建模板",
+            "  template rm <alias>         删除模板",
             "  shared status             共享层状态",
             "  help                      此帮助",
             "  quit                      退出 pit ui",

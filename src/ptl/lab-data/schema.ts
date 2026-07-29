@@ -33,6 +33,6 @@ export const RUN_COLUMNS = [
   "signals",
   "source",
   "trace_id",
-  "tenant_id",
+  "template_id",
   "session_id",
 ] as const;

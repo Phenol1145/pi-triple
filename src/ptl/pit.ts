@@ -2,7 +2,7 @@
 /**
  * pit — Pi-Triple 统一 CLI (PTL)
  *
- * 租户使用 UUID + alias 模式。
+ * 模板使用 UUID + alias 模式。
  * 所有路径用 UUID，用户交互用 alias。
  */
 
@@ -246,22 +246,22 @@ async function main() {
         const React = (await import("react")).default;
         const { LabApp } = await import("./tui-lab/app.js");
         const cfg = loadConfig();
-        const labResolved = flags.tenant ? resolveTemplateId(flags.tenant, cfg) : null;
-        if (flags.tenant && (!labResolved || !labResolved.ok)) {
+        const labResolved = flags.template ? resolveTemplateId(flags.template, cfg) : null;
+        if (flags.template && (!labResolved || !labResolved.ok)) {
           const reason = labResolved && !labResolved.ok ? labResolved.reason : "not_found";
           if (reason === "ambiguous" && labResolved && !labResolved.ok && "candidates" in labResolved) {
             const candidates = labResolved.candidates.map((c) => `${getTemplateAlias(c, cfg)} (${c.slice(0, 8)}…)`).join(", ");
-            console.log(`\x1b[31m❌ "${flags.tenant}" 匹配多个租户: ${candidates}\x1b[0m`);
+            console.log(`\x1b[31m❌ "${flags.template}" 匹配多个模板: ${candidates}\x1b[0m`);
           } else {
-            console.log(`\x1b[31m❌ 未知租户: "${flags.tenant}"\x1b[0m`);
+            console.log(`\x1b[31m❌ 未知模板: "${flags.template}"\x1b[0m`);
           }
-          console.log("  运行 \x1b[36mpit template ls\x1b[0m 查看可用租户\n");
+          console.log("  运行 \x1b[36mpit template ls\x1b[0m 查看可用模板\n");
           process.exit(1);
         }
         const labTemplateId = labResolved?.ok ? labResolved.id : getDefaultTemplateId(cfg);
         const labAlias = getTemplateAlias(labTemplateId, cfg);
         const labGlobal = flags.global === "true";
-        // 注入 per-tenant AGENT_LAB_* env，确保 lab-data 解析到该租户数据（与 buildPiLaunch 一致）
+        // 注入 per-tenant AGENT_LAB_* env，确保 lab-data 解析到该模板数据（与 buildPiLaunch 一致）
         const labHome = pitHome();
         if (labGlobal) {
           // --global：只用共享遥测 DB

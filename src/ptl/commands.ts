@@ -45,7 +45,7 @@ export async function execTemplateLs(): Promise<CommandResult> {
   const templates = listTemplates(config);
 
   if (templates.length === 0) {
-    return { ok: true, message: "(无租户，运行 pit template new 创建)", data: { templates: [] } };
+    return { ok: true, message: "(无模板，运行 pit template new 创建)", data: { templates: [] } };
   }
 
   const lines: string[] = [];
@@ -81,7 +81,7 @@ export async function execTemplateNew(alias?: string): Promise<CommandResult> {
     return {
       ok: false,
       message: "",
-      error: { code: ERR.INTERACTIVE_REQUIRED, message: "请提供租户别名: pit template new <alias>" },
+      error: { code: ERR.INTERACTIVE_REQUIRED, message: "请提供模板别名: pit template new <alias>" },
     };
   }
 
@@ -113,7 +113,7 @@ export async function execTemplateNew(alias?: string): Promise<CommandResult> {
 
     return {
       ok: true,
-      message: `  ✅ 租户已创建: ${displayAlias} (${id.slice(0, 8)}…)${sharedMsg}`,
+      message: `  ✅ 模板已创建: ${displayAlias} (${id.slice(0, 8)}…)${sharedMsg}`,
       data: {
         id,
         alias: displayAlias,
@@ -143,10 +143,10 @@ export async function execTemplateRm(input: string): Promise<CommandResult> {
       return {
         ok: false,
         message: "",
-        error: { code: ERR.TENANT_AMBIGUOUS, message: `"${input}" 匹配多个租户`, candidates: result.candidates },
+        error: { code: ERR.TENANT_AMBIGUOUS, message: `"${input}" 匹配多个模板`, candidates: result.candidates },
       };
     }
-    return { ok: false, message: "", error: { code: ERR.TENANT_NOT_FOUND, message: `租户 "${input}" 不存在` } };
+    return { ok: false, message: "", error: { code: ERR.TENANT_NOT_FOUND, message: `模板 "${input}" 不存在` } };
   }
 
   const id = result.id;
@@ -158,7 +158,7 @@ export async function execTemplateRm(input: string): Promise<CommandResult> {
     return {
       ok: false,
       message: "",
-      error: { code: ERR.HANDOFF_REQUIRED, message: `租户 "${alias}" 有 ${running.length} 个运行中的会话 (${running.map((s) => s.replace(/^pit-/, "")).join(", ")})，先执行: pit stop --all 或逐个停止` },
+      error: { code: ERR.HANDOFF_REQUIRED, message: `模板 "${alias}" 有 ${running.length} 个运行中的会话 (${running.map((s) => s.replace(/^pit-/, "")).join(", ")})，先执行: pit stop --all 或逐个停止` },
     };
   }
 
@@ -176,7 +176,7 @@ export async function execTemplateRm(input: string): Promise<CommandResult> {
 
   return {
     ok: true,
-    message: `  ✅ 租户 "${alias}" 已删除\n${deleted.map((d) => `  📁 ${d}`).join("\n")}`,
+    message: `  ✅ 模板 "${alias}" 已删除\n${deleted.map((d) => `  📁 ${d}`).join("\n")}`,
     data: { alias, id: id.slice(0, 8), deleted },
   };
 }
@@ -269,7 +269,7 @@ export async function execStartBg(
     ? resolveTemplateId(templateInput, config)
     : { ok: true as const, id: config.defaultTemplate };
   if (!resolved.ok) {
-    return { ok: false, message: "", error: { code: ERR.TENANT_NOT_FOUND, message: `租户 "${templateInput}" 不存在` } };
+    return { ok: false, message: "", error: { code: ERR.TENANT_NOT_FOUND, message: `模板 "${templateInput}" 不存在` } };
   }
   const templateId = resolved.id;
   const alias = getTemplateAlias(templateId, config);

@@ -16,9 +16,9 @@ export async function pipeToProcess(
   flags: Record<string, string>,
 ): Promise<void> {
   const config = loadConfig();
-  // Use --tenant or default
-  const resolved = flags.tenant
-    ? resolveTemplateId(flags.tenant, config)
+  // Use --template or default
+  const resolved = flags.template
+    ? resolveTemplateId(flags.template, config)
     : null;
   const templateId = (resolved?.ok ? resolved.id : null) ?? getDefaultTemplateId(config);
   const templateConfig = config.templates[templateId] ?? {};

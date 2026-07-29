@@ -1,5 +1,5 @@
 /**
- * lab-data/events — per-tenant DB 查询（调度事件流）
+ * lab-data/events — per-template DB 查询（调度事件流）
  *
  * 表结构（lab_events）：
  *   event_id, event_type, schema_version, ts, sequence, trace_id,

@@ -445,7 +445,7 @@ export function setConfigValue(key: string, value: string, config?: PiTripleConf
   return { ok: true };
 }
 
-/** 删除配置键（仅租户可选字段） */
+/** 删除配置键（仅模板可选字段） */
 export function unsetConfigValue(key: string, config?: PiTripleConfig): ConfigSetResult {
   const cfg = config ?? loadConfig();
   const parts = key.split(".");

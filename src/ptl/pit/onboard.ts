@@ -20,16 +20,16 @@ export function resolveOrFail(input: string | undefined, config: PiTripleConfig)
   const result = resolveTemplateId(input, config);
   if (result.ok) return result.id;
   if (result.reason === "ambiguous") {
-    console.log(`  \x1b[31m❌ "${input}" 匹配多个租户:\x1b[0m`);
+    console.log(`  \x1b[31m❌ "${input}" 匹配多个模板:\x1b[0m`);
     for (const c of result.candidates) {
       const alias = getTemplateAlias(c, config);
       console.log(`      ${alias} (${c})`);
     }
     console.log("  请使用更长的 UUID 前缀或别名");
   } else {
-    console.log(`  \x1b[31m❌ 未知租户: "${input}"\x1b[0m`);
+    console.log(`  \x1b[31m❌ 未知模板: "${input}"\x1b[0m`);
   }
-  console.log("  运行 \x1b[36mpit template ls\x1b[0m 查看可用租户\n");
+  console.log("  运行 \x1b[36mpit template ls\x1b[0m 查看可用模板\n");
   return null;
 }
 
@@ -52,7 +52,7 @@ export async function cmdOnboard(flags: Record<string, string>): Promise<void> {
   console.log("  ✅ pi-triple.json 已就绪 (v2, UUID+alias)");
 
   console.log("");
-  console.log("  \x1b[1mStep 3/4\x1b[0m — 租户环境");
+  console.log("  \x1b[1mStep 3/4\x1b[0m — 模板环境");
   console.log("  " + "─".repeat(40));
   const dataDir = resolveDataDir(config);
   const defaultId = getDefaultTemplateId(config);
@@ -60,10 +60,10 @@ export async function cmdOnboard(flags: Record<string, string>): Promise<void> {
 
   if (fs.existsSync(templateDir) && fs.existsSync(path.join(templateDir, "settings.json"))) {
     const alias = getTemplateAlias(defaultId, config);
-    console.log(`  ✅ 租户 "${alias}" (${defaultId.slice(0, 8)}…) 已存在`);
+    console.log(`  ✅ 模板 "${alias}" (${defaultId.slice(0, 8)}…) 已存在`);
   } else {
     const alias = getTemplateAlias(defaultId, config);
-    console.log(`  创建租户 "${alias}" (${defaultId.slice(0, 8)}…)…`);
+    console.log(`  创建模板 "${alias}" (${defaultId.slice(0, 8)}…)…`);
     await migrate({ templateId: defaultId });
   }
 
@@ -88,16 +88,16 @@ export async function cmdOnboard(flags: Record<string, string>): Promise<void> {
   console.log("  \x1b[32m\x1b[1m🎉 Pi-Triple 准备就绪！\x1b[0m");
   console.log("");
   console.log("  启动: pit start");
-  console.log("  租户: pit template ls");
+  console.log("  模板: pit template ls");
   console.log("  帮助: pit help");
   console.log("");
 }
 
-/** 解析租户（含位置参数）+ 首次启动自动迁移 */
+/** 解析模板（含位置参数）+ 首次启动自动迁移 */
 export async function resolveTemplateAndMigrate(flags: Record<string, string>, passthrough: string[]): Promise<{ templateId: string; piPassthrough: string[] } | null> {
   const config = loadConfig();
 
-  let templateInput = flags.tenant;
+  let templateInput = flags.template;
   const piPassthrough = [...passthrough];
   if (!templateInput && piPassthrough.length > 0) {
     const resolved = resolveTemplateId(piPassthrough[0], config);

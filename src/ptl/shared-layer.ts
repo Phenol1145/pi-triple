@@ -51,7 +51,7 @@ export function linkTemplateToShared(templateDir: string, sharedDir: string): vo
   }
 }
 
-/** 移除租户的共享层链接（只删 symlink，不删租户自有文件） */
+/** 移除模板的共享层链接（只删 symlink，不删模板自有文件） */
 export function unlinkTemplateFromShared(templateDir: string): void {
   for (const dir of SHARED_DIRS) {
     const tenantSubDir = path.join(templateDir, dir);
@@ -68,7 +68,7 @@ export function unlinkTemplateFromShared(templateDir: string): void {
   }
 }
 
-/** 确保租户链接完整（launcher 启动前调用） */
+/** 确保模板链接完整（launcher 启动前调用） */
 export function ensureTemplateLinks(templateDir: string, sharedDir: string): void {
   if (!fs.existsSync(sharedDir)) return;
   linkTemplateToShared(templateDir, sharedDir);
@@ -98,7 +98,7 @@ export function sharedStatus(sharedDir: string): {
 }
 
 /**
- * 将现有租户中的扩展/技能/包提升到共享层。
+ * 将现有模板中的扩展/技能/包提升到共享层。
  * 使用 cpSync + rmSync 而非 rename，因为可能跨文件系统。
  */
 export function promoteToShared(templateDir: string, sharedDir: string): {

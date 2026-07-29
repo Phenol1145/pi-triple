@@ -99,13 +99,13 @@ interface PickerOptions {
 }
 
 export async function interactiveStart(options: PickerOptions): Promise<{
-  tenant: string;
+  template: string;
   name: string;
   model?: string;
   bg: boolean;
 }> {
   return new Promise((resolve) => {
-    const tenantItems: SelectItem[] = [
+    const templateItems: SelectItem[] = [
       ...options.templates.map((t) => ({
         label: t.alias + (t.isDefault ? " (default)" : ""),
         value: t.id,
@@ -120,14 +120,14 @@ export async function interactiveStart(options: PickerOptions): Promise<{
 
     function Wizard() {
       const [step, setStep] = useState(0);
-      const [tenant, setTenant] = useState("");
+      const [template, setTemplate] = useState("");
 
       if (step === 0) {
         return (
           <Select
-            title="选择租户"
-            items={tenantItems}
-            onSelect={(v) => { setTenant(v); setStep(1); }}
+            title="选择模板"
+            items={templateItems}
+            onSelect={(v) => { setTemplate(v); setStep(1); }}
           />
         );
       }
@@ -136,7 +136,7 @@ export async function interactiveStart(options: PickerOptions): Promise<{
           title="启动模式"
           items={modeItems}
           onSelect={(v) => {
-            resolve({ tenant, name: `session-${Date.now().toString(36)}`, bg: v === "bg" });
+            resolve({ template, name: `session-${Date.now().toString(36)}`, bg: v === "bg" });
             unmount();
           }}
         />

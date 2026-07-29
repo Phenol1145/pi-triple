@@ -1,12 +1,12 @@
 /**
  * Pi-Triple Launcher — 启动配置好的 pi 实例
  *
- * Pi-Triple 不再自建 TUI，而是作为 pi 的多租户会话管理器：
+ * Pi-Triple 不再自建 TUI，而是作为 pi 的多模板会话管理器：
  * - 认证（token → tenant）
  * - 工作目录隔离（per-tenant workspace）
  * - 模型路由（ModelRouter → --provider --model）
  * - 工具 ACL（ToolRegistry → --tools）
- * - 租户级 system prompt 注入
+ * - 模板级 system prompt 注入
  *
  * 用户获得 pi 完整的 TUI 体验（Markdown、补全、主题、技能、/命令、!bash）。
  */

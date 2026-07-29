@@ -43,12 +43,12 @@ export function aggregateByRole(
     sql += ` AND role = ?`;
     params.push(role);
   }
-  // NULL tenant_id = pre-migration legacy rows.
-  //   - Tenant-filtered queries (templateId provided): INCLUDE legacy rows (OR tenant_id IS NULL)
-  //     so historic data contributes to per-tenant stats.
+  // NULL template_id = pre-migration legacy rows.
+  //   - Template-filtered queries (templateId provided): INCLUDE legacy rows (OR template_id IS NULL)
+  //     so historic data contributes to per-template stats.
   //   - Global queries (templateId undefined): all rows counted including legacy.
   if (templateId) {
-    sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
+    sql += ` AND (template_id = ? OR template_id IS NULL)`;
     params.push(templateId);
   }
 
@@ -67,7 +67,7 @@ export function listRoles(db: DatabaseSync, templateId?: string, days = 7): stri
   const params: (string | number)[] = [cutoff];
 
   if (templateId) {
-    sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
+    sql += ` AND (template_id = ? OR template_id IS NULL)`;
     params.push(templateId);
   }
 
@@ -121,7 +121,7 @@ export function modelComparison(
     `;
     const params: (string | number)[] = [model, cutoff];
     if (templateId) {
-      sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
+      sql += ` AND (template_id = ? OR template_id IS NULL)`;
       params.push(templateId);
     }
     return db.prepare(sql).get(...params) as unknown as Record<string, number> | undefined;

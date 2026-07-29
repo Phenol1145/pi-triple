@@ -3,9 +3,9 @@
  * tui-lab — Agent Lab Monitor 入口
  *
  * 用法：
- *   pit lab                   # 默认租户 + Telemetry 本租户
- *   pit lab --tenant dev      # 指定租户
- *   pit lab --global          # Telemetry 全局，Arena/Events 仍需选租户
+ *   pit lab                   # 默认模板 + Telemetry 本模板
+ *   pit lab --tenant dev      # 指定模板
+ *   pit lab --global          # Telemetry 全局，Arena/Events 仍需选模板
  */
 
 import { render } from "ink";

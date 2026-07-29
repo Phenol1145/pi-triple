@@ -1,5 +1,5 @@
 /**
- * lab-data/arena — per-tenant DB 查询（arena 经济模型）
+ * lab-data/arena — per-template DB 查询（arena 经济模型）
  *
  * 表结构：
  *   credits (agent, balance, frozen, updated_ts)

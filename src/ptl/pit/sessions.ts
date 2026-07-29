@@ -52,7 +52,7 @@ export async function cmdPi(flags: Record<string, string>, passthrough: string[]
 export async function cmdStart(flags: Record<string, string>, passthrough: string[]): Promise<void> {
   const config = loadConfig();
 
-  const hasArgs = flags.tenant || flags.model || flags.name || flags.bg === "true" || passthrough.length > 0;
+  const hasArgs = flags.template || flags.model || flags.name || flags.bg === "true" || passthrough.length > 0;
   if (!hasArgs && process.stdout.isTTY) {
     const { interactiveStart } = await import("../picker.js");
     const templates = listTemplates(config).map((t) => ({
@@ -62,7 +62,7 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
     }));
 
     const choice = await interactiveStart({ templates });
-    flags.tenant = choice.tenant;
+    flags.template = choice.template;
     if (choice.bg) flags.bg = "true";
     if (choice.name) flags.name = choice.name;
   }
@@ -124,12 +124,12 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
       console.log(`  \x1b[31m❌ 创建会话失败: ${create.stderr}\x1b[0m`);
       process.exit(1);
     }
-    console.log(`  会话: ${name} · 租户: ${alias} · 切换到新会话…`);
+    console.log(`  会话: ${name} · 模板: ${alias} · 切换到新会话…`);
     spawnSync("tmux", ["switch-client", "-t", `=${session}`], { stdio: "inherit" });
     return;
   }
 
-  console.log(`  会话: ${name} · 租户: ${alias} · Ctrl+B d 脱离（会话保持运行）`);
+  console.log(`  会话: ${name} · 模板: ${alias} · Ctrl+B d 脱离（会话保持运行）`);
 
   const tmuxArgs = buildTmuxSessionArgs(launch, session, false);
   const result = spawnSync("tmux", tmuxArgs, { stdio: "inherit" });
@@ -138,7 +138,7 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
 
 export async function cmdStartBg(flags: Record<string, string>, passthrough: string[]): Promise<void> {
   const config = loadConfig();
-  const templateId = resolveOrFail(flags.tenant, config);
+  const templateId = resolveOrFail(flags.template, config);
   if (!templateId) { process.exit(1); }
   const alias = getTemplateAlias(templateId, config);
   const name = flags.name ?? `${alias}-${Date.now().toString(36)}`;
@@ -181,7 +181,7 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
       process.exit(1);
     }
     console.log(`  \x1b[32m✅ 后台会话已启动\x1b[0m`);
-    console.log(`  名称: ${name} · 租户: ${alias} (${templateId.slice(0, 8)}…) · 工作区: ${launch.cwd}`);
+    console.log(`  名称: ${name} · 模板: ${alias} (${templateId.slice(0, 8)}…) · 工作区: ${launch.cwd}`);
     console.log(`  接入: \x1b[36mpit attach ${name}\x1b[0m`);
     console.log(`  切换: tmux 内 \x1b[2mCtrl+B s\x1b[0m 选择 · \x1b[2mCtrl+B d\x1b[0m 脱离`);
   } else {
