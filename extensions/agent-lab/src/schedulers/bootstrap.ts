@@ -12,6 +12,8 @@ import {
 } from "./weighted-scorer.ts";
 import { ARENA_DEFINITION, ARENA_DEFAULT_PARAMETERS } from "./arena-definition.ts";
 import { createArenaSchedulerImplementation } from "./arena-scheduler.ts";
+import { findOrCreateAgentByModel } from "../arena/agent-id.ts";
+import { randomUUID } from "node:crypto";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -143,34 +145,14 @@ export function syncWeightedScorerAgents(
   instanceId: string,
   candidates: ModelInfo[],
 ): number {
-  const existing = core.repository.listAgents(instanceId);
-  const existingIds = new Set(existing.map((a) => a.id));
-
-  const instance = core.repository.getInstance(instanceId);
-  if (!instance) {
-    throw new Error(`scheduler instance not found: ${instanceId}`);
-  }
-
-  let added = 0;
-  const now = Date.now();
+  const before = core.repository.listAgents(instanceId).length;
 
   for (const model of candidates) {
-    const spec = modelToAgentCreateSpec(model);
-    if (!existingIds.has(spec.id)) {
-      existingIds.add(spec.id);
-      core.repository.insertAgent({
-        id: spec.id,
-        schedulerInstanceId: instanceId,
-        definition: spec.definition,
-        createdAtRoundId: instance.currentRoundId,
-        status: "ready",
-        createdAt: now,
-      });
-      added++;
-    }
+    findOrCreateAgentByModel(core, instanceId, model, process.env.PI_TEMPLATE);
   }
 
-  return added;
+  const after = core.repository.listAgents(instanceId).length;
+  return after - before;
 }
 
 // ── ensureArenaInstance ───────────────────────────────────────────────
@@ -311,32 +293,60 @@ export function syncArenaAgents(
   instanceId: string,
   candidates: ModelInfo[],
 ): number {
-  const existing = core.repository.listAgents(instanceId);
-  const existingIds = new Set(existing.map((a) => a.id));
-
-  const instance = core.repository.getInstance(instanceId);
-  if (!instance) {
-    throw new Error(`scheduler instance not found: ${instanceId}`);
-  }
-
-  let added = 0;
-  const now = Date.now();
+  const before = core.repository.listAgents(instanceId).length;
 
   for (const model of candidates) {
-    const spec = modelToAgentCreateSpec(model, "arena");
-    if (!existingIds.has(spec.id)) {
-      existingIds.add(spec.id);
+    findOrCreateAgentByModel(core, instanceId, model, process.env.PI_TEMPLATE);
+  }
+
+  const after = core.repository.listAgents(instanceId).length;
+  return after - before;
+}
+
+// ── derived→UUID migration ───────────────────────────────────────────
+
+/**
+ * Migrate lab_agent_instances rows with old derived-format ids
+ * (agent-arena-* / agent-*) to UUIDs, populating the model column.
+ * Extracts model from definition_json, generates a UUID, and updates.
+ * Idempotent: rows that already have a UUID id are skipped.
+ *
+ * @returns the number of rows migrated.
+ */
+export function migrateDerivedAgentIds(core: LabCore, schedulerInstanceId: string, rawDb: { prepare: (sql: string) => { run: (...args: unknown[]) => void } }): number {
+  const rows = core.repository.listAgents(schedulerInstanceId);
+  const derived = rows.filter((a) => a.id.startsWith("agent-") && !a.model);
+
+  if (derived.length === 0) return 0;
+
+  let migrated = 0;
+  for (const agent of derived) {
+    const def = agent.definition as { standard?: { name?: string } };
+    const modelId = def.standard?.name ?? "";
+    if (!modelId) continue;
+
+    const newId = randomUUID();
+    // Insert with UUID + model, then delete old derived-id row.
+    try {
       core.repository.insertAgent({
-        id: spec.id,
-        schedulerInstanceId: instanceId,
-        definition: spec.definition,
-        createdAtRoundId: instance.currentRoundId,
-        status: "ready",
-        createdAt: now,
+        id: newId,
+        schedulerInstanceId: agent.schedulerInstanceId,
+        definition: agent.definition,
+        model: modelId,
+        sourceTemplateId: agent.sourceTemplateId,
+        sourceAgentId: agent.sourceAgentId,
+        cloneOperationId: agent.cloneOperationId,
+        createdAtRoundId: agent.createdAtRoundId,
+        status: agent.status,
+        createdAt: agent.createdAt,
       });
-      added++;
+      // Remove old derived-id row
+      rawDb.prepare("DELETE FROM lab_agent_instances WHERE id = ?").run(agent.id);
+      migrated++;
+    } catch {
+      // UNIQUE constraint: another migration path already handled this model
     }
   }
 
-  return added;
+  return migrated;
 }
