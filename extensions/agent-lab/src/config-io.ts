@@ -4,16 +4,24 @@ import { join } from "node:path";
 import type { LabConfig } from "./types.ts";
 import { mergeConfig } from "./config.ts";
 
+/** pitHome 解析（与 pit 经 env 契约一致，扩展自含，不 import pit 代码） */
+function pitHome(): string {
+  return process.env.PI_TRIPLE_HOME ?? join(homedir(), ".pi-triple");
+}
+
 /** per-tenant 配置目录（config.json / role_pin / arena / workloop） */
 export function localConfigDir(): string {
-  return process.env.AGENT_LAB_CONFIG_DIR
-    ?? join(homedir(), ".pi", "agent", "agent-lab");
+  if (process.env.AGENT_LAB_CONFIG_DIR) return process.env.AGENT_LAB_CONFIG_DIR;
+  const tenant = process.env.PI_TENANT;
+  if (tenant) return join(pitHome(), "data", "pi-config", tenant, "agent-lab");
+  return join(homedir(), ".pi", "agent", "agent-lab");
 }
 
 /** 共享遥测 DB 路径（runs 表） */
 export function sharedDbPath(): string {
-  return process.env.AGENT_LAB_DB_PATH
-    ?? join(localConfigDir(), "agent-lab.db");
+  if (process.env.AGENT_LAB_DB_PATH) return process.env.AGENT_LAB_DB_PATH;
+  if (process.env.PI_TENANT) return join(pitHome(), "data", "shared", "agent-lab", "agent-lab.db");
+  return join(localConfigDir(), "agent-lab.db");
 }
 
 // 向后兼容别名
