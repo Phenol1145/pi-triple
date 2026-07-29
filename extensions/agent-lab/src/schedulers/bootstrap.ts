@@ -47,6 +47,28 @@ export async function ensureWeightedScorerInstance(
 ): Promise<BootstrapResult> {
   const instanceId = opts?.instanceId ?? DEFAULT_INSTANCE_ID;
 
+  // 0. Register definition + implementation FIRST (idempotent). Must run even
+  // when the instance already exists: the in-memory SchedulerRegistry is rebuilt
+  // every boot, so the implementation must be re-registered regardless of DB
+  // state. (Fixes re-boot bug: the idempotency early-return below previously
+  // skipped registration, leaving the fresh registry without the implementation
+  // → "implementation not found" on the second boot.)
+  try {
+    core.definitions.register(weightedScorerDefinition);
+  } catch (err) {
+    // Already registered — ignore
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("already registered")) throw err;
+  }
+  try {
+    const { implementation } = createWeightedScorer(ports);
+    schedulers.register(implementation);
+  } catch (err) {
+    // Already registered — ignore
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("already registered")) throw err;
+  }
+
   // 1. Idempotency check: if instance already exists and is active, return it
   const existing = core.repository.getInstance(instanceId);
   if (existing && existing.status === "active") {
@@ -68,25 +90,6 @@ export async function ensureWeightedScorerInstance(
     if (staleDraft) {
       core.repository.deleteDraft(instanceId);
     }
-  }
-
-  // 2. Register definition (idempotent via DefinitionRegistry conflict)
-  try {
-    core.definitions.register(weightedScorerDefinition);
-  } catch (err) {
-    // Already registered — ignore
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("already registered")) throw err;
-  }
-
-  // 3. Register implementation (idempotent via SchedulerRegistry conflict)
-  try {
-    const { implementation } = createWeightedScorer(ports);
-    schedulers.register(implementation);
-  } catch (err) {
-    // Already registered — ignore
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("already registered")) throw err;
   }
 
   // 4. Build agent specs from candidates
@@ -204,6 +207,25 @@ export async function ensureArenaInstance(
 ): Promise<BootstrapResult> {
   const instanceId = opts?.instanceId ?? DEFAULT_ARENA_INSTANCE_ID;
 
+  // 0. Register definition + implementation FIRST (idempotent). Must run even
+  // when the instance already exists: the in-memory SchedulerRegistry is rebuilt
+  // every boot, so the implementation must be re-registered regardless of DB
+  // state. (Fixes re-boot bug: the idempotency early-return below previously
+  // skipped registration → "implementation not found: arena@1.0.0" on re-boot.)
+  try {
+    core.definitions.register(ARENA_DEFINITION);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("already registered")) throw err;
+  }
+  try {
+    const implementation = createArenaSchedulerImplementation(ports);
+    schedulers.register(implementation);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("already registered")) throw err;
+  }
+
   // 1. Idempotency check: if instance already exists and is active, return it
   const existing = core.repository.getInstance(instanceId);
   if (existing && existing.status === "active") {
@@ -225,23 +247,6 @@ export async function ensureArenaInstance(
     if (staleDraft) {
       core.repository.deleteDraft(instanceId);
     }
-  }
-
-  // 2. Register definition (idempotent via DefinitionRegistry conflict)
-  try {
-    core.definitions.register(ARENA_DEFINITION);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("already registered")) throw err;
-  }
-
-  // 3. Register implementation (idempotent via SchedulerRegistry conflict)
-  try {
-    const implementation = createArenaSchedulerImplementation(ports);
-    schedulers.register(implementation);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("already registered")) throw err;
   }
 
   // 4. Build agent specs from candidates
