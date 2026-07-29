@@ -282,15 +282,14 @@ export function modelToAgentDefinition(model: ModelInfo): AgentDefinition {
   };
 }
 
+import { randomUUID } from "node:crypto";
+
 export function modelToAgentCreateSpec(
   model: ModelInfo,
-  idNamespace?: string,
+  _idNamespace?: string,
 ): AgentCreateSpec {
-  const sanitized = model.id.replace(/[^a-zA-Z0-9_-]/g, "-");
   return {
-    // lab_agent_instances.id is a GLOBAL primary key: schedulers sharing a
-    // model catalog must namespace their agent ids or co-bootstrap collides.
-    id: idNamespace ? `agent-${idNamespace}-${sanitized}` : `agent-${sanitized}`,
+    id: randomUUID(),
     definition: modelToAgentDefinition(model),
   };
 }
