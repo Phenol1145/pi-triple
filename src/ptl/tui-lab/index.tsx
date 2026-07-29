@@ -10,22 +10,22 @@
 
 import { render } from "ink";
 import { LabApp } from "./app.js";
-import { loadConfig, getDefaultTenantId, resolveTenantId, getTenantAlias } from "../config.js";
+import { loadConfig, getDefaultTemplateId, resolveTemplateId, getTemplateAlias } from "../config.js";
 
 const args = process.argv.slice(2);
 
-let tenantId: string;
+let templateId: string;
 let globalTelemetry = false;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--tenant" && args[i + 1]) {
     const config = loadConfig();
-    const resolved = resolveTenantId(args[++i], config);
+    const resolved = resolveTemplateId(args[++i], config);
     if (resolved.ok) {
-      tenantId = resolved.id;
+      templateId = resolved.id;
     } else if (resolved.reason === "ambiguous") {
       console.error(`Ambiguous tenant "${resolved.input}". Candidates: ${resolved.candidates.map((c) => {
-        const alias = config.tenants[c]?.alias ?? c.slice(0, 8);
+        const alias = config.templates[c]?.alias ?? c.slice(0, 8);
         return `${alias} (${c.slice(0, 8)}…)`;
       }).join(", ")}`);
       console.error("Use a longer UUID prefix or the full UUID.");
@@ -40,21 +40,21 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-if (!tenantId!) {
+if (!templateId!) {
   const config = loadConfig();
-  tenantId = getDefaultTenantId(config);
+  templateId = getDefaultTemplateId(config);
 }
 
 const alias = (() => {
   try {
     const config = loadConfig();
-    return getTenantAlias(tenantId, config);
+    return getTemplateAlias(templateId, config);
   } catch {
-    return tenantId.slice(0, 8);
+    return templateId.slice(0, 8);
   }
 })();
 
 render(
-  <LabApp tenantId={tenantId} tenantAlias={alias} globalTelemetry={globalTelemetry} />,
+  <LabApp templateId={templateId} templateAlias={alias} globalTelemetry={globalTelemetry} />,
   { exitOnCtrlC: false },
 );

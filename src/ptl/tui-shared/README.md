@@ -28,7 +28,7 @@ export function MyApp() {
     <Screen
       title="My Tool"                    // Head 左：标题
       version="0.1.0"                    // Head 左：版本（可选）
-      status="tenant: local | DB: ok"    // Head 右：状态（可选）
+      status="template: local | DB: ok"    // Head 右：状态（可选）
       tabs={TABS}                        // Head 下：Tab 栏（可选）
       activeTab={activeTab}
       hints="[1-2] Tab  [q] Quit"        // Tips：快捷键提示

@@ -16,8 +16,8 @@ import { ComparePage } from "./compare.js";
 import { LabConfigPage } from "./lab-config.js";
 
 interface Props {
-  tenantId: string;
-  tenantAlias: string;
+  templateId: string;
+  templateAlias: string;
   globalTelemetry: boolean;
 }
 
@@ -30,7 +30,7 @@ const LAB_COMMANDS: CmdNode[] = [
   { name: "exit", desc: "退出 lab（同 quit）" },
 ];
 
-export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
+export function LabApp({ templateId, templateAlias, globalTelemetry }: Props) {
   const { columns } = useTerminalSize();
   const [commandMode, setCommandMode] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
@@ -58,12 +58,12 @@ export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
 
   const localDb: DatabaseSync | null = useMemo(() => {
     try {
-      const p = localDbPath(tenantId);
+      const p = localDbPath(templateId);
       return openReadOnlyOrNull(p);
     } catch {
       return null;
     }
-  }, [tenantId]);
+  }, [templateId]);
 
   // Close DBs on unmount
   useEffect(() => {
@@ -99,12 +99,12 @@ export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
     if (input === "r" && !key.ctrl) refresh();
   });
 
-  const effectiveTenant = globalTelemetry ? undefined : tenantId;
+  const effectiveTenant = globalTelemetry ? undefined : templateId;
 
   return (
     <Screen
       title="Agent Lab Monitor"
-      status={`tenant: ${tenantAlias}${globalTelemetry ? " (global)" : ""} | DB: ${sharedDb ? "connected" : "offline"}`}
+      status={`tenant: ${templateAlias}${globalTelemetry ? " (global)" : ""} | DB: ${sharedDb ? "connected" : "offline"}`}
       tabs={TABS}
       activeTab={activeTab}
       hints={`[1-${TABS.length}] Tab  [r] Refresh  [/] Command  /quit 退出`}
@@ -112,18 +112,18 @@ export function LabApp({ tenantId, tenantAlias, globalTelemetry }: Props) {
       {activeTab === "Telemetry" && (
         <TelemetryPage
           db={sharedDb}
-          tenantId={effectiveTenant}
+          templateId={effectiveTenant}
           refreshKey={refreshKey}
         />
       )}
       {activeTab === "Arena" && (
-        <ArenaPage db={localDb} refreshKey={refreshKey} tenantAlias={tenantAlias} />
+        <ArenaPage db={localDb} refreshKey={refreshKey} templateAlias={templateAlias} />
       )}
       {activeTab === "Events" && (
         <EventsPage db={localDb} refreshKey={refreshKey} />
       )}
       {activeTab === "Compare" && (
-        <ComparePage db={sharedDb} tenantId={effectiveTenant} refreshKey={refreshKey} />
+        <ComparePage db={sharedDb} templateId={effectiveTenant} refreshKey={refreshKey} />
       )}
       {activeTab === "Config" && (
         <LabConfigPage db={localDb} refreshKey={refreshKey} />

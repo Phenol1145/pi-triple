@@ -9,8 +9,8 @@ import {
 import type { ColumnDef, SelectItem } from "../tui-shared/index.js";
 import {
   loadConfig,
-  listTenants,
-  getTenantAlias,
+  listTemplates,
+  getTemplateAlias,
 } from "../config.js";
 import { buildPiLaunch } from "../launcher.js";
 import {
@@ -38,7 +38,7 @@ export function handoffTerminal(cmd: string, args: string[], unmount?: () => voi
 
 export function SessionsPage({ width, height: _h, unmount, enabled = true }: SessionsPageProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const [mode, setMode] = useState<"list" | "start-tenant" | "delete-confirm">("list");
+  const [mode, setMode] = useState<"list" | "start-template" | "delete-confirm">("list");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [sessions, setSessions] = useState<PitSession[]>([]);
 
@@ -47,7 +47,7 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
   const refreshSessions = () => setSessions(listPitSessions());
 
   const config = loadConfig();
-  const tenants = listTenants(config);
+  const templates = listTemplates(config);
 
   const sessionCols: ColumnDef[] = [
     { key: "name", label: "NAME", width: 18 },
@@ -80,14 +80,14 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
         setMode("delete-confirm");
         return;
       }
-      if (input === "s") { setMode("start-tenant"); return; }
+      if (input === "s") { setMode("start-template"); return; }
       if (input === "r") { refreshSessions(); return; }
     }
     if (mode === "delete-confirm" && key.escape) {
       setMode("list");
       setDeleteTarget(null);
     }
-    if (mode === "start-tenant" && key.escape) {
+    if (mode === "start-template" && key.escape) {
       setMode("list");
     }
   });
@@ -109,8 +109,8 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
     );
   }
 
-  if (mode === "start-tenant") {
-    const items: SelectItem[] = tenants.map((t) => ({
+  if (mode === "start-template") {
+    const items: SelectItem[] = templates.map((t) => ({
       label: `${t.isDefault ? "★ " : "  "}${t.alias}`,
       value: t.id,
       hint: t.config.model || "",
@@ -120,12 +120,12 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
       <Box flexDirection="column" gap={1}>
         <SelectList
           enabled={enabled}
-          title="Select tenant to start session"
+          title="Select template to start session"
           items={items}
-          onSelect={async (tenantId) => {
-            const alias = getTenantAlias(tenantId, config);
+          onSelect={async (templateId) => {
+            const alias = getTemplateAlias(templateId, config);
             const name = `${alias}-${Date.now().toString(36)}`;
-            const launch = await buildPiLaunch(tenantId, {});
+            const launch = await buildPiLaunch(templateId, {});
             // B4 fix: use buildTmuxSessionArgs to inject PI_/AGENT_LAB_ env vars
             const session = `pit-${name}`;
             const args = buildTmuxSessionArgs(launch, session, false);

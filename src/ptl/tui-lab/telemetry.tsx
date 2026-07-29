@@ -12,7 +12,7 @@ import type { ColumnDef } from "../tui-shared/data-table.js";
 
 interface Props {
   db: DatabaseSync | null;
-  tenantId: string | undefined;
+  templateId: string | undefined;
   refreshKey: number;
 }
 
@@ -26,11 +26,11 @@ const COLUMNS: ColumnDef[] = [
   { key: "trend", label: "TREND", width: 34 },
 ];
 
-export function TelemetryPage({ db, tenantId, refreshKey }: Props) {
+export function TelemetryPage({ db, templateId, refreshKey }: Props) {
   const data = useMemo(() => {
     if (!db) return { rows: [], trendData: new Map<string, number[]>() };
 
-    const agg = aggregateByRole(db, undefined, tenantId, 7);
+    const agg = aggregateByRole(db, undefined, templateId, 7);
 
     // Synthetic trend data: collect 7-day per-model success rates as SparkLine data points
     // We approximate by bucketing the aggregate data — refined in v2
@@ -54,7 +54,7 @@ export function TelemetryPage({ db, tenantId, refreshKey }: Props) {
 
     return { rows, trendData: trendMap };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey, tenantId, db]);
+  }, [refreshKey, templateId, db]);
 
   if (!db) {
     return (
@@ -78,7 +78,7 @@ export function TelemetryPage({ db, tenantId, refreshKey }: Props) {
     <Box flexDirection="column">
       <Box marginBottom={1}>
         <Text dimColor>
-          {tenantId ? "Filtered to current tenant" : "Global — all tenants"} | 7-day window | {data.rows.length} entries
+          {templateId ? "Filtered to current tenant" : "Global — all templates"} | 7-day window | {data.rows.length} entries
         </Text>
       </Box>
 

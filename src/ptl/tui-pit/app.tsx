@@ -3,19 +3,19 @@ import { Box, Text, useInput, useApp } from "ink";
 import { spawnSync } from "node:child_process";
 import { Screen, useTabs, useTerminalSize } from "../tui-shared/index.js";
 import { DashboardPage } from "./dashboard.js";
-import { TenantsPage } from "./tenants.js";
+import { TemplatesPage } from "./templates.js";
 import { SessionsPage } from "./sessions.js";
 import { ExtensionsPage } from "./extensions.js";
 import { ConfigPage } from "./config-page.js";
 import { CommandBar } from "./command-bar.js";
 import { OutputPanel } from "./output-panel.js";
 import type { CommandResult } from "../commands.js";
-import { loadConfig, listTenants } from "../config.js";
+import { loadConfig, listTemplates } from "../config.js";
 import { listPitSessions, startPitSession } from "../tmux.js";
 
-const TABS = ["Dashboard", "Tenants", "Sessions", "Extensions", "Config"];
+const TABS = ["Dashboard", "Templates", "Sessions", "Extensions", "Config"];
 
-const DESTRUCTIVE_CMDS = ["tenant rm", "stop", "stop --all"];
+const DESTRUCTIVE_CMDS = ["template rm", "stop", "stop --all"];
 
 /** TUI-wired bg session start — 与 CLI 同一构建路径 */
 export function PitApp() {
@@ -43,15 +43,15 @@ export function PitApp() {
   // Command completions for parameter autocomplete
   const completions = useMemo<Record<string, string[]>>(() => {
     const cfg = loadConfig();
-    const tenantAliases = listTenants(cfg).map((t) => t.alias);
+    const templateAliases = listTemplates(cfg).map((t) => t.alias);
     const sessions = listPitSessions().map((s) => s.name);
     return {
-      pi: ["--tenant", ...tenantAliases],
+      pi: ["--template", ...templateAliases],
       attach: sessions,
       switch: sessions,
       stop: [...sessions, "--all"],
-      "tenant rm": tenantAliases,
-      "tenant rename": tenantAliases,
+      "template rm": templateAliases,
+      "template rename": templateAliases,
     };
   }, [commandMode]); // refresh when command bar opens
 
@@ -116,19 +116,19 @@ export function PitApp() {
 
     try {
     // Route to commands.ts functions
-    const { execTenantLs, execTenantNew, execTenantRm, execStatus, execLs, execStop, execSharedStatus, execStartBg } = await import("../commands.js");
+    const { execTemplateLs, execTemplateNew, execTenantRm, execStatus, execLs, execStop, execSharedStatus, execStartBg } = await import("../commands.js");
 
     switch (cmd) {
-      case "tenant":
-        if (args[0] === "ls" || args[0] === "list") result = await execTenantLs();
-        else if (args[0] === "new") result = await execTenantNew(args[1]);
+      case "template":
+        if (args[0] === "ls" || args[0] === "list") result = await execTemplateLs();
+        else if (args[0] === "new") result = await execTemplateNew(args[1]);
         else if (args[0] === "rm") result = await execTenantRm(args[1]);
         else if (args[0] === "rename") {
-          const { loadConfig: lc, resolveTenantId: rt, renameTenant: rn } = await import("../config.js");
+          const { loadConfig: lc, resolveTemplateId: rt, renameTemplate: rn } = await import("../config.js");
           const cfg = lc();
           const resolved = rt(args[1] ?? "", cfg);
           if (!resolved.ok) result = { ok: false, message: "", error: { code: "TENANT_NOT_FOUND", message: `租户 "${args[1]}" 不存在` } };
-          else if (!args[2]) result = { ok: false, message: "", error: { code: "INVALID_ARGS", message: "用法: tenant rename <旧别名> <新别名>" } };
+          else if (!args[2]) result = { ok: false, message: "", error: { code: "INVALID_ARGS", message: "用法: template rename <旧别名> <新别名>" } };
           else {
             const ok = rn(resolved.id, args[2], cfg);
             result = ok
@@ -136,7 +136,7 @@ export function PitApp() {
               : { ok: false, message: "", error: { code: "RENAME_FAILED", message: "重命名失败（别名重复或无效）" } };
           }
         }
-        else result = await execTenantLs();
+        else result = await execTemplateLs();
         break;
       case "pi":
         result = { ok: true, message: "", handoff: { cmd: "pit", args: ["pi", ...args] } };
@@ -154,14 +154,14 @@ export function PitApp() {
           message: [
             "Available commands:",
             "  pi [args]                 原生前台启动 pi（无 tmux）",
-            "  start <bg-name> <tenant>   启动后台会话",
+            "  start <bg-name> <template>   启动后台会话",
             "  attach <name>             接入后台会话",
             "  stop <name>               停止会话",
             "  ls                        列出后台会话",
             "  status                    健康检查",
-            "  tenant ls                 列出租户",
-            "  tenant new <alias>        新建租户",
-            "  tenant rm <alias>         删除租户",
+            "  template ls                 列出租户",
+            "  template new <alias>        新建租户",
+            "  template rm <alias>         删除租户",
             "  shared status             共享层状态",
             "  help                      此帮助",
             "  quit                      退出 pit ui",
@@ -209,7 +209,7 @@ export function PitApp() {
         result = { ok: true, message: "", handoff: { cmd: "pit", args: ["dev", ...args] } };
         break;
       default:
-        result = { ok: false, message: "", error: { code: "UNKNOWN_COMMAND", message: `未知命令: ${cmd}。支持: start, status, ls, stop, tenant, shared, attach, help` } };
+        result = { ok: false, message: "", error: { code: "UNKNOWN_COMMAND", message: `未知命令: ${cmd}。支持: start, status, ls, stop, template, shared, attach, help` } };
     }
 
     } catch (err: any) {
@@ -253,7 +253,7 @@ export function PitApp() {
       <Box flexDirection="column">
         <Box minHeight={Math.max(5, rows - 12)}>
           {tabIndex === 0 && <DashboardPage {...sharedProps} />}
-          {tabIndex === 1 && <TenantsPage {...sharedProps} enabled={false} />}
+          {tabIndex === 1 && <TemplatesPage {...sharedProps} enabled={false} />}
           {tabIndex === 2 && <SessionsPage {...sharedProps} enabled={false} />}
           {tabIndex === 3 && <ExtensionsPage {...sharedProps} />}
           {tabIndex === 4 && <ConfigPage {...sharedProps} />}
@@ -271,7 +271,7 @@ export function PitApp() {
     content = (
       <Box flexDirection="column" minHeight={Math.max(5, rows - 9)}>
         {tabIndex === 0 && <DashboardPage {...sharedProps} />}
-        {tabIndex === 1 && <TenantsPage {...sharedProps} enabled={gated} />}
+        {tabIndex === 1 && <TemplatesPage {...sharedProps} enabled={gated} />}
         {tabIndex === 2 && <SessionsPage {...sharedProps} enabled={gated} />}
         {tabIndex === 3 && <ExtensionsPage {...sharedProps} />}
         {tabIndex === 4 && <ConfigPage {...sharedProps} />}

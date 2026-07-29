@@ -4,7 +4,7 @@
 
 import { emitJson, emitJsonError, ERR } from "../output.js";
 import {
-  execTenantLs, execTenantNew, execTenantRm,
+  execTemplateLs, execTemplateNew, execTenantRm,
   execStatus, execLs, execStop, execSharedStatus,
 } from "../commands.js";
 import { FlowStore } from "../flow/store.js";
@@ -26,10 +26,10 @@ export function resolveMode(command: string, flags: Record<string, string>): Pit
 /** 表驱动 JSON 路由 */
 const JSON_ROUTERS: Record<string, (sub: string | undefined, passthrough: string[]) => Promise<{ ok: boolean; data?: any; error?: { code: string; message: string } }>> = {
   tenant: async (sub, passthrough) => {
-    if (sub === "ls" || sub === "list") return await execTenantLs();
-    if (sub === "new") return await execTenantNew(passthrough[0]);
+    if (sub === "ls" || sub === "list") return await execTemplateLs();
+    if (sub === "new") return await execTemplateNew(passthrough[0]);
     if (sub === "rm") return await execTenantRm(passthrough[0] || "");
-    return await execTenantLs();
+    return await execTemplateLs();
   },
   status: async () => await execStatus(),
   doctor: async () => await execStatus(),
@@ -64,7 +64,7 @@ export async function routeJsonCommand(command: string, subcommand: string | und
   return true;
 }
 
-export function doPrintCommand(result: Awaited<ReturnType<typeof execTenantLs>>): void {
+export function doPrintCommand(result: Awaited<ReturnType<typeof execTemplateLs>>): void {
   printBanner();
   console.log(result.message);
   console.log("");

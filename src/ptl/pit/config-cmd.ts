@@ -58,6 +58,6 @@ export function cmdConfig(subcommand?: string, args: string[] = []): void {
   console.log("  配置 (pi-triple.json):\n");
   console.log(JSON.stringify(config, null, 2).split("\n").map((l) => "  " + l).join("\n"));
   console.log("\n  修改: pit config set <key> <value> · 读取: pit config get <key>");
-  console.log("  键: defaultTenant, redis, gateway.port, dataDir, sharedDir, tenants.<alias>.model 等");
+  console.log("  键: defaultTenant, redis, gateway.port, dataDir, sharedDir, templates.<alias>.model 等");
   console.log("");
 }

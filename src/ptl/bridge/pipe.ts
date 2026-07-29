@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { launchPi, buildPiLaunch } from "../launcher.js";
-import { loadConfig, resolveTenantId, getDefaultTenantId } from "../config.js";
+import { loadConfig, resolveTemplateId, getDefaultTemplateId } from "../config.js";
 import type { ProgramManifest } from "./manifest.js";
 
 export async function pipeToProcess(
@@ -18,10 +18,10 @@ export async function pipeToProcess(
   const config = loadConfig();
   // Use --tenant or default
   const resolved = flags.tenant
-    ? resolveTenantId(flags.tenant, config)
+    ? resolveTemplateId(flags.tenant, config)
     : null;
-  const tenantId = (resolved?.ok ? resolved.id : null) ?? getDefaultTenantId(config);
-  const tenantConfig = config.tenants[tenantId] ?? {};
+  const templateId = (resolved?.ok ? resolved.id : null) ?? getDefaultTemplateId(config);
+  const templateConfig = config.templates[templateId] ?? {};
 
   // Build extraArgs: --append-system-prompt + --skill for each skill
   const extraArgs: string[] = [];
@@ -46,11 +46,11 @@ export async function pipeToProcess(
   extraArgs.push(...passthrough);
 
   const code = await launchPi({
-    tenantId,
+    templateId,
     project: flags.project,
-    provider: manifest.provider ?? tenantConfig.provider,
-    model: manifest.model ?? tenantConfig.model,
-    thinking: manifest.thinking ?? tenantConfig.thinking,
+    provider: manifest.provider ?? templateConfig.provider,
+    model: manifest.model ?? templateConfig.model,
+    thinking: manifest.thinking ?? templateConfig.thinking,
     tools: manifest.tools?.join(","),
     excludeTools: manifest.excludeTools?.join(","),
     extraArgs,

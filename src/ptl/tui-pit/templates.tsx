@@ -11,13 +11,13 @@ import {
 import type { ColumnDef, SelectItem } from "../tui-shared/index.js";
 import {
   loadConfig,
-  listTenants,
-  createTenant,
-  removeTenant,
+  listTemplates,
+  createTemplate,
+  removeTemplate,
   saveConfig,
-  getTenantAlias,
+  getTemplateAlias,
   resolveDataDir,
-  renameTenant,
+  renameTemplate,
 } from "../config.js";
 
 interface TenantsPageProps {
@@ -28,7 +28,7 @@ interface TenantsPageProps {
 
 type Mode = "list" | "new-alias" | "delete-confirm" | "set-default-confirm" | "rename-select" | "rename-input";
 
-export function TenantsPage({ width, height: _h, enabled = true }: TenantsPageProps) {
+export function TemplatesPage({ width, height: _h, enabled = true }: TenantsPageProps) {
   const [mode, setMode] = useState<Mode>("list");
   const [aliasInput, setAliasInput] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameAlias, setRenameAlias] = useState("");
   const config = loadConfig();
-  const tenants = listTenants(config);
+  const templates = listTemplates(config);
 
   useInput((input, key) => {
     if (!enabled) return;
@@ -50,7 +50,7 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
     if (mode === "new-alias") {
       if (key.return) {
         if (aliasInput.trim()) {
-          const id = createTenant(aliasInput.trim(), {}, config);
+          const id = createTemplate(aliasInput.trim(), {}, config);
           const dir = path.join(resolveDataDir(config), "pi-config", id);
           fs.mkdirSync(dir, { recursive: true });
           setMode("list");
@@ -65,7 +65,7 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
     if (mode === "rename-input") {
       if (key.return) {
         if (renameAlias.trim() && renameTarget) {
-          renameTenant(renameTarget, renameAlias.trim(), loadConfig());
+          renameTemplate(renameTarget, renameAlias.trim(), loadConfig());
           setMode("list");
           setRenameTarget(null);
           setRenameAlias("");
@@ -78,14 +78,14 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
     }
   });
 
-  const tenantCols: ColumnDef[] = [
+  const templateCols: ColumnDef[] = [
     { key: "alias", label: "ALIAS", width: 16 },
     { key: "id", label: "ID" },
     { key: "model", label: "MODEL", width: 22 },
     { key: "default", label: "DEF", width: 5 },
   ];
 
-  const tenantRows = tenants.map((t) => ({
+  const templateRows = templates.map((t) => ({
     alias: t.alias,
     id: t.id.slice(0, 8) + "…",
     model: t.config.model ?? "(default)",
@@ -93,15 +93,15 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
   }));
 
   // Convert to SelectList items
-  const selectItems: SelectItem[] = tenants.map((t) => ({
+  const selectItems: SelectItem[] = templates.map((t) => ({
     label: `${t.isDefault ? "★ " : "  "}${t.alias.padEnd(16)} ${t.id.slice(0, 8)}…`,
     value: t.id,
     hint: t.config.model || "",
   }));
 
-  const handleSetDefault = (tenantId: string) => {
+  const handleSetDefault = (templateId: string) => {
     const cfg = loadConfig();
-    cfg.defaultTenant = tenantId;
+    cfg.defaultTemplate = templateId;
     saveConfig(cfg);
     setMode("list");
   };
@@ -124,10 +124,10 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
     return (
       <Box flexDirection="column" gap={1}>
         <ConfirmDialog
-          message={`Delete tenant "${deleteAlias}" and all its data?`}
+          message={`Delete template "${deleteAlias}" and all its data?`}
           onConfirm={() => {
             const cfg = loadConfig();
-            removeTenant(deleteTarget, cfg);
+            removeTemplate(deleteTarget, cfg);
             // cascade rm directories
             const dataDir = resolveDataDir(cfg);
             for (const sub of ["pi-config", "sessions", "workspaces", "mailbox"]) {
@@ -148,7 +148,7 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
       <Box flexDirection="column" gap={1}>
         <SelectList
           enabled={enabled}
-          title="Select tenant to set as default"
+          title="Select template to set as default"
           items={selectItems}
           onSelect={(id) => {
             handleSetDefault(id);
@@ -165,11 +165,11 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
       <Box flexDirection="column" gap={1}>
         <SelectList
           enabled={enabled}
-          title="Select tenant to rename"
+          title="Select template to rename"
           items={selectItems}
           onSelect={(id) => {
             setRenameTarget(id);
-            setRenameAlias(getTenantAlias(id, config));
+            setRenameAlias(getTemplateAlias(id, config));
             setMode("rename-input");
           }}
           onCancel={() => setMode("list")}
@@ -195,23 +195,23 @@ export function TenantsPage({ width, height: _h, enabled = true }: TenantsPagePr
   return (
     <Box flexDirection="column" gap={1}>
       <Box justifyContent="space-between">
-        <Text bold underline>Tenants ({tenants.length})</Text>
+        <Text bold underline>Templates ({templates.length})</Text>
         <Text dimColor>[n] new</Text>
       </Box>
 
-      <DataTable columns={tenantCols} rows={tenantRows} />
+      <DataTable columns={templateCols} rows={templateRows} />
 
       <Box marginTop={1} flexDirection="column">
-        <Text bold>Select tenant to manage:</Text>
+        <Text bold>Select template to manage:</Text>
         <SelectList
           enabled={enabled}
           items={selectItems}
           onSelect={(id) => {
             setDeleteTarget(id);
-            setDeleteAlias(getTenantAlias(id, config));
+            setDeleteAlias(getTemplateAlias(id, config));
             setMode("delete-confirm");
           }}
-          title="Select tenant to delete or [s] to set default"
+          title="Select template to delete or [s] to set default"
         />
         <Text dimColor>
           [Enter] select to delete · Press 's' on the select screen to set as default · [n] new

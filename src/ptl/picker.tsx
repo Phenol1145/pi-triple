@@ -94,7 +94,7 @@ function Select({ title, items, onSelect, allowCustom = true }: SelectProps) {
 // ─── 交互式命令导引 ──────────────────────────────────────────
 
 interface PickerOptions {
-  tenants: Array<{ id: string; alias: string; isDefault: boolean }>;
+  templates: Array<{ id: string; alias: string; isDefault: boolean }>;
   models?: string[];
 }
 
@@ -106,7 +106,7 @@ export async function interactiveStart(options: PickerOptions): Promise<{
 }> {
   return new Promise((resolve) => {
     const tenantItems: SelectItem[] = [
-      ...options.tenants.map((t) => ({
+      ...options.templates.map((t) => ({
         label: t.alias + (t.isDefault ? " (default)" : ""),
         value: t.id,
         hint: t.isDefault ? "★" : undefined,

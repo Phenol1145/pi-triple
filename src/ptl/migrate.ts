@@ -107,12 +107,12 @@ function copyDirRecursive(src: string, dst: string, report: MigrateReport, dryRu
   }
 }
 
-export async function migrate(options: Partial<MigrateOptions> & { tenantId?: string }): Promise<MigrateReport> {
+export async function migrate(options: Partial<MigrateOptions> & { templateId?: string }): Promise<MigrateReport> {
   const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? "~";
   const source = options.source ?? path.join(homeDir, ".pi", "agent");
   const dataDir = process.env.DATA_DIR ?? "./.pi-platform-data";
-  const tenantId = options.tenantId ?? "local";
-  const target = options.target ?? path.join(dataDir, "pi-config", tenantId);
+  const templateId = options.templateId ?? "local";
+  const target = options.target ?? path.join(dataDir, "pi-config", templateId);
   const dryRun = options.dryRun ?? false;
 
   const report: MigrateReport = { copied: [], skipped: [], errors: [] };
@@ -125,7 +125,7 @@ export async function migrate(options: Partial<MigrateOptions> & { tenantId?: st
   console.log("");
   console.log(`  源:   ${source}`);
   console.log(`  目标: ${target}`);
-  console.log(`  租户: ${tenantId}`);
+  console.log(`  租户: ${templateId}`);
   if (dryRun) console.log("  \x1b[33m模式: 预览 (dry-run)\x1b[0m");
   console.log("");
 
@@ -217,19 +217,19 @@ export async function migrate(options: Partial<MigrateOptions> & { tenantId?: st
 // CLI 入口
 async function main() {
   const args = process.argv.slice(2);
-  let tenantId = "local";
+  let templateId = "local";
   let source: string | undefined;
   let dryRun = false;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case "--tenant": tenantId = args[++i]; break;
+      case "--tenant": templateId = args[++i]; break;
       case "--source": source = args[++i]; break;
       case "--dry-run": dryRun = true; break;
     }
   }
 
-  await migrate({ tenantId, source, dryRun });
+  await migrate({ templateId, source, dryRun });
 }
 
 // 只在直接执行时运行 main（被 import 时不执行）

@@ -21,7 +21,7 @@ export function printHelp(): void {
   console.log("    start [args...]    启动 tmux 会话并接入（--bg 纯后台，--name 命名）");
   console.log("    pi [args...]       原生前台启动 pi（无 tmux）");
   console.log("    ui                 系统总控 TUI（无参数时也进入）");
-  console.log("    lab                模型调试 TUI（--tenant/--global）");
+  console.log("    lab                模型调试 TUI（--template/--global）");
   console.log("    attach <name>      接入后台会话（同一终端切换）");
   console.log("    switch <name>      切换会话（tmux 内瞬移，外则 attach）");
   console.log("    detach             脱离当前会话（保持运行）");
@@ -57,13 +57,13 @@ export function printHelp(): void {
   console.log("    help               显示帮助");
   console.log("");
   console.log("  选项:");
-  console.log("    --tenant <alias|uuid>  指定租户（别名或 UUID）");
+  console.log("    --template <alias|uuid>  指定租户（别名或 UUID）");
   console.log("    --project <name>       指定项目");
   console.log("    --model <model>        覆盖模型");
   console.log("");
   console.log("  示例:");
   console.log("    pit start                          # 默认租户，tmux 接入");
-  console.log("    pit start --tenant dev             # 指定租户（别名）");
+  console.log("    pit start --template dev             # 指定租户（别名）");
   console.log("    pit start --bg --name coding       # 纯后台启动");
   console.log("    pit pi                             # 原生前台启动（无 tmux）");
   console.log("    pit attach coding                  # 接入后台会话");
@@ -73,7 +73,7 @@ export function printHelp(): void {
   console.log("    pit dev my-agent                    # 本地调试");
   console.log("    pit flow run pr-review.json pr=123  # 运行工作流");
   console.log("    pit flow ls                          # 列出工作流");
-  console.log("    pit tenant new my-team             # 新建租户");
-  console.log("    pit tenant ls                        # 列出租户");
+  console.log("    pit template new my-team             # 新建租户");
+  console.log("    pit template ls                        # 列出租户");
   console.log("");
 }

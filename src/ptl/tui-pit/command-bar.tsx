@@ -5,7 +5,7 @@ import { Box, Text, useInput } from "ink";
  * CommandBar — 层级渐进式命令补全
  *
  * 命令组织为树：
- *   顶层输入只显示顶层命令（tenant ▸ 表示有子命令）
+ *   顶层输入只显示顶层命令（template ▸ 表示有子命令）
  *   输入完整一级 + 空格/Tab → 下钻到子命令层
  *   叶子命令 + 空格 → 参数补全（completions prop）
  */
@@ -14,7 +14,7 @@ interface CommandBarProps {
   visible: boolean;
   onSubmit: (cmd: string) => void;
   onCancel: () => void;
-  /** "完整命令路径" → 参数候选，如 { "stop": [...], "tenant rm": [...] } */
+  /** "完整命令路径" → 参数候选，如 { "stop": [...], "template rm": [...] } */
   completions?: Record<string, string[]>;
   /** 可用宽度（终端列数），用于截断长描述 */
   width?: number;
@@ -40,7 +40,7 @@ const COMMAND_TREE: CmdNode[] = [
   { name: "ls", desc: "列出后台会话" },
   { name: "status", desc: "健康检查" },
   {
-    name: "tenant", desc: "租户管理 ▸",
+    name: "template", desc: "租户管理 ▸",
     children: [
       { name: "ls", desc: "列出租户" },
       { name: "new", desc: "新建租户 <别名>" },

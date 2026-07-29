@@ -50,7 +50,7 @@ export function sharedDbPath(): string {
 }
 
 /** per-tenant DB 路径 */
-export function localDbPath(tenantId: string): string {
+export function localDbPath(templateId: string): string {
   if (process.env.AGENT_LAB_CONFIG_DIR) return path.join(process.env.AGENT_LAB_CONFIG_DIR, "agent-lab.db");
-  return path.join(pitHome(), "data", "pi-config", tenantId, "agent-lab", "agent-lab.db");
+  return path.join(pitHome(), "data", "pi-config", templateId, "agent-lab", "agent-lab.db");
 }

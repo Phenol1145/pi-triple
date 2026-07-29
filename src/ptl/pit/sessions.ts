@@ -4,7 +4,7 @@
 
 import { spawnSync } from "node:child_process";
 import {
-  loadConfig, getTenantAlias, listTenants,
+  loadConfig, getTemplateAlias, listTemplates,
 } from "../config.js";
 import { runDoctor } from "../doctor.js";
 import { launchPi, buildPiLaunch } from "../launcher.js";
@@ -16,28 +16,28 @@ import {
   hasPitSession,
   startPitSession,
 } from "../tmux.js";
-import { resolveTenantAndMigrate, resolveOrFail } from "./onboard.js";
+import { resolveTemplateAndMigrate, resolveOrFail } from "./onboard.js";
 
 /**
  * pit pi — 原生启动模式（前台直接 spawn pi，无 tmux）
  */
 export async function cmdPi(flags: Record<string, string>, passthrough: string[]): Promise<void> {
-  const r = await resolveTenantAndMigrate(flags, passthrough);
+  const r = await resolveTemplateAndMigrate(flags, passthrough);
   if (!r) { process.exit(1); }
-  const { tenantId, piPassthrough } = r;
+  const { templateId, piPassthrough } = r;
   const config = loadConfig();
-  const tenantConfig = config.tenants[tenantId] ?? {};
+  const templateConfig = config.templates[templateId] ?? {};
 
   await runDoctor("quick");
 
   const code = await launchPi({
-    tenantId,
+    templateId,
     project: flags.project,
-    provider: flags.provider ?? tenantConfig.provider,
-    model: flags.model ?? tenantConfig.model,
-    thinking: flags.thinking ?? tenantConfig.thinking,
-    tools: tenantConfig.tools,
-    excludeTools: tenantConfig.excludeTools,
+    provider: flags.provider ?? templateConfig.provider,
+    model: flags.model ?? templateConfig.model,
+    thinking: flags.thinking ?? templateConfig.thinking,
+    tools: templateConfig.tools,
+    excludeTools: templateConfig.excludeTools,
     continueSession: piPassthrough.includes("-c") || piPassthrough.includes("--continue"),
     extraArgs: piPassthrough.filter((a) => a !== "-c" && a !== "--continue"),
   });
@@ -55,13 +55,13 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
   const hasArgs = flags.tenant || flags.model || flags.name || flags.bg === "true" || passthrough.length > 0;
   if (!hasArgs && process.stdout.isTTY) {
     const { interactiveStart } = await import("../picker.js");
-    const tenants = listTenants(config).map((t) => ({
+    const templates = listTemplates(config).map((t) => ({
       id: t.id,
       alias: t.alias,
       isDefault: t.isDefault,
     }));
 
-    const choice = await interactiveStart({ tenants });
+    const choice = await interactiveStart({ templates });
     flags.tenant = choice.tenant;
     if (choice.bg) flags.bg = "true";
     if (choice.name) flags.name = choice.name;
@@ -88,11 +88,11 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
     process.exit(1);
   }
 
-  const r = await resolveTenantAndMigrate(flags, passthrough);
+  const r = await resolveTemplateAndMigrate(flags, passthrough);
   if (!r) { process.exit(1); }
-  const { tenantId, piPassthrough } = r;
-  const tenantConfig = config.tenants[tenantId] ?? {};
-  const alias = getTenantAlias(tenantId, config);
+  const { templateId, piPassthrough } = r;
+  const templateConfig = config.templates[templateId] ?? {};
+  const alias = getTemplateAlias(templateId, config);
   const name = flags.name ?? `${alias}-${Date.now().toString(36)}`;
   const session = tmuxSessionName(name);
 
@@ -105,13 +105,13 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
 
   await runDoctor("quick");
 
-  const launch = await buildPiLaunch(tenantId, {
+  const launch = await buildPiLaunch(templateId, {
     project: flags.project,
-    provider: flags.provider ?? tenantConfig.provider,
-    model: flags.model ?? tenantConfig.model,
-    thinking: flags.thinking ?? tenantConfig.thinking,
-    tools: tenantConfig.tools,
-    excludeTools: tenantConfig.excludeTools,
+    provider: flags.provider ?? templateConfig.provider,
+    model: flags.model ?? templateConfig.model,
+    thinking: flags.thinking ?? templateConfig.thinking,
+    tools: templateConfig.tools,
+    excludeTools: templateConfig.excludeTools,
     continueSession: piPassthrough.includes("-c") || piPassthrough.includes("--continue"),
     extraArgs: piPassthrough.filter((a) => a !== "-c" && a !== "--continue"),
   });
@@ -138,9 +138,9 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
 
 export async function cmdStartBg(flags: Record<string, string>, passthrough: string[]): Promise<void> {
   const config = loadConfig();
-  const tenantId = resolveOrFail(flags.tenant, config);
-  if (!tenantId) { process.exit(1); }
-  const alias = getTenantAlias(tenantId, config);
+  const templateId = resolveOrFail(flags.tenant, config);
+  if (!templateId) { process.exit(1); }
+  const alias = getTemplateAlias(templateId, config);
   const name = flags.name ?? `${alias}-${Date.now().toString(36)}`;
 
   if (!hasTmux()) {
@@ -158,15 +158,15 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
     return;
   }
 
-  const tenantConfig = config.tenants[tenantId] ?? {};
+  const templateConfig = config.templates[templateId] ?? {};
 
-  const launch = await buildPiLaunch(tenantId, {
+  const launch = await buildPiLaunch(templateId, {
     project: flags.project,
-    provider: flags.provider ?? tenantConfig.provider,
-    model: flags.model ?? tenantConfig.model,
-    thinking: flags.thinking ?? tenantConfig.thinking,
-    tools: tenantConfig.tools,
-    excludeTools: tenantConfig.excludeTools,
+    provider: flags.provider ?? templateConfig.provider,
+    model: flags.model ?? templateConfig.model,
+    thinking: flags.thinking ?? templateConfig.thinking,
+    tools: templateConfig.tools,
+    excludeTools: templateConfig.excludeTools,
     continueSession: passthrough.includes("-c"),
     extraArgs: passthrough.filter((a) => a !== "-c" && a !== "--continue"),
   });
@@ -177,11 +177,11 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
     spawnSync("sleep", ["1"]);
     if (!hasPitSession(name)) {
       console.log(`  \x1b[31m❌ 会话 "${name}" 启动后立即退出\x1b[0m`);
-      console.log("  排查: pit pi --tenant " + alias + "  （前台模式查看启动错误）");
+      console.log("  排查: pit pi --template " + alias + "  （前台模式查看启动错误）");
       process.exit(1);
     }
     console.log(`  \x1b[32m✅ 后台会话已启动\x1b[0m`);
-    console.log(`  名称: ${name} · 租户: ${alias} (${tenantId.slice(0, 8)}…) · 工作区: ${launch.cwd}`);
+    console.log(`  名称: ${name} · 租户: ${alias} (${templateId.slice(0, 8)}…) · 工作区: ${launch.cwd}`);
     console.log(`  接入: \x1b[36mpit attach ${name}\x1b[0m`);
     console.log(`  切换: tmux 内 \x1b[2mCtrl+B s\x1b[0m 选择 · \x1b[2mCtrl+B d\x1b[0m 脱离`);
   } else {

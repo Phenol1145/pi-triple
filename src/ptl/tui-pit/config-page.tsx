@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import path from "node:path";
-import { loadConfig, resolveDataDir, getTenantAlias } from "../config.js";
+import { loadConfig, resolveDataDir, getTemplateAlias } from "../config.js";
 
 interface ConfigPageProps {
   width: number;
@@ -13,16 +13,16 @@ export function ConfigPage({ width, height: _h }: ConfigPageProps) {
   const dataDir = resolveDataDir(config);
   const configPath = path.resolve(process.cwd(), "pi-triple.json");
 
-  // Format tenants compactly
-  const tenantLines = Object.entries(config.tenants).map(([id, t]) =>
-    `  ${t.alias.padEnd(16)} ${id.slice(0, 8)}…  model: ${t.model ?? "(default)"}${id === config.defaultTenant ? " ★" : ""}`,
+  // Format templates compactly
+  const tenantLines = Object.entries(config.templates).map(([id, t]) =>
+    `  ${t.alias.padEnd(16)} ${id.slice(0, 8)}…  model: ${t.model ?? "(default)"}${id === config.defaultTemplate ? " ★" : ""}`,
   );
 
   // Env var status
   const envVars = [
     { name: "DATA_DIR", value: dataDir },
     { name: "REDIS_URL", value: config.redis },
-    { name: "PI_CODING_AGENT_DIR", value: path.join(dataDir, "pi-config", config.defaultTenant) },
+    { name: "PI_CODING_AGENT_DIR", value: path.join(dataDir, "pi-config", config.defaultTemplate) },
     { name: "PI_BIN", value: process.env.PI_BIN ?? "pi" },
     { name: "AGENT_LAB_DB_PATH", value: path.join(dataDir, "shared", "agent-lab", "agent-lab.db") },
   ];
@@ -38,7 +38,7 @@ export function ConfigPage({ width, height: _h }: ConfigPageProps) {
         <Text dimColor>Config file: {configPath}</Text>
         <Box marginTop={1} flexDirection="column">
           <Text>version:       {config.version}</Text>
-          <Text>defaultTenant: {config.defaultTenant.slice(0, 8)}… ({getTenantAlias(config.defaultTenant, config)})</Text>
+          <Text>defaultTenant: {config.defaultTemplate.slice(0, 8)}… ({getTemplateAlias(config.defaultTemplate, config)})</Text>
           <Text>dataDir:       {config.dataDir}</Text>
           <Text>sharedDir:     {config.sharedDir}</Text>
           <Text>redis:         {config.redis}</Text>
@@ -46,9 +46,9 @@ export function ConfigPage({ width, height: _h }: ConfigPageProps) {
         </Box>
       </Box>
 
-      {/* Tenants */}
+      {/* Templates */}
       <Box flexDirection="column" marginTop={1}>
-        <Text bold>Tenants ({Object.keys(config.tenants).length})</Text>
+        <Text bold>Templates ({Object.keys(config.templates).length})</Text>
         {tenantLines.map((line, i) => (
           <Text key={i}>{line}</Text>
         ))}

@@ -13,7 +13,7 @@ import { SelectList } from "../tui-shared/select-list.js";
 
 interface Props {
   db: DatabaseSync | null;
-  tenantId: string | undefined;
+  templateId: string | undefined;
   refreshKey: number;
 }
 
@@ -25,7 +25,7 @@ const COMPARE_COLS: ColumnDef[] = [
 
 type Step = "select-a" | "select-b" | "compare";
 
-export function ComparePage({ db, tenantId, refreshKey }: Props) {
+export function ComparePage({ db, templateId, refreshKey }: Props) {
   const [step, setStep] = useState<Step>("select-a");
   const [modelA, setModelA] = useState<string>("");
   const [modelB, setModelB] = useState<string>("");
@@ -38,9 +38,9 @@ export function ComparePage({ db, tenantId, refreshKey }: Props) {
 
   const comparison = useMemo(() => {
     if (!db || !modelA || !modelB) return [];
-    return modelComparison(db, modelA, modelB, tenantId, 7);
+    return modelComparison(db, modelA, modelB, templateId, 7);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelA, modelB, refreshKey, db, tenantId]);
+  }, [modelA, modelB, refreshKey, db, templateId]);
 
   useInput((input, key) => {
     if (key.escape && step !== "select-a") {
@@ -119,7 +119,7 @@ export function ComparePage({ db, tenantId, refreshKey }: Props) {
       </Box>
 
       <Text dimColor>
-        {tenantId ? "Filtered to current tenant · " : "Global · "}7-day window
+        {templateId ? "Filtered to current tenant · " : "Global · "}7-day window
       </Text>
 
       <Box marginTop={1} marginBottom={1}>

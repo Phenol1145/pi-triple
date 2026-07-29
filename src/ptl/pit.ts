@@ -12,7 +12,7 @@ import { cmdOnboard } from "./pit/onboard.js";
 import { cmdPi, cmdStart, cmdAttach, cmdSwitch, cmdDetach } from "./pit/sessions.js";
 import { cmdConfig } from "./pit/config-cmd.js";
 import { resolveMode, routeJsonCommand, doPrintCommand } from "./pit/mode.js";
-import { cmdMigrate, handleTenantRename, handleUpdate, handleInstallRemove, handleShared } from "./pit/admin.js";
+import { cmdMigrate, handleTemplateRename, handleUpdate, handleInstallRemove, handleShared } from "./pit/admin.js";
 import { cmdSubmit } from "./bridge/submit.js";
 import { cmdRun } from "./bridge/run.js";
 import { cmdPrograms } from "./bridge/programs.js";
@@ -26,10 +26,10 @@ import {
 import { emitJsonError } from "./output.js";
 import path from "node:path";
 import {
-  loadConfig, resolveTenantId, getTenantAlias, getDefaultTenantId, pitHome,
+  loadConfig, resolveTemplateId, getTemplateAlias, getDefaultTemplateId, pitHome,
 } from "./config.js";
 import {
-  execTenantLs, execTenantNew, execTenantRm,
+  execTemplateLs, execTemplateNew, execTenantRm,
   execStatus, execLs, execStop,
 } from "./commands.js";
 
@@ -182,13 +182,13 @@ async function main() {
     case "doctor":
       await (await import("./doctor.js")).runDoctor("full");
       break;
-    case "tenant": {
+    case "template": {
       let tr;
-      if (subcommand === "ls" || subcommand === "list") tr = await execTenantLs();
-      else if (subcommand === "new") tr = await execTenantNew(passthrough[0]);
+      if (subcommand === "ls" || subcommand === "list") tr = await execTemplateLs();
+      else if (subcommand === "new") tr = await execTemplateNew(passthrough[0]);
       else if (subcommand === "rm") tr = await execTenantRm(passthrough[0] || "");
-      else if (subcommand === "rename") { handleTenantRename(passthrough); break; }
-      else tr = await execTenantLs();
+      else if (subcommand === "rename") { handleTemplateRename(passthrough); break; }
+      else tr = await execTemplateLs();
       doPrintCommand(tr);
       break;
     }
@@ -246,20 +246,20 @@ async function main() {
         const React = (await import("react")).default;
         const { LabApp } = await import("./tui-lab/app.js");
         const cfg = loadConfig();
-        const labResolved = flags.tenant ? resolveTenantId(flags.tenant, cfg) : null;
+        const labResolved = flags.tenant ? resolveTemplateId(flags.tenant, cfg) : null;
         if (flags.tenant && (!labResolved || !labResolved.ok)) {
           const reason = labResolved && !labResolved.ok ? labResolved.reason : "not_found";
           if (reason === "ambiguous" && labResolved && !labResolved.ok && "candidates" in labResolved) {
-            const candidates = labResolved.candidates.map((c) => `${getTenantAlias(c, cfg)} (${c.slice(0, 8)}…)`).join(", ");
+            const candidates = labResolved.candidates.map((c) => `${getTemplateAlias(c, cfg)} (${c.slice(0, 8)}…)`).join(", ");
             console.log(`\x1b[31m❌ "${flags.tenant}" 匹配多个租户: ${candidates}\x1b[0m`);
           } else {
             console.log(`\x1b[31m❌ 未知租户: "${flags.tenant}"\x1b[0m`);
           }
-          console.log("  运行 \x1b[36mpit tenant ls\x1b[0m 查看可用租户\n");
+          console.log("  运行 \x1b[36mpit template ls\x1b[0m 查看可用租户\n");
           process.exit(1);
         }
-        const labTenantId = labResolved?.ok ? labResolved.id : getDefaultTenantId(cfg);
-        const labAlias = getTenantAlias(labTenantId, cfg);
+        const labTenantId = labResolved?.ok ? labResolved.id : getDefaultTemplateId(cfg);
+        const labAlias = getTemplateAlias(labTenantId, cfg);
         const labGlobal = flags.global === "true";
         // 注入 per-tenant AGENT_LAB_* env，确保 lab-data 解析到该租户数据（与 buildPiLaunch 一致）
         const labHome = pitHome();
@@ -270,7 +270,7 @@ async function main() {
           process.env.AGENT_LAB_CONFIG_DIR = path.join(labHome, "data", "pi-config", labTenantId, "agent-lab");
           process.env.AGENT_LAB_DB_PATH = path.join(labHome, "data", "shared", "agent-lab", "agent-lab.db");
         }
-        render(React.createElement(LabApp, { tenantId: labTenantId, tenantAlias: labAlias, globalTelemetry: labGlobal }), { exitOnCtrlC: false });
+        render(React.createElement(LabApp, { templateId: labTenantId, templateAlias: labAlias, globalTelemetry: labGlobal }), { exitOnCtrlC: false });
       } else {
         console.log("  lab TUI 需要交互式终端");
       }

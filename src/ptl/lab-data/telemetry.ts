@@ -19,7 +19,7 @@ export interface AggregateRow {
 export function aggregateByRole(
   db: DatabaseSync,
   role?: string,
-  tenantId?: string,
+  templateId?: string,
   days = 7,
 ): AggregateRow[] {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
@@ -44,12 +44,12 @@ export function aggregateByRole(
     params.push(role);
   }
   // NULL tenant_id = pre-migration legacy rows.
-  //   - Tenant-filtered queries (tenantId provided): INCLUDE legacy rows (OR tenant_id IS NULL)
+  //   - Tenant-filtered queries (templateId provided): INCLUDE legacy rows (OR tenant_id IS NULL)
   //     so historic data contributes to per-tenant stats.
-  //   - Global queries (tenantId undefined): all rows counted including legacy.
-  if (tenantId) {
+  //   - Global queries (templateId undefined): all rows counted including legacy.
+  if (templateId) {
     sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
-    params.push(tenantId);
+    params.push(templateId);
   }
 
   sql += ` GROUP BY role, model ORDER BY role, runs DESC LIMIT 1000`;
@@ -61,14 +61,14 @@ export function aggregateByRole(
   }
 }
 
-export function listRoles(db: DatabaseSync, tenantId?: string, days = 7): string[] {
+export function listRoles(db: DatabaseSync, templateId?: string, days = 7): string[] {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
   let sql = `SELECT DISTINCT role FROM runs WHERE ts > ?`;
   const params: (string | number)[] = [cutoff];
 
-  if (tenantId) {
+  if (templateId) {
     sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
-    params.push(tenantId);
+    params.push(templateId);
   }
 
   sql += ` ORDER BY role`;
@@ -102,7 +102,7 @@ export function modelComparison(
   db: DatabaseSync,
   modelA: string,
   modelB: string,
-  tenantId?: string,
+  templateId?: string,
   days = 7,
 ): ComparisonRow[] {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
@@ -120,9 +120,9 @@ export function modelComparison(
       WHERE model = ? AND ts > ?
     `;
     const params: (string | number)[] = [model, cutoff];
-    if (tenantId) {
+    if (templateId) {
       sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
-      params.push(tenantId);
+      params.push(templateId);
     }
     return db.prepare(sql).get(...params) as unknown as Record<string, number> | undefined;
   };

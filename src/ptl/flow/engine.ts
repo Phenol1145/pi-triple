@@ -184,19 +184,19 @@ async function executeLoop(
       fs.mkdirSync(nodeCwd, { recursive: true });
 
       const env: NodeJS.ProcessEnv = { ...process.env };
-      if (nodeSnapshot.tenant) {
-        // 尝试 resolves tenant for PI_CODING_AGENT_DIR
+      if (nodeSnapshot.template) {
+        // 尝试 resolves template for PI_CODING_AGENT_DIR
         try {
-          const { resolveTenantId, resolveDataDir } = await import("../config.js");
+          const { resolveTemplateId, resolveDataDir } = await import("../config.js");
           const config = (await import("../config.js")).loadConfig();
-          const resolved = resolveTenantId(nodeSnapshot.tenant, config);
+          const resolved = resolveTemplateId(nodeSnapshot.template, config);
           if (resolved.ok) {
             const dataDir = resolveDataDir(config);
             env.PI_CODING_AGENT_DIR = path.resolve(dataDir, "pi-config", resolved.id);
-            env.PI_TENANT = resolved.id;
+            env.PI_TEMPLATE = resolved.id;
           }
         } catch {
-          // config unavailable — continue without tenant env
+          // config unavailable — continue without template env
         }
       }
 
@@ -522,15 +522,15 @@ async function executeWaveLoop(
         fs.mkdirSync(nodeCwd, { recursive: true });
 
         const env: NodeJS.ProcessEnv = { ...process.env };
-        if (nodeSnapshot.tenant) {
+        if (nodeSnapshot.template) {
           try {
-            const { resolveTenantId, resolveDataDir } = await import("../config.js");
+            const { resolveTemplateId, resolveDataDir } = await import("../config.js");
             const config = (await import("../config.js")).loadConfig();
-            const resolved = resolveTenantId(nodeSnapshot.tenant, config);
+            const resolved = resolveTemplateId(nodeSnapshot.template, config);
             if (resolved.ok) {
               const dataDir = resolveDataDir(config);
               env.PI_CODING_AGENT_DIR = path.resolve(dataDir, "pi-config", resolved.id);
-              env.PI_TENANT = resolved.id;
+              env.PI_TEMPLATE = resolved.id;
             }
           } catch { /* config unavailable */ }
         }

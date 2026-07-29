@@ -6,34 +6,34 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
-  loadConfig, resolveDataDir, resolveTenantId, renameTenant,
-  getTenantAlias, getDefaultTenantId,
+  loadConfig, resolveDataDir, resolveTemplateId, renameTemplate,
+  getTemplateAlias, getDefaultTemplateId,
 } from "../config.js";
 import { migrate } from "../migrate.js";
-import { initSharedLayer, linkTenantToShared, promoteToShared, installBundledExtensions } from "../shared-layer.js";
+import { initSharedLayer, linkTemplateToShared, promoteToShared, installBundledExtensions } from "../shared-layer.js";
 import { execSharedStatus } from "../commands.js";
 import { printBanner } from "./main.js";
 import { resolveOrFail } from "./onboard.js";
 
 export async function cmdMigrate(flags: Record<string, string>): Promise<void> {
   const config = loadConfig();
-  const tenantId = resolveOrFail(flags.tenant, config);
-  if (!tenantId) { process.exit(1); }
-  await migrate({ tenantId, dryRun: flags["dry-run"] === "true" });
+  const templateId = resolveOrFail(flags.tenant, config);
+  if (!templateId) { process.exit(1); }
+  await migrate({ templateId, dryRun: flags["dry-run"] === "true" });
 }
 
 /** Tenant rename as standalone command handler */
-export function handleTenantRename(passthrough: string[]): void {
+export function handleTemplateRename(passthrough: string[]): void {
   const oldName = passthrough[0] ?? "";
   const newName = passthrough[1] ?? "";
   if (!oldName || !newName) {
-    console.log("  用法: pit tenant rename <旧别名> <新别名>");
+    console.log("  用法: pit template rename <旧别名> <新别名>");
     process.exit(1);
   }
   const cfg = loadConfig();
-  const resolved = resolveTenantId(oldName, cfg);
+  const resolved = resolveTemplateId(oldName, cfg);
   if (!resolved.ok) { console.log(`  \x1b[31m❌ 租户 "${oldName}" 不存在\x1b[0m`); process.exit(1); }
-  const ok = renameTenant(resolved.id, newName, cfg);
+  const ok = renameTemplate(resolved.id, newName, cfg);
   if (ok) console.log(`  ✅ 租户别名: ${oldName} → ${newName}`);
   else console.log(`  \x1b[31m❌ 重命名失败（别名重复或无效）\x1b[0m`);
 }
@@ -65,11 +65,11 @@ export async function handleUpdate(flags: Record<string, string>): Promise<void>
 
   if (updateExt) {
     const config = loadConfig();
-    const tenantId = resolveOrFail(flags.tenant, config);
-    if (tenantId) {
+    const templateId = resolveOrFail(flags.tenant, config);
+    if (templateId) {
       const dataDir = resolveDataDir(config);
-      const agentDir = path.join(dataDir, "pi-config", tenantId);
-      const alias = getTenantAlias(tenantId, config);
+      const agentDir = path.join(dataDir, "pi-config", templateId);
+      const alias = getTemplateAlias(templateId, config);
       console.log(`  更新租户 "${alias}" 扩展包…`);
       const r = spawnSync("pi", ["update", "--extensions"], {
         stdio: "inherit",
@@ -113,8 +113,8 @@ export function handleInstallRemove(command: string, flags: Record<string, strin
   }
 
   const piArgs = [command, subcommand, ...passthrough].filter((a): a is string => Boolean(a));
-  const tenantAlias = isShared ? "shared" : getTenantAlias(tid!, config2);
-  console.log(`  ${isShared ? "共享层" : `租户 ${tenantAlias}`}  ${agentDir}`);
+  const templateAlias = isShared ? "shared" : getTemplateAlias(tid!, config2);
+  console.log(`  ${isShared ? "共享层" : `租户 ${templateAlias}`}  ${agentDir}`);
   const r = spawnSync("pi", piArgs, {
     stdio: "inherit",
     env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
@@ -128,17 +128,17 @@ export async function handleShared(subcommand: string | undefined): Promise<void
   const sharedDir2 = path.resolve(process.cwd(), config2.sharedDir);
 
   if (subcommand === "init") {
-    const defaultId = getDefaultTenantId(config2);
-    const tenantDir = path.join(dataDir2, "pi-config", defaultId);
-    if (!fs.existsSync(tenantDir)) {
+    const defaultId = getDefaultTemplateId(config2);
+    const templateDir = path.join(dataDir2, "pi-config", defaultId);
+    if (!fs.existsSync(templateDir)) {
       console.log(`  ❌ 默认租户目录不存在，先运行 pit onboard`);
       return;
     }
-    const { moved, kept } = promoteToShared(tenantDir, sharedDir2);
+    const { moved, kept } = promoteToShared(templateDir, sharedDir2);
     console.log(`  ✅ 迁移到共享层: ${moved.length} 项`);
     for (const m of moved) console.log(`    📦 ${m}`);
     if (kept.length > 0) console.log(`  保留在租户: ${kept.length} 项`);
-    linkTenantToShared(tenantDir, sharedDir2);
+    linkTemplateToShared(templateDir, sharedDir2);
     console.log("  ✅ 已链接共享层到默认租户");
     const bundled = installBundledExtensions(sharedDir2);
     if (bundled.length > 0) console.log(`  ✅ 已安装内置扩展: ${bundled.join(", ")}`);

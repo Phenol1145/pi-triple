@@ -25,7 +25,7 @@ interface ScreenProps {
   title: string;
   /** 版本号（可选） */
   version?: string;
-  /** 状态文本（TopBar 右侧，如 "tenant: local | DB: connected"） */
+  /** 状态文本（TopBar 右侧，如 "template: local | DB: connected"） */
   status?: string;
   /** Tab 列表（可选，不传则无 TabBar） */
   tabs?: readonly string[];

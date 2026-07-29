@@ -21,7 +21,7 @@ export interface NodeDef {
   id: string;
   type: "agent" | "human";
   model?: string;
-  tenant?: string;
+  template?: string;
   prompt?: string;
   message?: string;
   tools?: string[];
@@ -133,9 +133,13 @@ export function validateFlow(
           if (typeof nObj.model !== "string") errors.push(`nodes[${i}] (agent "${id}"): model must be a string`);
           else node.model = nObj.model as string;
         }
+        // N1: 旧字段 tenant 已重命名为 template，干净切断（不静默忽略）
         if (nObj.tenant !== undefined) {
-          if (typeof nObj.tenant !== "string") errors.push(`nodes[${i}] (agent "${id}"): tenant must be a string`);
-          else node.tenant = nObj.tenant as string;
+          errors.push(`nodes[${i}] (agent "${id}"): 节点字段 'tenant' 已重命名为 'template'，请更新 flow 定义`);
+        }
+        if (nObj.template !== undefined) {
+          if (typeof nObj.template !== "string") errors.push(`nodes[${i}] (agent "${id}"): template must be a string`);
+          else node.template = nObj.template as string;
         }
         if (nObj.tools !== undefined) {
           if (!Array.isArray(nObj.tools) || !nObj.tools.every((t: unknown) => typeof t === "string")) {

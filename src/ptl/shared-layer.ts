@@ -1,8 +1,8 @@
 /**
  * Pi-Triple 共享扩展层
  *
- * 消除多租户间 extensions/skills/packages 的重复存储。
- * 共享目录存放公共扩展，租户通过逐项 symlink 引用。
+ * 消除多模板间 extensions/skills/packages 的重复存储。
+ * 共享目录存放公共扩展，模板通过逐项 symlink 引用。
  */
 
 import fs from "node:fs";
@@ -22,10 +22,10 @@ export function initSharedLayer(sharedDir: string): void {
   fs.mkdirSync(path.join(sharedDir, "agent-lab"), { recursive: true });
 }
 
-/** 将共享层通过 symlink 挂载到租户目录 */
-export function linkTenantToShared(tenantDir: string, sharedDir: string): void {
+/** 将共享层通过 symlink 挂载到模板目录 */
+export function linkTemplateToShared(templateDir: string, sharedDir: string): void {
   for (const dir of SHARED_DIRS) {
-    const tenantSubDir = path.join(tenantDir, dir);
+    const tenantSubDir = path.join(templateDir, dir);
     const sharedSubDir = path.join(sharedDir, dir);
 
     fs.mkdirSync(tenantSubDir, { recursive: true });
@@ -52,9 +52,9 @@ export function linkTenantToShared(tenantDir: string, sharedDir: string): void {
 }
 
 /** 移除租户的共享层链接（只删 symlink，不删租户自有文件） */
-export function unlinkTenantFromShared(tenantDir: string): void {
+export function unlinkTemplateFromShared(templateDir: string): void {
   for (const dir of SHARED_DIRS) {
-    const tenantSubDir = path.join(tenantDir, dir);
+    const tenantSubDir = path.join(templateDir, dir);
     try {
       for (const entry of fs.readdirSync(tenantSubDir, { withFileTypes: true })) {
         const fullPath = path.join(tenantSubDir, entry.name);
@@ -69,9 +69,9 @@ export function unlinkTenantFromShared(tenantDir: string): void {
 }
 
 /** 确保租户链接完整（launcher 启动前调用） */
-export function ensureTenantLinks(tenantDir: string, sharedDir: string): void {
+export function ensureTemplateLinks(templateDir: string, sharedDir: string): void {
   if (!fs.existsSync(sharedDir)) return;
-  linkTenantToShared(tenantDir, sharedDir);
+  linkTemplateToShared(templateDir, sharedDir);
 }
 
 /** 共享层状态 */
@@ -101,7 +101,7 @@ export function sharedStatus(sharedDir: string): {
  * 将现有租户中的扩展/技能/包提升到共享层。
  * 使用 cpSync + rmSync 而非 rename，因为可能跨文件系统。
  */
-export function promoteToShared(tenantDir: string, sharedDir: string): {
+export function promoteToShared(templateDir: string, sharedDir: string): {
   moved: string[];
   kept: string[];
 } {
@@ -111,7 +111,7 @@ export function promoteToShared(tenantDir: string, sharedDir: string): {
   initSharedLayer(sharedDir);
 
   for (const dir of SHARED_DIRS) {
-    const srcDir = path.join(tenantDir, dir);
+    const srcDir = path.join(templateDir, dir);
     const dstDir = path.join(sharedDir, dir);
 
     if (!fs.existsSync(srcDir)) continue;

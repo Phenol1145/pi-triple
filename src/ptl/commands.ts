@@ -10,8 +10,8 @@ import path from "node:path";
 
 import {
   loadConfig, resolveDataDir,
-  resolveTenantId, getTenantAlias,
-  listTenants, createTenant, removeTenant,
+  resolveTemplateId, getTemplateAlias,
+  listTemplates, createTemplate, removeTemplate,
 } from "./config.js";
 import { runDoctorStructured } from "./doctor.js";
 import { sharedStatus } from "./shared-layer.js";
@@ -39,26 +39,26 @@ export interface CommandResult {
 
 // ─── Commands ────────────────────────────────────────────────
 
-export async function execTenantLs(): Promise<CommandResult> {
+export async function execTemplateLs(): Promise<CommandResult> {
   const config = loadConfig();
   const dataDir = resolveDataDir(config);
-  const tenants = listTenants(config);
+  const templates = listTemplates(config);
 
-  if (tenants.length === 0) {
-    return { ok: true, message: "(无租户，运行 pit tenant new 创建)", data: { tenants: [] } };
+  if (templates.length === 0) {
+    return { ok: true, message: "(无租户，运行 pit template new 创建)", data: { templates: [] } };
   }
 
   const lines: string[] = [];
   const data: any[] = [];
 
-  for (const t of tenants) {
+  for (const t of templates) {
     const mark = t.isDefault ? "*" : " ";
     const model = t.config.model ?? "(默认)";
-    const tenantDir = path.join(dataDir, "pi-config", t.id);
-    const extCount = fs.existsSync(path.join(tenantDir, "extensions"))
-      ? fs.readdirSync(path.join(tenantDir, "extensions")).length : 0;
-    const skillCount = fs.existsSync(path.join(tenantDir, "skills"))
-      ? fs.readdirSync(path.join(tenantDir, "skills")).length : 0;
+    const templateDir = path.join(dataDir, "pi-config", t.id);
+    const extCount = fs.existsSync(path.join(templateDir, "extensions"))
+      ? fs.readdirSync(path.join(templateDir, "extensions")).length : 0;
+    const skillCount = fs.existsSync(path.join(templateDir, "skills"))
+      ? fs.readdirSync(path.join(templateDir, "skills")).length : 0;
 
     lines.push(
       `  ${mark} \x1b[1m${t.alias}\x1b[0m  \x1b[2m(${t.id.slice(0, 8)}…)\x1b[0m  model: ${model}  ext: ${extCount}  skills: ${skillCount}${t.isDefault ? "  \x1b[2m(default)\x1b[0m" : ""}`
@@ -73,15 +73,15 @@ export async function execTenantLs(): Promise<CommandResult> {
     });
   }
 
-  return { ok: true, message: lines.join("\n"), data: { tenants: data } };
+  return { ok: true, message: lines.join("\n"), data: { templates: data } };
 }
 
-export async function execTenantNew(alias?: string): Promise<CommandResult> {
+export async function execTemplateNew(alias?: string): Promise<CommandResult> {
   if (!alias) {
     return {
       ok: false,
       message: "",
-      error: { code: ERR.INTERACTIVE_REQUIRED, message: "请提供租户别名: pit tenant new <alias>" },
+      error: { code: ERR.INTERACTIVE_REQUIRED, message: "请提供租户别名: pit template new <alias>" },
     };
   }
 
@@ -89,25 +89,25 @@ export async function execTenantNew(alias?: string): Promise<CommandResult> {
   const dataDir = resolveDataDir(config);
 
   try {
-    const id = createTenant(alias, {}, config);
-    const tenantDir = path.join(dataDir, "pi-config", id);
+    const id = createTemplate(alias, {}, config);
+    const templateDir = path.join(dataDir, "pi-config", id);
 
-    const displayAlias = getTenantAlias(id, config);
+    const displayAlias = getTemplateAlias(id, config);
 
     // Check shared layer
     let sharedMsg = "";
     const sharedDirPath = path.resolve(process.cwd(), config.sharedDir);
     if (fs.existsSync(sharedDirPath)) {
-      const { linkTenantToShared } = await import("./shared-layer.js");
-      linkTenantToShared(tenantDir, sharedDirPath);
+      const { linkTemplateToShared } = await import("./shared-layer.js");
+      linkTemplateToShared(templateDir, sharedDirPath);
       sharedMsg = "\n  ✅ 已链接共享层";
     }
 
     // Auto-migrate if pi config exists
     let migrated = false;
-    if (!fs.existsSync(path.join(tenantDir, "settings.json"))) {
+    if (!fs.existsSync(path.join(templateDir, "settings.json"))) {
       const { migrate } = await import("./migrate.js");
-      await migrate({ tenantId: id });
+      await migrate({ templateId: id });
       migrated = true;
     }
 
@@ -131,13 +131,13 @@ export async function execTenantNew(alias?: string): Promise<CommandResult> {
 
 export async function execTenantRm(input: string): Promise<CommandResult> {
   if (!input) {
-    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: pit tenant rm <alias|uuid>" } };
+    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: pit template rm <alias|uuid>" } };
   }
 
   const config = loadConfig();
   const dataDir = resolveDataDir(config);
 
-  const result = resolveTenantId(input, config);
+  const result = resolveTemplateId(input, config);
   if (!result.ok) {
     if (result.reason === "ambiguous") {
       return {
@@ -150,7 +150,7 @@ export async function execTenantRm(input: string): Promise<CommandResult> {
   }
 
   const id = result.id;
-  const alias = getTenantAlias(id, config);
+  const alias = getTemplateAlias(id, config);
 
   // Check running tmux sessions (B3 fix: prefix match, not exact alias match)
   const running = sessionsForTenant(alias);
@@ -172,7 +172,7 @@ export async function execTenantRm(input: string): Promise<CommandResult> {
     fs.rmSync(d, { recursive: true, force: true });
     deleted.push(path.relative(process.cwd(), d));
   }
-  removeTenant(id, config);
+  removeTemplate(id, config);
 
   return {
     ok: true,
@@ -258,35 +258,35 @@ export async function execStop(name: string): Promise<CommandResult> {
 /** 启动后台 tmux 会话（供 TUI / CLI 共用） */
 export async function execStartBg(
   name: string,
-  tenantInput: string,
+  templateInput: string,
   extraArgs: string[] = [],
 ): Promise<CommandResult> {
   if (!hasTmux()) {
     return { ok: false, message: "", error: { code: ERR.TMUX_NOT_INSTALLED, message: "tmux 未安装" } };
   }
   const config = loadConfig();
-  const resolved = tenantInput
-    ? resolveTenantId(tenantInput, config)
-    : { ok: true as const, id: config.defaultTenant };
+  const resolved = templateInput
+    ? resolveTemplateId(templateInput, config)
+    : { ok: true as const, id: config.defaultTemplate };
   if (!resolved.ok) {
-    return { ok: false, message: "", error: { code: ERR.TENANT_NOT_FOUND, message: `租户 "${tenantInput}" 不存在` } };
+    return { ok: false, message: "", error: { code: ERR.TENANT_NOT_FOUND, message: `租户 "${templateInput}" 不存在` } };
   }
-  const tenantId = resolved.id;
-  const alias = getTenantAlias(tenantId, config);
+  const templateId = resolved.id;
+  const alias = getTemplateAlias(templateId, config);
   const sessionName = name || `${alias}-${Date.now().toString(36)}`;
 
   if (hasPitSession(name)) {
     return { ok: false, message: "", error: { code: "SESSION_EXISTS", message: `会话 "${name}" 已在运行。接入: pit attach ${name}` } };
   }
 
-  const tenantConfig = config.tenants[tenantId] ?? {};
+  const templateConfig = config.templates[templateId] ?? {};
   const { buildPiLaunch: bpl } = await import("./launcher.js");
-  const launch = await bpl(tenantId, {
-    provider: tenantConfig.provider,
-    model: tenantConfig.model,
-    thinking: tenantConfig.thinking,
-    tools: tenantConfig.tools,
-    excludeTools: tenantConfig.excludeTools,
+  const launch = await bpl(templateId, {
+    provider: templateConfig.provider,
+    model: templateConfig.model,
+    thinking: templateConfig.thinking,
+    tools: templateConfig.tools,
+    excludeTools: templateConfig.excludeTools,
     extraArgs,
   });
 
@@ -295,7 +295,7 @@ export async function execStartBg(
     return {
       ok: true,
       message: `✅ 后台会话 "${sessionName}" 已启动\n接入: pit attach ${sessionName}`,
-      data: { name: sessionName, tenantId, alias },
+      data: { name: sessionName, templateId, alias },
     };
   }
   return { ok: false, message: "", error: { code: "TMUX_ERROR", message: `启动失败: ${result.stderr}` } };

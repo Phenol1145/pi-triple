@@ -18,8 +18,8 @@ export function ExtensionsPage({ width, height: _h }: ExtensionsPageProps) {
   const sharedDir = path.join(dataDir, "shared");
   const status = sharedStatus(sharedDir);
 
-  // Per-tenant extension counts
-  const tenantExtCounts = Object.entries(config.tenants).map(([id, tenant]) => {
+  // Per-template extension counts
+  const tenantExtCounts = Object.entries(config.templates).map(([id, template]) => {
     const extDir = path.join(dataDir, "pi-config", id, "extensions");
     let count = 0;
     let hasShared = false;
@@ -28,7 +28,7 @@ export function ExtensionsPage({ width, height: _h }: ExtensionsPageProps) {
       count = entries.filter((e) => !e.name.startsWith(".") && e.name !== "_shared").length;
       hasShared = entries.some((e) => e.name === "_shared");
     }
-    return { alias: tenant.alias, count, hasShared, id };
+    return { alias: template.alias, count, hasShared, id };
   });
 
   // Shared layer extensions list
@@ -46,7 +46,7 @@ export function ExtensionsPage({ width, height: _h }: ExtensionsPageProps) {
     { key: "name", label: "SHARED EXTENSION" },
   ];
 
-  const tenantCols: ColumnDef[] = [
+  const templateCols: ColumnDef[] = [
     { key: "alias", label: "TENANT", width: 16 },
     { key: "count", label: "EXT", width: 5 },
     { key: "shared", label: "LINKED", width: 8 },
@@ -78,12 +78,12 @@ export function ExtensionsPage({ width, height: _h }: ExtensionsPageProps) {
         )}
       </Box>
 
-      {/* Per-tenant */}
+      {/* Per-template */}
       <Box flexDirection="column" marginTop={1}>
-        <Text bold underline>Per-Tenant Extensions</Text>
+        <Text bold underline>Per-Template Extensions</Text>
 
         <DataTable
-          columns={tenantCols}
+          columns={templateCols}
           rows={tenantExtCounts.map((t) => ({
             alias: t.alias,
             count: String(t.count),

@@ -25,12 +25,12 @@ import { createLogger } from "../shared/observability/logger.js";
 import { EnvCredentialProvider } from "../shared/credential-provider.js";
 import { ModelRouter } from "../shared/model-router/router.js";
 import { WorkspaceManager } from "../shared/workspace/manager.js";
-import { ensureTenantLinks } from "./shared-layer.js";
-import { getTenantAlias, resolveDataDir } from "./config.js";
+import { ensureTemplateLinks } from "./shared-layer.js";
+import { getTemplateAlias, resolveDataDir } from "./config.js";
 
 export interface LaunchOptions {
   /** Tenant ID (from auth token or "local") */
-  tenantId: string;
+  templateId: string;
   /** Project name (workspace subdirectory) */
   project?: string;
   /** Override provider (skip ModelRouter) */
@@ -62,7 +62,7 @@ export interface PiBuildResult {
  * 构建 pi 启动参数（不执行），供 fg/bg 共用。
  * 需要 provider/model 已解析，剩下的工作区/会话目录/共享链接在此处理。
  */
-export async function buildPiLaunch(tenantId: string, options: {
+export async function buildPiLaunch(templateId: string, options: {
   project?: string;
   provider?: string;
   model?: string;
@@ -81,10 +81,10 @@ export async function buildPiLaunch(tenantId: string, options: {
     platform,
     path.join(dataDir, "workspaces"),
     path.join(dataDir, "platform"),
-    path.join(dataDir, "tenants"),
+    path.join(dataDir, "templates"),
   );
   const project = options.project ?? "default";
-  const cwd = await workspaceMgr.ensureWorkspace(tenantId, project);
+  const cwd = await workspaceMgr.ensureWorkspace(templateId, project);
 
   // build pi args
   const args: string[] = [];
@@ -95,7 +95,7 @@ export async function buildPiLaunch(tenantId: string, options: {
   if (options.tools) args.push("--tools", options.tools);
   if (options.excludeTools) args.push("--exclude-tools", options.excludeTools);
 
-  const sessionDir = path.join(dataDir, "sessions", tenantId);
+  const sessionDir = path.join(dataDir, "sessions", templateId);
   fs.mkdirSync(sessionDir, { recursive: true });
   args.push("--session-dir", sessionDir);
 
@@ -103,7 +103,7 @@ export async function buildPiLaunch(tenantId: string, options: {
   if (options.resumeSession) args.push("--resume", options.resumeSession);
 
   // tenant system prompt
-  const tenantPromptPath = path.join(dataDir, "tenants", tenantId, "PROMPT.md");
+  const tenantPromptPath = path.join(dataDir, "templates", templateId, "PROMPT.md");
   if (fs.existsSync(tenantPromptPath)) {
     args.push("--append-system-prompt", tenantPromptPath);
   }
@@ -111,9 +111,9 @@ export async function buildPiLaunch(tenantId: string, options: {
   if (options.extraArgs) args.push(...options.extraArgs);
 
   // ensure shared layer links
-  const piConfigDir = abs(path.join(dataDir, "pi-config", tenantId));
+  const piConfigDir = abs(path.join(dataDir, "pi-config", templateId));
   const sharedDir = abs(path.join(dataDir, "shared"));
-  ensureTenantLinks(piConfigDir, sharedDir);
+  ensureTemplateLinks(piConfigDir, sharedDir);
 
   // session + tenant identity
   const sessionId = randomUUID();
@@ -124,8 +124,8 @@ export async function buildPiLaunch(tenantId: string, options: {
     env: {
       ...process.env,
       PI_CODING_AGENT_DIR: piConfigDir,
-      PI_TENANT: tenantId,
-      PI_TENANT_ALIAS: getTenantAlias(tenantId),
+      PI_TEMPLATE: templateId,
+      PI_TEMPLATE_ALIAS: getTemplateAlias(templateId),
       PI_SESSION_ID: sessionId,
       AGENT_LAB_DB_PATH: path.join(sharedDir, "agent-lab", "agent-lab.db"),
       AGENT_LAB_CONFIG_DIR: path.join(piConfigDir, "agent-lab"),
@@ -152,7 +152,7 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
   }
 
   // --- Build launch params ---
-  const launch = await buildPiLaunch(options.tenantId, {
+  const launch = await buildPiLaunch(options.templateId, {
     project: options.project,
     provider,
     model,
@@ -164,8 +164,8 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
     extraArgs: options.extraArgs,
   });
 
-  const alias = getTenantAlias(options.tenantId);
-  console.log(`\x1b[36mPi-Triple\x1b[0m · tenant: ${alias} (${options.tenantId.slice(0, 8)}…) · project: ${options.project ?? "default"}`);
+  const alias = getTemplateAlias(options.templateId);
+  console.log(`\x1b[36mPi-Triple\x1b[0m · tenant: ${alias} (${options.templateId.slice(0, 8)}…) · project: ${options.project ?? "default"}`);
   if (provider && model) {
     console.log(`Model: ${provider}/${model}`);
   }
@@ -174,7 +174,7 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
 
   logger.info({
     event: "launch_pi",
-    tenantId: options.tenantId,
+    templateId: options.templateId,
     project: launch.cwd,
     provider,
     model,

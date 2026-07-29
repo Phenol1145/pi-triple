@@ -13,7 +13,7 @@ import type { ColumnDef } from "../tui-shared/data-table.js";
 interface Props {
   db: DatabaseSync | null;
   refreshKey: number;
-  tenantAlias: string;
+  templateAlias: string;
 }
 
 const BALANCE_COLS: ColumnDef[] = [
@@ -33,7 +33,7 @@ const SETTLE_COLS: ColumnDef[] = [
   { key: "created", label: "CREATED", width: 20 },
 ];
 
-export function ArenaPage({ db, refreshKey, tenantAlias }: Props) {
+export function ArenaPage({ db, refreshKey, templateAlias }: Props) {
   const balances = useMemo(() => {
     if (!db) return [];
     return getBalances(db);
@@ -55,7 +55,7 @@ export function ArenaPage({ db, refreshKey, tenantAlias }: Props) {
   if (!db) {
     return (
       <Box flexDirection="column">
-        <Text dimColor>Local Arena DB not available for tenant: {tenantAlias}</Text>
+        <Text dimColor>Local Arena DB not available for tenant: {templateAlias}</Text>
       </Box>
     );
   }
@@ -63,7 +63,7 @@ export function ArenaPage({ db, refreshKey, tenantAlias }: Props) {
   if (balances.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text dimColor>Arena not initialized for tenant: {tenantAlias}</Text>
+        <Text dimColor>Arena not initialized for tenant: {templateAlias}</Text>
         <Text dimColor>Start agent-lab workloads to create agents and begin bidding.</Text>
       </Box>
     );

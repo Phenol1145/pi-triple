@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import { spawnSync } from "node:child_process";
 import { DataTable } from "../tui-shared/index.js";
 import type { ColumnDef } from "../tui-shared/index.js";
-import { loadConfig, listTenants } from "../config.js";
+import { loadConfig, listTemplates } from "../config.js";
 
 /** Non-blocking tmux session reader */
 function readTmuxSessions(): string[] {
@@ -30,7 +30,7 @@ export function DashboardPage({ width, height: _h }: DashPageProps) {
   const [health, setHealth] = useState<HealthItem[]>([]);
   const [tmuxSessions, setTmuxSessions] = useState<string[]>([]);
   const config = loadConfig();
-  const tenants = listTenants(config);
+  const templates = listTemplates(config);
 
   useEffect(() => {
     runQuickHealth().then(setHealth);
@@ -39,13 +39,13 @@ export function DashboardPage({ width, height: _h }: DashPageProps) {
     setTmuxSessions(s);
   }, []);
 
-  const tenantCols: ColumnDef[] = [
+  const templateCols: ColumnDef[] = [
     { key: "alias", label: "TENANT", width: 16 },
     { key: "id", label: "ID" },
     { key: "model", label: "MODEL", width: 20 },
     { key: "default", label: "DEFAULT", width: 8 },
   ];
-  const tenantRows = tenants.map((t) => ({
+  const templateRows = templates.map((t) => ({
     alias: t.alias,
     id: t.id.slice(0, 8) + "…",
     model: t.config.model ?? "(default)",
@@ -72,10 +72,10 @@ export function DashboardPage({ width, height: _h }: DashPageProps) {
         )}
       </Box>
 
-      {/* Section: Tenants */}
+      {/* Section: Templates */}
       <Box flexDirection="column" marginTop={1}>
-        <Text bold underline>Tenants ({tenants.length})</Text>
-        <DataTable columns={tenantCols} rows={tenantRows} />
+        <Text bold underline>Templates ({templates.length})</Text>
+        <DataTable columns={templateCols} rows={templateRows} />
       </Box>
 
       {/* Section: Active Sessions */}
