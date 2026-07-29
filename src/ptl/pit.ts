@@ -17,6 +17,11 @@ import { cmdSubmit } from "./bridge/submit.js";
 import { cmdRun } from "./bridge/run.js";
 import { cmdPrograms } from "./bridge/programs.js";
 import { cmdDev } from "./bridge/dev.js";
+import {
+  cmdFlowRun, cmdFlowStatus, cmdFlowShow, cmdFlowLs,
+  cmdFlowApprove, cmdFlowReject, cmdFlowResume,
+  cmdFlowEdit, cmdFlowSet, cmdFlowGraph, cmdFlowRm, cmdFlowValidate,
+} from "./flow/commands.js";
 import { emitJsonError } from "./output.js";
 import {
   loadConfig, resolveTenantId, getTenantAlias, getDefaultTenantId,
@@ -30,6 +35,68 @@ import {
 export { parseArgs };
 export { printBanner, printHelp, getVersion } from "./pit/main.js";
 export { resolveOrFail } from "./pit/onboard.js";
+
+// ─── Flow 路由 ────────────────────────────────────────────────
+
+async function routeFlowCommand(subcmd: string | undefined, args: string[], flags: Record<string, string>): Promise<void> {
+  switch (subcmd) {
+    case "run":
+      await cmdFlowRun(args[0] ?? "", args.slice(1));
+      break;
+    case "status":
+      await cmdFlowStatus(args[0] ?? "");
+      break;
+    case "show":
+      await cmdFlowShow(args[0] ?? "");
+      break;
+    case "ls":
+      await cmdFlowLs(flags.json === "true");
+      break;
+    case "approve":
+      await cmdFlowApprove(args[0] ?? "", args.slice(1).join(" "));
+      break;
+    case "reject":
+      await cmdFlowReject(args[0] ?? "", args.slice(1).join(" "));
+      break;
+    case "resume":
+      await cmdFlowResume(args[0] ?? "");
+      break;
+    case "edit":
+      await cmdFlowEdit(args[0] ?? "");
+      break;
+    case "set":
+      await cmdFlowSet(args[0] ?? "", args[1] ?? "", args[2] ?? "");
+      break;
+    case "graph":
+      cmdFlowGraph(args[0] ?? "");
+      break;
+    case "rm":
+      cmdFlowRm(args[0] ?? "");
+      break;
+    case "validate":
+      cmdFlowValidate(args[0] ?? "");
+      break;
+    default:
+      console.log("");
+      console.log("  \x1b[36m\x1b[1mpit flow\x1b[0m  \x1b[2m— PTL Agents Workflow\x1b[0m");
+      console.log("");
+      console.log("  命令:");
+      console.log("    flow run <flow.json> [k=v...]      启动工作流");
+      console.log("    flow status <runId>                运行状态");
+      console.log("    flow show <runId>                  完整输出 + state");
+      console.log("    flow ls [--json]                    列出全部");
+      console.log("    flow approve <runId> [备注]        人工审批通过");
+      console.log("    flow reject <runId> [备注]          人工驳回");
+      console.log("    flow resume <runId>                继续暂停/失败的任务");
+      console.log("    flow edit <runId>                  编辑图定义");
+      console.log("    flow set <runId> <path> <value>    修改图/状态");
+      console.log("    flow graph <runId>                 查看图 + 修改历史");
+      console.log("    flow rm <runId>                    删除");
+      console.log("    flow validate <flow.json>           校验定义");
+      console.log("");
+      break;
+  }
+}
 
 // ─── Main ────────────────────────────────────────────────────
 
@@ -143,6 +210,9 @@ async function main() {
       break;
     case "dev":
       await cmdDev(passthrough[0] || "", passthrough.slice(1), flags);
+      break;
+    case "flow":
+      await routeFlowCommand(subcommand, passthrough, flags);
       break;
     case "help":
     case "--help":

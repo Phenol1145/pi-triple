@@ -1,0 +1,36 @@
+{
+  "name": "pr-review",
+  "entry": "analyze",
+  "maxSteps": 50,
+  "state": { "pr": "{{input.pr}}", "round": 0 },
+  "nodes": [
+    {
+      "id": "analyze",
+      "type": "agent",
+      "model": "deepseek/deepseek-v4-flash",
+      "prompt": "用一句话描述这个 PR 改动: {{state.pr}}",
+      "writes": { "analysis": "{{output}}" },
+      "timeoutSec": 120
+    },
+    {
+      "id": "gate",
+      "type": "human",
+      "message": "分析结果（第 {{state.round}} 轮）: {{state.analysis}}\n批准结束？",
+      "writes": { "round": "{{increment:state.round}}" }
+    },
+    {
+      "id": "report",
+      "type": "agent",
+      "model": "deepseek/deepseek-v4-flash",
+      "prompt": "基于分析写一句总结: {{state.analysis}}",
+      "writes": { "report": "{{output}}" }
+    }
+  ],
+  "edges": [
+    { "from": "analyze", "to": "gate" },
+    { "from": "gate", "to": "report", "when": "state.approved == true" },
+    { "from": "gate", "to": "end", "when": "state.round >= 3" },
+    { "from": "gate", "to": "analyze" },
+    { "from": "report", "to": "end" }
+  ]
+}

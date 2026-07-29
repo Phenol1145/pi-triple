@@ -49,6 +49,11 @@ export function printHelp(): void {
   console.log("    programs           列出 PTH 上已提交的程序");
   console.log("    run <name> [k=v...]  远端运行程序（SSE 流式输出）");
   console.log("    dev <dir>           本地调试程序（pi 交互会话）");
+  console.log("    flow run <file> [k=v]  运行工作流");
+  console.log("    flow ls                列出工作流");
+  console.log("    flow show/status <id>  状态/详情");
+  console.log("    flow approve/reject <id> 人工审批");
+  console.log("    flow validate <file>   校验定义");
   console.log("    help               显示帮助");
   console.log("");
   console.log("  选项:");
@@ -66,6 +71,8 @@ export function printHelp(): void {
   console.log("    pit submit my-agent                 # 提交程序");
   console.log("    pit run code-reviewer repo=./x pr=42  # 远端运行");
   console.log("    pit dev my-agent                    # 本地调试");
+  console.log("    pit flow run pr-review.json pr=123  # 运行工作流");
+  console.log("    pit flow ls                          # 列出工作流");
   console.log("    pit tenant new my-team             # 新建租户");
   console.log("    pit tenant ls                        # 列出租户");
   console.log("");

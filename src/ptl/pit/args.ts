@@ -3,7 +3,7 @@
  */
 
 /** 有子命令语义的命令白名单（第二个位置参数 = subcommand） */
-export const SUBCOMMAND_COMMANDS = new Set(["tenant", "shared", "config"]);
+export const SUBCOMMAND_COMMANDS = new Set(["tenant", "shared", "config", "flow"]);
 
 export function parseArgs(args: string[]): { command: string; subcommand?: string; flags: Record<string, string>; passthrough: string[] } {
   const flags: Record<string, string> = {};
