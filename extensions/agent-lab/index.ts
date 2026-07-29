@@ -123,6 +123,7 @@ export default async function (pi: ExtensionAPI) {
   // Construction failures are caught and the bridge falls through to legacy classic.
   let schedulerRuntime: SchedulerRuntimeLike | undefined;
   let runtimeInitAttempted = false;
+  let bootstrapPromise: Promise<void> | undefined;
   // Lazy arena model caller: populated from interceptor ctx on first tool_call.
   let arenaModelCaller: ModelCaller | undefined;
   const schedulerRuntimeFactory = (): SchedulerRuntimeLike | undefined => {
@@ -160,7 +161,7 @@ export default async function (pi: ExtensionAPI) {
         // Sequential bootstrap: weighted-scorer MUST be active before arena
         // (arena fallbackChain points to weighted-scorer, validated by ControlPlane).
         // Wrapped in a single void promise with per-step fail-open catches.
-        void (async () => {
+        bootstrapPromise = (async () => {
           const wsResult = await ensureWeightedScorerInstance(
             rt.core,
             rt.schedulers,
@@ -582,7 +583,11 @@ export default async function (pi: ExtensionAPI) {
   // ── bench (arena × HumanEval closed loop) ─────────────────────
   const bench = async (cmdCtx: ExtensionContext, n: number): Promise<string> => {
     if (!cfg.scheduler?.enabled) return "预检失败: Scheduler not enabled. /lab config scheduler.enabled true";
-    if (!schedulerCore) return "预检失败: Scheduler core not initialized. /lab scheduler status";
+    // 先初始化 runtime 并等 bootstrap 完成（注册 arena 实现），再做依赖 schedulerCore 的预检。
+    // （bootstrap 是 fire-and-forget 异步；新会话不 await 则 arena 实现未注册、schedulerCore 为空。）
+    const rt = schedulerRuntimeFactory();
+    if (bootstrapPromise) { try { await bootstrapPromise; } catch { /* fail-open */ } }
+    if (!rt || !schedulerCore) return "预检失败: Scheduler runtime unavailable. /lab scheduler status";
     const arena = schedulerCore.repository.getInstance("default-arena");
     if (!arena || arena.status !== "active") return "预检失败: Arena instance not active. /lab scheduler status";
     if (catalog.candidates().length < 2) return "预检失败: Need >= 2 catalog candidates. /lab models --refresh";
@@ -595,8 +600,6 @@ export default async function (pi: ExtensionAPI) {
     try {
       const tasks = await loadHumanEval(n);
       if (tasks.length === 0) return "预检失败: 无 HumanEval 任务（下载/缓存失败）";
-      const rt = schedulerRuntimeFactory();
-      if (!rt) return "预检失败: Scheduler runtime unavailable";
       const round = schedulerCore.repository.getRound(arena.currentRoundId);
       const eligibility = (round?.parameters as { market?: { eligibility?: string } })?.market?.eligibility ?? "all";
       const ports: BenchPorts = {
