@@ -102,13 +102,14 @@ export function createArenaSchedulerImplementation(
         };
       }
 
-      // 5. Endow + build AgentState
+      // 5. Endow + build AgentState（UUID 身份）
       const states: AgentState[] = eligible.map((m) => {
-        ports.ledger.ensureEndowed(m.id, m);
+        const agentId = ports.resolveAgent(m);          // UUID（resolveAgent 注入）
+        ports.ledger.ensureEndowed(agentId, m);         // ledger 按 UUID 键控
         return {
-          agent: m.id,
+          agent: agentId,
           model: m,
-          balance: ports.ledger.balance(m.id),
+          balance: ports.ledger.balance(agentId),
         };
       });
 
@@ -187,7 +188,7 @@ export function createArenaSchedulerImplementation(
 
           try {
             const reply = await ports.modelCaller.complete(
-              st.agent,
+              st.model.id,           // C1: 传 model id（非 agent UUID）
               prompt,
               params.bidding.timeoutMs,
             );
@@ -287,9 +288,10 @@ export function createArenaSchedulerImplementation(
         };
       }
 
-      // 13. Create task (task.id = settlementRef)
+      // 13. Create task (winner UUID + modelId)
+      const winnerModel = states.find(s => s.agent === winner.agent)!.model.id;
       const round = ports.ledger.nextRound();
-      ports.ledger.createTask(task, winner.agent, winner.stake, round);
+      ports.ledger.createTask(task, winner.agent, winner.stake, round, winnerModel);
 
       // 14. Emit balance_after
       sdk.telemetry.emit(
@@ -335,9 +337,16 @@ export function createArenaSchedulerImplementation(
         reward: row.reward,
       };
 
-      // Find model info for cost calculation
+      // Find model info for cost calculation (C2: use winnerModel, not winner UUID)
       const candidates = ports.candidates();
-      const model = candidates.find((m) => m.id === row.winner);
+      const model = row.winnerModel
+        ? candidates.find((m) => m.id === row.winnerModel)
+        : undefined;  // winnerModel NULL 兜底（旧数据迁移）
+
+      // NULL winnerModel: U=0 + warn（旧 task 无 winner_model 列，N1）
+      if (!row.winnerModel) {
+        sdk.telemetry.emit("scheduler.arena.missing_winner_model", { taskId: taskRef });
+      }
 
       const D = settlementPolicy.settle(arenaTask, row.stake, outcome);
       const U = model ? costModel.usageCost(outcome, model) : 0;
