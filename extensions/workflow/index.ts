@@ -126,6 +126,8 @@ export default function (pi: any) {
     { value: "status", label: "status <id>", description: "运行状态" },
     { value: "show", label: "show <id>", description: "完整输出 + state" },
     { value: "graph", label: "graph <id>", description: "查看当前图" },
+    { value: "set", label: "set <id> <path> <value>", description: "热修改图/状态（点路径）" },
+    { value: "edit", label: "edit <id>", description: "$EDITOR 编辑整图（tmux 新窗口）" },
     { value: "validate", label: "validate <file>", description: "校验 flow.json" },
     { value: "rm", label: "rm <id>", description: "删除工作流" },
   ];
@@ -142,9 +144,9 @@ export default function (pi: any) {
         return filtered.length > 0 ? filtered : null;
       }
 
-      // 第二级：runId 前缀（approve/reject/resume/status/show/graph/rm）
+      // 第二级：runId 前缀（approve/reject/resume/status/show/graph/rm/set/edit）
       const cmd2 = parts[0];
-      if (["approve", "reject", "resume", "status", "show", "graph", "rm"].includes(cmd2!) && parts.length === 2) {
+      if (["approve", "reject", "resume", "status", "show", "graph", "rm", "set", "edit"].includes(cmd2!) && parts.length === 2) {
         const p2 = parts[1] ?? "";
         const ids = listRunIds().filter((id) => id.startsWith(p2));
         return ids.length > 0 ? ids.slice(0, 10).map((id) => ({ value: id.slice(0, 8), label: id.slice(0, 8) })) : null;
@@ -157,7 +159,34 @@ export default function (pi: any) {
       const cwd = ctx.cwd ?? process.cwd();
 
       if (!cmd) {
-        ctx.ui.notify("/flow run|ls|status|show|approve|reject|resume|graph|validate|rm", "info");
+        ctx.ui.notify("/flow run|ls|status|show|approve|reject|resume|graph|set|edit|validate|rm", "info");
+        return;
+      }
+
+      // ── set：value 含空格需重组（id path value...） ──
+      if (cmd === "set") {
+        const [id, dotPath, ...valueParts] = rest;
+        if (!id || !dotPath || valueParts.length === 0) {
+          ctx.ui.notify("用法: /flow set <id> <path> <value>\n例: /flow set 5b59cbcf nodes.2.prompt 新 prompt", "warning");
+          return;
+        }
+        const r = syncRun(["flow", "set", id, dotPath, valueParts.join(" ")], cwd);
+        const text = r.stdout.trim() || r.stderr.trim();
+        ctx.ui.notify(text || (r.ok ? "已设置" : "设置失败"), r.ok ? "info" : "error");
+        return;
+      }
+
+      // ── edit：tmux 新窗口跑 pit flow edit（$EDITOR 交互） ──
+      if (cmd === "edit") {
+        const id = rest[0];
+        if (!id) { ctx.ui.notify("用法: /flow edit <id>", "warning"); return; }
+        if (process.env.TMUX) {
+          const { spawnSync: sp } = await import("node:child_process");
+          sp("tmux", ["new-window", "-n", `flow-edit-${id.slice(0, 8)}`, "pit", "flow", "edit", id]);
+          ctx.ui.notify(`已在 tmux 新窗口打开编辑器（flow-edit-${id.slice(0, 8)}）`, "info");
+        } else {
+          ctx.ui.notify(`请在 shell 中运行: pit flow edit ${id}`, "warning");
+        }
         return;
       }
 
