@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import {
   loadConfig,
-  createTenant,
+  createTemplate,
   getConfigValue,
   setConfigValue,
   unsetConfigValue,
@@ -30,7 +30,7 @@ describe("config get/set/unset", () => {
     loadConfig();  // 触发默认配置创建
     expect(getConfigValue("redis")).toBe("redis://localhost:6379");
     expect(getConfigValue("gateway.port")).toBe("3000");
-    expect(getConfigValue("version")).toBe("2");
+    expect(getConfigValue("version")).toBe("3");
   });
 
   it("set redis + 持久化", () => {
@@ -41,22 +41,22 @@ describe("config get/set/unset", () => {
     expect(reloaded.redis).toBe("redis://other:6380");
   });
 
-  it("set defaultTenant 接受别名", () => {
+  it("set defaultTemplate 接受别名", () => {
     const c = loadConfig();
-    const localId = c.defaultTenant;
-    const newId = createTenant("dev", {}, c);
-    const r = setConfigValue("defaultTenant", "dev");
+    const localId = c.defaultTemplate;
+    const newId = createTemplate("dev", {}, c);
+    const r = setConfigValue("defaultTemplate", "dev");
     expect(r.ok).toBe(true);
-    expect(loadConfig().defaultTenant).toBe(newId);
+    expect(loadConfig().defaultTemplate).toBe(newId);
     // 设回 local（别名解析）
-    const r2 = setConfigValue("defaultTenant", "local");
+    const r2 = setConfigValue("defaultTemplate", "local");
     expect(r2.ok).toBe(true);
-    expect(loadConfig().defaultTenant).toBe(localId);
+    expect(loadConfig().defaultTemplate).toBe(localId);
   });
 
-  it("set defaultTenant 不存在的租户 → 报错", () => {
+  it("set defaultTemplate 不存在的租户 → 报错", () => {
     loadConfig();
-    const r = setConfigValue("defaultTenant", "ghost");
+    const r = setConfigValue("defaultTemplate", "ghost");
     expect(r.ok).toBe(false);
     expect(r.error).toContain("ghost");
   });
@@ -69,17 +69,17 @@ describe("config get/set/unset", () => {
     expect(setConfigValue("gateway.port", "99999").ok).toBe(false);
   });
 
-  it("tenants.<alias>.model set/get/unset", () => {
+  it("templates.<alias>.model set/get/unset", () => {
     loadConfig();
-    expect(setConfigValue("tenants.local.model", "deepseek/deepseek-v4-pro").ok).toBe(true);
-    expect(getConfigValue("tenants.local.model")).toBe("deepseek/deepseek-v4-pro");
-    expect(unsetConfigValue("tenants.local.model").ok).toBe(true);
-    expect(getConfigValue("tenants.local.model")).toBeUndefined();
+    expect(setConfigValue("templates.local.model", "deepseek/deepseek-v4-pro").ok).toBe(true);
+    expect(getConfigValue("templates.local.model")).toBe("deepseek/deepseek-v4-pro");
+    expect(unsetConfigValue("templates.local.model").ok).toBe(true);
+    expect(getConfigValue("templates.local.model")).toBeUndefined();
   });
 
-  it("tenants 字段白名单：alias 不可经 config set 修改", () => {
+  it("templates 字段白名单：alias 不可经 config set 修改", () => {
     loadConfig();
-    const r = setConfigValue("tenants.local.alias", "hacked");
+    const r = setConfigValue("templates.local.alias", "hacked");
     expect(r.ok).toBe(false);
   });
 

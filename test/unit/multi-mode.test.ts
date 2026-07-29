@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { emitJson, emitJsonError, ERR } from "../../src/ptl/output.js";
 import {
-  execTenantLs,
+  execTemplateLs,
   execTenantRm,
-  execTenantNew,
+  execTemplateNew,
   execStop,
   execLs,
   execStatus,
@@ -93,15 +93,15 @@ describe("ERR constants", () => {
 
 // ─── commands.ts — structural checks ─────────────────────────
 
-describe("execTenantLs", () => {
+describe("execTemplateLs", () => {
   it("returns ok with tenants array in data", async () => {
-    const result = await execTenantLs();
+    const result = await execTemplateLs();
     expect(result.ok).toBe(true);
     expect(result.data).toBeDefined();
-    expect(result.data.tenants).toBeDefined();
-    expect(Array.isArray(result.data.tenants)).toBe(true);
-    if (result.data.tenants.length > 0) {
-      const t = result.data.tenants[0];
+    expect(result.data.templates).toBeDefined();
+    expect(Array.isArray(result.data.templates)).toBe(true);
+    if (result.data.templates.length > 0) {
+      const t = result.data.templates[0];
       expect(t).toHaveProperty("id");
       expect(t).toHaveProperty("alias");
       expect(t).toHaveProperty("isDefault");
@@ -112,7 +112,7 @@ describe("execTenantLs", () => {
   });
 
   it("returns string message", async () => {
-    const result = await execTenantLs();
+    const result = await execTemplateLs();
     expect(typeof result.message).toBe("string");
     expect(result.message.length).toBeGreaterThan(0);
   });
@@ -134,16 +134,16 @@ describe("execTenantRm", () => {
   });
 });
 
-describe("execTenantNew", () => {
+describe("execTemplateNew", () => {
   it("rejects empty alias", async () => {
-    const result = await execTenantNew("");
+    const result = await execTemplateNew("");
     expect(result.ok).toBe(false);
     expect(result.error).toBeDefined();
     expect(result.error!.code).toBe(ERR.INTERACTIVE_REQUIRED);
   });
 
   it("rejects undefined alias", async () => {
-    const result = await execTenantNew(undefined);
+    const result = await execTemplateNew(undefined);
     expect(result.ok).toBe(false);
     expect(result.error).toBeDefined();
     expect(result.error!.code).toBe(ERR.INTERACTIVE_REQUIRED);

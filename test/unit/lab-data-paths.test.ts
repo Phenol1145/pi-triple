@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const HOME = homedir();
-const KEYS = ["AGENT_LAB_DB_PATH", "AGENT_LAB_CONFIG_DIR", "PI_TRIPLE_HOME", "DATA_DIR", "PI_TENANT"];
+const KEYS = ["AGENT_LAB_DB_PATH", "AGENT_LAB_CONFIG_DIR", "PI_TRIPLE_HOME", "DATA_DIR", "PI_TEMPLATE"];
 function withEnv(env: Record<string, string | undefined>, fn: () => void) {
   const saved: [string, string | undefined][] = KEYS.map((k) => [k, process.env[k]] as const);
   KEYS.forEach((k) => delete process.env[k]);

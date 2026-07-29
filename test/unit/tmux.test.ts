@@ -109,7 +109,7 @@ describe("tmux module", () => {
         cmd: "pi",
         args: ["--print", "hi"],
         env: {
-          PI_TENANT: "uuid-123",
+          PI_TEMPLATE: "uuid-123",
           PI_CODING_AGENT_DIR: "/data/config/uuid-123",
           AGENT_LAB_DB_PATH: "/data/shared/agent-lab.db",
           HOME: "/home/user", // should NOT be injected
@@ -125,7 +125,7 @@ describe("tmux module", () => {
       expect(args).toContain("pi");
       // Env vars injected
       expect(args).toContain("-e");
-      expect(args).toContain("PI_TENANT=uuid-123");
+      expect(args).toContain("PI_TEMPLATE=uuid-123");
       expect(args).toContain("PI_CODING_AGENT_DIR=/data/config/uuid-123");
       expect(args).toContain("AGENT_LAB_DB_PATH=/data/shared/agent-lab.db");
       // Non-PI_/AGENT_LAB_ vars NOT injected
@@ -138,7 +138,7 @@ describe("tmux module", () => {
   describe("startPitSession", () => {
     it("passes args to tmux with correct session name", () => {
       mockSpawnSync.mockReturnValue({ status: 0, stderr: "" });
-      const launch = { cmd: "pi", args: [], env: { PI_TENANT: "x" }, cwd: "/tmp" };
+      const launch = { cmd: "pi", args: [], env: { PI_TEMPLATE: "x" }, cwd: "/tmp" };
       const result = startPitSession(launch, "myname", true);
       expect(result.status).toBe(0);
       const calls = mockSpawnSync.mock.calls;
