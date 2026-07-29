@@ -33,6 +33,7 @@ export interface RunRecord {
   traceId?: string;
   templateId?: string;
   sessionId?: string;
+  agentInstanceId?: string;
 }
 
 export interface Aggregate {

@@ -3,6 +3,7 @@ import type { LabConfig } from "../types.ts";
 import type { Store } from "../store/store.ts";
 import type { Outcome } from "../arena/types.ts";
 import type { SchedulerRuntimeLike } from "../interceptor/scheduler-bridge.ts";
+import { takeDispatchAgent } from "../interceptor/scheduler-bridge.ts";
 import { parseSubagentRun } from "./parse.ts";
 
 export function registerTelemetry(
@@ -35,6 +36,9 @@ export function registerTelemetry(
       if (rec) {
         rec.templateId = process.env.PI_TEMPLATE ?? undefined;
         rec.sessionId = process.env.PI_SESSION_ID ?? undefined;
+        // 关联调度器选出的 agent 实例（I3：按 toolCallId 关联，不依赖 Pi env）
+        const agentInstanceId = takeDispatchAgent(taskId);
+        if (agentInstanceId) rec.agentInstanceId = agentInstanceId;
         store.appendRun(rec);
         // fail-open auto-trigger hook: never throw into telemetry handler (L7/I7)
         try { onRunRecorded?.(); } catch { /* swallow */ }

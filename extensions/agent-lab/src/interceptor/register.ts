@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { LabConfig } from "../types.ts";
 import { modelAllowed, loadModelScopeAllow } from "./model-scope.ts";
-import { decideSchedulerSelection } from "./scheduler-bridge.ts";
+import { decideSchedulerSelection, recordDispatchAgent } from "./scheduler-bridge.ts";
 import type { SchedulerRuntimeLike } from "./scheduler-bridge.ts";
 
 /** Register the bridge-only interceptor.
@@ -44,6 +44,11 @@ export function registerInterceptor(
         input.model = decision.model;
         const source = decision.source === "scheduler" ? "WeightedScorer" : decision.source;
         ctx.ui.setStatus("agent-lab", `${role} → ${decision.model} (${source})`);
+        // 记录 toolCallId → agentInstanceId，供 telemetry 关联（I3）
+        const toolCallId = (event as { toolCallId?: unknown }).toolCallId;
+        if (decision.agentInstanceId && typeof toolCallId === "string") {
+          recordDispatchAgent(toolCallId, decision.agentInstanceId);
+        }
         return;
       }
       // skip → return silently (no rewrite)

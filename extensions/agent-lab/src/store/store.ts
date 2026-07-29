@@ -56,13 +56,13 @@ export class SqliteStore implements Store {
   get raw(): DatabaseSync { return this.db; }
   appendRun(r: RunRecord): void {
     this.db.prepare(
-      `INSERT INTO runs (ts, role, model, task_category, acceptance, completion, tokens_in, tokens_out, cost, tool_success, turns, interrupted, signals, source, trace_id, template_id, session_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO runs (ts, role, model, task_category, acceptance, completion, tokens_in, tokens_out, cost, tool_success, turns, interrupted, signals, source, trace_id, template_id, session_id, agent_instance_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       r.ts, r.role, r.model, r.taskCategory ?? null, r.acceptance ?? null, r.completion,
       r.tokensIn ?? null, r.tokensOut ?? null, r.cost ?? null, r.toolSuccess ?? null,
       r.turns ?? null, r.interrupted ?? null, JSON.stringify(r.signals ?? {}), r.source,
-      r.traceId ?? null, r.templateId ?? null, r.sessionId ?? null
+      r.traceId ?? null, r.templateId ?? null, r.sessionId ?? null, r.agentInstanceId ?? null
     );
   }
   aggregateByRole(role: string, templateId?: string): Aggregate[] {

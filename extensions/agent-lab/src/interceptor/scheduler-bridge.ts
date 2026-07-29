@@ -59,8 +59,20 @@ export interface SchedulerBridgeDeps {
 }
 
 export type SchedulerBridgeDecision =
-  | { action: "apply"; model: string; source: "scheduler" }
+  | { action: "apply"; model: string; source: "scheduler"; agentInstanceId?: string }
   | { action: "skip"; reason: string };
+
+// ── toolCallId → agentInstanceId 映射（interceptor 存，telemetry 读，同进程共享）─────
+const dispatchAgentMap = new Map<string, string>();
+export function recordDispatchAgent(toolCallId: string, agentInstanceId: string): void {
+  dispatchAgentMap.set(toolCallId, agentInstanceId);
+}
+/** 读后删（一次性关联） */
+export function takeDispatchAgent(toolCallId: string): string | undefined {
+  const v = dispatchAgentMap.get(toolCallId);
+  if (v !== undefined) dispatchAgentMap.delete(toolCallId);
+  return v;
+}
 
 // ── Pure decision logic ─────────────────────────────────────────────
 
@@ -126,5 +138,5 @@ export async function decideSchedulerSelection(
     return { action: "skip", reason: `model not allowed: ${model}` };
   }
 
-  return { action: "apply", model, source: "scheduler" };
+  return { action: "apply", model, source: "scheduler", agentInstanceId: result.selectedAgentId };
 }
