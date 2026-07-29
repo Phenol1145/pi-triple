@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { emitJson, emitJsonError, ERR } from "../../src/ptl/output.js";
 import {
   execTemplateLs,
-  execTenantRm,
+  execTemplateRm,
   execTemplateNew,
   execStop,
   execLs,
@@ -118,16 +118,16 @@ describe("execTemplateLs", () => {
   });
 });
 
-describe("execTenantRm", () => {
+describe("execTemplateRm", () => {
   it("rejects empty input", async () => {
-    const result = await execTenantRm("");
+    const result = await execTemplateRm("");
     expect(result.ok).toBe(false);
     expect(result.error).toBeDefined();
     expect(result.error!.code).toBe(ERR.INTERACTIVE_REQUIRED);
   });
 
   it("rejects nonexistent tenant", async () => {
-    const result = await execTenantRm("nonexistent-uuid-12345678");
+    const result = await execTemplateRm("nonexistent-uuid-12345678");
     expect(result.ok).toBe(false);
     expect(result.error).toBeDefined();
     expect(result.error!.code).toBe(ERR.TENANT_NOT_FOUND);

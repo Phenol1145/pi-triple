@@ -4,7 +4,7 @@
 
 import { emitJson, emitJsonError, ERR } from "../output.js";
 import {
-  execTemplateLs, execTemplateNew, execTenantRm,
+  execTemplateLs, execTemplateNew, execTemplateRm,
   execStatus, execLs, execStop, execSharedStatus,
 } from "../commands.js";
 import { FlowStore } from "../flow/store.js";
@@ -28,7 +28,7 @@ const JSON_ROUTERS: Record<string, (sub: string | undefined, passthrough: string
   tenant: async (sub, passthrough) => {
     if (sub === "ls" || sub === "list") return await execTemplateLs();
     if (sub === "new") return await execTemplateNew(passthrough[0]);
-    if (sub === "rm") return await execTenantRm(passthrough[0] || "");
+    if (sub === "rm") return await execTemplateRm(passthrough[0] || "");
     return await execTemplateLs();
   },
   status: async () => await execStatus(),

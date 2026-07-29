@@ -129,7 +129,7 @@ export async function execTemplateNew(alias?: string): Promise<CommandResult> {
   }
 }
 
-export async function execTenantRm(input: string): Promise<CommandResult> {
+export async function execTemplateRm(input: string): Promise<CommandResult> {
   if (!input) {
     return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: pit template rm <alias|uuid>" } };
   }

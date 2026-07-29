@@ -29,7 +29,7 @@ import {
   loadConfig, resolveTemplateId, getTemplateAlias, getDefaultTemplateId, pitHome,
 } from "./config.js";
 import {
-  execTemplateLs, execTemplateNew, execTenantRm,
+  execTemplateLs, execTemplateNew, execTemplateRm,
   execStatus, execLs, execStop,
 } from "./commands.js";
 
@@ -186,7 +186,7 @@ async function main() {
       let tr;
       if (subcommand === "ls" || subcommand === "list") tr = await execTemplateLs();
       else if (subcommand === "new") tr = await execTemplateNew(passthrough[0]);
-      else if (subcommand === "rm") tr = await execTenantRm(passthrough[0] || "");
+      else if (subcommand === "rm") tr = await execTemplateRm(passthrough[0] || "");
       else if (subcommand === "rename") { handleTemplateRename(passthrough); break; }
       else tr = await execTemplateLs();
       doPrintCommand(tr);
@@ -258,8 +258,8 @@ async function main() {
           console.log("  运行 \x1b[36mpit template ls\x1b[0m 查看可用租户\n");
           process.exit(1);
         }
-        const labTenantId = labResolved?.ok ? labResolved.id : getDefaultTemplateId(cfg);
-        const labAlias = getTemplateAlias(labTenantId, cfg);
+        const labTemplateId = labResolved?.ok ? labResolved.id : getDefaultTemplateId(cfg);
+        const labAlias = getTemplateAlias(labTemplateId, cfg);
         const labGlobal = flags.global === "true";
         // 注入 per-tenant AGENT_LAB_* env，确保 lab-data 解析到该租户数据（与 buildPiLaunch 一致）
         const labHome = pitHome();
@@ -267,10 +267,10 @@ async function main() {
           // --global：只用共享遥测 DB
           process.env.AGENT_LAB_DB_PATH = path.join(labHome, "data", "shared", "agent-lab", "agent-lab.db");
         } else {
-          process.env.AGENT_LAB_CONFIG_DIR = path.join(labHome, "data", "pi-config", labTenantId, "agent-lab");
+          process.env.AGENT_LAB_CONFIG_DIR = path.join(labHome, "data", "pi-config", labTemplateId, "agent-lab");
           process.env.AGENT_LAB_DB_PATH = path.join(labHome, "data", "shared", "agent-lab", "agent-lab.db");
         }
-        render(React.createElement(LabApp, { templateId: labTenantId, templateAlias: labAlias, globalTelemetry: labGlobal }), { exitOnCtrlC: false });
+        render(React.createElement(LabApp, { templateId: labTemplateId, templateAlias: labAlias, globalTelemetry: labGlobal }), { exitOnCtrlC: false });
       } else {
         console.log("  lab TUI 需要交互式终端");
       }

@@ -116,13 +116,13 @@ export function PitApp() {
 
     try {
     // Route to commands.ts functions
-    const { execTemplateLs, execTemplateNew, execTenantRm, execStatus, execLs, execStop, execSharedStatus, execStartBg } = await import("../commands.js");
+    const { execTemplateLs, execTemplateNew, execTemplateRm, execStatus, execLs, execStop, execSharedStatus, execStartBg } = await import("../commands.js");
 
     switch (cmd) {
       case "template":
         if (args[0] === "ls" || args[0] === "list") result = await execTemplateLs();
         else if (args[0] === "new") result = await execTemplateNew(args[1]);
-        else if (args[0] === "rm") result = await execTenantRm(args[1]);
+        else if (args[0] === "rm") result = await execTemplateRm(args[1]);
         else if (args[0] === "rename") {
           const { loadConfig: lc, resolveTemplateId: rt, renameTemplate: rn } = await import("../config.js");
           const cfg = lc();
