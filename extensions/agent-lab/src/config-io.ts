@@ -12,7 +12,7 @@ function pitHome(): string {
 /** per-tenant 配置目录（config.json / role_pin / arena / workloop） */
 export function localConfigDir(): string {
   if (process.env.AGENT_LAB_CONFIG_DIR) return process.env.AGENT_LAB_CONFIG_DIR;
-  const tenant = process.env.PI_TENANT;
+  const tenant = process.env.PI_TEMPLATE;
   if (tenant) return join(pitHome(), "data", "pi-config", tenant, "agent-lab");
   return join(homedir(), ".pi", "agent", "agent-lab");
 }
@@ -20,7 +20,7 @@ export function localConfigDir(): string {
 /** 共享遥测 DB 路径（runs 表） */
 export function sharedDbPath(): string {
   if (process.env.AGENT_LAB_DB_PATH) return process.env.AGENT_LAB_DB_PATH;
-  if (process.env.PI_TENANT) return join(pitHome(), "data", "shared", "agent-lab", "agent-lab.db");
+  if (process.env.PI_TEMPLATE) return join(pitHome(), "data", "shared", "agent-lab", "agent-lab.db");
   return join(localConfigDir(), "agent-lab.db");
 }
 

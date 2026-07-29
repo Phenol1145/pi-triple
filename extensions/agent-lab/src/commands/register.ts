@@ -622,7 +622,7 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
         const tenantArg = tenantIdx >= 0 ? argv[tenantIdx + 1] : undefined;
         // 默认：本租户（从 env），除非显式 --global
         const effectiveTenantId = isGlobal ? undefined
-          : tenantArg ?? process.env.PI_TENANT ?? undefined;
+          : tenantArg ?? process.env.PI_TEMPLATE ?? undefined;
         const role = argv[1] && !argv[1].startsWith("--") ? argv[1] : undefined;
         const label = isGlobal ? " (global)" : effectiveTenantId ? ` (tenant: ${effectiveTenantId.slice(0, 8)}…)` : "";
         ctx.ui.notify(`Stats${label}:\n${renderStats(role, effectiveTenantId)}`, "info");

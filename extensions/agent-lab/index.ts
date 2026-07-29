@@ -41,7 +41,7 @@ export default async function (pi: ExtensionAPI) {
   ensureDataDir();
   const cfg = loadConfig();
 
-  // Dual store: shared telemetry (runs) + per-tenant config/pin/arena/workloop
+  // Dual store: shared telemetry (runs) + per-template config/pin/arena/workloop
   const sharedStore = new SqliteStore(sharedDbPath());
   const localDir = localConfigDir();
   mkdirSync(localDir, { recursive: true });
@@ -50,8 +50,8 @@ export default async function (pi: ExtensionAPI) {
   // Composite store: delegates telemetry ops to sharedStore, config/pin to localStore
   const store: Store = {
     appendRun: (r) => sharedStore.appendRun(r),
-    aggregateByRole: (role, tenantId?) => sharedStore.aggregateByRole(role, tenantId),
-    listRoles: (tenantId?) => sharedStore.listRoles(tenantId),
+    aggregateByRole: (role, templateId?) => sharedStore.aggregateByRole(role, templateId),
+    listRoles: (templateId?) => sharedStore.listRoles(templateId),
     getPin: (role) => localStore.getPin(role),
     setPin: (role, model) => localStore.setPin(role, model),
     clearPin: (role) => localStore.clearPin(role),

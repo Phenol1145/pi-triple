@@ -33,7 +33,7 @@ export function registerTelemetry(
       const result = (raw?.details ?? event.result) as Record<string, unknown>;
       const rec = parseSubagentRun({ input: (event.args ?? {}) as Record<string, unknown>, result }, cfg, undefined, taskId);
       if (rec) {
-        rec.tenantId = process.env.PI_TENANT ?? undefined;
+        rec.templateId = process.env.PI_TEMPLATE ?? undefined;
         rec.sessionId = process.env.PI_SESSION_ID ?? undefined;
         store.appendRun(rec);
         // fail-open auto-trigger hook: never throw into telemetry handler (L7/I7)
