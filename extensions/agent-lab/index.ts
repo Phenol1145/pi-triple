@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { registerTelemetry, createSettleDispatch } from "./src/telemetry/register.ts";
 import { registerInterceptor } from "./src/interceptor/register.ts";
 import { registerCommands } from "./src/commands/register.ts";
+import { findOrCreateAgentByModel } from "./src/arena/agent-id.ts";
 import { SqliteLedger } from "./src/arena/ledger.ts";
 import { EndowmentPolicyV1 } from "./src/arena/policies.ts";
 import type { SchedulerRuntimeLike } from "./src/interceptor/scheduler-bridge.ts";
@@ -187,6 +188,7 @@ export default async function (pi: ExtensionAPI) {
               ledger,
               candidates: () => catalog.candidates(),
               modelCaller: arenaCaller,
+              resolveAgent: (m: ModelInfo) => findOrCreateAgentByModel(rt.core, "default-arena", m, process.env.PI_TEMPLATE),
             };
 
             // Arena is always bootstrapped (registered/activated, addressable by
@@ -200,6 +202,19 @@ export default async function (pi: ExtensionAPI) {
             }).catch((err) => {
               console.error("[agent-lab] arena bootstrap failed (fail-open):", err);
             });
+
+            // ── Ledger key migration: model id → agent UUID ──────────
+            // Migrate credits/credit_tx/market_tasks/arena_freezes agent keys
+            // from raw model ids (legacy) to UUIDs. Uses lab_agent_instances
+            // model→UUID mapping populated by ensureArenaInstance above.
+            // Idempotent: already-migrated UUIDs skip (resolveAgentId returns undefined).
+            try {
+              const agents = rt.core.repository.listAgents("default-arena");
+              const modelToUuid = new Map(agents.filter(a => a.model).map(a => [a.model!, a.id]));
+              if (modelToUuid.size > 0) ledger.migrateAgentKeys((v: string) => modelToUuid.get(v));
+            } catch (err) {
+              console.error("[agent-lab] ledger key migration failed (fail-open):", err);
+            }
 
             // ── Optimizer bootstrap (fail-open) ──────────────────────────
             try {

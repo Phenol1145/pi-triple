@@ -23,12 +23,34 @@ CREATE TABLE IF NOT EXISTS arena_freezes (
 export class SqliteLedger implements Ledger {
   private db: DatabaseSync;
   private endowment: EndowmentPolicy;
-  constructor(db: DatabaseSync, endowment: EndowmentPolicy) {
+  constructor(db: DatabaseSync, endowment: EndowmentPolicy, resolveAgentId?: (v: string) => string | undefined) {
     this.db = db;
     this.endowment = endowment;
     this.db.exec(ARENA_SCHEMA);
+    if (resolveAgentId) this.runMigration(resolveAgentId);
   }
-  private now(): number { return Date.now(); }
+  /** 迁移 credits/credit_tx/market_tasks/arena_freezes 的 agent 字段从 model id → UUID（幂等） */
+  private runMigration(resolveAgentId: (v: string) => string | undefined): void {
+    const plans: Array<{ table: string; col: string; pkCol: string }> = [
+      { table: "credits",  col: "agent",  pkCol: "agent" },
+      { table: "credit_tx", col: "agent",  pkCol: "id" },
+      { table: "market_tasks", col: "winner", pkCol: "task_id" },
+      { table: "arena_freezes", col: "agent",  pkCol: "task_id" },
+    ];
+    for (const { table, col, pkCol } of plans) {
+      const rows = this.db.prepare(`SELECT ${pkCol} AS pk, ${col} AS agent FROM ${table}`).all() as { pk: number | string; agent: string }[];
+      for (const row of rows) {
+        const uuid = resolveAgentId(row.agent);
+        if (uuid !== undefined && uuid !== row.agent) {
+          this.db.prepare(`UPDATE ${table} SET ${col} = ? WHERE ${pkCol} = ?`).run(uuid, row.pk);
+        }
+      }
+    }
+  }
+  /** 迁移（公开，供启动时调用） */
+  migrateAgentKeys(resolveAgentId: (v: string) => string | undefined): void {
+    this.runMigration(resolveAgentId);
+  }
   private ensureRow(a: AgentId): void {
     if (!this.db.prepare(`SELECT agent FROM credits WHERE agent = ?`).get(a)) {
       this.db.prepare(`INSERT INTO credits (agent, balance, frozen, updated_ts) VALUES (?, 0, 0, ?)`).run(a, this.now());
