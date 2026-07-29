@@ -1,6 +1,7 @@
 # PTL（Pi-Triple-Lite）架构
 
 > PTL（Pi-Triple-Lite）文档 — 轻量开发/调试工具链
+> 双产品全景见顶层 [`ARCHITECTURE.md`](../../ARCHITECTURE.md)。
 
 ## 设计哲学
 
@@ -59,6 +60,11 @@ PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己
 | | `pit shared status/init` | 共享层操作 |
 | **运维** | `pit onboard/doctor/status` | 导引/诊断/状态 |
 | | `pit migrate` | 从 ~/.pi/agent 迁移 |
+| **流程** | `pit flow run/status/show/ls` | pit-flow 波次工作流引擎 |
+| | `pit flow approve/reject/resume` | human gate 审批 / 恢复 |
+| | `pit flow set/edit/propose/discard` | 运行中热修改（停波护栏） |
+| **桥** | `pit submit/run/dev` | PTL→PTH agent 程序提交/运行 |
+| | `pit programs` | 列出 PTH 上的程序 |
 
 ### 模式分辨
 
@@ -104,6 +110,7 @@ pit start --tenant local
 │       ├── pit-providers/       ← 统一 provider 后端
 │       ├── pit-communicate/     ← 跨会话通信
 │       ├── pit-control/         ← 会话内控制
+│       ├── workflow/            ← pi 内流程编排（/flow）
 │       └── agent-lab/           ← 模型遥测
 └── pi-config/<uuid>/
     └── extensions/
@@ -147,7 +154,8 @@ pit start --tenant local
     │   └── agent-lab/       ← 共享 telemetry DB（agent-lab.db）
     ├── sessions/<uuid>/     ← pi session 文件（--session-dir）
     ├── workspaces/<uuid>/   ← Agent 工作目录
-    └── mailbox/<uuid>/      ← pit-communicate 邮箱
+    ├── mailbox/<uuid>/      ← pit-communicate 邮箱
+    └── flows/<runId>/       ← pit-flow 运行态（graph/meta/state/checkpoints/waves/locks）
 ```
 
 配置驱动：`src/ptl/config.ts`，全局查找路径由 `PI_TRIPLE_HOME` 或 `pitHome()` 决定（默认 `~/.pi-triple`）。
@@ -198,6 +206,71 @@ pi 内直接管理 tmux 会话。替代 `Ctrl+B d/s`。
 - **本地 DB**：per-tenant arena/workloop/config/pin
 - **`/lab stats`**：支持 `--tenant <alias>` / `--global` 聚合
 
+### workflow — pi 内流程编排
+
+在 pi 会话里直接驱动 pit-flow 引擎（shell 调 `pit flow` CLI，不 import src/）。
+
+- **`/flow` 命令**：`/flow run <flow.json>` / `/flow status` / `/flow ls` / `/flow set` / `/flow edit`（会话内热修改）
+- **LLM 工具**：`flow_run` / `flow_status` / `flow_ls`（让 agent 自主起流程）
+- **gate 通知**：human gate 暂停时在会话内提示 approve/reject
+- 设计原则：human gate 由人决策，**不提供** `flow_approve` LLM 工具（避免双源）
+
+## pit-flow 波次工作流引擎
+
+`src/ptl/flow/` —— LangGraph 风格的本地工作流引擎，声明式 JSON 图（节点 + 条件边 + 环）。两大特性：**波次并行（BSP）执行** + **运行中热修改**。
+
+### 执行模型
+
+```
+波循环（executeWaveLoop）：
+  1. findReadyNodes：遍历 firedEpoch/consumed，fired[pred] > consumed[pred→target] 即有未消费完成 → 激活
+     · 默认 any-join（任一边激活即触发）；显式 needs:[...] 为 AND-join（所有前驱满足）
+  2. 同波就绪节点并行 spawn pi（受 maxParallel 限）
+  3. 波末：reducer 合并 state（last-wins/append/concat，按 nodeId 序确定性）
+     + 写波 checkpoint + 推进 firedEpoch + 检查屏障
+  4. editRequested → 停于 editing；human gate → 停于 waiting_human；无就绪 → done / needs-hunger → failed
+```
+
+### 关键机制
+
+| 机制 | 说明 |
+|------|------|
+| **触发计数** | 每节点 `firedEpoch`、每边 `consumed[pred→target]`；环多轮迭代靠 epoch 递增区分 |
+| **Reducer** | 并发写同 key：`append`（收 {node,value} 对）/ `concat`（拼接）/ `last-wins` |
+| **Human gate** | `type:"human"` 节点写 pending.json 暂停；`pit flow approve/reject` 应用 writes + 推进 firedEpoch + 恢复 |
+| **热修改护栏** | running 中 `set/edit` 排队进 `meta.pendingEdits` 并自动 propose → 引擎在**波边界**停（`status=editing`，`editBaseWave`）→ `resume` 重校验后逐条应用再继续 |
+| **双锁** | exec lock（执行）+ mutation lock（改图）分离，允许执行中改图 |
+| **失败语义** | drain-on-failure（同波兄弟跑完）；失败节点回滚入边消费，**仅外部 resume 重跑**（failedThisRun 防同进程无限重试）；needs-hunger 检测不可满足的 AND-join |
+
+### 模块与命令
+
+模块：`engine.ts`（波循环）· `schema.ts`（校验）· `store.ts`（runs/checkpoints/waves/locks）· `expr.ts`（手写表达式）· `template.ts`（`{{state.x}}` 插值，对象/数组 JSON 序列化）· `reducers.ts` · `edit.ts`（set/edit/approve/reject/propose/discard/resume）· `commands.ts` · `pm.ts`（spawn pi）。
+
+命令：`pit flow run/status/show/ls/validate/graph/rm` + `approve/reject/resume` + `set/edit/propose/discard`。
+
+示例：`examples/pr-review/`（串行 + human gate）· `examples/arena-review/`（并行 fan-out + append reducer）。
+
+## PTL→PTH 桥
+
+`src/ptl/bridge/` —— 把 PTL 本地开发的 agent 程序（`agent.json` manifest + skills + systemPrompt）打包提交到 PTH 运行。
+
+```
+pit submit ./my-agent
+  → pack.ts 读 agent.json（manifest.ts 校验）+ skills → ustar.ts 打 tar（零外部依赖）
+  → POST /api/v1/programs（PTH ProgramStore：INCR 版本 + tar 安全解包 + GC）
+pit run my-agent key=val
+  → POST /api/v1/programs/my-agent/run → AgentEngine 起一次性 session
+  → SSE 双信封 {seq,type,data} 直推 → pit 解包渲染 → 流结束自动销毁 session
+pit dev ./my-agent      ← 本地直跑（pipe.ts 注入 systemPrompt+skills 到 pi 启动参数）
+pit programs            ← 列出 PTH 上的程序
+```
+
+模块：`client.ts`（PTH HTTP 客户端）· `pack.ts` + `ustar.ts`（打包）· `manifest.ts`（校验）· `submit.ts` / `run.ts` / `dev.ts` / `programs.ts`（命令）· `pipe.ts`（本地注入）。服务端见 PTH `programs/store.ts` + `gateway/routes-programs.ts`。
+
+## lab 遥测数据层
+
+`src/ptl/lab-data/` —— `pit lab` TUI 的数据底座。SQLite（WAL + busy_timeout）：共享 `runs` DB（跨租户 LLM 调用遥测）+ per-tenant arena/events/config。模块：`telemetry.ts` · `arena.ts` · `events.ts` · `open-db.ts` · `schema.ts`。
+
 ## TUI 模板规范
 
 PTL 包含两个 Ink TUI：
@@ -227,8 +300,8 @@ pi 进程 × tmux               AgentEngine × Redis
 个人/小组                    团队/联邦
 pit CLI                      HTTP/SSE/WebSocket
 
-           ───── 桥（roadmap）─────
-        pit submit → PTH workflow 运行
+        ───── 桥（已实现）─────
+   pit submit/run → PTH ProgramStore 运行
 ```
 
-PTL 生产的结果（prompt/skills/扩展配置）未来可通过 `pit submit` 提交到 PTH 以联邦模式运行。PTH 提供集中治理、审计、弹性伸缩，PTL 提供本地开发/调试体验。
+PTL 生产的 agent 程序（`agent.json` + skills）可通过 `pit submit` 打包提交到 PTH，`pit run` 以联邦模式运行（SSE 流式回显）。PTH 提供集中治理、审计、弹性伸缩，PTL 提供本地开发/调试体验。桥的实现见上文「PTL→PTH 桥」节。

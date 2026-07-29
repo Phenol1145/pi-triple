@@ -13,6 +13,8 @@
 
 > **SDK 兼容性**：所有 pi SDK 调用通过 `src/shared/sdk-adapter/` 适配层隔离。升级 SDK 时只需修改适配层 + 跑测试，业务代码不受影响。当前适配 `@earendil-works/pi-coding-agent@^0.82.1`。
 
+> 📐 **架构总览**：双产品全景、模块地图、数据流、硬约束见 [`ARCHITECTURE.md`](./ARCHITECTURE.md)（单一真相源）。
+
 ## PTL 快速开始（推荐）
 
 ```bash
@@ -42,6 +44,8 @@ pit lab                        # 模型调试 TUI
 | `pit attach/switch/detach` | 接入 / 瞬移切换 / 脱离会话 |
 | `pit ls / pit stop` | 列出 / 停止会话 |
 | `pit ui` / `pit lab` | 系统控制 / 模型调试 TUI |
+| `pit flow run/approve/reject/set/edit...` | pit-flow 波次工作流引擎 |
+| `pit submit/run/dev/programs` | PTL→PTH 桥（agent 程序提交/运行） |
 | `pit tenant ls/new/rm/rename` | 租户管理 |
 | `pit config get/set/unset` | 配置读写 |
 | `pit update --all` | 更新 pi + 扩展 + 内置同步 |
@@ -77,55 +81,57 @@ docker-compose up -d
 - [x] PTL：共享扩展层（symlink 注入，逐项更新）
 - [x] PTL：pit-providers 统一 provider 后端（声明式 JSON + 多 Key failover）
 - [x] PTL：pit-communicate 跨会话通信 + pit-control 会话内控制
-- [ ] **PTL→PTH 桥**：`pit submit` — 将 PTL 的 agent 程序打包提交到 PTH workflow 运行
+- [x] **PTL：pit-flow 波次工作流引擎**（并行执行 + reducer + human gate + 运行中热修改）
+- [x] **PTL→PTH 桥**：`pit submit/run` — agent 程序打包提交到 PTH 运行
 - [ ] PTH：Windows 平台适配
 - [ ] PTH：Dapr/K8s Phase 2 迁移
 
 ## 项目结构
 
+> 完整模块说明见 [`ARCHITECTURE.md`](./ARCHITECTURE.md)。
+
 ```
 pi-platform/
 ├── src/
-│   ├── shared/                    # 双产品共享模块
+│   ├── shared/                    # 双产品共享（SDK 隔离层）
+│   │   ├── sdk-adapter/           # pi SDK 唯一导入点
+│   │   ├── model-router/          # 模型检测 + failover
 │   │   ├── workspace/             # 工作目录隔离
-│   │   ├── platform/              # 跨 OS 适配器（POSIX/Win32）
-│   │   ├── model-router/          # 模型自动检测 + failover
-│   │   ├── sdk-adapter/           # pi SDK 适配层
+│   │   ├── platform/              # 跨 OS 适配器（posix/win32）
 │   │   └── observability/         # pino 日志
-│   ├── ptl/                       # Pi-Triple-Lite（pit CLI）
-│   │   ├── pit.ts                 # CLI 入口（bin: pit）
-│   │   ├── pit/                   # 命令模块（args/sessions/onboard/config-cmd/mode/admin）
-│   │   ├── config/                # 配置系统（v2 UUID+alias + RW）
-│   │   ├── tmux.ts                # tmux 会话管理
-│   │   ├── launcher.ts            # pi 进程启动
-│   │   ├── shared-layer.ts        # 共享扩展层（symlink + manifest + prune）
-│   │   ├── doctor.ts              # 环境诊断
-│   │   ├── migrate.ts             # ~/.pi/agent 迁移
-│   │   ├── tui-pit/               # pit ui（Ink TUI）
-│   │   ├── tui-lab/               # lab ui（Ink TUI）
-│   │   └── tui-shared/            # TUI 共享组件 + Screen 布局模板
-│   └── pth/                       # Pi-Triple-Heavy（server）
-│       ├── main.ts                # 服务器入口（bin: pth）
+│   ├── ptl/                       # Pi-Triple-Lite（bin: pit）
+│   │   ├── pit.ts + pit/          # CLI 入口 + 命令模块
+│   │   ├── flow/                  # ★ pit-flow 波次工作流引擎
+│   │   ├── bridge/                # ★ PTL→PTH 桥（submit/run/dev）
+│   │   ├── lab-data/              # ★ lab 遥测数据层（SQLite）
+│   │   ├── config.ts              # 配置系统（v2 UUID+alias）
+│   │   ├── tmux.ts / launcher.ts  # tmux 会话 / pi 启动
+│   │   ├── shared-layer.ts        # 共享扩展层（symlink+manifest）
+│   │   ├── doctor.ts / migrate.ts # 诊断 / 迁移
+│   │   ├── tui-pit/ + tui-lab/    # 双 Ink TUI
+│   │   └── tui-shared/            # TUI 组件库 + Screen 布局
+│   └── pth/                       # Pi-Triple-Heavy（bin: pth）
+│       ├── main.ts                # 服务器入口
 │       ├── core/                  # AgentEngine / SessionPool / Bridge
-│       ├── gateway/               # Fastify HTTP + WebSocket
+│       ├── gateway/               # Fastify（sessions/programs/self）+ SSE
+│       ├── programs/              # ★ ProgramStore（桥的服务端）
 │       ├── workflow/              # BullMQ 工作流编排
-│       ├── tools/                 # 工具治理平台（allowlist + 审计 + 指标）
+│       ├── tools/                 # 工具治理（allowlist+审计+指标）
 │       ├── storage/               # Redis 存储层
 │       ├── self-modify/           # 热加载 + A/B 重建
-│       └── observability/         # Prometheus 指标 + 审计
-├── extensions/                    # bundled 扩展
+│       └── observability/         # Prometheus + 审计
+├── extensions/                    # bundled 扩展（5 个）
 │   ├── pit-providers/             # 统一 provider 后端
 │   ├── pit-communicate/           # 跨会话通信
 │   ├── pit-control/               # 会话内控制
+│   ├── workflow/                  # ★ pi 内流程编排（/flow）
 │   └── agent-lab/                 # 模型遥测
-├── test/                          # 208 个测试
+├── examples/                      # echo-agent / pr-review / arena-review / custom-*
+├── test/                          # 447 个测试（vitest）
 ├── docs/
-│   ├── pth/                       # PTH 文档
-│   │   ├── api.md
-│   │   ├── architecture.md
-│   │   └── deployment.md
-│   └── ptl/                       # PTL 文档
-│       └── architecture.md
+│   ├── pth/                       # api.md / architecture.md / deployment.md
+│   └── ptl/                       # architecture.md
+├── ARCHITECTURE.md                # ★ 架构总览（单一真相源）
 ├── Dockerfile
 └── docker-compose.yaml
 ```
@@ -151,11 +157,13 @@ pi-platform/
 ### 快速循环
 
 ```bash
-npx tsc --noEmit        # 类型检查
-npx vitest run           # 208 tests
-npm run build && npm link
+npx tsc --noEmit        # 类型检查（不产出 dist）
+npx vitest run           # 447 tests（直跑 TS）
+npm run build && npm link # ★ pit/pth bin 跑 dist/，端到端验证前必须 build
 cd /tmp && pit tenant ls  # 冒烟测试
 ```
+
+> ⚠️ `tsc --noEmit` 与 vitest 都不产出/不依赖 dist，会掩盖“改了 src 未重建”的问题；CLI 冒烟前务必 `npm run build`。
 
 ### 扩展开发
 
