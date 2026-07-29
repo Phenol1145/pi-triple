@@ -17,7 +17,7 @@ import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
 export default function pitControl(api: any) {
-  const tenantId: string = process.env.PI_TENANT ?? "unknown";
+  const templateId: string = process.env.PI_TEMPLATE ?? "unknown";
   const agentDir: string = process.env.PI_CODING_AGENT_DIR ?? "";
   const sessionId: string = process.env.PI_SESSION_ID ?? randomUUID();
 
@@ -100,8 +100,8 @@ export default function pitControl(api: any) {
 
         const tmuxArgs = ["new-session", "-d", "-s", tmuxName(name), "-x", "200", "-y", "50"];
         if (agentDir) tmuxArgs.push("-e", `PI_CODING_AGENT_DIR=${agentDir}`);
-        if (process.env.PI_TENANT) tmuxArgs.push("-e", `PI_TENANT=${process.env.PI_TENANT}`);
-        if (process.env.PI_TENANT_ALIAS) tmuxArgs.push("-e", `PI_TENANT_ALIAS=${process.env.PI_TENANT_ALIAS}`);
+        if (process.env.PI_TEMPLATE) tmuxArgs.push("-e", `PI_TEMPLATE=${process.env.PI_TEMPLATE}`);
+        if (process.env.PI_TEMPLATE_ALIAS) tmuxArgs.push("-e", `PI_TEMPLATE_ALIAS=${process.env.PI_TEMPLATE_ALIAS}`);
         if (process.env.AGENT_LAB_DB_PATH) tmuxArgs.push("-e", `AGENT_LAB_DB_PATH=${process.env.AGENT_LAB_DB_PATH}`);
         if (process.env.AGENT_LAB_CONFIG_DIR) tmuxArgs.push("-e", `AGENT_LAB_CONFIG_DIR=${process.env.AGENT_LAB_CONFIG_DIR}`);
         tmuxArgs.push("--", "pi");
@@ -247,7 +247,7 @@ export default function pitControl(api: any) {
           "\x1b[1mSession Status\x1b[0m",
           `  name:    ${sessionName}`,
           `  session: ${sessionId.slice(0, 8)}`,
-          `  tenant:  ${tenantId.slice(0, 8)}…`,
+          `  template:  ${templateId.slice(0, 8)}…`,
           `  agent:   ${agentDir ? "custom dir" : "default (~/.pi/agent)"}`,
         ];
         if (hasTmux()) {
