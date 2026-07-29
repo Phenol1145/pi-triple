@@ -4,8 +4,8 @@ import { SCHEMA, MIGRATIONS } from "./schema.ts";
 
 export interface Store {
   appendRun(r: RunRecord): void;
-  aggregateByRole(role: string, tenantId?: string): Aggregate[];
-  listRoles(tenantId?: string): string[];
+  aggregateByRole(role: string, templateId?: string): Aggregate[];
+  listRoles(templateId?: string): string[];
   getPin(role: string): string | undefined;
   setPin(role: string, model: string): void;
   clearPin(role: string): void;
@@ -32,10 +32,20 @@ export class SqliteStore implements Store {
       if (ver > currentVersion) {
         // Check if column already exists before ALTER (idempotent for edge cases)
         if (sql.startsWith("ALTER TABLE")) {
+          // ADD COLUMN 幂等
           const m = sql.match(/ALTER TABLE (\w+) ADD COLUMN (\w+)/);
           if (m) {
             const cols = this.db.prepare(`PRAGMA table_info(${m[1]})`).all() as Array<{ name: string }>;
             if (cols.some((c) => c.name === m[2])) continue;
+          }
+          // RENAME COLUMN 幂等：新列已存在则跳过
+          const rn = sql.match(/ALTER TABLE (\w+) RENAME COLUMN (\w+) TO (\w+)/);
+          if (rn) {
+            const cols = this.db.prepare(`PRAGMA table_info(${rn[1]})`).all() as Array<{ name: string }>;
+            if (cols.some((c) => c.name === rn[3])) {
+              this.db.exec(`PRAGMA user_version = ${ver}`);
+              continue;
+            }
           }
         }
         this.db.exec(sql);
@@ -46,23 +56,23 @@ export class SqliteStore implements Store {
   get raw(): DatabaseSync { return this.db; }
   appendRun(r: RunRecord): void {
     this.db.prepare(
-      `INSERT INTO runs (ts, role, model, task_category, acceptance, completion, tokens_in, tokens_out, cost, tool_success, turns, interrupted, signals, source, trace_id, tenant_id, session_id)
+      `INSERT INTO runs (ts, role, model, task_category, acceptance, completion, tokens_in, tokens_out, cost, tool_success, turns, interrupted, signals, source, trace_id, template_id, session_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       r.ts, r.role, r.model, r.taskCategory ?? null, r.acceptance ?? null, r.completion,
       r.tokensIn ?? null, r.tokensOut ?? null, r.cost ?? null, r.toolSuccess ?? null,
       r.turns ?? null, r.interrupted ?? null, JSON.stringify(r.signals ?? {}), r.source,
-      r.traceId ?? null, r.tenantId ?? null, r.sessionId ?? null
+      r.traceId ?? null, r.templateId ?? null, r.sessionId ?? null
     );
   }
-  aggregateByRole(role: string, tenantId?: string): Aggregate[] {
+  aggregateByRole(role: string, templateId?: string): Aggregate[] {
     let sql = `SELECT model, role, COUNT(*) AS runs, AVG(completion) AS avgCompletion,
               AVG(COALESCE(cost, 0)) AS avgCost, AVG(COALESCE(tool_success, 1)) AS successRate
        FROM runs WHERE role = ?`;
     const params: (string | number)[] = [role];
-    if (tenantId) {
-      sql += ` AND (tenant_id = ? OR tenant_id IS NULL)`;
-      params.push(tenantId);
+    if (templateId) {
+      sql += ` AND (template_id = ? OR template_id IS NULL)`;
+      params.push(templateId);
     }
     sql += ` GROUP BY model, role`;
     const rows = this.db.prepare(sql).all(...params) as Array<Record<string, number | string>>;
@@ -75,12 +85,12 @@ export class SqliteStore implements Store {
       successRate: Number(row.successRate),
     }));
   }
-  listRoles(tenantId?: string): string[] {
+  listRoles(templateId?: string): string[] {
     let sql = `SELECT DISTINCT role FROM runs`;
     const params: string[] = [];
-    if (tenantId) {
-      sql += ` WHERE tenant_id = ? OR tenant_id IS NULL`;
-      params.push(tenantId);
+    if (templateId) {
+      sql += ` WHERE template_id = ? OR template_id IS NULL`;
+      params.push(templateId);
     }
     sql += ` ORDER BY role`;
     const rows = this.db.prepare(sql).all(...params) as Array<{ role: string }>;

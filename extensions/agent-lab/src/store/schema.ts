@@ -37,4 +37,5 @@ export const MIGRATIONS: Array<[number, string]> = [
   [2, `ALTER TABLE runs ADD COLUMN tenant_id TEXT`],
   [3, `ALTER TABLE runs ADD COLUMN session_id TEXT`],
   [4, `CREATE INDEX IF NOT EXISTS idx_runs_tenant ON runs(tenant_id)`],
+  [5, `ALTER TABLE runs RENAME COLUMN tenant_id TO template_id; DROP INDEX IF EXISTS idx_runs_tenant; CREATE INDEX IF NOT EXISTS idx_runs_template ON runs(template_id)`],
 ];
