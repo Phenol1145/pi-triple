@@ -217,6 +217,21 @@ describe("flow edit — approve", () => {
     expect(postState.round).toBe(1);
   });
 
+  it("approve increments gate firedEpoch so downstream edge activates (regression)", async () => {
+    const runId = createRunWithPending();
+    await approve(store, runId, "ok");
+    // 门完成后 firedEpoch 必须推进，否则 gate→done 边永远不激活（下游节点饱死）
+    const meta = store.loadMeta(runId);
+    expect(meta.firedEpoch?.["gate"]).toBe(1);
+  });
+
+  it("reject increments gate firedEpoch so downstream edge activates (regression)", async () => {
+    const runId = createRunWithPending();
+    await reject(store, runId, "no");
+    const meta = store.loadMeta(runId);
+    expect(meta.firedEpoch?.["gate"]).toBe(1);
+  });
+
   it("approve rejected if not waiting_human", async () => {
     const runId = store.createRun(
       {

@@ -20,6 +20,7 @@ import { cmdDev } from "./bridge/dev.js";
 import {
   cmdFlowRun, cmdFlowStatus, cmdFlowShow, cmdFlowLs,
   cmdFlowApprove, cmdFlowReject, cmdFlowResume,
+  cmdFlowPropose, cmdFlowDiscard,
   cmdFlowEdit, cmdFlowSet, cmdFlowGraph, cmdFlowRm, cmdFlowValidate,
 } from "./flow/commands.js";
 import { emitJsonError } from "./output.js";
@@ -76,6 +77,12 @@ async function routeFlowCommand(subcmd: string | undefined, args: string[], flag
     case "validate":
       cmdFlowValidate(args[0] ?? "");
       break;
+    case "propose":
+      await cmdFlowPropose(args[0] ?? "");
+      break;
+    case "discard":
+      await cmdFlowDiscard(args[0] ?? "");
+      break;
     default:
       console.log("");
       console.log("  \x1b[36m\x1b[1mpit flow\x1b[0m  \x1b[2m— PTL Agents Workflow\x1b[0m");
@@ -88,6 +95,8 @@ async function routeFlowCommand(subcmd: string | undefined, args: string[], flag
       console.log("    flow approve <runId> [备注]        人工审批通过");
       console.log("    flow reject <runId> [备注]          人工驳回");
       console.log("    flow resume <runId>                继续暂停/失败的任务");
+      console.log("    flow propose <runId>              申请热修改（停波）");
+      console.log("    flow discard <runId>              放弃修改申请");
       console.log("    flow edit <runId>                  编辑图定义");
       console.log("    flow set <runId> <path> <value>    修改图/状态");
       console.log("    flow graph <runId>                 查看图 + 修改历史");

@@ -23,6 +23,8 @@ export function interpolate(
         val = (val as Record<string, unknown>)[seg];
       }
       if (val === null || val === undefined) return "";
+      // 对象/数组（如 append reducer 的 {node,value} 列表）序列化为 JSON，避免 [object Object]
+      if (typeof val === "object") return JSON.stringify(val);
       return String(val);
     }
     // 不认识的占位符，原样保留

@@ -3,6 +3,7 @@
  */
 
 import { parseExpr } from "./expr.js";
+import { parseStateField, VALID_REDUCERS, type StateFieldDef } from "./reducers.js";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -10,7 +11,8 @@ export interface FlowDef {
   name: string;
   entry: string;
   maxSteps?: number;
-  state?: Record<string, unknown>;
+  maxParallel?: number;
+  state?: Record<string, unknown>;  // v2: may contain {initial,reducer} objects; v1 bare values also accepted
   nodes: NodeDef[];
   edges: EdgeDef[];
 }
@@ -25,6 +27,7 @@ export interface NodeDef {
   tools?: string[];
   cwd?: string;
   timeoutSec?: number;
+  needs?: string[];  // v2: explicit AND-join predecessors
   writes?: Record<string, string>;
 }
 
@@ -62,13 +65,32 @@ export function validateFlow(
     }
   }
 
+  // maxParallel (v2, optional, defaults to 4)
+  let maxParallel = 4;
+  if ("maxParallel" in obj && obj.maxParallel !== undefined) {
+    if (typeof obj.maxParallel !== "number" || !Number.isInteger(obj.maxParallel) || obj.maxParallel < 1) {
+      errors.push("maxParallel must be a positive integer");
+    } else {
+      maxParallel = obj.maxParallel as number;
+    }
+  }
+
   // state (optional)
   let state: Record<string, unknown> = {};
+  const parsedState: Record<string, StateFieldDef> = {};
   if ("state" in obj && obj.state !== undefined) {
     if (typeof obj.state !== "object" || obj.state === null || Array.isArray(obj.state)) {
       errors.push("state must be an object or null");
     } else {
       state = obj.state as Record<string, unknown>;
+      // v2: parse each state field
+      for (const [k, v] of Object.entries(state)) {
+        const field = parseStateField(v);
+        parsedState[k] = field;
+        if (field.reducer === "append" && !Array.isArray(field.initial)) {
+          errors.push(`state.${k}: reducer "append" requires initial to be an array`);
+        }
+      }
     }
   }
 
@@ -164,6 +186,15 @@ export function validateFlow(
         }
       }
 
+      // needs validation (v2)
+      if (nObj.needs !== undefined) {
+        if (!Array.isArray(nObj.needs) || !nObj.needs.every((n: unknown) => typeof n === "string")) {
+          errors.push(`nodes[${i}] ("${id}"): needs must be a string array`);
+        } else {
+          node.needs = nObj.needs as string[];
+        }
+      }
+
       nodeDefs.push(node);
     }
   }
@@ -237,13 +268,120 @@ export function validateFlow(
     }
   }
 
+  // ── v2 validation (only when no structural errors) ───────────
+  if (errors.length === 0) {
+    // per-node: 多条无条件出边 → warning（fallback 时全部触发 fan-out，与 v1 最后一条生效不等价）
+    for (const n of nodeDefs) {
+      const unconditionalEdges = edgeDefs.filter((e) => e.from === n.id && !e.when);
+      if (unconditionalEdges.length > 1) {
+        warnings.push(`node "${n.id}" has ${unconditionalEdges.length} unconditional outgoing edges — all fire together when no when-edge matches (differs from v1 last-wins)`);
+      }
+
+      // fan-out detection: when edges that may all hit → warning
+      if (n.type === "agent") {
+        const whenEdges = edgeDefs.filter((e) => e.from === n.id && e.when);
+        if (whenEdges.length >= 2) {
+          warnings.push(`node "${n.id}" has ${whenEdges.length} when-conditioned edges — all matching conditions trigger fan-out in v2 (v1 would only follow the first match)`);
+        }
+      }
+    }
+
+    // needs validation
+    for (const n of nodeDefs) {
+      if (!n.needs || n.needs.length === 0) continue;
+
+      // needs references must exist
+      for (const need of n.needs) {
+        if (!allRefs.has(need)) {
+          errors.push(`node "${n.id}": needs references non-existent node "${need}"`);
+        }
+      }
+
+      // needs 环检测
+      if (n.needs.length > 0) {
+        const color = new Map<string, 0 | 1 | 2>();
+        function needsCycleCheck(nodeId: string): boolean {
+          const c = color.get(nodeId) ?? 0;
+          if (c === 1) return true;
+          if (c === 2) return false;
+          color.set(nodeId, 1);
+          const node = nodeDefs.find((x) => x.id === nodeId);
+          if (node?.needs) {
+            for (const need of node.needs) {
+              if (needsCycleCheck(need)) return true;
+            }
+          }
+          color.set(nodeId, 2);
+          return false;
+        }
+        if (needsCycleCheck(n.id)) {
+          errors.push(`node "${n.id}": needs cycle detected — cannot start (needs relations cannot form cycles)`);
+        }
+      }
+
+      // needs must equal all static incoming edges
+      const staticPredecessors = new Set<string>();
+      for (const e of edgeDefs) {
+        if (e.to === n.id && e.from !== "end") {
+          staticPredecessors.add(e.from);
+        }
+      }
+      const needsSet = new Set(n.needs);
+      const onlyInNeeds = [...needsSet].filter((x) => !staticPredecessors.has(x));
+      const onlyInEdges = [...staticPredecessors].filter((x) => !needsSet.has(x));
+      if (onlyInNeeds.length > 0 || onlyInEdges.length > 0) {
+        errors.push(
+          `node "${n.id}": needs must exactly match all static incoming edges. ` +
+          (onlyInNeeds.length > 0 ? `Missing edges to: ${onlyInNeeds.join(", ")}. ` : "") +
+          (onlyInEdges.length > 0 ? `needs missing: ${onlyInEdges.join(", ")}.` : "")
+        );
+      }
+    }
+
+    // last-wins multi-writer detection → warning
+    for (const [stateKey, field] of Object.entries(parsedState)) {
+      if (field.reducer === "last-wins") {
+        const writers = nodeDefs.filter((n) => n.writes && stateKey in n.writes);
+        if (writers.length > 1) {
+          writers.sort((a, b) => a.id.localeCompare(b.id));
+          warnings.push(
+            `state.${stateKey}: reducer "last-wins" with ${writers.length} writers ` +
+            `(${writers.map((w) => w.id).join(", ")}) — ` +
+            `result is determined by nodeId dictionary order (${writers[writers.length - 1]!.id} wins)`
+          );
+        }
+      }
+    }
+
+    // cycle detection on edges → warning
+    {
+      const color = new Map<string, 0 | 1 | 2>(); // 0=white 1=gray 2=black
+      function edgeCycleCheck(nodeId: string): boolean {
+        const c = color.get(nodeId) ?? 0;
+        if (c === 1) return true;  // back edge
+        if (c === 2) return false; // already fully explored
+        color.set(nodeId, 1);
+        for (const e of edgeDefs) {
+          if (e.from === nodeId && e.to !== "end") {
+            if (edgeCycleCheck(e.to)) return true;
+          }
+        }
+        color.set(nodeId, 2);
+        return false;
+      }
+      if (edgeCycleCheck(entry!)) {
+        warnings.push("graph contains cycles — ensure maxSteps is set to prevent infinite loops");
+      }
+    }
+  }
+
   if (errors.length > 0) {
     return { ok: false, errors };
   }
 
   return {
     ok: true,
-    def: { name: name!, entry: entry!, maxSteps, state, nodes: nodeDefs, edges: edgeDefs },
+    def: { name: name!, entry: entry!, maxSteps, maxParallel, state, nodes: nodeDefs, edges: edgeDefs },
     warnings,
   };
 }

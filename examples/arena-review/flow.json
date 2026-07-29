@@ -1,0 +1,29 @@
+{
+  "name": "arena-review",
+  "entry": "prepare",
+  "maxSteps": 20,
+  "maxParallel": 3,
+  "state": {
+    "topic": "{{input.topic}}",
+    "reviews": { "initial": [], "reducer": "append" },
+    "summary": ""
+  },
+  "nodes": [
+    { "id": "prepare", "type": "agent", "model": "deepseek/deepseek-v4-flash",
+      "prompt": "用一句话说明要评估的主题: {{state.topic}}", "writes": { "material": "{{output}}" }, "timeoutSec": 60 },
+    { "id": "review-a", "type": "agent", "model": "deepseek/deepseek-v4-flash",
+      "prompt": "从性能角度评价（一句话）: {{state.topic}}", "writes": { "reviews": "{{output}}" }, "timeoutSec": 60 },
+    { "id": "review-b", "type": "agent", "model": "deepseek/deepseek-v4-flash",
+      "prompt": "从易用性角度评价（一句话）: {{state.topic}}", "writes": { "reviews": "{{output}}" }, "timeoutSec": 60 },
+    { "id": "summarize", "type": "agent", "model": "deepseek/deepseek-v4-flash",
+      "needs": ["review-a", "review-b"],
+      "prompt": "汇总以下 {{state.reviews.length}} 份评价为一句话: {{state.reviews}}", "writes": { "summary": "{{output}}" }, "timeoutSec": 60 }
+  ],
+  "edges": [
+    { "from": "prepare", "to": "review-a" },
+    { "from": "prepare", "to": "review-b" },
+    { "from": "review-a", "to": "summarize" },
+    { "from": "review-b", "to": "summarize" },
+    { "from": "summarize", "to": "end" }
+  ]
+}

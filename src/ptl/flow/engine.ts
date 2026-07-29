@@ -1,8 +1,8 @@
 /**
  * pit-flow engine — 执行循环
  *
- * runFlow:   主循环（agent/human 节点调度 + checkpoint + 死路检测）
- * resumeFlow: 从 waiting_human / failed / running-but-dead 恢复
+ * v1: 单链串行（makeRunFlow / makeResumeFlow）
+ * v2: 波次并行（makeRunFlowV2 / makeResumeFlowV2）
  *
  * spawnAgent 抽象依赖注入（构造函数捕获），测试可 mock。
  */
@@ -10,10 +10,11 @@
 import path from "node:path";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
-import type { FlowStore, ExecLock, Checkpoint, PendingPayload } from "./store.js";
+import type { FlowStore, ExecLock, Checkpoint, PendingPayload, WaveCheckpoint } from "./store.js";
 import type { FlowDef, NodeDef, EdgeDef } from "./schema.js";
 import { interpolate } from "./template.js";
 import { evalExpr } from "./expr.js";
+import { parseStateField, applyReducer, type StateFieldDef } from "./reducers.js";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -267,7 +268,602 @@ async function executeLoop(
   }
 }
 
-// ── Helpers ────────────────────────────────────────────────────
+// ── V2 Engine (waves) ──────────────────────────────────────────
+
+export function makeRunFlowV2(spawnAgent: SpawnAgent) {
+  return async function runFlowV2(store: FlowStore, runId: string): Promise<RunResult> {
+    const meta = store.loadMeta(runId);
+    const lock = store.acquireExecLock(runId);
+
+    try {
+      return await executeWaveLoop(store, runId, lock, spawnAgent);
+    } finally {
+      const currentMeta = store.loadMeta(runId);
+      if (currentMeta.status !== "waiting_human" && currentMeta.status !== "editing") {
+        lock.release();
+      }
+    }
+  };
+}
+
+export function makeResumeFlowV2(spawnAgent: SpawnAgent) {
+  return async function resumeFlowV2(store: FlowStore, runId: string): Promise<RunResult> {
+    const meta = store.loadMeta(runId);
+
+    // editing → resume (barrier): clear flags, validate, continue
+    if (meta.status === "editing") {
+      // Apply pending edits
+      if (meta.pendingEdits && meta.pendingEdits.length > 0) {
+        for (const edit of meta.pendingEdits) {
+          applyPendingEdit(store, runId, edit);
+        }
+      }
+      // Handle stale human pending: discard and re-enter with current graph
+      const pending = store.loadPending(runId);
+      if (pending) {
+        store.clearPending(runId);
+        // Will re-enter human node from current graph
+      }
+      // Clear barrier state
+      store.updateMeta(runId, {
+        status: "running",
+        editRequested: false,
+        editBaseWave: undefined,
+        pendingEdits: undefined,
+      });
+
+      const lock = store.acquireExecLock(runId);
+      try {
+        return await executeWaveLoop(store, runId, lock, spawnAgent);
+      } finally {
+        const m = store.loadMeta(runId);
+        if (m.status !== "waiting_human" && m.status !== "editing") lock.release();
+      }
+    }
+
+    // waiting_human, failed, running-but-dead: v1 compatible paths
+    // waiting_human: crash recovery or normal human gate
+    if (meta.status === "waiting_human") {
+      const pending = store.loadPending(runId);
+      if (pending) {
+        const state = store.loadState(runId);
+        // approve 与 reject 同理：approved 为布尔即表示门已决策，完成该 human 节点
+        if (typeof state.approved === "boolean") {
+          // Crash-recovery: apply pending writes + checkpoint + clear
+          applyWrites(state, pending.nodeSnapshot.writes as Record<string, string>, "");
+          store.saveState(runId, state);
+          const cp: Checkpoint = {
+            nodeId: pending.nodeId,
+            graphVersion: pending.graphVersion,
+            seq: meta.stepCount + 1,
+            startedAt: pending.createdAt,
+            finishedAt: Date.now(),
+            status: "completed",
+            output: "",
+            stateAfter: { ...state },
+          };
+          store.writeCheckpoint(runId, cp);
+          store.clearPending(runId);
+          // Bump firedEpoch
+          incrementFiredEpoch(store, runId, pending.nodeId);
+          store.updateMeta(runId, { status: "running", stepCount: meta.stepCount + 1 });
+
+          const lock = store.acquireExecLock(runId);
+          try {
+            return await executeWaveLoop(store, runId, lock, spawnAgent);
+          } finally {
+            const m = store.loadMeta(runId);
+            if (m.status !== "waiting_human" && m.status !== "editing") lock.release();
+          }
+        }
+      }
+    }
+
+    // Normal resume: failed or running-but-dead
+    const lock = store.acquireExecLock(runId);
+    store.updateMeta(runId, { status: "running" });
+    try {
+      return await executeWaveLoop(store, runId, lock, spawnAgent);
+    } finally {
+      const m = store.loadMeta(runId);
+      if (m.status !== "waiting_human" && m.status !== "editing") lock.release();
+    }
+  };
+}
+
+// ── Wave execution loop ───────────────────────────────────────
+
+async function executeWaveLoop(
+  store: FlowStore,
+  runId: string,
+  lock: ExecLock,
+  spawnAgent: SpawnAgent,
+  _resumeFromWave?: number,
+): Promise<RunResult> {
+  const dir = store["runDir"](runId);
+  const workspaceDir = path.join(dir, "workspace");
+  // 本执行进程内失败的节点不再重试（防无限重试）；外部 resume（新进程）可重跑
+  const failedThisRun = new Set<string>();
+
+  // Ensure epoch state is initialized
+  let meta = store.loadMeta(runId);
+  if (!meta.firedEpoch) store.updateMeta(runId, { firedEpoch: {} });
+  if (!meta.consumed) store.updateMeta(runId, { consumed: {} });
+
+  let waveSeq = (store.latestWaveCheckpoint(runId)?.waveSeq ?? 0) + 1;
+
+  // Resume from wave checkpoint: recover epoch (merge: keep max of existing + checkpoint)
+  const lastWave = store.latestWaveCheckpoint(runId);
+  if (lastWave) {
+    const existingFired = meta.firedEpoch ?? {};
+    const existingConsumed = meta.consumed ?? {};
+    const mergedFired: Record<string, number> = {};
+    const mergedConsumed: Record<string, number> = {};
+    for (const k of new Set([...Object.keys(existingFired), ...Object.keys(lastWave.epochSnapshot.fired)])) {
+      mergedFired[k] = Math.max(existingFired[k] ?? 0, lastWave.epochSnapshot.fired[k] ?? 0);
+    }
+    for (const k of new Set([...Object.keys(existingConsumed), ...Object.keys(lastWave.epochSnapshot.consumed)])) {
+      mergedConsumed[k] = Math.max(existingConsumed[k] ?? 0, lastWave.epochSnapshot.consumed[k] ?? 0);
+    }
+    store.updateMeta(runId, {
+      firedEpoch: mergedFired,
+      consumed: mergedConsumed,
+    });
+  }
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    meta = store.loadMeta(runId);
+    const graph = store.loadGraph(runId);
+
+    // Find ready nodes
+    const activeCandidates = findAllActiveTargets(graph, store, runId);
+    const ready = findReadyNodes(graph, meta.firedEpoch ?? {}, meta.consumed ?? {}, activeCandidates)
+      .filter((nid) => !failedThisRun.has(nid));
+
+    // Initialize mutable epoch copies for this wave
+    const firedEpoch = { ...(meta.firedEpoch ?? {}) };
+    const consumed = { ...(meta.consumed ?? {}) };
+    const preWaveConsumed = { ...consumed };  // 失败节点回滚用
+
+    // Consume inbound edges for all ready nodes (they're about to execute)
+    for (const target of ready) {
+      const tDef = graph.nodes.find((n) => n.id === target);
+      if (!tDef || target === "end") continue;
+      for (const edge of graph.edges) {
+        if (edge.to !== target) continue;
+        const pred = edge.from;
+        const edgeKey = `${pred}→${target}`;
+        const c = consumed[edgeKey] ?? 0;
+        const f = firedEpoch[pred] ?? 0;
+        if (f > c) consumed[edgeKey] = f;
+      }
+    }
+    // Persist consumed immediately (human gate waves exit before merge)
+    store.updateMeta(runId, { consumed });
+
+    if (ready.length === 0) {
+      // Check for hunger
+      if (activeCandidates.length > 0) {
+        const blocked: string[] = [];
+        for (const t of activeCandidates) {
+          if (!ready.includes(t)) {
+            const nodeDef = graph.nodes.find((n) => n.id === t);
+            const needs = nodeDef?.needs ?? [];
+            const missing = needs.filter((p) => {
+              const consumed = meta.consumed?.[`${p}→${t}`] ?? 0;
+              const fired = meta.firedEpoch?.[p] ?? 0;
+              return consumed >= fired;
+            });
+            if (missing.length > 0) {
+              blocked.push(`${t}(missing: ${missing.join(",")})`);
+            }
+          }
+        }
+        const msg = `needs hunger: candidates exist but none ready. ${blocked.join("; ")}`;
+        await failRunV2(store, runId, msg, lock);
+        return { status: "failed", error: msg };
+      }
+      // No active candidates and no ready → done
+      store.updateMeta(runId, { status: "done" });
+      return { status: "done" };
+    }
+
+    // Check maxSteps
+    if (meta.stepCount >= (graph.maxSteps ?? 100)) {
+      await failRunV2(store, runId, `maxSteps (${graph.maxSteps ?? 100}) exceeded`, lock);
+      return { status: "failed", error: "maxSteps exceeded" };
+    }
+
+    // Execute wave: parallel spawn
+    const waveStartedAt = Date.now();
+    const maxParallel = graph.maxParallel ?? 4;
+    const nodeResults: Map<string, { ok: boolean; output: string; exitCode: number; signal: string | null }> = new Map();
+
+    // Capture pre-wave state (nodes in same wave must NOT see each other's outputs)
+    const preWaveState = store.loadState(runId);
+
+    // Split into batches of maxParallel (scheduling only, merge at wave end)
+    const batches: string[][] = [];
+    for (let i = 0; i < ready.length; i += maxParallel) {
+      batches.push(ready.slice(i, i + maxParallel));
+    }
+
+    for (const batch of batches) {
+      const batchPromises = batch.map(async (nodeId) => {
+        const nodeDef = graph.nodes.find((n) => n.id === nodeId);
+        if (!nodeDef) {
+          nodeResults.set(nodeId, { ok: false, output: "", exitCode: -1, signal: "node not found" });
+          return;
+        }
+        const nodeSnapshot = JSON.parse(JSON.stringify(nodeDef)) as NodeDef;
+
+        if (nodeSnapshot.type === "human") {
+          const renderedMessage = interpolate(nodeSnapshot.message ?? "", { state: preWaveState, input: meta.input });
+          const pending: PendingPayload = {
+            nodeId,
+            graphVersion: meta.graphVersion,
+            nodeSnapshot: nodeSnapshot as unknown as Record<string, unknown>,
+            message: renderedMessage,
+            createdAt: Date.now(),
+          };
+          store.writePending(runId, pending);
+          store.updateMeta(runId, { status: "waiting_human" });
+          lock.release();
+          nodeResults.set(nodeId, { ok: true, output: "", exitCode: 0, signal: null });
+          return;
+        }
+
+        // Agent node: render from pre-wave state
+        const renderedPrompt = interpolate(nodeSnapshot.prompt ?? "", { state: preWaveState, input: meta.input });
+        const nodeCwd = nodeSnapshot.cwd
+          ? path.join(workspaceDir, nodeSnapshot.cwd)
+          : workspaceDir;
+        fs.mkdirSync(nodeCwd, { recursive: true });
+
+        const env: NodeJS.ProcessEnv = { ...process.env };
+        if (nodeSnapshot.tenant) {
+          try {
+            const { resolveTenantId, resolveDataDir } = await import("../config.js");
+            const config = (await import("../config.js")).loadConfig();
+            const resolved = resolveTenantId(nodeSnapshot.tenant, config);
+            if (resolved.ok) {
+              const dataDir = resolveDataDir(config);
+              env.PI_CODING_AGENT_DIR = path.resolve(dataDir, "pi-config", resolved.id);
+              env.PI_TENANT = resolved.id;
+            }
+          } catch { /* config unavailable */ }
+        }
+
+        const nodeStartedAt = Date.now();
+        let result: SpawnResult;
+        try {
+          result = await spawnAgent(nodeSnapshot, renderedPrompt, nodeCwd, env);
+        } catch (err: any) {
+          result = { output: "", exitCode: -1, signal: err.message };
+        }
+        const nodeFinishedAt = Date.now();
+
+        const ok = result.exitCode === 0 && result.signal === null;
+        nodeResults.set(nodeId, {
+          ok,
+          output: result.output,
+          exitCode: result.exitCode,
+          signal: result.signal,
+        });
+      });
+
+      await Promise.allSettled(batchPromises);
+
+      // Check for human pause
+      const currentMeta = store.loadMeta(runId);
+      if (currentMeta.status === "waiting_human") {
+        return { status: "waiting_human" };
+      }
+    }
+
+    const waveFinishedAt = Date.now();
+
+    // Collect writing nodes for reducer merge (nodeId order for determinism)
+    const sortedReady = [...ready].sort();
+
+    // Start with pre-wave state
+    const mergedState = JSON.parse(JSON.stringify(preWaveState)) as Record<string, unknown>;
+
+    // Collect bare (last-wins) and reducer writes
+    const reducerAdditions: Record<string, Array<{ node: string; value: unknown }>> = {};
+    const bareAdditions: Record<string, Array<{ node: string; value: unknown }>> = {};
+    const incrementAdditions: Record<string, Array<{ node: string }>> = {};
+
+    for (const nodeId of sortedReady) {
+      const r = nodeResults.get(nodeId);
+      if (!r?.ok) continue;
+      const nodeDef = graph.nodes.find((n) => n.id === nodeId);
+      if (!nodeDef) continue;
+      const nodeSnapshot = JSON.parse(JSON.stringify(nodeDef)) as NodeDef;
+
+      for (const [writeKey, writeVal] of Object.entries(nodeSnapshot.writes ?? {})) {
+        // {{increment:state.x}}
+        if (writeVal.startsWith("{{increment:state.")) {
+          if (!incrementAdditions[writeKey]) incrementAdditions[writeKey] = [];
+          incrementAdditions[writeKey].push({ node: nodeId });
+          continue;
+        }
+        const resolved = resolveWriteValue(writeKey, writeVal, r.output);
+        if (resolved === undefined) continue;
+
+        const fieldDefs = graph.state ? parseStateField(graph.state[writeKey]) : { initial: undefined, reducer: "last-wins" as const };
+        if (fieldDefs.reducer !== "last-wins") {
+          if (!reducerAdditions[writeKey]) reducerAdditions[writeKey] = [];
+          reducerAdditions[writeKey].push({ node: nodeId, value: resolved });
+        } else {
+          if (!bareAdditions[writeKey]) bareAdditions[writeKey] = [];
+          bareAdditions[writeKey].push({ node: nodeId, value: resolved });
+        }
+      }
+
+      firedEpoch[nodeId] = (firedEpoch[nodeId] ?? 0) + 1;
+    }
+
+    // Apply state changes: first increments (deterministic, nodeId order, serial)
+    for (const [key, additions] of Object.entries(incrementAdditions)) {
+      let current = (typeof mergedState[key] === "number" ? mergedState[key] : 0) as number;
+      for (const { node } of [...additions].sort((a, b) => a.node.localeCompare(b.node))) {
+        current = (typeof current === "number" ? current : 0) + 1;
+      }
+      mergedState[key] = current;
+    }
+
+    // Apply bare (last-wins) keys: last by nodeId order
+    for (const [key, additions] of Object.entries(bareAdditions)) {
+      if (additions.length > 0) {
+        const sorted = [...additions].sort((a, b) => a.node.localeCompare(b.node));
+        mergedState[key] = sorted[sorted.length - 1]!.value;
+      }
+    }
+
+    // Apply reducer-based keys
+    for (const [key, additions] of Object.entries(reducerAdditions)) {
+      const fieldDefs = graph.state ? parseStateField(graph.state[key]) : { initial: undefined, reducer: "last-wins" as const };
+      const current = preWaveState[key];
+      mergedState[key] = applyReducer(fieldDefs.reducer, current, additions);
+    }
+
+    store.saveState(runId, mergedState);
+
+    // Update stepCount and rewrite node checkpoints with correct seq + stateAfter
+    const finalState = store.loadState(runId);
+    const newStepCount = meta.stepCount + ready.length;
+    const partialFailures = [...ready].filter((nid) => !(nodeResults.get(nid)?.ok ?? false));
+
+    // 失败节点回滚入边消费（外部 resume 时因入边有未消费完成而重新就绪重跑）；
+    // 同时记入 failedThisRun——本进程内不再重试
+    for (const failedId of partialFailures) {
+      failedThisRun.add(failedId);
+      for (const edge of graph.edges) {
+        if (edge.to !== failedId) continue;
+        const edgeKey = `${edge.from}→${failedId}`;
+        if (edgeKey in preWaveConsumed || edgeKey in consumed) {
+          consumed[edgeKey] = preWaveConsumed[edgeKey] ?? 0;
+        }
+      }
+    }
+
+    // Rewrite node checkpoints with proper seq and stateAfter
+    let seqCounter = meta.stepCount;
+    for (const nodeId of sortedReady) {
+      seqCounter++;
+      const r = nodeResults.get(nodeId);
+      if (!r) continue;
+      const cp: Checkpoint = {
+        nodeId,
+        graphVersion: meta.graphVersion,
+        seq: seqCounter,
+        startedAt: waveStartedAt,
+        finishedAt: waveFinishedAt,
+        status: r.ok ? "completed" : "failed",
+        output: r.output,
+        stateAfter: { ...finalState },
+      };
+      store.writeCheckpoint(runId, cp);
+    }
+
+    // Write wave checkpoint (always, including drain waves)
+    const wc: WaveCheckpoint = {
+      waveSeq,
+      nodes: [...ready],
+      startedAt: waveStartedAt,
+      finishedAt: waveFinishedAt,
+      stateAfter: { ...finalState },
+      graphVersion: meta.graphVersion,
+      epochSnapshot: { fired: { ...firedEpoch }, consumed: { ...consumed } },
+      partialFailures,
+    };
+    store.writeWaveCheckpoint(runId, wc);
+
+    // Persist epoch
+    store.updateMeta(runId, {
+      firedEpoch,
+      consumed,
+      stepCount: newStepCount,
+    });
+
+    // Check editRequested barrier
+    const updatedMeta = store.loadMeta(runId);
+    if (updatedMeta.editRequested) {
+      store.updateMeta(runId, {
+        status: "editing",
+        editBaseWave: waveSeq,
+      });
+      lock.release();
+      return { status: "done" }; // signal: stopped at barrier, but run is in editing state
+    }
+
+    waveSeq++;
+  }
+}
+
+// ── V2 Helpers ───────────────────────────────────────────────
+
+/** Find all target nodes that should be activated from ALL completed nodes in the graph */
+function findAllActiveTargets(graph: FlowDef, store: FlowStore, runId: string): string[] {
+  const meta = store.loadMeta(runId);
+  const firedEpoch = meta.firedEpoch ?? {};
+  const consumed = meta.consumed ?? {};
+  const state = store.loadState(runId);
+  const targets = new Set<string>();
+
+  // Entry node: always active if not yet fired (run start)
+  if (!(graph.entry in firedEpoch)) {
+    targets.add(graph.entry);
+  }
+
+  // Find all nodes that have un-consumed completions (outgoing edges to propagate)
+  for (const nodeDef of graph.nodes) {
+    const nodeId = nodeDef.id;
+    const f = firedEpoch[nodeId] ?? 0;
+    if (f === 0) continue; // hasn't fired
+
+    const outTargets = findAllOutTargets(graph, nodeId, state);
+    for (const t of outTargets) {
+      const edgeKey = `${nodeId}→${t}`;
+      const c = consumed[edgeKey] ?? 0;
+      const f = firedEpoch[nodeId] ?? 0;
+      if (f > c) {
+        if (t !== "end") targets.add(t);
+      }
+    }
+  }
+
+  // Also add "end" if any completed node has an edge to "end"
+  // (end is not a real node, just a sentinel)
+  for (const nodeDef of graph.nodes) {
+    const nodeId = nodeDef.id;
+    const allOut = findAllOutTargets(graph, nodeId, state);
+    if (allOut.length === 0) {
+      // This node has no activated edges → dead end for this node
+      // But other nodes might still activate targets
+    }
+  }
+
+  return [...targets];
+}
+
+/** Find all target nodes reachable from a source via edge evaluation */
+function findAllOutTargets(graph: FlowDef, nodeId: string, state: Record<string, unknown>): string[] {
+  // Check if node is end or nonexistent
+  const nodeDef = graph.nodes.find((n) => n.id === nodeId);
+  if (!nodeDef && nodeId !== graph.entry) return [];
+
+  const whenMatches: string[] = [];
+  const unconditionals: string[] = [];
+
+  for (const edge of graph.edges) {
+    if (edge.from !== nodeId) continue;
+    if (edge.when) {
+      // 表达式错误（如未加引号的字符串字面量）直接抛出——静默跳过会让图走死路且无法排查
+      if (evalExpr(edge.when, state)) {
+        whenMatches.push(edge.to);
+      }
+    } else {
+      unconditionals.push(edge.to);
+    }
+  }
+
+  if (whenMatches.length > 0) return whenMatches; // when fan-out
+  return unconditionals; // fallback：所有无条件边全部触发（fan-out）
+}
+
+/** Pure counter-based ready detection */
+function findReadyNodes(
+  graph: FlowDef,
+  firedEpoch: Record<string, number>,
+  consumed: Record<string, number>,
+  activeCandidates: string[],
+): string[] {
+  const ready: string[] = [];
+
+  for (const target of activeCandidates) {
+    if (target === "end") continue; // end is implicit
+
+    const nodeDef = graph.nodes.find((n) => n.id === target);
+    if (!nodeDef) continue;
+
+    // Check all incoming edges: any with consumed < fired?
+    const needs = nodeDef.needs ?? [];
+    let hasAnyUnconsumed = false;
+    let allNeedsSatisfied = true;
+
+    // Gather all predecessors (nodes that have edges pointing to target)
+    const predecessors = new Set<string>();
+    for (const edge of graph.edges) {
+      if (edge.to === target) predecessors.add(edge.from);
+    }
+
+    // Node with no predecessors: ready if activated
+    if (predecessors.size === 0) {
+      ready.push(target);
+      continue;
+    }
+
+    // Entry node with back-edges from cycles: first wave, all preds unfired
+    const allPredsNeverFired = [...predecessors].every((p) => (firedEpoch[p] ?? 0) === 0);
+    if (target === graph.entry && allPredsNeverFired) {
+      ready.push(target);
+      continue;
+    }
+
+    for (const pred of predecessors) {
+      const edgeKey = `${pred}→${target}`;
+      const c = consumed[edgeKey] ?? 0;
+      const f = firedEpoch[pred] ?? 0;
+      if (f > c) {
+        hasAnyUnconsumed = true;
+      }
+      if (needs.includes(pred) && !(f > c)) {
+        allNeedsSatisfied = false;
+      }
+    }
+
+    if (!hasAnyUnconsumed) continue; // no triggering edge
+
+    if (needs.length > 0 && !allNeedsSatisfied) continue; // AND-join not satisfied
+
+    ready.push(target);
+  }
+
+  return ready;
+}
+
+/** Increment firedEpoch for a node (used in crash-recovery human gate path) */
+export function incrementFiredEpoch(store: FlowStore, runId: string, nodeId: string): void {
+  const meta = store.loadMeta(runId);
+  const fe = { ...(meta.firedEpoch ?? {}) };
+  fe[nodeId] = (fe[nodeId] ?? 0) + 1;
+  store.updateMeta(runId, { firedEpoch: fe });
+}
+
+async function failRunV2(store: FlowStore, runId: string, error: string, lock: ExecLock): Promise<void> {
+  store.updateMeta(runId, { status: "failed" });
+  lock.release();
+}
+
+function applyPendingEdit(store: FlowStore, runId: string, edit: { path: string; value: unknown }): void {
+  // Apply edits that were queued during running
+  // For now, just notify — full implementation is in edit.ts
+  // The resume path in edit.ts handles this via setValue
+}
+
+/** Resolve a write value: plain value, {{output}} substitution, {{increment:x}} */
+function resolveWriteValue(key: string, raw: string, output: string): unknown {
+  if (raw === "{{output}}") return output;
+  const incrMatch = raw.match(/^\{\{increment:state\.(.+)\}\}$/);
+  if (incrMatch) {
+    // Increment is handled separately in applyWrites, return undefined here
+    return undefined;
+  }
+  return raw;
+}
 
 async function failRun(store: FlowStore, runId: string, error: string): Promise<void> {
   store.updateMeta(runId, { status: "failed" });

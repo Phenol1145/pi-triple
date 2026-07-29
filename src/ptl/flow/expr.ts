@@ -294,10 +294,14 @@ function evalNode(node: ASTNode, state: Record<string, unknown>): unknown {
 }
 
 function requireNumbers(a: unknown, b: unknown, op: string): [number, number] {
-  if (typeof a !== "number" || typeof b !== "number") {
-    throw new ExprError(`${op} requires numbers, got ${typeof a} and ${typeof b}`);
+  // 数字强转：agent 输出的 state 值常为字符串数字（"99"），按业界惯例 coercion；
+  // ==/!= 保持严格类型（"2" ≠ 2），仅比较运算符强转
+  const na = typeof a === "number" ? a : (typeof a === "string" && a.trim() !== "" ? Number(a) : NaN);
+  const nb = typeof b === "number" ? b : (typeof b === "string" && b.trim() !== "" ? Number(b) : NaN);
+  if (Number.isNaN(na) || Number.isNaN(nb)) {
+    throw new ExprError(`${op} requires numbers, got ${JSON.stringify(a)} and ${JSON.stringify(b)}`);
   }
-  return [a, b];
+  return [na, nb];
 }
 
 // ── Public API ────────────────────────────────────────────────

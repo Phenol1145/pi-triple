@@ -83,9 +83,9 @@ export async function cmdFlowRun(filePath: string, inputArgs: string[]): Promise
   const meta = s.loadMeta(runId);
   console.log(`  启动: ${meta.name} (${runId.slice(0, 8)}…)`);
 
-  const { makeRunFlow } = await import("./engine.js");
+  const { makeRunFlowV2 } = await import("./engine.js");
   const { makeSpawnAgent } = await import("./pm.js");
-  const runFlow = makeRunFlow(makeSpawnAgent());
+  const runFlow = makeRunFlowV2(makeSpawnAgent());
 
   const result = await runFlow(s, runId);
   switch (result.status) {
@@ -252,15 +252,91 @@ export async function cmdFlowReject(runId: string, note?: string): Promise<void>
 export async function cmdFlowResume(runId: string): Promise<void> {
   const s = store();
   runId = requireRun(s, runId);
+
+  // v2 barrier resume (editing state)
+  const meta = s.loadMeta(runId);
+  if (meta.status === "editing") {
+    try {
+      const { resumeV2 } = await import("./edit.js");
+      const { makeResumeFlowV2 } = await import("./engine.js");
+      const { makeSpawnAgent } = await import("./pm.js");
+      const engineResume = makeResumeFlowV2(makeSpawnAgent());
+      const result = await resumeV2(s, runId, engineResume);
+      if (result.ok) {
+        if (result.status === "waiting_human") {
+          console.log(`  \x1b[33m⏳ 等待人工审批\x1b[0m`);
+          if (result.error) console.log(`  \x1b[33m${result.error}\x1b[0m`);
+        } else {
+          console.log(`  \x1b[32m✅ 工作流完成\x1b[0m`);
+          if (result.error) console.log(`  \x1b[33m${result.error}\x1b[0m`);
+        }
+      } else {
+        console.log(`  \x1b[31m❌ 恢复失败: ${result.error ?? "未知错误"}\x1b[0m`);
+        process.exit(1);
+      }
+    } catch (err: any) {
+      console.log(`  \x1b[31m❌ 恢复失败: ${err.message}\x1b[0m`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  // resume path (failed, waiting_human, editing)
   try {
-    const { makeResumeFlow } = await import("./engine.js");
+    const { makeResumeFlowV2 } = await import("./engine.js");
     const { makeSpawnAgent } = await import("./pm.js");
-    const resumeFlow = makeResumeFlow(makeSpawnAgent());
+    const resumeFlow = makeResumeFlowV2(makeSpawnAgent());
     const result = await resumeFlow(s, runId);
     if (result.status === "done") console.log(`  \x1b[32m✅ 工作流完成\x1b[0m`);
     else if (result.status === "waiting_human") console.log(`  \x1b[33m⏳ 等待人工审批\x1b[0m`);
   } catch (err: any) {
     console.log(`  \x1b[31m❌ 恢复失败: ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
+// ─── propose / discard ───────────────────────────────────────
+
+export async function cmdFlowPropose(runId: string): Promise<void> {
+  const s = store();
+  runId = requireRun(s, runId);
+  try {
+    const { propose } = await import("./edit.js");
+    const result = await propose(s, runId);
+    if (result.ok) {
+      console.log(`  \x1b[32m✅ 已申请修改\x1b[0m`);
+      const m = s.loadMeta(runId);
+      if (m.status === "editing") {
+        console.log(`  状态: editing — 可修改图或状态`);
+        console.log(`  提交: pit flow resume ${runId.slice(0, 8)}`);
+        console.log(`  放弃: pit flow discard ${runId.slice(0, 8)}`);
+      } else if (m.editRequested) {
+        console.log(`  状态: running (将在波边界停波)`);
+      }
+    } else {
+      console.log(`  \x1b[31m❌ ${result.error}\x1b[0m`);
+      process.exit(1);
+    }
+  } catch (err: any) {
+    console.log(`  \x1b[31m❌ 申请失败: ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
+export async function cmdFlowDiscard(runId: string): Promise<void> {
+  const s = store();
+  runId = requireRun(s, runId);
+  try {
+    const { discard } = await import("./edit.js");
+    const result = await discard(s, runId);
+    if (result.ok) {
+      console.log(`  \x1b[32m✅ 已放弃修改\x1b[0m`);
+    } else {
+      console.log(`  \x1b[31m❌ ${result.error}\x1b[0m`);
+      process.exit(1);
+    }
+  } catch (err: any) {
+    console.log(`  \x1b[31m❌ 放弃失败: ${err.message}\x1b[0m`);
     process.exit(1);
   }
 }

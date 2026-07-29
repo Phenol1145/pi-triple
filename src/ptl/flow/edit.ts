@@ -22,15 +22,185 @@ import type { FlowStore } from "./store.js";
 import type { Checkpoint } from "./store.js";
 import type { FlowDef } from "./schema.js";
 import { validateFlow } from "./schema.js";
-import { makeResumeFlow, makeRunFlow } from "./engine.js";
+import { makeResumeFlowV2, incrementFiredEpoch, type RunResult } from "./engine.js";
 import { makeSpawnAgent } from "./pm.js";
 
 // ── Types ─────────────────────────────────────────────────────
 
 export interface EditResult {
   ok: boolean;
-  status?: "done" | "failed" | "waiting_human";
+  status?: "done" | "failed" | "waiting_human" | "queued" | "editing";
   error?: string;
+}
+
+// ── propose ───────────────────────────────────────────────────
+
+/**
+ * 申请修改：标记 editRequested。
+ * running → 标记，当前波完成后停波
+ * waiting_human/failed → 直接进入 editing
+ * done → 报错
+ * editing → 幂等 ok
+ */
+export async function propose(store: FlowStore, runId: string): Promise<EditResult> {
+  return await store.withMutationLock(runId, async () => {
+    const meta = store.loadMeta(runId);
+
+    switch (meta.status) {
+      case "running":
+        store.updateMeta(runId, { editRequested: true });
+        return { ok: true };
+
+      case "waiting_human":
+      case "failed":
+        store.updateMeta(runId, {
+          status: "editing",
+          editRequested: false,
+          editBaseWave: undefined,
+        });
+        return { ok: true };
+
+      case "editing":
+        // 幂等
+        return { ok: true };
+
+      case "done":
+        return { ok: false, error: `run "${runId.slice(0, 8)}…" is already done; cannot propose` };
+
+      default:
+        return { ok: false, error: `unknown status: ${meta.status}` };
+    }
+  });
+}
+
+// ── discard ───────────────────────────────────────────────────
+
+/**
+ * 放弃修改：editing → running，清 editRequested/pendingEdits/editBaseWave
+ */
+export async function discard(store: FlowStore, runId: string): Promise<EditResult> {
+  return await store.withMutationLock(runId, async () => {
+    const meta = store.loadMeta(runId);
+
+    if (meta.status !== "editing") {
+      return { ok: false, error: `run is not in editing state (current: ${meta.status})` };
+    }
+
+    store.updateMeta(runId, {
+      status: "running",
+      editRequested: false,
+      editBaseWave: undefined,
+      pendingEdits: undefined,
+    });
+    return { ok: true };
+  });
+}
+
+// ── resumeV2 ──────────────────────────────────────────────────
+
+/**
+ * resumeV2: editing → re-validate graph → apply pendingEdits → clear → continue
+ *
+ * 流程：
+ * 1. re-validate 最终图（失败保持 editing + 返回错误）
+ * 2. 逐条应用 meta.pendingEdits（各自 re-validate，失败收集报告跳过）
+ * 3. 清 editRequested/pendingEdits/editBaseWave
+ * 4. 若存在 stale human pending：丢弃，按当前 graph 重进 human 节点 → waiting_human
+ * 5. 否则调 engine resume 继续波循环
+ */
+export async function resumeV2(
+  store: FlowStore,
+  runId: string,
+  engineResume: (store: FlowStore, runId: string) => Promise<RunResult>,
+): Promise<EditResult> {
+  const meta = store.loadMeta(runId);
+  if (meta.status !== "editing") {
+    return { ok: false, error: `run is not in editing state (current: ${meta.status})` };
+  }
+
+  // 1. Re-validate final graph
+  const graph = store.loadGraph(runId);
+  const vResult = validateFlow(graph);
+  if (!vResult.ok) {
+    return { ok: false, error: `re-validation failed: ${vResult.errors.join("; ")}` };
+  }
+
+  // 2. Apply pendingEdits (each re-validated, failures collected and skipped)
+  const failedEdits: string[] = [];
+  if (meta.pendingEdits && meta.pendingEdits.length > 0) {
+    for (const edit of meta.pendingEdits) {
+      try {
+        const result = await setValue(store, runId, edit.path, String(edit.value));
+        if (!result.ok) {
+          failedEdits.push(`${edit.path}: ${result.error ?? "unknown"}`);
+        }
+      } catch (err: any) {
+        failedEdits.push(`${edit.path}: ${err.message}`);
+      }
+    }
+  }
+
+  // 3. Clear barrier markers
+  await store.withMutationLock(runId, async () => {
+    store.updateMeta(runId, {
+      status: "running",
+      editRequested: false,
+      editBaseWave: undefined,
+      pendingEdits: undefined,
+    });
+  });
+
+  // 4. Handle stale human pending
+  const pending = store.loadPending(runId);
+  if (pending) {
+    // Discard stale pending, re-enter human node with current graph
+    store.clearPending(runId);
+
+    const nodeDef = graph.nodes.find((n) => n.id === pending.nodeId);
+    if (nodeDef && nodeDef.type === "human" && nodeDef.message) {
+      // Render message with current state
+      const { interpolate } = await import("./template.js");
+      const currentMeta = store.loadMeta(runId);
+      const state = store.loadState(runId);
+      const renderedMessage = interpolate(nodeDef.message, {
+        state,
+        input: currentMeta.input,
+      });
+
+      const newPending: import("./store.js").PendingPayload = {
+        nodeId: nodeDef.id,
+        graphVersion: currentMeta.graphVersion,
+        nodeSnapshot: JSON.parse(JSON.stringify(nodeDef)),
+        message: renderedMessage,
+        createdAt: Date.now(),
+      };
+      store.writePending(runId, newPending);
+      store.updateMeta(runId, { status: "waiting_human" });
+
+      const warn =
+        failedEdits.length > 0
+          ? `\n\n⚠️ 部分修改失败: ${failedEdits.join("; ")}`
+          : "";
+      return {
+        ok: true,
+        status: "waiting_human",
+        error: undefined,
+      };
+    }
+  }
+
+  // 5. Continue wave loop via engine resume
+  const runResult = await engineResume(store, runId);
+
+  const warn =
+    failedEdits.length > 0
+      ? `⚠️ 部分修改失败: ${failedEdits.join("; ")}`
+      : undefined;
+  return {
+    ok: runResult.status === "done" || runResult.status === "waiting_human",
+    status: runResult.status,
+    error: runResult.status === "failed" ? runResult.error : warn,
+  };
 }
 
 // ── setValue ───────────────────────────────────────────────────
@@ -48,6 +218,7 @@ export async function setValue(
   runId: string,
   dotPath: string,
   rawValue: string,
+  opts?: { forceImmediate?: boolean },
 ): Promise<EditResult> {
   // 值解析：优先 JSON parse（2→number、true→boolean、"x"→string），失败兜底为原始字符串
   let parsedValue: unknown;
@@ -56,6 +227,30 @@ export async function setValue(
   } catch {
     parsedValue = rawValue;
   }
+
+  // ── running guard: queue edits + auto-propose ─────────────
+  const meta = store.loadMeta(runId);
+  if (!opts?.forceImmediate && meta.status === "running" && !meta.editRequested) {
+    return await store.withMutationLock(runId, async () => {
+      // Re-read meta under lock
+      const m2 = store.loadMeta(runId);
+      if (m2.status !== "running") {
+        // Status changed — fall through to immediate effect
+        return await setValue(store, runId, dotPath, rawValue, { forceImmediate: true });
+      }
+      const pending: Array<{ path: string; value: unknown }> = [
+        ...(m2.pendingEdits ?? []),
+        { path: dotPath, value: parsedValue },
+      ];
+      store.updateMeta(runId, {
+        pendingEdits: pending,
+        editRequested: true,
+      });
+      return { ok: true, status: "queued" };
+    });
+  }
+
+  // ── Normal path (failed/editing/waiting_human/done, or force)
 
   const parts = dotPath.split(".");
   const root = parts[0];
@@ -283,12 +478,13 @@ export async function approve(store: FlowStore, runId: string, note?: string): P
       stateAfter: { ...state },
     };
     store.writeCheckpoint(runId, cp);
+    incrementFiredEpoch(store, runId, pending.nodeId);
     store.clearPending(runId);
     store.updateMeta(runId, { status: "running", stepCount: meta.stepCount + 1 });
   });
 
-  // resumeFlow handles its own exec lock acquisition (crash-recovery path detects approved=true)
-  const resumeFlow = makeResumeFlow(makeSpawnAgent());
+  // resumeFlowV2 handles its own exec lock acquisition (crash-recovery path detects approved/rejected)
+  const resumeFlow = makeResumeFlowV2(makeSpawnAgent());
   const runResult = await resumeFlow(store, runId);
 
   return {
@@ -331,12 +527,13 @@ export async function reject(store: FlowStore, runId: string, note?: string): Pr
       stateAfter: { ...state },
     };
     store.writeCheckpoint(runId, cp);
+    incrementFiredEpoch(store, runId, pending.nodeId);
     store.clearPending(runId);
     store.updateMeta(runId, { status: "running", stepCount: meta.stepCount + 1 });
   });
 
-  // resumeFlow handles its own exec lock acquisition
-  const resumeFlow = makeResumeFlow(makeSpawnAgent());
+  // resumeFlowV2 handles its own exec lock acquisition
+  const resumeFlow = makeResumeFlowV2(makeSpawnAgent());
   const runResult = await resumeFlow(store, runId);
 
   return {
@@ -386,9 +583,4 @@ function applyWrites(
     }
     state[key] = raw;
   }
-}
-
-/** Stub spawnAgent for approve/reject resume — real agent nodes in the loop will use the real spawner */
-async function spawnAgentStub(): Promise<{ output: string; exitCode: number; signal: string | null }> {
-  return { output: "", exitCode: 0, signal: null };
 }

@@ -53,7 +53,9 @@ describe("flow-schema validate", () => {
     if (r.ok) {
       expect(r.def.nodes.length).toBe(4);
       expect(r.def.edges.length).toBe(6);
-      expect(r.warnings).toEqual([]);
+      // v2: cycle detection on edges → warning (gate→review is a cycle)
+      expect(r.warnings.length).toBe(1);
+      expect(r.warnings[0]).toContain("cycles");
     }
   });
 
@@ -257,5 +259,198 @@ describe("flow-schema validate", () => {
     });
     if (r.ok) expect(r.def.maxSteps).toBe(100);
     else console.log(r.errors); // debug
+  });
+});
+
+describe("flow-schema validate v2", () => {
+  it("accepts maxParallel", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      nodes: [{ id: "n1", type: "agent", prompt: "hi" }],
+      edges: [],
+      maxParallel: 2,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.def.maxParallel).toBe(2);
+  });
+
+  it("maxParallel defaults to 4", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      nodes: [{ id: "n1", type: "agent", prompt: "hi" }],
+      edges: [],
+    });
+    if (r.ok) expect(r.def.maxParallel).toBe(4);
+    else console.log(r.errors);
+  });
+
+  it("rejects maxParallel non-integer", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      nodes: [{ id: "n1", type: "agent", prompt: "hi" }],
+      edges: [],
+      maxParallel: 0,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.some((e) => e.includes("maxParallel"))).toBe(true);
+  });
+
+  it("warns on >1 unconditional edges from same node (fallback fan-out)", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      nodes: [{ id: "n1", type: "agent", prompt: "hi" }],
+      edges: [
+        { from: "n1", to: "end" },
+        { from: "n1", to: "end" },
+      ],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.warnings.some((w) => w.includes("unconditional"))).toBe(true);
+  });
+
+  it("warns on multiple when edges (fan-out)", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      nodes: [{ id: "n1", type: "agent", prompt: "hi" }],
+      edges: [
+        { from: "n1", to: "end", when: "state.a == 1" },
+        { from: "n1", to: "end", when: "state.b == 2" },
+      ],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.warnings.some((w) => w.includes("fan-out"))).toBe(true);
+    }
+  });
+
+  it("accepts needs with correct static predecessors", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      nodes: [
+        { id: "n1", type: "agent", prompt: "hi" },
+        { id: "n2", type: "agent", prompt: "hi" },
+        { id: "n3", type: "agent", prompt: "hi", needs: ["n1", "n2"] },
+      ],
+      edges: [
+        { from: "n1", to: "n3" },
+        { from: "n2", to: "n3" },
+        { from: "n3", to: "end" },
+      ],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.def.nodes[2].needs).toEqual(["n1", "n2"]);
+  });
+
+  it("rejects needs with missing static predecessor in edges", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      nodes: [
+        { id: "n1", type: "agent", prompt: "hi" },
+        { id: "n2", type: "agent", prompt: "hi", needs: ["n1"] },
+      ],
+      edges: [], // no edge n1→n2
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.errors.some((e) => e.includes("n2") && e.includes("needs must"))).toBe(true);
+    }
+  });
+
+  it("rejects needs with extra edge not in needs", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      nodes: [
+        { id: "n1", type: "agent", prompt: "hi" },
+        { id: "n2", type: "agent", prompt: "hi", needs: ["n1"] },
+        { id: "n3", type: "agent", prompt: "hi" },
+      ],
+      edges: [
+        { from: "n1", to: "n2" },
+        { from: "n3", to: "n2" },  // n3→n2 is a static predecessor but NOT in needs
+      ],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.errors.some((e) => e.includes("n2") && e.includes("needs"))).toBe(true);
+    }
+  });
+
+  it("rejects needs referencing non-existent node", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      nodes: [
+        { id: "n1", type: "agent", prompt: "hi" },
+        { id: "n2", type: "agent", prompt: "hi", needs: ["ghost"] },
+      ],
+      edges: [{ from: "n1", to: "n2" }],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.errors.some((e) => e.includes("needs") && e.includes("ghost"))).toBe(true);
+    }
+  });
+
+  it("rejects needs cycle", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      nodes: [
+        { id: "n1", type: "agent", prompt: "hi", needs: ["n2"] },
+        { id: "n2", type: "agent", prompt: "hi", needs: ["n1"] },
+      ],
+      edges: [
+        { from: "n1", to: "n2" },
+        { from: "n2", to: "n1" },
+      ],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.errors.some((e) => e.includes("needs cycle"))).toBe(true);
+    }
+  });
+
+  it("warns on last-wins with multiple writers", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      state: { result: "initial" },
+      nodes: [
+        { id: "n1", type: "agent", prompt: "hi", writes: { result: "{{output}}" } },
+        { id: "n2", type: "agent", prompt: "hi", writes: { result: "{{output}}" } },
+      ],
+      edges: [
+        { from: "n1", to: "n2" },
+        { from: "n2", to: "end" },
+      ],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.warnings.some((w) => w.includes("last-wins") && w.includes("writers"))).toBe(true);
+    }
+  });
+
+  it("rejects append reducer with non-array initial", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      state: { reviews: { initial: "not-array", reducer: "append" } },
+      nodes: [{ id: "n1", type: "agent", prompt: "hi" }],
+      edges: [],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.errors.some((e) => e.includes("append") && e.includes("array"))).toBe(true);
+    }
+  });
+
+  it("accepts state with reducer declared", () => {
+    const r = validateFlow({
+      name: "x", entry: "n1",
+      state: {
+        bare: "value",
+        reviews: { initial: [], reducer: "append" },
+        notes: { initial: "", reducer: "concat" },
+      },
+      nodes: [{ id: "n1", type: "agent", prompt: "hi" }],
+      edges: [],
+    });
+    expect(r.ok).toBe(true);
   });
 });

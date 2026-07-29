@@ -28,7 +28,7 @@ import { interpolate } from "./template.js";
 
 // ── Types ──────────────────────────────────────────────────────
 
-export type RunStatus = "running" | "waiting_human" | "failed" | "done";
+export type RunStatus = "running" | "waiting_human" | "failed" | "done" | "editing";
 
 export interface RunMeta {
   runId: string;
@@ -38,6 +38,11 @@ export interface RunMeta {
   input: Record<string, string>;
   graphVersion: number;
   stepCount: number;
+  firedEpoch?: Record<string, number>;   // v2: per-node completion count
+  consumed?: Record<string, number>;       // v2: per-edge "pred→target" consumed count
+  editRequested?: boolean;                 // v2: barrier
+  editBaseWave?: number;                   // v2: wave where barrier triggered
+  pendingEdits?: Array<{ path: string; value: unknown }>; // v2: queued edits
 }
 
 export interface Checkpoint {
@@ -57,6 +62,18 @@ export interface PendingPayload {
   nodeSnapshot: Record<string, unknown>;
   message: string;
   createdAt: number;
+}
+
+/** v2: wave checkpoint */
+export interface WaveCheckpoint {
+  waveSeq: number;
+  nodes: string[];
+  startedAt: number;
+  finishedAt: number;
+  stateAfter: Record<string, unknown>;
+  graphVersion: number;
+  epochSnapshot: { fired: Record<string, number>; consumed: Record<string, number> };
+  partialFailures: string[]; // nodeIds that failed in this wave
 }
 
 export interface RunSummary {
@@ -135,6 +152,7 @@ export class FlowStore {
     fs.mkdirSync(path.join(dir, "checkpoints"));
     fs.mkdirSync(path.join(dir, "graph.history"));
     fs.mkdirSync(path.join(dir, "workspace"));
+    fs.mkdirSync(path.join(dir, "waves"));   // v2: wave checkpoints
 
     // state 初始值：一次性插值
     const state: Record<string, unknown> = {};
@@ -174,8 +192,8 @@ export class FlowStore {
     const meta = this.loadMeta(runId);
     if (!meta) return false;
 
-    // 拒删 running/waiting
-    if (meta.status === "running" || meta.status === "waiting_human") {
+    // 拒删 running/waiting/editing
+    if (meta.status === "running" || meta.status === "waiting_human" || meta.status === "editing") {
       return false;
     }
 
@@ -266,6 +284,29 @@ export class FlowStore {
 
   latestCheckpoint(runId: string): Checkpoint | null {
     const list = this.listCheckpoints(runId);
+    return list.length > 0 ? list[list.length - 1]! : null;
+  }
+
+  // ── Wave checkpoint (v2) ────────────────────────────────
+
+  writeWaveCheckpoint(runId: string, wc: WaveCheckpoint): void {
+    const dir = path.join(this.runDir(runId), "waves");
+    const seq = wc.waveSeq.toString().padStart(3, "0");
+    const p = path.join(dir, `${seq}.json`);
+    this.writeAtomic(p, wc);
+  }
+
+  listWaveCheckpoints(runId: string): WaveCheckpoint[] {
+    const dir = path.join(this.runDir(runId), "waves");
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir)
+      .filter((f) => f.endsWith(".json"))
+      .sort()
+      .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) as WaveCheckpoint);
+  }
+
+  latestWaveCheckpoint(runId: string): WaveCheckpoint | null {
+    const list = this.listWaveCheckpoints(runId);
     return list.length > 0 ? list[list.length - 1]! : null;
   }
 

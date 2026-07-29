@@ -52,4 +52,20 @@ describe("flow-template", () => {
   it("state 值为 true → string 化", () => {
     expect(interpolate("{{state.ok}}", { state: { ok: true }, input: {} })).toBe("true");
   });
+
+  it("state 值为数组（append reducer 结果）→ JSON 序列化", () => {
+    const reviews = [
+      { node: "review-a", value: "快" },
+      { node: "review-b", value: "易用" },
+    ];
+    expect(interpolate("汇总: {{state.reviews}}", { state: { reviews }, input: {} })).toBe(
+      `汇总: ${JSON.stringify(reviews)}`,
+    );
+  });
+
+  it("state 值为对象 → JSON 序列化（非 [object Object]）", () => {
+    expect(interpolate("{{state.cfg}}", { state: { cfg: { a: 1 } }, input: {} })).toBe(
+      '{"a":1}',
+    );
+  });
 });
