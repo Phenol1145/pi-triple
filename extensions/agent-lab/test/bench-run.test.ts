@@ -99,3 +99,86 @@ test("codeGenPrompt 含可识别标记", () => {
   assert.ok(codeGenPrompt(HE0).includes("Complete the following Python function"));
   assert.ok(codeGenPrompt(HE0).includes(HE0.prompt));
 });
+
+// ── Error-path helpers & tests (fix round 1) ──────────────────────
+
+function failingGenCaller(
+  genCode: string,
+): ModelCaller & { bidCalls: number; genCalls: number } {
+  let genCount = 0, bidCount = 0;
+  return {
+    get bidCalls() { return bidCount; },
+    get genCalls() { return genCount; },
+    async complete(_model: string, prompt: string, _t: number) {
+      if (prompt.includes("Complete the following Python function")) {
+        genCount++;
+        if (genCount === 1) throw new Error("model-unavailable");
+        return genCode;
+      }
+      bidCount++;
+      return "50";
+    },
+  };
+}
+
+test("I-1: routing_fallback — dispatch 返回 non-arena 结果时记录 status 且不结算", async () => {
+  const stubs: BenchPorts = {
+    dispatch: async () =>
+      ({
+        status: "abstained" as const,
+        schedulerInstanceId: "default-weighted-scorer",
+        roundId: "r",
+        reason: "test",
+        attempts: [],
+      } as any),
+    settle: async () => { throw new Error("should not be called"); },
+    balance: () => 1000,
+    getTask: () => undefined,
+    candidates: () => [],
+    eligibility: "all",
+    matchEligibility: () => true,
+    executeModel: async () => "",
+    genTimeoutMs: 1000,
+    judgeTimeoutMs: 1000,
+  };
+  const report = await runBench(stubs, [HE0]);
+  const r = report.results[0];
+  assert.equal(r.status, "routing_fallback");
+  assert.equal(r.detail, "abstained");       // dispatch.status propagated
+  assert.equal(r.settled, undefined);         // never reached settle
+  assert.equal(r.model, undefined);           // never assigned
+});
+
+test("I-2: 批量 fail-open — 一题 executeModel 失败不阻断后续题", async () => {
+  const caller = failingGenCaller(HE0.canonical_solution);
+  const { benchPorts } = await buildPorts(caller);
+  const HE1: HumanEvalTask = { ...HE0, task_id: "HumanEval/1" };
+
+  const report = await runBench(benchPorts, [HE0, HE1]);
+  assert.equal(report.results.length, 2, "两题都被处理，整批未中断");
+
+  // 题 1：gen 抛错 → genError → passed=false → settled completion=0
+  const r0 = report.results[0];
+  assert.equal(r0.passed, false);
+  assert.equal(r0.settled, true);
+  assert.ok(r0.error, "应有 gen error");
+
+  // 题 2：gen 正常 → judge pass → settled completion=1
+  const r1 = report.results[1];
+  assert.equal(r1.passed, true);
+  assert.equal(r1.settled, true);
+  assert.equal(r1.status, undefined, "不应是 routing_fallback");
+});
+
+test("I-3: executeModel 失败路径 — genError → settle(completion=0) → 胜者余额净减", async () => {
+  const caller = failingGenCaller(HE0.canonical_solution);
+  const { benchPorts, ledger } = await buildPorts(caller);
+
+  const report = await runBench(benchPorts, [HE0]);
+  const r = report.results[0];
+  assert.equal(r.passed, false);
+  assert.equal(r.settled, true);
+  assert.ok(r.error, "应有 gen error");
+  const delta = ledger.balance(r.model!) - 1000;
+  assert.ok(delta < 0, `executeModel 失败应 settle(completion=0)，胜者余额净减，实际 delta=${delta}`);
+});
