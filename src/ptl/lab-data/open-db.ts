@@ -8,6 +8,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { pitHome } from "../config.js";
 
 /**
  * 打开 SQLite 数据库。先尝试只读模式，失败再 fallback 读写。
@@ -45,12 +46,11 @@ export function openReadOnlyOrNull(filePath: string): DatabaseSync | null {
 /** 共享 telemetry DB 路径 */
 export function sharedDbPath(): string {
   if (process.env.AGENT_LAB_DB_PATH) return process.env.AGENT_LAB_DB_PATH;
-  const dataDir = process.env.DATA_DIR ?? "./.pi-platform-data";
-  return path.resolve(dataDir, "shared", "agent-lab", "agent-lab.db");
+  return path.join(pitHome(), "data", "shared", "agent-lab", "agent-lab.db");
 }
 
 /** per-tenant DB 路径 */
 export function localDbPath(tenantId: string): string {
-  const dataDir = process.env.DATA_DIR ?? "./.pi-platform-data";
-  return path.resolve(dataDir, "pi-config", tenantId, "agent-lab", "agent-lab.db");
+  if (process.env.AGENT_LAB_CONFIG_DIR) return path.join(process.env.AGENT_LAB_CONFIG_DIR, "agent-lab.db");
+  return path.join(pitHome(), "data", "pi-config", tenantId, "agent-lab", "agent-lab.db");
 }
