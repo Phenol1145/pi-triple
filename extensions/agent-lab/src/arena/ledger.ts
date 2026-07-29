@@ -29,6 +29,7 @@ export class SqliteLedger implements Ledger {
     this.db.exec(ARENA_SCHEMA);
     if (resolveAgentId) this.runMigration(resolveAgentId);
   }
+  private now(): number { return Date.now(); }
   /** 迁移 credits/credit_tx/market_tasks/arena_freezes 的 agent 字段从 model id → UUID（幂等） */
   private runMigration(resolveAgentId: (v: string) => string | undefined): void {
     const plans: Array<{ table: string; col: string; pkCol: string }> = [

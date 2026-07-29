@@ -256,6 +256,7 @@ export class ControlPlane {
           id: agent.id,
           schedulerInstanceId: spec.id,
           definition: agent.definition,
+          model: agent.definition?.standard?.name,   // model-candidate agent 的 standard.name = model id
           createdAtRoundId: roundId,
           status: "ready",
           createdAt: now,

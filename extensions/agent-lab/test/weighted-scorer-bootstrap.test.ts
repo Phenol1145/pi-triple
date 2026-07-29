@@ -138,9 +138,9 @@ test("1. ensureWeightedScorerInstance registers definition, creates draft, valid
   // Verify agents
   const agents = core.repository.listAgents("default-weighted-scorer");
   assert.equal(agents.length, 2);
-  const agentIds = new Set(agents.map((a) => a.id));
-  assert.ok(agentIds.has("agent-openai-gpt-4o"));
-  assert.ok(agentIds.has("agent-anthropic-claude-3"));
+  const agentModels = new Set(agents.map((a) => a.model));
+  assert.ok(agentModels.has("openai/gpt-4o"));
+  assert.ok(agentModels.has("anthropic/claude-3"));
 
   // Verify routing bindings
   const bindings = core.repository.listRoutingBindings();
@@ -200,10 +200,10 @@ test("3. syncWeightedScorerAgents creates agents for models not already in popul
   const agents = core.repository.listAgents(instanceId);
   assert.equal(agents.length, 3);
 
-  const agentIds = new Set(agents.map((a) => a.id));
-  assert.ok(agentIds.has("agent-openai-gpt-4o"));
-  assert.ok(agentIds.has("agent-anthropic-claude-3"));
-  assert.ok(agentIds.has("agent-google-gemini-pro"));
+  const agentModels = new Set(agents.map((a) => a.model));
+  assert.ok(agentModels.has("openai/gpt-4o"));
+  assert.ok(agentModels.has("anthropic/claude-3"));
+  assert.ok(agentModels.has("google/gemini-pro"));
 
   // All agents still "ready" (never deactivated)
   for (const agent of agents) {

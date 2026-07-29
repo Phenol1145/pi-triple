@@ -27,7 +27,7 @@ test("re-boot: ensureArenaInstance 二次调用（同 DB 新 registry）后实�
   core.definitions.register(structuredClone(PI_DEFAULT_LOOP_DEFINITION));
   const candidates = [model("openai/gpt-4o"), model("anthropic/claude-3")];
   const ledger = new SqliteLedger(db, fixedEndow);
-  const arenaPorts: ArenaSchedulerPorts = { ledger, candidates: () => candidates, modelCaller: caller };
+  const arenaPorts: ArenaSchedulerPorts = { ledger, candidates: () => candidates, modelCaller: caller, resolveAgent: (m: ModelInfo) => `agent-${m.id}` };
 
   // 第一次启动：创建实例
   const reg1 = new SchedulerRegistry(core.definitions);

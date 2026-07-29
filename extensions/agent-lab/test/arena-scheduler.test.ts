@@ -75,6 +75,7 @@ function setup(opts?: {
     ledger,
     candidates: () => candidates,
     modelCaller,
+    resolveAgent: (m: ModelInfo) => `agent-${m.id}`,
   };
 
   const scheduler = createArenaSchedulerImplementation(ports);
@@ -259,14 +260,14 @@ test("eligibility filtering excludes non-matching models", async () => {
   const sdk = buildSDK(events);
 
   // Pre-endow all so balance checks work
-  for (const c of candidates) ledger.ensureEndowed(c.id, c);
+  for (const c of candidates) ledger.ensureEndowed("agent-" + c.id, c);
 
   const result = await scheduler.schedule(input, params, sdk);
 
   assert.equal(result.status, "completed");
   if (result.status !== "completed") throw new Error("expected completed");
-  // Winner must be anthropic
-  assert.ok(result.model!.startsWith("anthropic/"), `expected anthropic model, got ${result.model}`);
+  // Winner must be anthropic (now result.model = agent UUID like "agent-anthropic-claude-3")
+  assert.ok(result.model!.includes("anthropic"), `expected anthropic model, got ${result.model}`);
 });
 
 test("no eligible candidates → failed with no-eligible-bids", async () => {
@@ -415,6 +416,7 @@ test("freeze competition failure → failed with freeze-rejected", async () => {
         return "500";
       },
     },
+    resolveAgent: (m: ModelInfo) => `agent-${m.id}`,
   };
   const raceScheduler = createArenaSchedulerImplementation(ports);
 
@@ -739,6 +741,8 @@ test("maxCallsPerDispatch limits concurrent bid calls", async () => {
 test("opt-out tax deducted for zero-stake bidders", async () => {
   const model1 = "openai/gpt-4";
   const model2 = "anthropic/claude-3";
+  const agent1 = `agent-${model1}`;
+  const agent2 = `agent-${model2}`;
   const candidates = [model(model1), model(model2)];
 
   let callSeq = 0;
@@ -773,7 +777,7 @@ test("opt-out tax deducted for zero-stake bidders", async () => {
   assert.equal(result.status, "completed");
 
   // Second model should have lost the opt-out tax
-  const balanceAfter2 = ledger.balance(model2);
+  const balanceAfter2 = ledger.balance(agent2);
   assert.ok(
     balanceAfter2 < balanceBefore2,
     `model2 should pay opt-out tax: ${balanceAfter2} < ${balanceBefore2}`,
@@ -796,9 +800,11 @@ test("opt-out tax not deducted when tax is 0", async () => {
     },
   });
 
-  ledger.ensureEndowed(model1, model(model1));
-  ledger.ensureEndowed(model2, model(model2));
-  const balanceBefore2 = ledger.balance(model2);
+  const agent1b = `agent-${model1}`;
+  const agent2b = `agent-${model2}`;
+  ledger.ensureEndowed(agent1b, model(model1));
+  ledger.ensureEndowed(agent2b, model(model2));
+  const balanceBefore2 = ledger.balance(agent2b);
 
   const input = makeInput({ settlementRef: "settle-notax" });
   const params: ArenaSchedulerParameters = {
@@ -815,7 +821,7 @@ test("opt-out tax not deducted when tax is 0", async () => {
   const result = await scheduler.schedule(input, params, sdk);
   assert.equal(result.status, "completed");
 
-  const balanceAfter2 = ledger.balance(model2);
+  const balanceAfter2 = ledger.balance(agent2b);
   assert.equal(balanceAfter2, balanceBefore2, "no tax deducted when tax=0");
 });
 
@@ -893,11 +899,12 @@ test("winner selection: highest stake wins, tie-break by balance then agent", as
     },
   });
 
-  ledger.ensureEndowed(m1, model(m1));
-  ledger.ensureEndowed(m2, model(m2));
-  ledger.ensureEndowed(m3, model(m3));
+  const a1 = `agent-${m1}`; const a2 = `agent-${m2}`; const a3 = `agent-${m3}`;
+  ledger.ensureEndowed(a1, model(m1));
+    ledger.ensureEndowed(a2, model(m2));
+    ledger.ensureEndowed(a3, model(m3));
   // Give m3 more balance than m2 for tie-break
-  ledger.credit(m3, 500, "bonus");
+    ledger.credit(a3, 500, "bonus");
 
   const input = makeInput({ settlementRef: "settle-tiebreak" });
   const params: ArenaSchedulerParameters = {
@@ -917,12 +924,12 @@ test("winner selection: highest stake wins, tie-break by balance then agent", as
   if (result.status !== "completed") throw new Error("expected completed");
 
   // Winner should be the one with higher stake (m2 or m3), not m1
-  assert.notEqual(result.model, m1, "m1 should not win with lowest stake");
+  assert.notEqual(result.model, a1, "m1 should not win with lowest stake");
 
   // With same stake (50), the one with higher balance (m3) wins
   // sort: stake desc, balance desc, agent asc
   // m3 has 1500 balance, m2 has 1000, both bid 50 → m3 wins
-  assert.equal(result.model, m3, `expected m3 to win with higher balance, got ${result.model}`);
+  assert.equal(result.model, a3, `expected m3 to win with higher balance, got ${result.model}`);
 });
 
 // ── Tests: edge cases ─────────────────────────────────────────────────

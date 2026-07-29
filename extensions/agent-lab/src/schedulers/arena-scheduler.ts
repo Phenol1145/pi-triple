@@ -29,6 +29,7 @@ export interface ArenaSchedulerPorts {
   ledger: Ledger;
   candidates(): ModelInfo[];
   modelCaller: ModelCaller;
+  resolveAgent: (model: ModelInfo) => string;
 }
 
 // ── Factory ───────────────────────────────────────────────────────────

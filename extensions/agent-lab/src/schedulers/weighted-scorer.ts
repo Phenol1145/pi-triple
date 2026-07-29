@@ -366,8 +366,6 @@ export function createWeightedScorer(ports: WeightedScorerPorts): {
         const pinnedModel = candidates.find((m) => m.id === pin);
         if (pinnedModel) {
           // Pin hit: model present in candidates
-          const agentId = modelToAgentCreateSpec(pinnedModel).id;
-
           sdk.telemetry.emit("scheduler.weighted_scorer.score", {
             role: input.role,
             candidateCount: candidates.length,
@@ -377,22 +375,25 @@ export function createWeightedScorer(ports: WeightedScorerPorts): {
             "scheduler.weighted_scorer.candidate_count": candidates.length,
           });
 
-          // syncOnDispatch
+          // 按 model 匹配已有 agent（agent id 是随机 UUID，不能按 id 匹配）
+          const existing = await sdk.agents.list();
+          const findByModel = () => existing.find((a) => a.definition?.standard?.name === pinnedModel.id);
+
+          // syncOnDispatch：按 model 判重，缺则创建
           if (params.syncOnDispatch) {
-            const existing = await sdk.agents.list();
-            const existingIds = new Set(existing.map((a) => a.id));
-            if (!existingIds.has(agentId)) {
-              await sdk.agents.create(modelToAgentCreateSpec(pinnedModel));
+            if (!findByModel()) {
+              const spec = modelToAgentCreateSpec(pinnedModel);
+              const created = await sdk.agents.create(spec);
+              existing.push({ id: created.id, definition: spec.definition, status: "ready" });
             }
           }
 
           // In select mode, check if agent exists
           if (input.mode === "select") {
-            const existing = await sdk.agents.list();
-            const existingAgent = existing.find((a) => a.id === agentId);
+            const existingAgent = findByModel();
             return {
               status: "completed",
-              selectedAgentId: existingAgent ? agentId : undefined,
+              selectedAgentId: existingAgent ? existingAgent.id : undefined,
               model: pin,
               reason: `pinned model: ${pin}`,
             };
@@ -400,9 +401,8 @@ export function createWeightedScorer(ports: WeightedScorerPorts): {
 
           // Execute mode
           if (input.mode === "execute") {
-            const existing = await sdk.agents.list();
-            const existingAgent = existing.find((a) => a.id === agentId);
-            const runAgentId = agentId;
+            const existingAgent = findByModel();
+            const runAgentId = existingAgent?.id ?? modelToAgentCreateSpec(pinnedModel).id;
 
             try {
               const result = await sdk.agents.run(runAgentId, {
@@ -464,7 +464,6 @@ export function createWeightedScorer(ports: WeightedScorerPorts): {
       }
 
       const agentSpec = modelToAgentCreateSpec(top.model);
-      const agentId = agentSpec.id;
 
       // Emit telemetry
       sdk.telemetry.emit("scheduler.weighted_scorer.score", {
@@ -477,22 +476,24 @@ export function createWeightedScorer(ports: WeightedScorerPorts): {
         "scheduler.weighted_scorer.candidate_count": candidates.length,
       });
 
-      // 6. syncOnDispatch
+      // 按 model 匹配已有 agent（agent id 是随机 UUID，不能按 id 匹配）
+      const existing = await sdk.agents.list();
+      const findByModel = () => existing.find((a) => a.definition?.standard?.name === top.model.id);
+
+      // 6. syncOnDispatch：按 model 判重，缺则创建
       if (params.syncOnDispatch) {
-        const existing = await sdk.agents.list();
-        const existingIds = new Set(existing.map((a) => a.id));
-        if (!existingIds.has(agentId)) {
-          await sdk.agents.create(agentSpec);
+        if (!findByModel()) {
+          const created = await sdk.agents.create(agentSpec);
+          existing.push({ id: created.id, definition: agentSpec.definition, status: "ready" });
         }
       }
 
       // 7. Select mode: never call agents.run
       if (input.mode === "select") {
-        const existing = await sdk.agents.list();
-        const existingAgent = existing.find((a) => a.id === agentId);
+        const existingAgent = findByModel();
         return {
           status: "completed",
-          selectedAgentId: existingAgent ? agentId : undefined,
+          selectedAgentId: existingAgent ? existingAgent.id : undefined,
           model: top.model.id,
           reason: top.reason,
         };
@@ -500,8 +501,8 @@ export function createWeightedScorer(ports: WeightedScorerPorts): {
 
       // 8. Execute mode: merge config and run
       if (input.mode === "execute") {
-        const existing = await sdk.agents.list();
-        const runAgentId = agentId;
+        const existingAgent = findByModel();
+        const runAgentId = existingAgent?.id ?? agentSpec.id;
 
         try {
           const result = await sdk.agents.run(runAgentId, {

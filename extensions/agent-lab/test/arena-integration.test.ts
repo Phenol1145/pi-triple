@@ -81,6 +81,7 @@ function buildArenaOnlyRuntime(opts?: {
     ledger,
     candidates: () => arenaCandidates,
     modelCaller,
+    resolveAgent: (m: ModelInfo) => `agent-${m.id}`,
   };
 
   return {
@@ -147,6 +148,7 @@ function buildArenaWithWsRuntime(opts?: {
     ledger,
     candidates: () => arenaCandidates,
     modelCaller,
+    resolveAgent: (m: ModelInfo) => `agent-${m.id}`,
   };
 
   const wsPorts: WeightedScorerPorts = {
@@ -353,8 +355,8 @@ test("Scenario 3: concurrency isolation — two dispatches racing same winner, b
   const runner = rt.runner();
 
   // Endow agent
-  rt.ledger.ensureEndowed(winnerModel, model(winnerModel));
-  assert.equal(rt.ledger.balance(winnerModel), 1000);
+  const agentId = "agent-" + winnerModel; rt.ledger.ensureEndowed(agentId, model(winnerModel));
+  assert.equal(rt.ledger.balance(agentId), 1000);
 
   // Dispatch 3 concurrent requests
   const d1 = runner.dispatch({
@@ -412,7 +414,7 @@ test("Scenario 3: concurrency isolation — two dispatches racing same winner, b
   }
 
   // Verify no over-freeze: balance should be 0 (two 500-stake freezes)
-  const finalBalance = rt.ledger.balance(winnerModel);
+  const finalBalance = rt.ledger.balance(agentId);
   assert.equal(finalBalance, 0, `expected balance 0, got ${finalBalance}`);
 
   // Verify exactly two freeze rows in arena_freezes
@@ -443,8 +445,8 @@ test("Scenario 4: abandoned auction — schedule froze but no settle → staleTa
   const runner = rt.runner();
 
   // Endow the agent manually so balance is 1000 before dispatch
-  rt.ledger.ensureEndowed(winnerModel, model(winnerModel));
-  const balanceBefore = rt.ledger.balance(winnerModel);
+  const agentId = "agent-" + winnerModel; rt.ledger.ensureEndowed(agentId, model(winnerModel));
+  const balanceBefore = rt.ledger.balance(agentId);
   assert.equal(balanceBefore, 1000);
 
   // Dispatch (freezes 300)
@@ -459,7 +461,7 @@ test("Scenario 4: abandoned auction — schedule froze but no settle → staleTa
   assert.equal(result.status, "completed");
 
   // Verify balance decreased after freeze
-  const balanceAfterFreeze = rt.ledger.balance(winnerModel);
+  const balanceAfterFreeze = rt.ledger.balance(agentId);
   assert.ok(balanceAfterFreeze < balanceBefore, "balance should decrease after freeze");
   assert.equal(balanceAfterFreeze, 700, "balance should be 1000 - 300");
 
@@ -487,7 +489,7 @@ test("Scenario 4: abandoned auction — schedule froze but no settle → staleTa
   assert.equal(task!.status, "failed");
 
   // Balance should be fully restored (unfreeze returned the 300)
-  const balanceAfterRecover = rt.ledger.balance(winnerModel);
+  const balanceAfterRecover = rt.ledger.balance(agentId);
   assert.equal(balanceAfterRecover, balanceBefore, "balance should be fully restored after stale recovery");
 
   // arena_freezes row should be gone
@@ -504,6 +506,8 @@ test("Scenario 4: abandoned auction — schedule froze but no settle → staleTa
 test("Scenario 5: bankruptcy — settle leaves balance 0 → bankrupt metric emitted → subsequent bid stake 0", async () => {
   const winnerModel = "openai/gpt-4o";
   const candidates = [model(winnerModel)];
+
+  const agentId = `agent-${winnerModel}`;
 
   const rt = buildArenaOnlyRuntime({
     arenaCandidates: candidates,
@@ -541,7 +545,7 @@ test("Scenario 5: bankruptcy — settle leaves balance 0 → bankrupt metric emi
   );
   // Bankrupt may or may not fire depending on exact D/U calculation
   // At minimum, check that balance is now 0
-  const balanceAfterSettle = rt.ledger.balance(winnerModel);
+  const balanceAfterSettle = rt.ledger.balance(agentId);
   // The settle uses stakeTimesOdds mode → D = -stake * odds with majorError
   // This should drain balance close to 0
   if (balanceAfterSettle <= 0 && bankruptEvents.length > 0) {
@@ -565,7 +569,7 @@ test("Scenario 5: bankruptcy — settle leaves balance 0 → bankrupt metric emi
   );
 
   // Verify balance is near 0
-  const finalBalance = rt.ledger.balance(winnerModel);
+  const finalBalance = rt.ledger.balance(agentId);
   assert.ok(
     finalBalance <= 0,
     `final balance should be <= 0, got ${finalBalance}`,
@@ -592,11 +596,11 @@ test("Scenario 6: legacy coexistence — arena task and legacy task settle alter
   const runner = rt.runner();
 
   // Endow agents manually so initial balances are predictable
-  rt.ledger.ensureEndowed("openai/gpt-4o", model("openai/gpt-4o"));
-  rt.ledger.ensureEndowed("anthropic/claude-3", model("anthropic/claude-3"));
+  const a1 = "agent-openai/gpt-4o"; const a2 = "agent-anthropic/claude-3"; rt.ledger.ensureEndowed(a1, model("openai/gpt-4o"));
+  rt.ledger.ensureEndowed(a2, model("anthropic/claude-3"));
 
   // Track initial balance for gpt-4o
-  const agent = "openai/gpt-4o";
+  const agent = a1;
   const initialBalance = rt.ledger.balance(agent);
   assert.equal(initialBalance, 1000);
 
@@ -617,8 +621,8 @@ test("Scenario 6: legacy coexistence — arena task and legacy task settle alter
   // --- Manually create a legacy-style task in the same ledger ---
   // Legacy tasks use the same market_tasks table and ledger API.
   // Ensure claude-3 is endowed (it was already endowed by bootstrap, so this is idempotent).
-  rt.ledger.ensureEndowed("anthropic/claude-3", model("anthropic/claude-3"));
-  const frozen = rt.ledger.freeze("anthropic/claude-3", 100, "coexist-legacy-ref");
+  rt.ledger.ensureEndowed(a2, model("anthropic/claude-3"));
+  const frozen = rt.ledger.freeze(a2, 100, "coexist-legacy-ref");
   assert.equal(frozen, true, "legacy freeze should succeed");
 
   rt.ledger.createTask(
@@ -630,9 +634,10 @@ test("Scenario 6: legacy coexistence — arena task and legacy task settle alter
       odds: 2.0,
       reward: 10,
     },
-    "anthropic/claude-3",
+    a2,
     100,
     rt.ledger.nextRound(),
+    "anthropic/claude-3",
   );
 
   const legacyTask = rt.ledger.getTask("coexist-legacy-ref");
@@ -648,10 +653,10 @@ test("Scenario 6: legacy coexistence — arena task and legacy task settle alter
   assert.equal(rt.ledger.getTask("coexist-arena-ref")!.status, "settled");
 
   // --- Settle legacy task manually (unfreeze + credit) ---
-  const unfrozenAmt = rt.ledger.unfreeze("anthropic/claude-3", "coexist-legacy-ref");
+  const unfrozenAmt = rt.ledger.unfreeze(a2, "coexist-legacy-ref");
   assert.equal(unfrozenAmt, 100, "should unfreeze 100");
   rt.ledger.credit(
-    "anthropic/claude-3",
+    a2,
     20,
     "settle",
     "coexist-legacy-ref",
@@ -671,7 +676,7 @@ test("Scenario 6: legacy coexistence — arena task and legacy task settle alter
   );
 
   // Legacy task winner (claude-3) balance: 1000 (endowment) - 100 (freeze) + 100 (unfreeze) + 20 (credit) = 1020
-  const legacyBalance = rt.ledger.balance("anthropic/claude-3");
+  const legacyBalance = rt.ledger.balance(a2);
   assert.equal(legacyBalance, 1020, `legacy balance should be 1020, got ${legacyBalance}`);
 
   // Verify no cross-contamination: each task's winner is distinct

@@ -50,7 +50,7 @@ test("nextRound increments and persists", () => {
 test("createTask/getTask/setTaskStatus + agentTurn", () => {
   const { ledger } = mk();
   ledger.ensureEndowed("m/a", model("m/a"));
-  ledger.createTask({ id: "t1", role: "r", prompt: "p", difficulty: "easy", odds: 1.5, reward: 10 }, "m/a", 100, 1);
+  ledger.createTask({ id: "t1", role: "r", prompt: "p", difficulty: "easy", odds: 1.5, reward: 10 }, "m/a", 100, 1, "m/a");
   const t = ledger.getTask("t1")!;
   assert.equal(t.winner, "m/a");
   assert.equal(t.status, "pending");
@@ -71,7 +71,7 @@ test("leaderboard ordered desc", () => {
 test("stale recovery unfreezes stake and marks task failed", () => {
   const { store, ledger } = mk();
   ledger.ensureEndowed("m/a", model("m/a"));   // balance 1000
-  ledger.createTask({ id: "t1", role: "r", prompt: "p", difficulty: "easy", odds: 1.5, reward: 10 }, "m/a", 300, 1);
+  ledger.createTask({ id: "t1", role: "r", prompt: "p", difficulty: "easy", odds: 1.5, reward: 10 }, "m/a", 300, 1, "m/a");
   ledger.freeze("m/a", 300, "t1");             // balance 700, frozen 300
   store.raw.prepare(`UPDATE market_tasks SET created_ts = 0 WHERE task_id = 't1'`).run(); // backdate -> stale
   const stale = ledger.staleTasks(1000);

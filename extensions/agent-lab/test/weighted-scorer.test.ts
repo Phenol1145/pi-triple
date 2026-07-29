@@ -468,7 +468,7 @@ test("syncOnDispatch=true: creates agent for missing model", async () => {
   );
 
   assert.ok(createdSpec, "agent should have been created");
-  assert.ok(createdSpec!.id.includes("x-new-model"), "agent id should contain model name");
+  assert.equal(createdSpec!.definition.standard.name, "x/new-model", "agent definition should reference model");
   assert.equal(createdSpec!.definition.workLoop.id, "pi-default-loop");
   assert.equal(createdSpec!.definition.workLoop.version, "1.0.0");
 });

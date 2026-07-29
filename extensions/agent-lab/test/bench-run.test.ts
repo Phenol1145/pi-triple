@@ -45,7 +45,7 @@ async function buildPorts(caller: ModelCaller) {
   const schedulers = new SchedulerRegistry(core.definitions);
   const ledger = new SqliteLedger(db, fixedEndow);
   const candidates = [model("openai/gpt-4o"), model("anthropic/claude-3")];
-  const arenaPorts: ArenaSchedulerPorts = { ledger, candidates: () => candidates, modelCaller: caller };
+  const arenaPorts: ArenaSchedulerPorts = { ledger, candidates: () => candidates, modelCaller: caller, resolveAgent: (m: ModelInfo) => `agent-${m.id}` };
   await ensureArenaInstance(core, schedulers, arenaPorts, {
     instanceId: "default-arena",
     routingBindings: [{ id: "arena-default", priority: 10, match: {} }],
