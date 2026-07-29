@@ -13,7 +13,7 @@ import { SqliteLedger } from "./src/arena/ledger.ts";
 import { EndowmentPolicyV1 } from "./src/arena/policies.ts";
 import type { SchedulerRuntimeLike } from "./src/interceptor/scheduler-bridge.ts";
 import { createSchedulerRuntime } from "./src/runtime/create-scheduler-runtime.ts";
-import { ensureWeightedScorerInstance, syncWeightedScorerAgents, ensureArenaInstance, syncArenaAgents } from "./src/schedulers/bootstrap.ts";
+import { ensureWeightedScorerInstance, syncWeightedScorerAgents, ensureArenaInstance, syncArenaAgents, migrateDerivedAgentIds } from "./src/schedulers/bootstrap.ts";
 import type { LabCore } from "./src/core/create-core.ts";
 import type { ModelCaller } from "./src/arena/types.ts";
 import { createModelCaller } from "./src/arena/model-caller.ts";
@@ -163,6 +163,15 @@ export default async function (pi: ExtensionAPI) {
         // (arena fallbackChain points to weighted-scorer, validated by ControlPlane).
         // Wrapped in a single void promise with per-step fail-open catches.
         bootstrapPromise = (async () => {
+          // derived→UUID agent id 迁移（旧 agent-arena-* / agent-* → UUID + model 列）。
+          // 必须在 ensure*Instance 的 findOrCreateAgentByModel 之前跑，避免重复。
+          try {
+            migrateDerivedAgentIds(rt.core, "default-weighted-scorer", localStore.raw);
+            migrateDerivedAgentIds(rt.core, "default-arena", localStore.raw);
+          } catch (err) {
+            console.error("[agent-lab] derived→UUID agent migration failed (fail-open):", err);
+          }
+
           const wsResult = await ensureWeightedScorerInstance(
             rt.core,
             rt.schedulers,

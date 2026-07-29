@@ -61,6 +61,21 @@ export class CoreRepository {
         this.db.exec(`ALTER TABLE lab_scheduler_instances ADD COLUMN ${col} ${colType}`);
       }
     }
+    // Add model / source_template_id columns to lab_agent_instances if missing
+    // (phase 1.5 UUID AgentInstance；旧表无此列，findAgentByModel 按 model 查需要）
+    for (const col of ["model", "source_template_id"]) {
+      const cols = this.db.prepare(
+        `PRAGMA table_info(lab_agent_instances)`
+      ).all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === col)) {
+        this.db.exec(`ALTER TABLE lab_agent_instances ADD COLUMN ${col} TEXT`);
+      }
+    }
+    // model 列就绪后建 UNIQUE 索引（防同 instance 同 model 重复 agent）。
+    // 不放 CORE_SCHEMA：旧库表已存在但无 model 列，CREATE INDEX 会先于 ALTER 失败。
+    this.db.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_agents_model ON lab_agent_instances(scheduler_instance_id, model)`
+    );
   }
 
   transaction<T>(fn: () => T): T {

@@ -50,7 +50,6 @@ CREATE TABLE IF NOT EXISTS lab_agent_instances (
   status TEXT NOT NULL,
   created_ts INTEGER NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_agents_model ON lab_agent_instances(scheduler_instance_id, model);
 CREATE INDEX IF NOT EXISTS idx_lab_agents_scheduler ON lab_agent_instances(scheduler_instance_id, id);
 
 CREATE TABLE IF NOT EXISTS lab_routing_bindings (
