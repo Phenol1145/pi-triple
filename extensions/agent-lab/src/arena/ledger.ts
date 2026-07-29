@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS credit_tx (
 );
 CREATE TABLE IF NOT EXISTS market_tasks (
   task_id TEXT PRIMARY KEY, round INTEGER, role TEXT, prompt TEXT, difficulty TEXT,
-  odds REAL, reward REAL, winner TEXT, stake REAL, status TEXT, created_ts INTEGER
+  odds REAL, reward REAL, winner TEXT, winner_model TEXT, stake REAL, status TEXT, created_ts INTEGER
 );
 CREATE TABLE IF NOT EXISTS market_meta ( key TEXT PRIMARY KEY, value TEXT );
 CREATE TABLE IF NOT EXISTS arena_freezes (
@@ -117,12 +117,12 @@ export class SqliteLedger implements Ledger {
     const row = this.db.prepare(`SELECT COUNT(*) AS n FROM market_tasks WHERE winner = ? AND status = 'settled'`).get(a) as { n: number };
     return Number(row.n);
   }
-  createTask(t: ArenaTask, winner: AgentId, stake: number, round: number): void {
-    this.db.prepare(`INSERT INTO market_tasks (task_id, round, role, prompt, difficulty, odds, reward, winner, stake, status, created_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`)
-      .run(t.id, round, t.role, t.prompt, String(t.difficulty), t.odds, t.reward, winner, stake, this.now());
+  createTask(t: ArenaTask, winner: AgentId, stake: number, round: number, modelId: string): void {
+    this.db.prepare(`INSERT INTO market_tasks (task_id, round, role, prompt, difficulty, odds, reward, winner, winner_model, stake, status, created_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`)
+      .run(t.id, round, t.role, t.prompt, String(t.difficulty), t.odds, t.reward, winner, modelId, stake, this.now());
   }
   getTask(taskId: string): MarketTaskRow | undefined {
-    const row = this.db.prepare(`SELECT task_id AS taskId, role, prompt, difficulty, odds, reward, winner, stake, status, round FROM market_tasks WHERE task_id = ?`).get(taskId);
+    const row = this.db.prepare(`SELECT task_id AS taskId, role, prompt, difficulty, odds, reward, winner, winner_model AS winnerModel, stake, status, round FROM market_tasks WHERE task_id = ?`).get(taskId);
     return row as MarketTaskRow | undefined;
   }
   setTaskStatus(taskId: string, status: string): void {
@@ -130,7 +130,7 @@ export class SqliteLedger implements Ledger {
   }
   staleTasks(timeoutMs: number): MarketTaskRow[] {
     const cutoff = this.now() - timeoutMs;
-    const rows = this.db.prepare(`SELECT task_id AS taskId, role, prompt, difficulty, odds, reward, winner, stake, status, round FROM market_tasks WHERE status = 'pending' AND created_ts < ?`).all(cutoff);
+    const rows = this.db.prepare(`SELECT task_id AS taskId, role, prompt, difficulty, odds, reward, winner, winner_model AS winnerModel, stake, status, round FROM market_tasks WHERE status = 'pending' AND created_ts < ?`).all(cutoff);
     return rows as MarketTaskRow[];
   }
   recoverStaleTask(taskId: string): void {

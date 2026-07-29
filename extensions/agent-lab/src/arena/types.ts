@@ -48,7 +48,7 @@ export interface Judge { score(t: ArenaTask, outputs: unknown[]): number[]; }   
 
 export interface MarketTaskRow {
   taskId: string; role: string; prompt: string; difficulty: string;
-  odds: number; reward: number; winner: string; stake: number; status: string; round: number;
+  odds: number; reward: number; winner: string; winnerModel?: string; stake: number; status: string; round: number;
 }
 
 export interface Ledger {
@@ -63,7 +63,7 @@ export interface Ledger {
   currentRound(): number;
   nextRound(): number;
   agentTurn(a: AgentId): number;
-  createTask(t: ArenaTask, winner: AgentId, stake: number, round: number): void;
+  createTask(t: ArenaTask, winner: AgentId, stake: number, round: number, modelId: string): void;
   getTask(taskId: string): MarketTaskRow | undefined;
   setTaskStatus(taskId: string, status: string): void;
   staleTasks(timeoutMs: number): MarketTaskRow[];

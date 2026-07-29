@@ -42,12 +42,15 @@ CREATE TABLE IF NOT EXISTS lab_agent_instances (
   id TEXT PRIMARY KEY,
   scheduler_instance_id TEXT NOT NULL,
   definition_json TEXT NOT NULL,
+  model TEXT,
+  source_template_id TEXT,
   source_agent_id TEXT,
   clone_operation_id TEXT,
   created_round_id TEXT NOT NULL,
   status TEXT NOT NULL,
   created_ts INTEGER NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_agents_model ON lab_agent_instances(scheduler_instance_id, model);
 CREATE INDEX IF NOT EXISTS idx_lab_agents_scheduler ON lab_agent_instances(scheduler_instance_id, id);
 
 CREATE TABLE IF NOT EXISTS lab_routing_bindings (

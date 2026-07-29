@@ -142,6 +142,8 @@ export interface AgentInstanceRecord {
   id: string;
   schedulerInstanceId: string;
   definition: AgentDefinition;
+  model?: string;
+  sourceTemplateId?: string;
   sourceAgentId?: string;
   cloneOperationId?: string;
   createdAtRoundId: string;

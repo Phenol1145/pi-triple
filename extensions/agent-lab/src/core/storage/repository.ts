@@ -216,18 +216,21 @@ export class CoreRepository {
 
   listAgents(schedulerInstanceId: string): AgentInstanceRecord[] {
     const rows = this.db.prepare(
-      `SELECT id, definition_json, source_agent_id, clone_operation_id,
+      `SELECT id, definition_json, model, source_template_id, source_agent_id, clone_operation_id,
               created_round_id, status, created_ts
        FROM lab_agent_instances WHERE scheduler_instance_id = ? ORDER BY created_ts`
     ).all(schedulerInstanceId) as Array<{
-      id: string; definition_json: string; source_agent_id: string | null;
-      clone_operation_id: string | null; created_round_id: string; status: string; created_ts: number;
+      id: string; definition_json: string; model: string | null; source_template_id: string | null;
+      source_agent_id: string | null; clone_operation_id: string | null;
+      created_round_id: string; status: string; created_ts: number;
     }>;
 
     return rows.map((row) => ({
       id: row.id,
       schedulerInstanceId,
       definition: JSON.parse(row.definition_json) as AgentInstanceRecord["definition"],
+      model: row.model ?? undefined,
+      sourceTemplateId: row.source_template_id ?? undefined,
       sourceAgentId: row.source_agent_id ?? undefined,
       cloneOperationId: row.clone_operation_id ?? undefined,
       createdAtRoundId: row.created_round_id,
@@ -285,16 +288,42 @@ export class CoreRepository {
     );
   }
 
+  findAgentByModel(schedulerInstanceId: string, model: string): AgentInstanceRecord | undefined {
+    const row = this.db.prepare(
+      `SELECT id, definition_json, model, source_template_id, source_agent_id, clone_operation_id,
+              created_round_id, status, created_ts
+       FROM lab_agent_instances WHERE scheduler_instance_id = ? AND model = ? LIMIT 1`
+    ).get(schedulerInstanceId, model) as {
+      id: string; definition_json: string; model: string | null; source_template_id: string | null;
+      source_agent_id: string | null; clone_operation_id: string | null;
+      created_round_id: string; status: string; created_ts: number;
+    } | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id, schedulerInstanceId,
+      definition: JSON.parse(row.definition_json) as AgentInstanceRecord["definition"],
+      model: row.model ?? undefined,
+      sourceTemplateId: row.source_template_id ?? undefined,
+      sourceAgentId: row.source_agent_id ?? undefined,
+      cloneOperationId: row.clone_operation_id ?? undefined,
+      createdAtRoundId: row.created_round_id,
+      status: row.status as AgentInstanceRecord["status"],
+      createdAt: row.created_ts,
+    };
+  }
+
   insertAgent(record: AgentInstanceRecord): void {
     this.db.prepare(
       `INSERT INTO lab_agent_instances
-       (id, scheduler_instance_id, definition_json, source_agent_id,
+       (id, scheduler_instance_id, definition_json, model, source_template_id, source_agent_id,
         clone_operation_id, created_round_id, status, created_ts)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       record.id,
       record.schedulerInstanceId,
       JSON.stringify(record.definition),
+      record.model ?? null,
+      record.sourceTemplateId ?? null,
       record.sourceAgentId ?? null,
       record.cloneOperationId ?? null,
       record.createdAtRoundId,
