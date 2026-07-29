@@ -24,8 +24,9 @@ import {
   cmdFlowEdit, cmdFlowSet, cmdFlowGraph, cmdFlowRm, cmdFlowValidate,
 } from "./flow/commands.js";
 import { emitJsonError } from "./output.js";
+import path from "node:path";
 import {
-  loadConfig, resolveTenantId, getTenantAlias, getDefaultTenantId,
+  loadConfig, resolveTenantId, getTenantAlias, getDefaultTenantId, pitHome,
 } from "./config.js";
 import {
   execTenantLs, execTenantNew, execTenantRm,
@@ -260,6 +261,15 @@ async function main() {
         const labTenantId = labResolved?.ok ? labResolved.id : getDefaultTenantId(cfg);
         const labAlias = getTenantAlias(labTenantId, cfg);
         const labGlobal = flags.global === "true";
+        // 注入 per-tenant AGENT_LAB_* env，确保 lab-data 解析到该租户数据（与 buildPiLaunch 一致）
+        const labHome = pitHome();
+        if (labGlobal) {
+          // --global：只用共享遥测 DB
+          process.env.AGENT_LAB_DB_PATH = path.join(labHome, "data", "shared", "agent-lab", "agent-lab.db");
+        } else {
+          process.env.AGENT_LAB_CONFIG_DIR = path.join(labHome, "data", "pi-config", labTenantId, "agent-lab");
+          process.env.AGENT_LAB_DB_PATH = path.join(labHome, "data", "shared", "agent-lab", "agent-lab.db");
+        }
         render(React.createElement(LabApp, { tenantId: labTenantId, tenantAlias: labAlias, globalTelemetry: labGlobal }), { exitOnCtrlC: false });
       } else {
         console.log("  lab TUI 需要交互式终端");
