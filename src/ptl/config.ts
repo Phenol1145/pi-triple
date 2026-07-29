@@ -1,7 +1,7 @@
 /**
  * Pi-Triple 中心配置 — pi-triple.json
  *
- * 租户使用 UUID 作为唯一标识，用户提供别名（alias）。
+ * 模板使用 UUID 作为唯一标识，用户提供别名（alias）。
  * 所有目录路径使用 UUID，用户交互使用别名。
  */
 
@@ -12,28 +12,45 @@ import { homedir } from "node:os";
 
 // ─── Types ───────────────────────────────────────────────────
 
-export interface TenantConfig {
+export interface WorkLoopRef {
+  id: string;
+  version?: string;
+  config?: unknown;
+}
+
+export interface InstantiationPolicy {
+  count?: number;
+  lifecycle?: "resident" | "on-demand" | "hybrid";
+}
+
+export interface TemplateConfig {
   alias: string;
   model?: string;
   provider?: string;
   thinking?: string;
   tools?: string;
   excludeTools?: string;
+  systemPrompt?: string;
+  skills?: string[];
+  extensions?: string[];
+  workLoop?: WorkLoopRef;
+  instantiation?: InstantiationPolicy;
 }
 
 export interface PiTripleConfig {
-  version: 2;
-  defaultTenant: string;  // UUID
+  version: number;
+  defaultTemplate: string;  // UUID
   dataDir: string;
   sharedDir: string;
   redis: string;
   gateway: { port: number };
-  tenants: Record<string, TenantConfig>;  // key = UUID
+  templates: Record<string, TemplateConfig>;  // key = UUID
   pth?: { url?: string; token?: string };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ALIAS_RE = /[^a-zA-Z0-9_\-\u4e00-\u9fff]/g;
+const CURRENT_VERSION = 3;
 
 // ─── Global paths ────────────────────────────────────────────
 
@@ -46,13 +63,13 @@ function defaultConfig(): PiTripleConfig {
   const home = pitHome();
   const localId = randomUUID();
   return {
-    version: 2,
-    defaultTenant: localId,
+    version: CURRENT_VERSION,
+    defaultTemplate: localId,
     dataDir: path.join(home, "data"),
     sharedDir: path.join(home, "data", "shared"),
     redis: "redis://localhost:6379",
     gateway: { port: 3000 },
-    tenants: {
+    templates: {
       [localId]: { alias: "local" },
     },
   };
@@ -88,13 +105,16 @@ export function loadConfig(): PiTripleConfig {
     raw = JSON.parse(fs.readFileSync(p, "utf-8"));
   } catch (err) {
     console.error(`\x1b[31m❌ pi-triple.json 解析失败: ${err}\x1b[0m`);
-    console.error("  请检查配置文件，或从 pi-triple.json.v1.bak 恢复");
+    console.error("  请检查配置文件，或从 pi-triple.json.v1.bak 或 pi-triple.json.v2.bak 恢复");
     process.exit(1);
   }
   // 修正已有文件权限为 0600（token 保护）
   try { fs.chmodSync(p, 0o600); } catch { /* best-effort */ }
   if (!raw.version || raw.version < 2) {
     return migrateV1toV2(raw);
+  }
+  if (raw.version === 2 || (raw.tenants && !raw.templates)) {
+    return migrateV2toV3(raw);
   }
   return { ...defaultConfig(), ...raw };
 }
@@ -114,31 +134,32 @@ function migrateV1toV2(raw: Record<string, any>): PiTripleConfig {
   if (fs.existsSync(p)) fs.copyFileSync(p, p + ".v1.bak");
 
   const config = defaultConfig();
-  config.tenants = {};
+  config.templates = {};
 
-  const oldTenants: Record<string, any> = raw.tenants ?? {};
+  type OldRaw = Record<string, any>;
+  const oldTemplates: OldRaw = raw.tenants ?? {};
   const oldDefault: string = raw.defaultTenant ?? "local";
-  let newDefaultId = config.defaultTenant;
+  let newDefaultId = config.defaultTemplate;
   const renames: Array<{ alias: string; uuid: string }> = [];
 
-  for (const [name, tenantCfg] of Object.entries(oldTenants)) {
+  for (const [name, tplCfg] of Object.entries(oldTemplates)) {
     if (UUID_RE.test(name)) {
-      const existingAlias = (tenantCfg as any)?.alias ?? name;
-      config.tenants[name] = { ...(tenantCfg as any), alias: existingAlias };
+      const existingAlias = (tplCfg as any)?.alias ?? name;
+      config.templates[name] = { ...(tplCfg as any), alias: existingAlias };
       if (name === oldDefault) newDefaultId = name;
     } else {
       const id = randomUUID();
-      config.tenants[id] = { alias: name, ...(tenantCfg as any) };
+      config.templates[id] = { alias: name, ...(tplCfg as any) };
       renames.push({ alias: name, uuid: id });
       if (name === oldDefault) newDefaultId = id;
     }
   }
 
-  if (Object.keys(config.tenants).length === 0) {
-    config.tenants[config.defaultTenant] = { alias: "local" };
+  if (Object.keys(config.templates).length === 0) {
+    config.templates[config.defaultTemplate] = { alias: "local" };
   }
 
-  config.defaultTenant = newDefaultId;
+  config.defaultTemplate = newDefaultId;
   if (raw.dataDir) config.dataDir = raw.dataDir;
   if (raw.sharedDir) config.sharedDir = raw.sharedDir;
   if (raw.redis) config.redis = raw.redis;
@@ -168,31 +189,71 @@ function migrateV1toV2(raw: Record<string, any>): PiTripleConfig {
   return config;
 }
 
+// ─── V2 → V3 迁移（tenants→templates key + 新字段）─────────────
+
+function migrateV2toV3(raw: Record<string, any>): PiTripleConfig {
+  const p = configPath();
+  if (fs.existsSync(p)) fs.copyFileSync(p, p + ".v2.bak");
+
+  const config = defaultConfig();
+
+  // 幂等：无 tenants key 时（用户手改或异常）只升 version + 补 defaultTemplate（N2）
+  if (!raw.tenants) {
+    config.defaultTemplate = raw.defaultTemplate ?? raw.defaultTenant ?? config.defaultTemplate;
+    config.templates = raw.templates ?? { [config.defaultTemplate]: { alias: "local" } };
+    config.version = CURRENT_VERSION;
+    if (raw.dataDir) config.dataDir = raw.dataDir;
+    if (raw.sharedDir) config.sharedDir = raw.sharedDir;
+    if (raw.redis) config.redis = raw.redis;
+    if (raw.gateway) config.gateway = raw.gateway;
+    if (raw.pth) config.pth = raw.pth;
+    saveConfig(config);
+    return config;
+  }
+
+  // 迁移 tenants → templates
+  config.templates = {};
+  for (const [id, tplCfg] of Object.entries(raw.tenants ?? {})) {
+    config.templates[id] = { ...(tplCfg as any) };
+  }
+
+  config.defaultTemplate = raw.defaultTenant ?? raw.defaultTemplate ?? config.defaultTemplate;
+  config.version = CURRENT_VERSION;
+  if (raw.dataDir) config.dataDir = raw.dataDir;
+  if (raw.sharedDir) config.sharedDir = raw.sharedDir;
+  if (raw.redis) config.redis = raw.redis;
+  if (raw.gateway) config.gateway = raw.gateway;
+  if (raw.pth) config.pth = raw.pth;
+
+  saveConfig(config);
+  return config;
+}
+
 // ─── 解析 ────────────────────────────────────────────────────
 
-export type TenantResolution =
+export type TemplateResolution =
   | { ok: true; id: string }
   | { ok: false; reason: "not_found"; input: string }
   | { ok: false; reason: "ambiguous"; input: string; candidates: string[] };
 
 /**
- * 将用户输入的别名或 UUID 解析为租户 UUID。
+ * 将用户输入的别名或 UUID 解析为模板 UUID。
  * 支持前缀匹配 UUID（≥4 字符）。
  */
-export function resolveTenantId(input: string, config?: PiTripleConfig): TenantResolution {
+export function resolveTemplateId(input: string, config?: PiTripleConfig): TemplateResolution {
   const cfg = config ?? loadConfig();
 
   // 精确 UUID
-  if (cfg.tenants[input]) return { ok: true, id: input };
+  if (cfg.templates[input]) return { ok: true, id: input };
 
   // 别名匹配
-  for (const [id, tenant] of Object.entries(cfg.tenants)) {
-    if (tenant.alias === input) return { ok: true, id };
+  for (const [id, tpl] of Object.entries(cfg.templates)) {
+    if (tpl.alias === input) return { ok: true, id };
   }
 
   // UUID 前缀匹配
   if (input.length >= 4) {
-    const matches = Object.keys(cfg.tenants).filter((id) => id.startsWith(input));
+    const matches = Object.keys(cfg.templates).filter((id) => id.startsWith(input));
     if (matches.length === 1) return { ok: true, id: matches[0] };
     if (matches.length > 1) return { ok: false, reason: "ambiguous", input, candidates: matches };
   }
@@ -200,34 +261,34 @@ export function resolveTenantId(input: string, config?: PiTripleConfig): TenantR
   return { ok: false, reason: "not_found", input };
 }
 
-/** 获取租户别名 */
-export function getTenantAlias(tenantId: string, config?: PiTripleConfig): string {
+/** 获取模板别名 */
+export function getTemplateAlias(templateId: string, config?: PiTripleConfig): string {
   const cfg = config ?? loadConfig();
-  return cfg.tenants[tenantId]?.alias ?? tenantId.slice(0, 8);
+  return cfg.templates[templateId]?.alias ?? templateId.slice(0, 8);
 }
 
-/** 获取默认租户 UUID */
-export function getDefaultTenantId(config?: PiTripleConfig): string {
+/** 获取默认模板 UUID */
+export function getDefaultTemplateId(config?: PiTripleConfig): string {
   const cfg = config ?? loadConfig();
-  return cfg.defaultTenant;
+  return cfg.defaultTemplate;
 }
 
-/** 列出所有租户 */
-export function listTenants(config?: PiTripleConfig): Array<{ id: string; alias: string; isDefault: boolean; config: TenantConfig }> {
+/** 列出所有模板 */
+export function listTemplates(config?: PiTripleConfig): Array<{ id: string; alias: string; isDefault: boolean; config: TemplateConfig }> {
   const cfg = config ?? loadConfig();
-  return Object.entries(cfg.tenants).map(([id, tenant]) => ({
+  return Object.entries(cfg.templates).map(([id, tpl]) => ({
     id,
-    alias: tenant.alias,
-    isDefault: id === cfg.defaultTenant,
-    config: tenant,
+    alias: tpl.alias,
+    isDefault: id === cfg.defaultTemplate,
+    config: tpl,
   }));
 }
 
 /**
- * 创建新租户，返回 UUID。
+ * 创建新模板，返回 UUID。
  * 别名强制唯一、消毒（仅保留字母数字/下划线/连字符/中文）。
  */
-export function createTenant(alias: string, tenantConfig?: Partial<TenantConfig>, config?: PiTripleConfig): string {
+export function createTemplate(alias: string, templateConfig?: Partial<TemplateConfig>, config?: PiTripleConfig): string {
   const cfg = config ?? loadConfig();
 
   // 别名消毒
@@ -240,53 +301,56 @@ export function createTenant(alias: string, tenantConfig?: Partial<TenantConfig>
   }
 
   // 强制唯一
-  for (const [id, tenant] of Object.entries(cfg.tenants)) {
-    if (tenant.alias === sanitized) {
-      throw new Error(`别名 "${sanitized}" 已被租户 ${id.slice(0, 8)}… 使用`);
+  for (const [id, tpl] of Object.entries(cfg.templates)) {
+    if (tpl.alias === sanitized) {
+      throw new Error(`别名 "${sanitized}" 已被模板 ${id.slice(0, 8)}… 使用`);
     }
   }
 
   const id = randomUUID();
-  cfg.tenants[id] = { alias: sanitized, ...tenantConfig };
+  cfg.templates[id] = { alias: sanitized, ...templateConfig };
   saveConfig(cfg);
   return id;
 }
 
-/** 删除租户 */
-export function removeTenant(tenantId: string, config?: PiTripleConfig): boolean {
+/** 删除模板 */
+export function removeTemplate(templateId: string, config?: PiTripleConfig): boolean {
   const cfg = config ?? loadConfig();
-  if (!cfg.tenants[tenantId]) return false;
-  delete cfg.tenants[tenantId];
-  if (cfg.defaultTenant === tenantId) {
-    const remaining = Object.keys(cfg.tenants);
-    cfg.defaultTenant = remaining[0] ?? randomUUID();
+  if (!cfg.templates[templateId]) return false;
+  delete cfg.templates[templateId];
+  if (cfg.defaultTemplate === templateId) {
+    const remaining = Object.keys(cfg.templates);
+    cfg.defaultTemplate = remaining[0] ?? randomUUID();
     if (remaining.length === 0) {
-      cfg.tenants[cfg.defaultTenant] = { alias: "local" };
+      cfg.templates[cfg.defaultTemplate] = { alias: "local" };
     }
   }
   saveConfig(cfg);
   return true;
 }
 
-/** 重命名租户别名 */
-export function renameTenant(tenantId: string, newAlias: string, config?: PiTripleConfig): boolean {
+/** 重命名模板别名 */
+export function renameTemplate(templateId: string, newAlias: string, config?: PiTripleConfig): boolean {
   const cfg = config ?? loadConfig();
-  if (!cfg.tenants[tenantId]) return false;
+  if (!cfg.templates[templateId]) return false;
   const sanitized = newAlias.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fff]/g, "-");
   if (!sanitized) return false;
   // 检查别名重复
-  for (const [id, t] of Object.entries(cfg.tenants)) {
-    if (id !== tenantId && t.alias === sanitized) return false;
+  for (const [id, t] of Object.entries(cfg.templates)) {
+    if (id !== templateId && t.alias === sanitized) return false;
   }
-  cfg.tenants[tenantId].alias = sanitized;
+  cfg.templates[templateId].alias = sanitized;
   saveConfig(cfg);
   return true;
 }
 
 // ─── 配置键读写（pit config get/set/unset）─────────────────────
 
-/** 租户可写字段 */
-const TENANT_WRITABLE = new Set(["model", "provider", "thinking", "tools", "excludeTools"]);
+/** 模板可写字段 */
+const TEMPLATE_WRITABLE = new Set([
+  "model", "provider", "thinking", "tools", "excludeTools",
+  "systemPrompt", "skills", "extensions",
+]);
 
 export interface ConfigSetResult {
   ok: boolean;
@@ -298,16 +362,16 @@ export function getConfigValue(key: string, config?: PiTripleConfig): string | u
   const cfg = config ?? loadConfig();
   const parts = key.split(".");
 
-  if (parts[0] === "tenants" && parts.length === 3) {
-    const resolved = resolveTenantId(parts[1]!, cfg);
+  if (parts[0] === "templates" && parts.length === 3) {
+    const resolved = resolveTemplateId(parts[1]!, cfg);
     if (!resolved.ok) return undefined;
-    const val = (cfg.tenants[resolved.id] as any)?.[parts[2]!];
+    const val = (cfg.templates[resolved.id] as any)?.[parts[2]!];
     return val === undefined ? undefined : String(val);
   }
 
   switch (key) {
     case "version": return String(cfg.version);
-    case "defaultTenant": return cfg.defaultTenant;
+    case "defaultTemplate": return cfg.defaultTemplate;
     case "dataDir": return cfg.dataDir;
     case "sharedDir": return cfg.sharedDir;
     case "redis": return cfg.redis;
@@ -321,10 +385,11 @@ export function getConfigValue(key: string, config?: PiTripleConfig): string | u
 /** 列出所有可读写键 */
 export function listConfigKeys(config?: PiTripleConfig): string[] {
   return [
-    "defaultTenant", "dataDir", "sharedDir", "redis", "gateway.port",
+    "defaultTemplate", "dataDir", "sharedDir", "redis", "gateway.port",
     "pth.url", "pth.token",
-    "tenants.<alias>.model", "tenants.<alias>.provider", "tenants.<alias>.thinking",
-    "tenants.<alias>.tools", "tenants.<alias>.excludeTools",
+    "templates.<alias>.model", "templates.<alias>.provider", "templates.<alias>.thinking",
+    "templates.<alias>.tools", "templates.<alias>.excludeTools",
+    "templates.<alias>.systemPrompt", "templates.<alias>.skills", "templates.<alias>.extensions",
   ];
 }
 
@@ -333,23 +398,23 @@ export function setConfigValue(key: string, value: string, config?: PiTripleConf
   const cfg = config ?? loadConfig();
   const parts = key.split(".");
 
-  if (parts[0] === "tenants" && parts.length === 3) {
-    const resolved = resolveTenantId(parts[1]!, cfg);
-    if (!resolved.ok) return { ok: false, error: `租户 "${parts[1]}" 不存在` };
+  if (parts[0] === "templates" && parts.length === 3) {
+    const resolved = resolveTemplateId(parts[1]!, cfg);
+    if (!resolved.ok) return { ok: false, error: `模板 "${parts[1]}" 不存在` };
     const field = parts[2]!;
-    if (!TENANT_WRITABLE.has(field)) {
-      return { ok: false, error: `租户字段只允许: ${[...TENANT_WRITABLE].join(", ")}` };
+    if (!TEMPLATE_WRITABLE.has(field)) {
+      return { ok: false, error: `模板字段只允许: ${[...TEMPLATE_WRITABLE].join(", ")}` };
     }
-    (cfg.tenants[resolved.id] as any)[field] = value;
+    (cfg.templates[resolved.id] as any)[field] = value;
     saveConfig(cfg);
     return { ok: true };
   }
 
   switch (key) {
-    case "defaultTenant": {
-      const resolved = resolveTenantId(value, cfg);
-      if (!resolved.ok) return { ok: false, error: `租户 "${value}" 不存在` };
-      cfg.defaultTenant = resolved.id;
+    case "defaultTemplate": {
+      const resolved = resolveTemplateId(value, cfg);
+      if (!resolved.ok) return { ok: false, error: `模板 "${value}" 不存在` };
+      cfg.defaultTemplate = resolved.id;
       break;
     }
     case "redis":
@@ -385,14 +450,14 @@ export function unsetConfigValue(key: string, config?: PiTripleConfig): ConfigSe
   const cfg = config ?? loadConfig();
   const parts = key.split(".");
 
-  if (parts[0] === "tenants" && parts.length === 3) {
-    const resolved = resolveTenantId(parts[1]!, cfg);
-    if (!resolved.ok) return { ok: false, error: `租户 "${parts[1]}" 不存在` };
+  if (parts[0] === "templates" && parts.length === 3) {
+    const resolved = resolveTemplateId(parts[1]!, cfg);
+    if (!resolved.ok) return { ok: false, error: `模板 "${parts[1]}" 不存在` };
     const field = parts[2]!;
-    if (!TENANT_WRITABLE.has(field)) {
-      return { ok: false, error: `租户字段只允许: ${[...TENANT_WRITABLE].join(", ")}` };
+    if (!TEMPLATE_WRITABLE.has(field)) {
+      return { ok: false, error: `模板字段只允许: ${[...TEMPLATE_WRITABLE].join(", ")}` };
     }
-    delete (cfg.tenants[resolved.id] as any)[field];
+    delete (cfg.templates[resolved.id] as any)[field];
     saveConfig(cfg);
     return { ok: true };
   }
@@ -480,15 +545,15 @@ export function migrateDirectoryNames(config: PiTripleConfig): string[] {
   const dataDir = resolveDataDir(config);
   const migrated: string[] = [];
 
-  for (const [id, tenant] of Object.entries(config.tenants)) {
+  for (const [id, tpl] of Object.entries(config.templates)) {
     for (const subdir of ["pi-config", "sessions", "workspaces", "mailbox"]) {
       const basePath = path.join(dataDir, subdir);
-      const oldPath = path.join(basePath, tenant.alias);
+      const oldPath = path.join(basePath, tpl.alias);
       const newPath = path.join(basePath, id);
 
       if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
         fs.renameSync(oldPath, newPath);
-        migrated.push(`${subdir}/${tenant.alias} → ${id.slice(0, 8)}…`);
+        migrated.push(`${subdir}/${tpl.alias} → ${id.slice(0, 8)}…`);
       }
     }
   }
