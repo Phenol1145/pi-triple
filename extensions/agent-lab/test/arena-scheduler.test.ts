@@ -225,23 +225,6 @@ test("settlementRef missing → failed with no-stable-task-ref", async () => {
   assert.equal(result.error.retryable, false);
 });
 
-test("execute mode → failed with execute-unsupported", async () => {
-  const { events, scheduler } = setup();
-  const input = makeInput({ mode: "execute" });
-  const sdk = buildSDK(events);
-
-  const result = await scheduler.schedule(
-    input,
-    ARENA_DEFAULT_PARAMETERS,
-    sdk,
-  );
-
-  assert.equal(result.status, "failed");
-  if (result.status !== "failed") throw new Error("expected failed");
-  assert.equal(result.error.code, "execute-unsupported");
-  assert.equal(result.error.retryable, false);
-});
-
 test("eligibility filtering excludes non-matching models", async () => {
   const candidates = [
     model("openai/gpt-4"),

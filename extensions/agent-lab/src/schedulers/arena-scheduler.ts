@@ -50,19 +50,7 @@ export function createArenaSchedulerImplementation(
       parameters: Readonly<unknown>,
       sdk,
     ): Promise<SchedulingResult> {
-      // 1. Only select mode supported
-      if (input.mode === "execute") {
-        return {
-          status: "failed",
-          error: {
-            code: "execute-unsupported",
-            message: "Arena scheduler only supports select mode",
-            retryable: false,
-          },
-        };
-      }
-
-      // 2. settlementRef required (freeze guard)
+      // 1. settlementRef required (freeze guard)
       if (!input.settlementRef) {
         return {
           status: "failed",
@@ -320,6 +308,41 @@ export function createArenaSchedulerImplementation(
         { balance: ports.ledger.balance(winner.agent) },
       );
 
+      // 15. Execute mode: run the task through the winner's WorkLoop
+      if (input.mode === "execute") {
+        try {
+          const runResult = await sdk.agents.run(winner.agent, { task: input.task });
+          if (runResult.status === "completed") {
+            return {
+              status: "completed",
+              model: winner.agent,
+              selectedAgentId: winner.agent,
+              settlementRef: input.settlementRef,
+              reason: `stake ${winner.stake} round ${round} (executed)`,
+              output: runResult.output,
+            };
+          }
+          return {
+            status: "failed",
+            error: runResult.error ?? {
+              code: "workloop-failed",
+              message: `agent run ${runResult.status}`,
+              retryable: runResult.status === "cancelled",
+            },
+          };
+        } catch (err) {
+          return {
+            status: "failed",
+            error: {
+              code: "workloop-error",
+              message: err instanceof Error ? err.message : String(err),
+              retryable: false,
+            },
+          };
+        }
+      }
+
+      // Select mode: return model selection only
       return {
         status: "completed",
         model: winner.agent,

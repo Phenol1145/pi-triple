@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { EventBus } from "@earendil-works/pi-coding-agent/dist/core/event-bus.ts";
 import { SqliteStore } from "./src/store/store.ts";
 import type { Store } from "./src/store/store.ts";
 import { CatalogService } from "./src/catalog/catalog.ts";
@@ -127,6 +128,8 @@ export default async function (pi: ExtensionAPI) {
   let bootstrapPromise: Promise<void> | undefined;
   // Lazy arena model caller: populated from interceptor ctx on first tool_call.
   let arenaModelCaller: ModelCaller | undefined;
+  // Lazy delegation event bus: captured from ctx.events on first tool_call (Q1 verified).
+  let delegationBus: EventBus | undefined;
   const schedulerRuntimeFactory = (): SchedulerRuntimeLike | undefined => {
     if (!runtimeInitAttempted) {
       runtimeInitAttempted = true;
@@ -136,7 +139,16 @@ export default async function (pi: ExtensionAPI) {
           aggregates: (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a])),
           pinLookup: (role: string) => store.getPin(role),
         };
-        const rt = createSchedulerRuntime(sharedStore.raw, {});
+        const rt = createSchedulerRuntime(sharedStore.raw, delegationBus ? {
+          eventBus: delegationBus,
+          // pi-default-loop delegates via eventBus; stub ports satisfy the constructor.
+          model: { async complete() { throw new Error("stub: pi-default-loop uses eventBus delegation"); } },
+          tools: { async execute() { throw new Error("stub: tools not available in managed loop v1"); } },
+          artifacts: {
+            async put() { return crypto.randomUUID(); },
+            async get() { return undefined; },
+          },
+        } : {});
         schedulerCore = rt.core;
         optimizerRegistry = new OptimizerRegistry(rt.core.definitions, rt.core.repository, rt.core.events);
 
@@ -320,6 +332,9 @@ export default async function (pi: ExtensionAPI) {
       } catch {
         // fail-open: arena bidding will error on first use
       }
+    }
+    if (!delegationBus && ctx.events) {
+      delegationBus = ctx.events;
     }
   });
 
@@ -662,6 +677,43 @@ export default async function (pi: ExtensionAPI) {
     } finally { restore(); }
   };
 
+  // ── /lab execute: execute-mode dispatch (arena竞价 → WorkLoop执行) ──
+  const executeDispatch = async (role: string, task: string): Promise<string> => {
+    if (!cfg.scheduler?.enabled) return "预检失败: Scheduler not enabled. /lab config scheduler.enabled true";
+    const rt = schedulerRuntimeFactory();
+    if (bootstrapPromise) { try { await bootstrapPromise; } catch { /* fail-open */ } }
+    if (!rt || !schedulerCore) return "预检失败: Scheduler runtime unavailable. /lab scheduler status";
+    const arena = schedulerCore.repository.getInstance("default-arena");
+    if (!arena || arena.status !== "active") return "预检失败: Arena instance not active. /lab scheduler status";
+    if (!delegationBus) return "预检失败: Delegation bus unavailable — initiate a subagent call first to capture ctx.events";
+
+    const traceId = `exec-${Date.now()}`;
+    const settlementRef = `${traceId}-settlement`;
+    try {
+      const result = await rt.dispatch({
+        traceId,
+        role,
+        task,
+        mode: "execute",
+        settlementRef,
+      });
+      if (result.status === "completed") {
+        const out = result.output as { text?: string } | undefined;
+        const lines = [
+          `Execute: ${role} → ${result.model ?? result.selectedAgentId ?? "?"} (completed)`,
+          `reason: ${result.reason ?? "-"}`,
+        ];
+        if (out?.text) lines.push("", out.text);
+        return lines.join("\n");
+      }
+      if (result.status === "abstained") return `Execute: abstained — ${result.reason}`;
+      if (result.status === "fallback") return `Execute: fallback — ${result.target.type}`;
+      return `Execute: failed — ${result.error.code}: ${result.error.message}`;
+    } catch (err) {
+      return `Execute: error — ${err instanceof Error ? err.message : String(err)}`;
+    }
+  };
+
   // ── Optimizer facade (lazy: resolves schedulerCore/optimizerRegistry at call time) ──
   const optimizerFacade: OptimizerFacade = buildOptimizerFacade({
     getCore: () => schedulerCore,
@@ -714,6 +766,7 @@ export default async function (pi: ExtensionAPI) {
     },
     arenaSmoke,
     bench,
+    executeDispatch,
     runMigration: (dryRun: boolean) => {
       const ensureArenaBinding = () => {
         // Force the lazy bootstrap before checking — running /lab migrate

@@ -23,6 +23,7 @@ interface Deps {
   getEffectiveRouting?: () => string;
   arenaSmoke?: (role: string, cmdCtx: ExtensionContext) => Promise<string>;
   bench?: (cmdCtx: ExtensionContext, n?: number) => Promise<string>;
+  executeDispatch?: (role: string, task: string) => Promise<string>;
   optimizerFacade?: OptimizerFacade;
   experimentFacade?: ExperimentFacade;
   runMigration?: (dryRun: boolean) => MigrationReport;
@@ -560,7 +561,7 @@ export function renderExperimentCompare(result: ExperimentCompareResult): string
 // ── Command registration ────────────────────────────────────────────
 
 export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
-  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, arenaSmoke, bench, optimizerFacade, experimentFacade, runMigration } = deps;
+  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, arenaSmoke, bench, executeDispatch, optimizerFacade, experimentFacade, runMigration } = deps;
 
   const aggsFor = (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a]));
 
@@ -717,6 +718,15 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
           const output = await bench(ctx, Number.isFinite(n) && n > 0 ? n : 8);
           ctx.ui.notify(output, "info");
         } catch (err) { ctx.ui.notify(`bench failed: ${(err as Error).message}`, "error"); }
+      } else if (cmd === "execute") {
+        const role = argv[1];
+        const task = argv.slice(2).join(" ");
+        if (!role || !task) { ctx.ui.notify("用法: /lab execute <role> <task>", "error"); return; }
+        if (!executeDispatch) { ctx.ui.notify("execute unavailable — enable scheduler first", "error"); return; }
+        try {
+          const output = await executeDispatch(role, task);
+          ctx.ui.notify(output, "info");
+        } catch (err) { ctx.ui.notify(`execute failed: ${(err as Error).message}`, "error"); }
       } else if (cmd === "scheduler") {
         const sub = argv[1];
         if (sub === "status") {
