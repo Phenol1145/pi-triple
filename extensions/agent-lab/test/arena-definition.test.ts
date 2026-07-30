@@ -73,6 +73,10 @@ test("ARENA_DEFINITION tunablePaths covers exactly the specified paths", () => {
     "bidding.timeoutMs",
     "bidding.maxCallsPerDispatch",
     "bidding.minStake",
+    "bidding.engine",
+    "bidding.maxConcurrentBids",
+    "bidding.bidTurnBudget",
+    "bidding.bidSkill",
     "risk.maxStakeRatio",
   ];
   assert.deepEqual([...ARENA_DEFINITION.tunablePaths].sort(), [...expected].sort());
@@ -361,6 +365,49 @@ test("validateTransition passes valid transition", () => {
     { ...ARENA_DEFAULT_PARAMETERS, risk: { maxStakeRatio: 0.7 } },
   );
   assert.ok(result.ok);
+});
+
+// ── Phase 3b: new bidding fields ─────────────────────────────────
+
+test("bidding new fields: defaults applied when absent", () => {
+  const r = validateArenaParameters({
+    endowment: { K: 100, floor: 0.05 },
+    odds: { easy: 1.5, medium: 3, hard: 5 },
+    settlement: { tax: 5, errorMode: "stakeTimesOdds" },
+    cost: { tokenMult: 1, toolMult: 1, latencyMult: 1, resourceFactor: 1, toolWeights: {} },
+    bidding: { timeoutMs: 10000, promptTemplate: "p", maxCallsPerDispatch: 6, minStake: 10 },
+    market: { staleTaskTimeoutMs: 600000, eligibility: "all", maxBidders: 6, bidderSelector: "top-balance", diversityFactor: 0.1 },
+    risk: { maxStakeRatio: 0.5 },
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    assert.equal(r.value.bidding.engine, "model-caller");
+    assert.equal(r.value.bidding.maxConcurrentBids, 3);
+    assert.equal(r.value.bidding.bidTurnBudget, 3);
+    assert.equal(r.value.bidding.bidSkill, "agent-lab-bidding");
+  }
+});
+
+test("bidding engine: workloop accepted, invalid rejected", () => {
+  const base = {
+    endowment: { K: 100, floor: 0.05 },
+    odds: { easy: 1.5, medium: 3, hard: 5 },
+    settlement: { tax: 5, errorMode: "stakeTimesOdds" },
+    cost: { tokenMult: 1, toolMult: 1, latencyMult: 1, resourceFactor: 1, toolWeights: {} },
+    market: { staleTaskTimeoutMs: 600000, eligibility: "all", maxBidders: 6, bidderSelector: "top-balance", diversityFactor: 0.1 },
+    risk: { maxStakeRatio: 0.5 },
+  };
+  const ok = validateArenaParameters({ ...base, bidding: { timeoutMs: 1, promptTemplate: "p", maxCallsPerDispatch: 1, minStake: 1, engine: "workloop", maxConcurrentBids: 2, bidTurnBudget: 4, bidSkill: "s" } });
+  assert.equal(ok.ok, true);
+  if (ok.ok) assert.equal(ok.value.bidding.engine, "workloop");
+
+  const bad = validateArenaParameters({ ...base, bidding: { timeoutMs: 1, promptTemplate: "p", maxCallsPerDispatch: 1, minStake: 1, engine: "nope" } });
+  assert.equal(bad.ok, false);
+});
+
+test("ARENA_DEFAULT_PARAMETERS carries new bidding defaults", () => {
+  assert.equal(ARENA_DEFAULT_PARAMETERS.bidding.engine, "model-caller");
+  assert.equal(ARENA_DEFAULT_PARAMETERS.bidding.maxConcurrentBids, 3);
 });
 
 // ── Helper: import matchEligibility ────────────────────────────────

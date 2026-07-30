@@ -24,6 +24,10 @@ export interface ArenaSchedulerParameters {
     promptTemplate: string;
     maxCallsPerDispatch: number;
     minStake: number;
+    engine: "model-caller" | "workloop";
+    maxConcurrentBids: number;
+    bidTurnBudget: number;
+    bidSkill: string;
   };
   market: {
     staleTaskTimeoutMs: number;
@@ -65,6 +69,10 @@ const TUNABLE_PATHS: string[] = [
   "bidding.timeoutMs",
   "bidding.maxCallsPerDispatch",
   "bidding.minStake",
+  "bidding.engine",
+  "bidding.maxConcurrentBids",
+  "bidding.bidTurnBudget",
+  "bidding.bidSkill",
   "market.diversityFactor",
   "risk.maxStakeRatio",
 ];
@@ -255,6 +263,27 @@ export function validateArenaParameters(value: unknown): ValidationResult<ArenaS
     } else if (maxCalls < 1) {
       issues.push({ path: "bidding.maxCallsPerDispatch", code: "OUT_OF_RANGE", message: "bidding.maxCallsPerDispatch must be >= 1" });
     }
+
+    // bidding.engine (optional, default model-caller)
+    const engine = bidding.engine;
+    if (engine !== undefined && engine !== "model-caller" && engine !== "workloop") {
+      issues.push({ path: "bidding.engine", code: "OUT_OF_RANGE", message: "bidding.engine must be 'model-caller' or 'workloop'" });
+    }
+    // bidding.maxConcurrentBids (optional integer >= 1)
+    const maxConc = bidding.maxConcurrentBids;
+    if (maxConc !== undefined && (typeof maxConc !== "number" || !Number.isInteger(maxConc) || maxConc < 1)) {
+      issues.push({ path: "bidding.maxConcurrentBids", code: "OUT_OF_RANGE", message: "bidding.maxConcurrentBids must be an integer >= 1" });
+    }
+    // bidding.bidTurnBudget (optional integer >= 1)
+    const turnBudget = bidding.bidTurnBudget;
+    if (turnBudget !== undefined && (typeof turnBudget !== "number" || !Number.isInteger(turnBudget) || turnBudget < 1)) {
+      issues.push({ path: "bidding.bidTurnBudget", code: "OUT_OF_RANGE", message: "bidding.bidTurnBudget must be an integer >= 1" });
+    }
+    // bidding.bidSkill (optional string)
+    const bidSkill = bidding.bidSkill;
+    if (bidSkill !== undefined && typeof bidSkill !== "string") {
+      issues.push({ path: "bidding.bidSkill", code: "INVALID_TYPE", message: "bidding.bidSkill must be a string" });
+    }
   }
 
   if (issues.length > 0) return { ok: false, issues };
@@ -288,6 +317,10 @@ export function validateArenaParameters(value: unknown): ValidationResult<ArenaS
         promptTemplate: (bidding as Record<string, string>).promptTemplate ?? "",
         maxCallsPerDispatch: (bidding as Record<string, number>).maxCallsPerDispatch,
         minStake: (bidding as Record<string, number>).minStake ?? 10,
+        engine: ((bidding as Record<string, unknown>).engine as "model-caller" | "workloop") ?? "model-caller",
+        maxConcurrentBids: (bidding as Record<string, number>).maxConcurrentBids ?? 3,
+        bidTurnBudget: (bidding as Record<string, number>).bidTurnBudget ?? 3,
+        bidSkill: (bidding as Record<string, string>).bidSkill ?? "agent-lab-bidding",
       },
       market: {
         staleTaskTimeoutMs: (market as Record<string, number>).staleTaskTimeoutMs ?? 600000,
