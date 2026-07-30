@@ -30,6 +30,8 @@ export interface ArenaSchedulerPorts {
   candidates(): ModelInfo[];
   modelCaller: ModelCaller;
   resolveAgent: (model: ModelInfo) => string;
+  /** Resolve agent UUID → templateId (from lab_agent_instances.source_template_id). */
+  resolveTemplate?: (agentId: string) => string | undefined;
 }
 
 // ── Factory ───────────────────────────────────────────────────────────
@@ -106,7 +108,8 @@ export function createArenaSchedulerImplementation(
       // 5. Endow + build AgentState（UUID 身份）
       const states: AgentState[] = eligible.map((m) => {
         const agentId = ports.resolveAgent(m);          // UUID（resolveAgent 注入）
-        ports.ledger.ensureEndowed(agentId, m);         // ledger 按 UUID 键控
+        const templateId = ports.resolveTemplate?.(agentId);
+        ports.ledger.ensureEndowed(agentId, m, templateId);         // ledger 按 UUID 键控
         return {
           agent: agentId,
           model: m,
@@ -233,6 +236,8 @@ export function createArenaSchedulerImplementation(
               params.settlement.tax,
               "opt-out-tax",
               task.id,
+              undefined,
+              ports.resolveTemplate?.(b.agent),
             );
           }
         }
@@ -245,6 +250,8 @@ export function createArenaSchedulerImplementation(
               params.settlement.tax,
               "opt-out-tax",
               task.id,
+              undefined,
+              ports.resolveTemplate?.(s.agent),
             );
           }
         }
@@ -289,10 +296,11 @@ export function createArenaSchedulerImplementation(
         };
       }
 
-      // 13. Create task (winner UUID + modelId)
+      // 13. Create task (winner UUID + modelId + templateId)
       const winnerModel = states.find(s => s.agent === winner.agent)!.model.id;
+      const winnerTemplate = ports.resolveTemplate?.(winner.agent);
       const round = ports.ledger.nextRound();
-      ports.ledger.createTask(task, winner.agent, winner.stake, round, winnerModel);
+      ports.ledger.createTask(task, winner.agent, winner.stake, round, winnerModel, winnerTemplate);
 
       // 14. Emit balance_after
       sdk.telemetry.emit(
@@ -357,9 +365,9 @@ export function createArenaSchedulerImplementation(
 
       const net = D - U;
       if (net >= 0) {
-        ports.ledger.credit(row.winner, net, "settle", taskRef, row.round);
+        ports.ledger.credit(row.winner, net, "settle", taskRef, row.round, row.templateId);
       } else {
-        ports.ledger.debit(row.winner, -net, "settle", taskRef, row.round);
+        ports.ledger.debit(row.winner, -net, "settle", taskRef, row.round, row.templateId);
       }
 
       ports.ledger.setTaskStatus(taskRef, "settled");

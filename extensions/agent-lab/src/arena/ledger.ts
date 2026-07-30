@@ -4,15 +4,15 @@ import type { AgentId, ArenaTask, CreditTx, EndowmentPolicy, Ledger, MarketTaskR
 
 const ARENA_SCHEMA = `
 CREATE TABLE IF NOT EXISTS credits (
-  agent TEXT PRIMARY KEY, balance REAL NOT NULL, frozen REAL NOT NULL DEFAULT 0, updated_ts INTEGER NOT NULL
+  agent TEXT PRIMARY KEY, balance REAL NOT NULL, frozen REAL NOT NULL DEFAULT 0, template_id TEXT, updated_ts INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS credit_tx (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, agent TEXT NOT NULL, delta REAL NOT NULL,
-  reason TEXT, task_id TEXT, round INTEGER, agent_turn INTEGER
+  reason TEXT, task_id TEXT, round INTEGER, agent_turn INTEGER, template_id TEXT
 );
 CREATE TABLE IF NOT EXISTS market_tasks (
   task_id TEXT PRIMARY KEY, round INTEGER, role TEXT, prompt TEXT, difficulty TEXT,
-  odds REAL, reward REAL, winner TEXT, winner_model TEXT, stake REAL, status TEXT, created_ts INTEGER
+  odds REAL, reward REAL, winner TEXT, winner_model TEXT, stake REAL, status TEXT, created_ts INTEGER, template_id TEXT
 );
 CREATE TABLE IF NOT EXISTS market_meta ( key TEXT PRIMARY KEY, value TEXT );
 CREATE TABLE IF NOT EXISTS arena_freezes (
@@ -27,7 +27,17 @@ export class SqliteLedger implements Ledger {
     this.db = db;
     this.endowment = endowment;
     this.db.exec(ARENA_SCHEMA);
+    this._applyArenaMigrations();
     if (resolveAgentId) this.runMigration(resolveAgentId);
+  }
+  /** Add template_id columns to existing DBs (idempotent). */
+  private _applyArenaMigrations(): void {
+    for (const table of ["credits", "credit_tx", "market_tasks"]) {
+      const cols = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === "template_id")) {
+        this.db.exec(`ALTER TABLE ${table} ADD COLUMN template_id TEXT`);
+      }
+    }
   }
   private now(): number { return Date.now(); }
   /** 迁移 credits/credit_tx/market_tasks/arena_freezes 的 agent 字段从 model id → UUID（幂等） */
@@ -52,35 +62,35 @@ export class SqliteLedger implements Ledger {
   migrateAgentKeys(resolveAgentId: (v: string) => string | undefined): void {
     this.runMigration(resolveAgentId);
   }
-  private ensureRow(a: AgentId): void {
+  private ensureRow(a: AgentId, templateId?: string): void {
     if (!this.db.prepare(`SELECT agent FROM credits WHERE agent = ?`).get(a)) {
-      this.db.prepare(`INSERT INTO credits (agent, balance, frozen, updated_ts) VALUES (?, 0, 0, ?)`).run(a, this.now());
+      this.db.prepare(`INSERT INTO credits (agent, balance, frozen, template_id, updated_ts) VALUES (?, 0, 0, ?, ?)`).run(a, templateId ?? null, this.now());
     }
   }
-  private recordTx(a: AgentId, delta: number, reason: string, taskId?: string, round?: number): void {
-    this.db.prepare(`INSERT INTO credit_tx (ts, agent, delta, reason, task_id, round, agent_turn) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .run(this.now(), a, delta, reason, taskId ?? null, round ?? null, this.agentTurn(a));
+  private recordTx(a: AgentId, delta: number, reason: string, taskId?: string, round?: number, templateId?: string): void {
+    this.db.prepare(`INSERT INTO credit_tx (ts, agent, delta, reason, task_id, round, agent_turn, template_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(this.now(), a, delta, reason, taskId ?? null, round ?? null, this.agentTurn(a), templateId ?? null);
   }
   balance(a: AgentId): number {
     const row = this.db.prepare(`SELECT balance FROM credits WHERE agent = ?`).get(a) as { balance: number } | undefined;
     return row?.balance ?? 0;
   }
-  ensureEndowed(a: AgentId, m: ModelInfo): void {
+  ensureEndowed(a: AgentId, m: ModelInfo, templateId?: string): void {
     if (this.db.prepare(`SELECT agent FROM credits WHERE agent = ?`).get(a)) return;
     const initial = this.endowment.initialCredits(m);
-    this.db.prepare(`INSERT INTO credits (agent, balance, frozen, updated_ts) VALUES (?, ?, 0, ?)`).run(a, initial, this.now());
-    this.recordTx(a, initial, "endowment", undefined, this.currentRound());
+    this.db.prepare(`INSERT INTO credits (agent, balance, frozen, template_id, updated_ts) VALUES (?, ?, 0, ?, ?)`).run(a, initial, templateId ?? null, this.now());
+    this.recordTx(a, initial, "endowment", undefined, this.currentRound(), templateId);
   }
-  credit(a: AgentId, amt: number, reason: string, taskId?: string, round?: number): void {
-    this.ensureRow(a);
+  credit(a: AgentId, amt: number, reason: string, taskId?: string, round?: number, templateId?: string): void {
+    this.ensureRow(a, templateId);
     this.db.prepare(`UPDATE credits SET balance = balance + ?, updated_ts = ? WHERE agent = ?`).run(amt, this.now(), a);
-    this.recordTx(a, amt, reason, taskId, round);
+    this.recordTx(a, amt, reason, taskId, round, templateId);
   }
-  debit(a: AgentId, amt: number, reason: string, taskId?: string, round?: number): void {
-    this.ensureRow(a);
+  debit(a: AgentId, amt: number, reason: string, taskId?: string, round?: number, templateId?: string): void {
+    this.ensureRow(a, templateId);
     const actual = Math.min(amt, Math.max(0, this.balance(a)));
     this.db.prepare(`UPDATE credits SET balance = balance - ?, updated_ts = ? WHERE agent = ?`).run(actual, this.now(), a);
-    this.recordTx(a, -actual, reason, taskId, round);
+    this.recordTx(a, -actual, reason, taskId, round, templateId);
   }
   freeze(a: AgentId, amt: number, taskId: string): boolean {
     this.ensureRow(a);
@@ -140,12 +150,12 @@ export class SqliteLedger implements Ledger {
     const row = this.db.prepare(`SELECT COUNT(*) AS n FROM market_tasks WHERE winner = ? AND status = 'settled'`).get(a) as { n: number };
     return Number(row.n);
   }
-  createTask(t: ArenaTask, winner: AgentId, stake: number, round: number, modelId: string): void {
-    this.db.prepare(`INSERT INTO market_tasks (task_id, round, role, prompt, difficulty, odds, reward, winner, winner_model, stake, status, created_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`)
-      .run(t.id, round, t.role, t.prompt, String(t.difficulty), t.odds, t.reward, winner, modelId, stake, this.now());
+  createTask(t: ArenaTask, winner: AgentId, stake: number, round: number, modelId: string, templateId?: string): void {
+    this.db.prepare(`INSERT INTO market_tasks (task_id, round, role, prompt, difficulty, odds, reward, winner, winner_model, stake, status, created_ts, template_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`)
+      .run(t.id, round, t.role, t.prompt, String(t.difficulty), t.odds, t.reward, winner, modelId, stake, this.now(), templateId ?? null);
   }
   getTask(taskId: string): MarketTaskRow | undefined {
-    const row = this.db.prepare(`SELECT task_id AS taskId, role, prompt, difficulty, odds, reward, winner, winner_model AS winnerModel, stake, status, round FROM market_tasks WHERE task_id = ?`).get(taskId);
+    const row = this.db.prepare(`SELECT task_id AS taskId, role, prompt, difficulty, odds, reward, winner, winner_model AS winnerModel, stake, status, round, template_id AS templateId FROM market_tasks WHERE task_id = ?`).get(taskId);
     return row as MarketTaskRow | undefined;
   }
   setTaskStatus(taskId: string, status: string): void {
@@ -153,7 +163,7 @@ export class SqliteLedger implements Ledger {
   }
   staleTasks(timeoutMs: number): MarketTaskRow[] {
     const cutoff = this.now() - timeoutMs;
-    const rows = this.db.prepare(`SELECT task_id AS taskId, role, prompt, difficulty, odds, reward, winner, winner_model AS winnerModel, stake, status, round FROM market_tasks WHERE status = 'pending' AND created_ts < ?`).all(cutoff);
+    const rows = this.db.prepare(`SELECT task_id AS taskId, role, prompt, difficulty, odds, reward, winner, winner_model AS winnerModel, stake, status, round, template_id AS templateId FROM market_tasks WHERE status = 'pending' AND created_ts < ?`).all(cutoff);
     return rows as MarketTaskRow[];
   }
   recoverStaleTask(taskId: string): void {

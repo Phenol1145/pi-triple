@@ -198,6 +198,10 @@ export default async function (pi: ExtensionAPI) {
               candidates: () => catalog.candidates(),
               modelCaller: arenaCaller,
               resolveAgent: (m: ModelInfo) => findOrCreateAgentByModel(rt.core, "default-arena", m, process.env.PI_TEMPLATE),
+              resolveTemplate: (agentId: string) => {
+                const agents = rt.core.repository.listAgents("default-arena");
+                return agents.find((a) => a.id === agentId)?.sourceTemplateId;
+              },
             };
 
             // Arena is always bootstrapped (registered/activated, addressable by

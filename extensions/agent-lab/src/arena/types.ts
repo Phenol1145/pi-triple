@@ -48,14 +48,14 @@ export interface Judge { score(t: ArenaTask, outputs: unknown[]): number[]; }   
 
 export interface MarketTaskRow {
   taskId: string; role: string; prompt: string; difficulty: string;
-  odds: number; reward: number; winner: string; winnerModel?: string; stake: number; status: string; round: number;
+  odds: number; reward: number; winner: string; winnerModel?: string; stake: number; status: string; round: number; templateId?: string;
 }
 
 export interface Ledger {
   balance(a: AgentId): number;
-  ensureEndowed(a: AgentId, m: ModelInfo): void;
-  credit(a: AgentId, amt: number, reason: string, taskId?: string, round?: number): void;
-  debit(a: AgentId, amt: number, reason: string, taskId?: string, round?: number): void;
+  ensureEndowed(a: AgentId, m: ModelInfo, templateId?: string): void;
+  credit(a: AgentId, amt: number, reason: string, taskId?: string, round?: number, templateId?: string): void;
+  debit(a: AgentId, amt: number, reason: string, taskId?: string, round?: number, templateId?: string): void;
   freeze(a: AgentId, amt: number, taskId: string): boolean;
   unfreeze(a: AgentId, taskId: string): number;
   leaderboard(): { agent: AgentId; balance: number }[];
@@ -63,7 +63,7 @@ export interface Ledger {
   currentRound(): number;
   nextRound(): number;
   agentTurn(a: AgentId): number;
-  createTask(t: ArenaTask, winner: AgentId, stake: number, round: number, modelId: string): void;
+  createTask(t: ArenaTask, winner: AgentId, stake: number, round: number, modelId: string, templateId?: string): void;
   getTask(taskId: string): MarketTaskRow | undefined;
   setTaskStatus(taskId: string, status: string): void;
   staleTasks(timeoutMs: number): MarketTaskRow[];
