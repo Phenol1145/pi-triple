@@ -118,25 +118,27 @@ test("1. ensureWeightedScorerInstance registers definition, creates draft, valid
 
   const result = await ensureWeightedScorerInstance(core, schedulers, ports);
 
-  assert.equal(result.instanceId, "default-weighted-scorer");
-  assert.equal(result.roundId, "default-weighted-scorer:round:0");
+  // instanceId is now a UUID (ADR-0002 UUID identity)
+  assert.match(result.instanceId, /^[0-9a-f-]{36}$/);
+  assert.match(result.roundId, /^[0-9a-f-]{36}:round:0$/);
   assert.equal(result.agentCount, 2);
 
-  // Verify instance is active
-  const inst = core.repository.getInstance("default-weighted-scorer");
+  // Verify instance is active (by UUID)
+  const inst = core.repository.getInstance(result.instanceId);
   assert.ok(inst);
   assert.equal(inst.status, "active");
-  assert.equal(inst.currentRoundId, "default-weighted-scorer:round:0");
+  assert.equal(inst.name, "default-weighted-scorer");
+  assert.equal(inst.currentRoundId, result.roundId);
   assert.equal(inst.definition.id, "weighted-scorer");
   assert.equal(inst.definition.version, "1.0.0");
 
   // Verify round
-  const round = core.repository.getRound("default-weighted-scorer:round:0");
+  const round = core.repository.getRound(result.roundId);
   assert.ok(round);
   assert.equal(round.sequence, 0);
 
   // Verify agents
-  const agents = core.repository.listAgents("default-weighted-scorer");
+  const agents = core.repository.listAgents(result.instanceId);
   assert.equal(agents.length, 2);
   const agentModels = new Set(agents.map((a) => a.model));
   assert.ok(agentModels.has("openai/gpt-4o"));
@@ -148,6 +150,11 @@ test("1. ensureWeightedScorerInstance registers definition, creates draft, valid
   assert.ok(defaultBinding);
   assert.equal(defaultBinding.priority, 0);
   assert.deepEqual(defaultBinding.match, {});
+
+  // Verify by-name lookup works
+  const byName = core.repository.findInstanceByName("weighted-scorer", "default-weighted-scorer");
+  assert.ok(byName);
+  assert.equal(byName.id, result.instanceId);
 
   db.close();
 });
@@ -166,8 +173,10 @@ test("2. ensureWeightedScorerInstance is idempotent on second call", async () =>
   const first = await ensureWeightedScorerInstance(core, schedulers, ports);
   const second = await ensureWeightedScorerInstance(core, schedulers, ports);
 
+  // Both return the same UUID-identified instance
   assert.deepEqual(first, second);
-  assert.equal(core.repository.listAgents("default-weighted-scorer").length, 1);
+  // Verify only one agent exists (no duplicates)
+  assert.equal(core.repository.listAgents(first.instanceId).length, 1);
 
   db.close();
 });
@@ -430,7 +439,7 @@ test("ensureWeightedScorerInstance respects custom instanceId", async () => {
   db.close();
 });
 
-// ── Stale-draft recovery (P7 hotfix) ──────────────────────────────────
+// ── Stale-draft recovery (P7 hotfix, adapted for UUID identity) ────
 
 test("stale draft from crashed bootstrap is discarded and recreated (ws)", async () => {
   const db = memoryDB();
@@ -443,21 +452,23 @@ test("stale draft from crashed bootstrap is discarded and recreated (ws)", async
 
   // Simulate a crashed bootstrap: draft exists, instance never activated.
   const first = await ensureWeightedScorerInstance(core, schedulers, ports);
-  assert.equal(first.instanceId, "default-weighted-scorer");
+  const firstUuid = first.instanceId;
+  assert.match(firstUuid, /^[0-9a-f-]{36}$/);
   // Simulate a crashed bootstrap: draft row remains (pre-activation),
   // instance/rounds/agents were never committed (activation is
   // transactional — a crash leaves none of them behind).
-  db.prepare("DELETE FROM lab_scheduler_instances WHERE id = ?").run("default-weighted-scorer");
-  db.prepare("DELETE FROM lab_optimization_rounds WHERE scheduler_instance_id = ?").run("default-weighted-scorer");
-  db.prepare("DELETE FROM lab_agent_instances WHERE scheduler_instance_id = ?").run("default-weighted-scorer");
-  db.prepare("DELETE FROM lab_events WHERE event_id = ?").run("instance.activated:default-weighted-scorer");
-  db.prepare("DELETE FROM lab_routing_bindings WHERE scheduler_instance_id = ?").run("default-weighted-scorer");
-  db.prepare("UPDATE lab_scheduler_drafts SET status = 'draft' WHERE id = ?").run("default-weighted-scorer");
+  db.prepare("DELETE FROM lab_scheduler_instances WHERE id = ?").run(firstUuid);
+  db.prepare("DELETE FROM lab_optimization_rounds WHERE scheduler_instance_id = ?").run(firstUuid);
+  db.prepare("DELETE FROM lab_agent_instances WHERE scheduler_instance_id = ?").run(firstUuid);
+  db.prepare("DELETE FROM lab_events WHERE event_id = ?").run(`instance.activated:${firstUuid}`);
+  db.prepare("DELETE FROM lab_routing_bindings WHERE scheduler_instance_id = ?").run(firstUuid);
+  db.prepare("UPDATE lab_scheduler_drafts SET status = 'draft' WHERE id = ?").run(firstUuid);
 
-  // Second bootstrap must not throw "draft already exists".
+  // Second bootstrap must not throw. With UUID identity, each bootstrap
+  // generates a fresh UUID so there's no "draft already exists" conflict.
   const second = await ensureWeightedScorerInstance(core, schedulers, ports);
-  assert.equal(second.instanceId, "default-weighted-scorer");
-  const inst = core.repository.getInstance("default-weighted-scorer");
+  assert.match(second.instanceId, /^[0-9a-f-]{36}$/);
+  const inst = core.repository.getInstance(second.instanceId);
   assert.ok(inst);
   assert.equal(inst.status, "active");
 

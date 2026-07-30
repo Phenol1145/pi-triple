@@ -14,7 +14,12 @@ import { ARENA_DEFINITION, ARENA_DEFAULT_PARAMETERS } from "./arena-definition.t
 import { createArenaSchedulerImplementation } from "./arena-scheduler.ts";
 import { findOrCreateAgentByModel } from "../arena/agent-id.ts";
 import { randomUUID } from "node:crypto";
-import { DEFAULT_WEIGHTED_SCORER_INSTANCE_ID, DEFAULT_MARKET_INSTANCE_ID } from "./names.ts";
+import {
+  WEIGHTED_SCORER_DEFINITION_ID,
+  MARKET_SCHEDULER_DEFINITION_ID,
+  DEFAULT_WEIGHTED_SCORER_NAME,
+  DEFAULT_MARKET_NAME,
+} from "./names.ts";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -43,14 +48,15 @@ export async function ensureWeightedScorerInstance(
   core: LabCore,
   schedulers: SchedulerRegistry,
   ports: WeightedScorerPorts,
-  opts?: { instanceId?: string },
+  opts?: { instanceId?: string; name?: string },
 ): Promise<BootstrapResult> {
-  const instanceId = opts?.instanceId ?? DEFAULT_WEIGHTED_SCORER_INSTANCE_ID;
+  const name = opts?.name ?? DEFAULT_WEIGHTED_SCORER_NAME;
 
-  // Guard: reject dispatch-target ids passed as bootstrap ids (see ADR / 1e4eb56)
-  if (opts?.instanceId && opts.instanceId === DEFAULT_MARKET_INSTANCE_ID) {
+  // Guard: reject names that collide with the market scheduler's canonical name
+  // (see ADR / 1e4eb56 — cfg.scheduler.instanceId is a dispatch target, not a bootstrap id)
+  if (opts?.name && opts.name === DEFAULT_MARKET_NAME) {
     throw new Error(
-      `ensureWeightedScorerInstance: instanceId "${opts.instanceId}" collides with the market scheduler's canonical instance id — cfg.scheduler.instanceId is a dispatch target, not a bootstrap id`,
+      `ensureWeightedScorerInstance: name "${opts.name}" collides with the market scheduler's canonical name — cfg.scheduler.instanceId is a dispatch target, not a bootstrap id`,
     );
   }
 
@@ -76,26 +82,25 @@ export async function ensureWeightedScorerInstance(
     if (!msg.includes("already registered")) throw err;
   }
 
-  // 1. Idempotency check: if instance already exists and is active, return it
-  const existing = core.repository.getInstance(instanceId);
+  // 1. Idempotency check by (definition_id, name) → UUID identity
+  const existing = core.repository.findInstanceByName(WEIGHTED_SCORER_DEFINITION_ID, name);
   if (existing && existing.status === "active") {
-    const agents = core.repository.listAgents(instanceId);
+    const agents = core.repository.listAgents(existing.id);
     return {
-      instanceId,
+      instanceId: existing.id,
       roundId: existing.currentRoundId,
       agentCount: agents.length,
     };
   }
 
-  // 1b. Stale-draft recovery: a previous bootstrap that crashed between
-  // createDraft and activateDraft leaves a 'draft'-status row that would
-  // make createDraft throw "draft already exists". Drafts are disposable
-  // pre-activation state (activation is transactional), so discard and
-  // recreate fresh.
-  if (!existing || existing.status !== "active") {
-    const staleDraft = core.repository.getDraft(instanceId);
+  // 1b. Stale-draft recovery: if a previous bootstrap created a draft but
+  // crashed before activateDraft committed, the draft row exists with the
+  // instance's UUID. Discard it so the new draft (with the same UUID if we
+  // reuse it) doesn't hit "draft already exists".
+  if (existing && existing.status !== "active") {
+    const staleDraft = core.repository.getDraft(existing.id);
     if (staleDraft) {
-      core.repository.deleteDraft(instanceId);
+      core.repository.deleteDraft(existing.id);
     }
   }
 
@@ -106,14 +111,18 @@ export async function ensureWeightedScorerInstance(
   // 5. Default parameters
   const defaultParams = weightedScorerDefinition.defaultParameters as WeightedScorerParameters;
 
+  // Generate UUID id (caller may override via opts.instanceId for tests)
+  const uuid = opts?.instanceId ?? randomUUID();
+
   // 6–7. Create draft → validate → activate.
   // Concurrent safety (C2): activateDraft uses repository.transaction()
   // (BEGIN IMMEDIATE) internally. If two processes race past the
-  // getInstance check, the loser hits a UNIQUE constraint on saveDraft
-  // and we re-check idempotently.
+  // findInstanceByName check, the loser hits the UNIQUE constraint on
+  // (definition_id, name) and we re-check idempotently.
   try {
     core.controlPlane.createDraft({
-      id: instanceId,
+      id: uuid,
+      name,
       schedulerDefinition: {
         kind: "scheduler",
         id: weightedScorerDefinition.id,
@@ -128,23 +137,23 @@ export async function ensureWeightedScorerInstance(
       metadata: {},
     });
 
-    const validation = core.controlPlane.validateDraft(instanceId);
+    const validation = core.controlPlane.validateDraft(uuid);
     if (!validation.ok) {
       const issueList = validation.issues.map((i) => `${i.path}: ${i.message}`).join("; ");
       throw new Error(`draft validation failed: ${issueList}`);
     }
 
-    const { roundId } = core.controlPlane.activateDraft(instanceId);
-    const finalAgents = core.repository.listAgents(instanceId);
+    const { roundId } = core.controlPlane.activateDraft(uuid);
+    const finalAgents = core.repository.listAgents(uuid);
 
-    return { instanceId, roundId, agentCount: finalAgents.length };
+    return { instanceId: uuid, roundId, agentCount: finalAgents.length };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("UNIQUE constraint") || msg.includes("already exists")) {
-      const winner = core.repository.getInstance(instanceId);
+      const winner = core.repository.findInstanceByName(WEIGHTED_SCORER_DEFINITION_ID, name);
       if (winner && winner.status === "active") {
-        const winnerAgents = core.repository.listAgents(instanceId);
-        return { instanceId, roundId: winner.currentRoundId, agentCount: winnerAgents.length };
+        const winnerAgents = core.repository.listAgents(winner.id);
+        return { instanceId: winner.id, roundId: winner.currentRoundId, agentCount: winnerAgents.length };
       }
     }
     throw err;
@@ -179,9 +188,11 @@ export function syncWeightedScorerAgents(
 
 export interface ArenaBootstrapOpts {
   instanceId?: string;
+  name?: string;
   wsInstanceId?: string;
   routingBindings?: Array<{
     id: string;
+    name?: string;
     priority: number;
     match: { role?: string; taskCategory?: string; labels?: Record<string, string>; caller?: string };
   }>;
@@ -207,12 +218,12 @@ export async function ensureArenaInstance(
   ports: ArenaSchedulerPorts,
   opts?: ArenaBootstrapOpts,
 ): Promise<BootstrapResult> {
-  const instanceId = opts?.instanceId ?? DEFAULT_MARKET_INSTANCE_ID;
+  const name = opts?.name ?? DEFAULT_MARKET_NAME;
 
-  // Guard: reject dispatch-target ids passed as bootstrap ids (see ADR / 1e4eb56)
-  if (opts?.instanceId && opts.instanceId === DEFAULT_WEIGHTED_SCORER_INSTANCE_ID) {
+  // Guard: reject names that collide with the weighted-scorer scheduler's canonical name
+  if (opts?.name && opts.name === DEFAULT_WEIGHTED_SCORER_NAME) {
     throw new Error(
-      `ensureArenaInstance: instanceId "${opts.instanceId}" collides with the weighted-scorer scheduler's canonical instance id — cfg.scheduler.instanceId is a dispatch target, not a bootstrap id`,
+      `ensureArenaInstance: name "${opts.name}" collides with the weighted-scorer scheduler's canonical name — cfg.scheduler.instanceId is a dispatch target, not a bootstrap id`,
     );
   }
 
@@ -235,26 +246,23 @@ export async function ensureArenaInstance(
     if (!msg.includes("already registered")) throw err;
   }
 
-  // 1. Idempotency check: if instance already exists and is active, return it
-  const existing = core.repository.getInstance(instanceId);
+  // 1. Idempotency check by (definition_id, name) → UUID identity
+  const existing = core.repository.findInstanceByName(MARKET_SCHEDULER_DEFINITION_ID, name);
   if (existing && existing.status === "active") {
-    const agents = core.repository.listAgents(instanceId);
+    const agents = core.repository.listAgents(existing.id);
     return {
-      instanceId,
+      instanceId: existing.id,
       roundId: existing.currentRoundId,
       agentCount: agents.length,
     };
   }
 
-  // 1b. Stale-draft recovery: a previous bootstrap that crashed between
-  // createDraft and activateDraft leaves a 'draft'-status row that would
-  // make createDraft throw "draft already exists". Drafts are disposable
-  // pre-activation state (activation is transactional), so discard and
-  // recreate fresh.
-  if (!existing || existing.status !== "active") {
-    const staleDraft = core.repository.getDraft(instanceId);
+  // 1b. Stale-draft recovery: if a previous bootstrap created a draft but
+  // crashed before activateDraft committed, clean up the stale draft.
+  if (existing && existing.status !== "active") {
+    const staleDraft = core.repository.getDraft(existing.id);
     if (staleDraft) {
-      core.repository.deleteDraft(instanceId);
+      core.repository.deleteDraft(existing.id);
     }
   }
 
@@ -275,12 +283,16 @@ export async function ensureArenaInstance(
   // 7. Routing bindings (default: none; caller provides market-mode bindings)
   const routingBindings = opts?.routingBindings ?? [];
 
+  // Generate UUID id (caller may override via opts.instanceId for tests)
+  const uuid = opts?.instanceId ?? randomUUID();
+
   // 8–9. Create draft → validate → activate.
   // Concurrent safety (C2): activateDraft uses repository.transaction()
   // (BEGIN IMMEDIATE) internally. UNIQUE catch for race losers.
   try {
     core.controlPlane.createDraft({
-      id: instanceId,
+      id: uuid,
+      name,
       schedulerDefinition: {
         kind: "scheduler",
         id: ARENA_DEFINITION.id,
@@ -293,23 +305,23 @@ export async function ensureArenaInstance(
       metadata: {},
     });
 
-    const validation = core.controlPlane.validateDraft(instanceId);
+    const validation = core.controlPlane.validateDraft(uuid);
     if (!validation.ok) {
       const issueList = validation.issues.map((i) => `${i.path}: ${i.message}`).join("; ");
       throw new Error(`arena draft validation failed: ${issueList}`);
     }
 
-    const { roundId } = core.controlPlane.activateDraft(instanceId);
-    const finalAgents = core.repository.listAgents(instanceId);
+    const { roundId } = core.controlPlane.activateDraft(uuid);
+    const finalAgents = core.repository.listAgents(uuid);
 
-    return { instanceId, roundId, agentCount: finalAgents.length };
+    return { instanceId: uuid, roundId, agentCount: finalAgents.length };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("UNIQUE constraint") || msg.includes("already exists")) {
-      const winner = core.repository.getInstance(instanceId);
+      const winner = core.repository.findInstanceByName(MARKET_SCHEDULER_DEFINITION_ID, name);
       if (winner && winner.status === "active") {
-        const winnerAgents = core.repository.listAgents(instanceId);
-        return { instanceId, roundId: winner.currentRoundId, agentCount: winnerAgents.length };
+        const winnerAgents = core.repository.listAgents(winner.id);
+        return { instanceId: winner.id, roundId: winner.currentRoundId, agentCount: winnerAgents.length };
       }
     }
     throw err;

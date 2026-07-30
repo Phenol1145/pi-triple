@@ -26,8 +26,8 @@ import {
   ensureArenaInstance,
 } from "../src/schedulers/bootstrap.ts";
 import {
-  DEFAULT_MARKET_INSTANCE_ID,
-  DEFAULT_WEIGHTED_SCORER_INSTANCE_ID,
+  DEFAULT_MARKET_NAME,
+  DEFAULT_WEIGHTED_SCORER_NAME,
 } from "../src/schedulers/names.ts";
 
 // ── Fixtures ───────────────────────────────────────────────────────────
@@ -84,9 +84,9 @@ function mockArenaPorts(candidates: ModelInfo[] = []): ArenaSchedulerPorts {
   };
 }
 
-// ── Collision guards ───────────────────────────────────────────────────
+// ── Collision guards (name-based, ADR-0002 UUID identity) ──────────────
 
-test("ensureWeightedScorerInstance rejects the market canonical instanceId", async () => {
+test("ensureWeightedScorerInstance rejects the market canonical name", async () => {
   const db = memoryDB();
   const core = createLabCore(db);
   core.definitions.register(structuredClone(PI_DEFAULT_LOOP_DEFINITION));
@@ -96,18 +96,18 @@ test("ensureWeightedScorerInstance rejects the market canonical instanceId", asy
   await assert.rejects(
     () =>
       ensureWeightedScorerInstance(core, schedulers, ports, {
-        instanceId: DEFAULT_MARKET_INSTANCE_ID,
+        name: DEFAULT_MARKET_NAME,
       }),
     (err: Error) =>
       /collides/.test(err.message) &&
-      err.message.includes(DEFAULT_MARKET_INSTANCE_ID) &&
+      err.message.includes(DEFAULT_MARKET_NAME) &&
       err.message.includes("dispatch target"),
   );
 
   db.close();
 });
 
-test("ensureArenaInstance rejects the weighted-scorer canonical instanceId", async () => {
+test("ensureArenaInstance rejects the weighted-scorer canonical name", async () => {
   const db = memoryDB();
   const core = createLabCore(db);
   core.definitions.register(structuredClone(PI_DEFAULT_LOOP_DEFINITION));
@@ -117,11 +117,11 @@ test("ensureArenaInstance rejects the weighted-scorer canonical instanceId", asy
   await assert.rejects(
     () =>
       ensureArenaInstance(core, schedulers, ports, {
-        instanceId: DEFAULT_WEIGHTED_SCORER_INSTANCE_ID,
+        name: DEFAULT_WEIGHTED_SCORER_NAME,
       }),
     (err: Error) =>
       /collides/.test(err.message) &&
-      err.message.includes(DEFAULT_WEIGHTED_SCORER_INSTANCE_ID) &&
+      err.message.includes(DEFAULT_WEIGHTED_SCORER_NAME) &&
       err.message.includes("dispatch target"),
   );
 

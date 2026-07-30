@@ -16,3 +16,10 @@ export const DEFAULT_WEIGHTED_TUNER_INSTANCE_ID = "default-weighted-tuner";
 // 路由绑定
 export const MARKET_DEFAULT_BINDING_ID = "arena-default"; // Phase 2 → "market-default"
 export const WEIGHTED_SCORER_DEFAULT_BINDING_ID = "default";
+
+// ── Logical instance names (ADR-0002 UUID identity) ──────────────────
+// These are the mutable name attribute; the stable identity is UUID.
+export const DEFAULT_MARKET_NAME = "default-market";
+export const DEFAULT_WEIGHTED_SCORER_NAME = "default-weighted-scorer";
+export const DEFAULT_WEIGHTED_TUNER_NAME = "default-weighted-tuner";
+export const MARKET_DEFAULT_BINDING_NAME = "market-default";

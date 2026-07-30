@@ -100,12 +100,16 @@ export interface AgentCreateSpec {
 
 export interface SchedulerInstanceDraftSpec {
   id: string;
+  /** Logical instance name (mutable identity attribute; UUID id is the stable identity). */
+  name?: string;
   schedulerDefinition: DefinitionRef;
   initialParameters?: unknown;
   agents: AgentCreateSpec[];
   fallbackChain: FallbackTarget[];
   routingBindings: Array<{
     id: string;
+    /** Logical routing binding name (falls back to id when not specified). */
+    name?: string;
     priority: number;
     match: { role?: string; taskCategory?: string; labels?: Record<string, string>; caller?: string };
   }>;

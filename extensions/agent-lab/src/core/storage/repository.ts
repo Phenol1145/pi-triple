@@ -410,7 +410,7 @@ export class CoreRepository {
     this.db.prepare(
       `INSERT INTO lab_routing_bindings (id, name, scheduler_instance_id, priority, match_json, created_ts)
        VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(binding.id, binding.id, schedulerInstanceId, binding.priority, JSON.stringify(binding.match), Date.now());
+    ).run(binding.id, binding.name ?? binding.id, schedulerInstanceId, binding.priority, JSON.stringify(binding.match), Date.now());
   }
 
   upsertRoutingBinding(
@@ -426,7 +426,7 @@ export class CoreRepository {
          priority = excluded.priority,
          match_json = excluded.match_json,
          created_ts = excluded.created_ts`
-    ).run(binding.id, binding.id, schedulerInstanceId, binding.priority, JSON.stringify(binding.match), Date.now());
+    ).run(binding.id, binding.name ?? binding.id, schedulerInstanceId, binding.priority, JSON.stringify(binding.match), Date.now());
   }
 
   deleteRoutingBinding(id: string): number {

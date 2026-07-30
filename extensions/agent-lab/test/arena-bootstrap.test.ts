@@ -108,25 +108,27 @@ test("1. ensureArenaInstance registers definition, creates draft, validates, act
 
   const result = await ensureArenaInstance(core, schedulers, ports);
 
-  assert.equal(result.instanceId, "default-arena");
-  assert.equal(result.roundId, "default-arena:round:0");
+  // instanceId is now a UUID (ADR-0002 UUID identity)
+  assert.match(result.instanceId, /^[0-9a-f-]{36}$/);
+  assert.match(result.roundId, /^[0-9a-f-]{36}:round:0$/);
   assert.equal(result.agentCount, 2);
 
-  // Verify instance is active
-  const inst = core.repository.getInstance("default-arena");
+  // Verify instance is active (by UUID)
+  const inst = core.repository.getInstance(result.instanceId);
   assert.ok(inst);
   assert.equal(inst.status, "active");
-  assert.equal(inst.currentRoundId, "default-arena:round:0");
+  assert.equal(inst.name, "default-market");
+  assert.equal(inst.currentRoundId, result.roundId);
   assert.equal(inst.definition.id, "arena");
   assert.equal(inst.definition.version, "1.0.0");
 
   // Verify round
-  const round = core.repository.getRound("default-arena:round:0");
+  const round = core.repository.getRound(result.roundId);
   assert.ok(round);
   assert.equal(round.sequence, 0);
 
   // Verify agents — now UUID (modelToAgentCreateSpec uses randomUUID); check model from definition
-  const agents = core.repository.listAgents("default-arena");
+  const agents = core.repository.listAgents(result.instanceId);
   assert.equal(agents.length, 2);
   const agentIds = new Set(agents.map((a) => a.id));
   assert.equal(agentIds.size, 2, "agent IDs should be unique UUIDs");
@@ -136,6 +138,11 @@ test("1. ensureArenaInstance registers definition, creates draft, validates, act
 
   // Verify fallback chain includes original-request
   assert.ok(inst.fallbackChain.some((f) => f.type === "original-request"));
+
+  // Verify by-name lookup works
+  const byName = core.repository.findInstanceByName("arena", "default-market");
+  assert.ok(byName);
+  assert.equal(byName.id, result.instanceId);
 
   db.close();
 });
@@ -155,7 +162,7 @@ test("2. ensureArenaInstance is idempotent on second call", async () => {
   const second = await ensureArenaInstance(core, schedulers, ports);
 
   assert.deepEqual(first, second);
-  assert.equal(core.repository.listAgents("default-arena").length, 1);
+  assert.equal(core.repository.listAgents(first.instanceId).length, 1);
 
   db.close();
 });
@@ -274,7 +281,8 @@ test("5. ensureArenaInstance with routingBindings creates market-mode routing", 
     ],
   });
 
-  assert.equal(result.instanceId, "default-arena");
+  // instanceId is now a UUID
+  assert.match(result.instanceId, /^[0-9a-f-]{36}$/);
 
   // Verify routing binding exists
   const bindings = core.repository.listRoutingBindings();
@@ -342,7 +350,7 @@ test("7. Sequential bootstrap: weighted-scorer first, then arena, validates fall
   const wsCandidates = [model("openai/gpt-4o"), model("google/gemini-pro")];
   const arenaCandidates = [model("anthropic/claude-3"), model("meta/llama-3")];
 
-  // Step 1: bootstrap weighted-scorer
+  // Step 1: bootstrap weighted-scorer with custom instanceId
   const wsResult = await ensureWeightedScorerInstance(
     core,
     schedulers,
@@ -361,13 +369,14 @@ test("7. Sequential bootstrap: weighted-scorer first, then arena, validates fall
     ],
   });
   assert.ok(arenaResult);
-  assert.equal(arenaResult.instanceId, "default-arena");
+  // instanceId is now a UUID
+  assert.match(arenaResult.instanceId, /^[0-9a-f-]{36}$/);
 
   // Both instances active
   const wsInst = core.repository.getInstance("prod-ws");
   assert.equal(wsInst.status, "active");
 
-  const arenaInst = core.repository.getInstance("default-arena");
+  const arenaInst = core.repository.getInstance(arenaResult.instanceId);
   assert.equal(arenaInst.status, "active");
 
   // Routing bindings: ws has priority 0, arena has priority 10
@@ -483,19 +492,21 @@ test("startup guard — cleans smoke-round residue on boot", async () => {
   const candidates = [model("openai/gpt-4o")];
   const ports = arenaPorts(candidates);
 
-  // Bootstrap arena normally — creates instance with currentRoundId = "default-arena:round:0"
-  await ensureArenaInstance(core, schedulers, ports);
+  // Bootstrap arena normally — creates instance with UUID id
+  const bootstrapResult = await ensureArenaInstance(core, schedulers, ports);
+  const arenaId = bootstrapResult.instanceId;
+  assert.match(arenaId, /^[0-9a-f-]{36}$/);
 
-  const inst = core.repository.getInstance("default-arena");
+  const inst = core.repository.getInstance(arenaId);
   assert.ok(inst);
-  assert.equal(inst.currentRoundId, "default-arena:round:0");
+  assert.equal(inst.currentRoundId, bootstrapResult.roundId);
 
   // Now simulate crash residue: manually set current_round_id to smoke-round-xxx
   // and insert a fake smoke round row
   const smokeRoundId = "smoke-round-crash-1234";
   core.repository.insertRound({
     id: smokeRoundId,
-    schedulerInstanceId: "default-arena",
+    schedulerInstanceId: arenaId,
     sequence: 9999,
     parentRoundId: inst.currentRoundId,
     parameters: inst.fallbackChain,
@@ -508,35 +519,35 @@ test("startup guard — cleans smoke-round residue on boot", async () => {
 
   db.prepare(
     "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
-  ).run(smokeRoundId, "default-arena");
+  ).run(smokeRoundId, arenaId);
 
   // Verify corrupted state
-  const corrupted = core.repository.getInstance("default-arena");
+  const corrupted = core.repository.getInstance(arenaId);
   assert.ok(corrupted);
   assert.equal(corrupted.currentRoundId, smokeRoundId);
 
   // Run startup guard logic (same as index.ts inline guard)
   {
-    const arenaRecord = core.repository.getInstance("default-arena");
+    const arenaRecord = core.repository.getInstance(arenaId);
     if (arenaRecord && arenaRecord.currentRoundId.startsWith("smoke-round-")) {
       const seq0 = db.prepare(
         "SELECT id FROM lab_optimization_rounds WHERE scheduler_instance_id = ? AND sequence = 0 LIMIT 1"
-      ).get("default-arena") as { id: string } | undefined;
+      ).get(arenaId) as { id: string } | undefined;
       if (seq0) {
         db.prepare(
           "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
-        ).run(seq0.id, "default-arena");
+        ).run(seq0.id, arenaId);
       }
       db.prepare(
         "DELETE FROM lab_optimization_rounds WHERE scheduler_instance_id = ? AND id LIKE 'smoke-round-%'"
-      ).run("default-arena");
+      ).run(arenaId);
     }
   }
 
   // Verify cleaned: current_round_id restored
-  const cleaned = core.repository.getInstance("default-arena");
+  const cleaned = core.repository.getInstance(arenaId);
   assert.ok(cleaned);
-  assert.equal(cleaned.currentRoundId, "default-arena:round:0");
+  assert.equal(cleaned.currentRoundId, bootstrapResult.roundId);
 
   // Verify smoke round row deleted
   const smokeRow = db.prepare(
@@ -545,14 +556,14 @@ test("startup guard — cleans smoke-round residue on boot", async () => {
   assert.equal(smokeRow, undefined, "smoke round row should be deleted");
 
   // Verify original round still intact
-  const originalRound = core.repository.getRound("default-arena:round:0");
+  const originalRound = core.repository.getRound(bootstrapResult.roundId);
   assert.ok(originalRound);
   assert.equal(originalRound.sequence, 0);
 
   db.close();
 });
 
-// ── Stale-draft recovery (P7 hotfix) ──────────────────────────────────
+// ── Stale-draft recovery (adapted for UUID identity) ────────────────
 
 test("stale validated draft from crashed bootstrap is discarded and recreated (arena)", async () => {
   const db = memoryDB();
@@ -564,21 +575,23 @@ test("stale validated draft from crashed bootstrap is discarded and recreated (a
   const ports = arenaPorts(candidates);
 
   // First bootstrap succeeds.
-  await ensureArenaInstance(core, schedulers, ports);
+  const first = await ensureArenaInstance(core, schedulers, ports);
+  const firstUuid = first.instanceId;
+  assert.match(firstUuid, /^[0-9a-f-]{36}$/);
 
   // Simulate the user's production residue: draft left at 'validated',
   // activation never committed (no instance/rounds/agents).
-  db.prepare("DELETE FROM lab_scheduler_instances WHERE id = ?").run("default-arena");
-  db.prepare("DELETE FROM lab_optimization_rounds WHERE scheduler_instance_id = ?").run("default-arena");
-  db.prepare("DELETE FROM lab_agent_instances WHERE scheduler_instance_id = ?").run("default-arena");
-  db.prepare("DELETE FROM lab_events WHERE event_id = ?").run("instance.activated:default-arena");
-  db.prepare("DELETE FROM lab_routing_bindings WHERE scheduler_instance_id = ?").run("default-arena");
-  db.prepare("UPDATE lab_scheduler_drafts SET status = 'validated' WHERE id = ?").run("default-arena");
+  db.prepare("DELETE FROM lab_scheduler_instances WHERE id = ?").run(firstUuid);
+  db.prepare("DELETE FROM lab_optimization_rounds WHERE scheduler_instance_id = ?").run(firstUuid);
+  db.prepare("DELETE FROM lab_agent_instances WHERE scheduler_instance_id = ?").run(firstUuid);
+  db.prepare("DELETE FROM lab_events WHERE event_id = ?").run(`instance.activated:${firstUuid}`);
+  db.prepare("DELETE FROM lab_routing_bindings WHERE scheduler_instance_id = ?").run(firstUuid);
+  db.prepare("UPDATE lab_scheduler_drafts SET status = 'validated' WHERE id = ?").run(firstUuid);
 
   // Re-bootstrap must discard the stale draft and activate cleanly.
   const result = await ensureArenaInstance(core, schedulers, ports);
-  assert.equal(result.instanceId, "default-arena");
-  const inst = core.repository.getInstance("default-arena");
+  assert.match(result.instanceId, /^[0-9a-f-]{36}$/);
+  const inst = core.repository.getInstance(result.instanceId);
   assert.ok(inst);
   assert.equal(inst.status, "active");
 
@@ -604,11 +617,12 @@ test("ws + arena co-bootstrap in one DB: agent ids are namespaced, no collision"
     wsInstanceId: wsResult.instanceId,
   });
 
-  assert.equal(wsResult.instanceId, "default-weighted-scorer");
-  assert.equal(arenaResult.instanceId, "default-arena");
+  // Both instanceIds are UUIDs
+  assert.match(wsResult.instanceId, /^[0-9a-f-]{36}$/);
+  assert.match(arenaResult.instanceId, /^[0-9a-f-]{36}$/);
 
-  const wsAgents = new Set(core.repository.listAgents("default-weighted-scorer").map((a) => a.id));
-  const arenaAgents = new Set(core.repository.listAgents("default-arena").map((a) => a.id));
+  const wsAgents = new Set(core.repository.listAgents(wsResult.instanceId).map((a) => a.id));
+  const arenaAgents = new Set(core.repository.listAgents(arenaResult.instanceId).map((a) => a.id));
   assert.equal(wsAgents.size, 2, "WS agent IDs should be unique UUIDs");
   assert.equal(arenaAgents.size, 2, "Arena agent IDs should be unique UUIDs");
   // Zero overlap between populations (UUIDs are unique).

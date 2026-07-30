@@ -142,7 +142,7 @@ test("e2e closed loop: seed runs → run → proposal → diff → promote → t
   const ports = mockPorts(candidates);
 
   const wsResult = await ensureWeightedScorerInstance(core, schedulers, ports);
-  assert.equal(wsResult.instanceId, "default-weighted-scorer");
+  assert.match(wsResult.instanceId, /^[0-9a-f-]{36}$/);
 
   // ── Set up optimizer ────────────────────────────────────────────────
   const optRegistry = new OptimizerRegistry(core.definitions, core.repository, core.events);
@@ -152,7 +152,7 @@ test("e2e closed loop: seed runs → run → proposal → diff → promote → t
     {
       instanceId: "default-weighted-tuner",
       config: { minSamples: 20, step: 0.05, margin: 0.1 },
-      targetSchedulers: ["default-weighted-scorer"],
+      targetSchedulers: [wsResult.instanceId],
     },
   );
   assert.equal(optInst.status, "active");
@@ -169,9 +169,9 @@ test("e2e closed loop: seed runs → run → proposal → diff → promote → t
   const originalCompletion = currentParams.weights.completion;
 
   // ── Create DataAPI and call decide ──────────────────────────────────
-  const dataApi = new DataAPIImpl(db, core.repository, core.events, ["default-weighted-scorer"], "default-weighted-tuner");
+  const dataApi = new DataAPIImpl(db, core.repository, core.events, [wsResult.instanceId], "default-weighted-tuner");
   const window = { since: currentRound!.createdAt, until: Date.now() };
-  const aggregates = dataApi.getCandidateAggregates("default-weighted-scorer", window, "coder") as ModelAggregate[];
+  const aggregates = dataApi.getCandidateAggregates(wsResult.instanceId, window, "coder") as ModelAggregate[];
   assert.ok(aggregates.length > 0, "aggregates should be non-empty");
 
   const result = decide(aggregates, currentParams.weights, { minSamples: 20, step: 0.05, margin: 0.1 });
@@ -187,7 +187,7 @@ test("e2e closed loop: seed runs → run → proposal → diff → promote → t
   // ── Submit proposal through ControlPlane ───────────────────────────
   const { proposalId, candidateRoundId } = core.controlPlane.submitProposal(
     "default-weighted-tuner",
-    "default-weighted-scorer",
+    wsResult.instanceId,
     {
       baseRoundId: currentRound!.id,
       parameters: newParams,
@@ -227,7 +227,7 @@ test("e2e closed loop: seed runs → run → proposal → diff → promote → t
   assert.notEqual(newRoundId, candidateRoundId);
 
   // ── Verify new active round ─────────────────────────────────────────
-  const instance = core.repository.getInstance("default-weighted-scorer");
+  const instance = core.repository.getInstance(wsResult.instanceId);
   assert.ok(instance);
   assert.equal(instance!.currentRoundId, newRoundId);
 
@@ -252,7 +252,7 @@ test("e2e closed loop: seed runs → run → proposal → diff → promote → t
 
   // ── Rollback to original round ──────────────────────────────────────
   const { newRoundId: rollbackRoundId } = core.controlPlane.rollbackRound(
-    "default-weighted-scorer",
+    wsResult.instanceId,
     wsResult.roundId,
   );
   assert.ok(rollbackRoundId);
@@ -294,7 +294,7 @@ test("supersede discipline: promote one proposal, other pending becomes supersed
   optRegistry.registerOptimizer(weightedTunerDefinition);
   optRegistry.createOptimizerInstance(
     { kind: "optimizer", id: "weighted-tuner", version: "1.0.0" },
-    { instanceId: "default-weighted-tuner", config: {}, targetSchedulers: ["default-weighted-scorer"] },
+    { instanceId: "default-weighted-tuner", config: {}, targetSchedulers: [wsResult.instanceId] },
   );
 
   const currentRound = core.repository.getRound(wsResult.roundId);
@@ -311,7 +311,7 @@ test("supersede discipline: promote one proposal, other pending becomes supersed
     weights: { ...currentParams.weights, completion: Math.min(currentParams.weights.completion + 0.1, 1) },
   };
   const { proposalId: proposalAId, candidateRoundId: candidateAId } = core.controlPlane.submitProposal(
-    "default-weighted-tuner", "default-weighted-scorer",
+    "default-weighted-tuner", wsResult.instanceId,
     { baseRoundId: wsResult.roundId, parameters: proposalA_params },
   );
   assert.ok(proposalAId);
@@ -322,7 +322,7 @@ test("supersede discipline: promote one proposal, other pending becomes supersed
     weights: { ...currentParams.weights, costEffectiveness: Math.min(currentParams.weights.costEffectiveness + 0.1, 1) },
   };
   const { proposalId: proposalBId, candidateRoundId: candidateBId } = core.controlPlane.submitProposal(
-    "default-weighted-tuner", "default-weighted-scorer",
+    "default-weighted-tuner", wsResult.instanceId,
     { baseRoundId: wsResult.roundId, parameters: proposalB_params },
   );
   assert.ok(proposalBId);
@@ -367,17 +367,18 @@ test("failure isolation: optimization failure → event recorded, zero round/pro
   const ports = mockPorts(candidates);
 
   await ensureWeightedScorerInstance(core, schedulers, ports);
+  const wsResult = await ensureWeightedScorerInstance(core, schedulers, ports);
 
   const optRegistry = new OptimizerRegistry(core.definitions, core.repository, core.events);
   optRegistry.registerOptimizer(weightedTunerDefinition);
   optRegistry.createOptimizerInstance(
     { kind: "optimizer", id: "weighted-tuner", version: "1.0.0" },
-    { instanceId: "default-weighted-tuner", config: {}, targetSchedulers: ["default-weighted-scorer"] },
+    { instanceId: "default-weighted-tuner", config: {}, targetSchedulers: [wsResult.instanceId] },
   );
 
   // Count rounds + proposals before
-  const roundsBefore = core.repository.listRounds("default-weighted-scorer").length;
-  const proposalsBefore = core.repository.listProposals("default-weighted-scorer").length;
+  const roundsBefore = core.repository.listRounds(wsResult.instanceId).length;
+  const proposalsBefore = core.repository.listProposals(wsResult.instanceId).length;
 
   // Simulate a failed run by recording a failed event directly
   // (The facade.run() catches exceptions and emits optimizer.run.failed)
@@ -390,19 +391,19 @@ test("failure isolation: optimization failure → event recorded, zero round/pro
     identity: {
       traceId: "test-failure",
       optimizerInstanceId: "default-weighted-tuner",
-      schedulerInstanceId: "default-weighted-scorer",
+      schedulerInstanceId: wsResult.instanceId,
     },
     payload: { instanceId: "default-weighted-tuner", error: "simulated failure" },
   });
 
   // Verify the event was recorded
-  const events = core.events.query({ schedulerInstanceId: "default-weighted-scorer", limit: 100 });
+  const events = core.events.query({ schedulerInstanceId: wsResult.instanceId, limit: 100 });
   const failEvents = events.filter((e) => e.eventType === "optimizer.run.failed");
   assert.ok(failEvents.length >= 1, "optimizer.run.failed event should be recorded");
 
   // Zero round/proposal mutation
-  const roundsAfter = core.repository.listRounds("default-weighted-scorer").length;
-  const proposalsAfter = core.repository.listProposals("default-weighted-scorer").length;
+  const roundsAfter = core.repository.listRounds(wsResult.instanceId).length;
+  const proposalsAfter = core.repository.listProposals(wsResult.instanceId).length;
   assert.equal(roundsAfter, roundsBefore, "no new rounds should be created on failure");
   assert.equal(proposalsAfter, proposalsBefore, "no new proposals should be created on failure");
 });
@@ -421,19 +422,20 @@ test("authorization: DataAPI access to unauthorized scheduler → DataAccessDeni
   const ports = mockPorts(candidates);
 
   await ensureWeightedScorerInstance(core, schedulers, ports);
+  const wsResult = await ensureWeightedScorerInstance(core, schedulers, ports);
 
-  // DataAPI authorized only for "some-other-instance" — not "default-weighted-scorer"
+  // DataAPI authorized only for "some-other-instance" — not wsResult.instanceId
   const dataApi = new DataAPIImpl(
     db,
     core.repository,
     core.events,
-    ["some-other-instance"], // authorized set does NOT include default-weighted-scorer
+    ["some-other-instance"], // authorized set does NOT include the ws instance
     "default-weighted-tuner",
   );
 
-  // Accessing "default-weighted-scorer" should throw
+  // Accessing the actual ws instance (by UUID) should throw
   assert.throws(
-    () => dataApi.getCurrentRound("default-weighted-scorer"),
+    () => dataApi.getCurrentRound(wsResult.instanceId),
     DataAccessDeniedError,
     "should throw DataAccessDeniedError",
   );
@@ -445,7 +447,7 @@ test("authorization: DataAPI access to unauthorized scheduler → DataAccessDeni
 
   // Verify event payload
   const denyEvent = denyEvents[0];
-  assert.equal((denyEvent.payload as { schedulerInstanceId: string }).schedulerInstanceId, "default-weighted-scorer");
+  assert.equal((denyEvent.payload as { schedulerInstanceId: string }).schedulerInstanceId, wsResult.instanceId);
   assert.equal((denyEvent.payload as { method: string }).method, "getCurrentRound");
 });
 
@@ -468,7 +470,7 @@ test("stale baseline: submit with old baseRoundId after promote → rejected", a
   optRegistry.registerOptimizer(weightedTunerDefinition);
   optRegistry.createOptimizerInstance(
     { kind: "optimizer", id: "weighted-tuner", version: "1.0.0" },
-    { instanceId: "default-weighted-tuner", config: {}, targetSchedulers: ["default-weighted-scorer"] },
+    { instanceId: "default-weighted-tuner", config: {}, targetSchedulers: [wsResult.instanceId] },
   );
 
   const currentRound = core.repository.getRound(wsResult.roundId);
@@ -484,14 +486,14 @@ test("stale baseline: submit with old baseRoundId after promote → rejected", a
     weights: { ...currentParams.weights, completion: Math.min(currentParams.weights.completion + 0.1, 1) },
   };
   const { proposalId, candidateRoundId } = core.controlPlane.submitProposal(
-    "default-weighted-tuner", "default-weighted-scorer",
+    "default-weighted-tuner", wsResult.instanceId,
     { baseRoundId: wsResult.roundId, parameters: validParams },
   );
 
   // Promote → currentRoundId changes
   core.controlPlane.promoteRound(candidateRoundId);
 
-  const newInstance = core.repository.getInstance("default-weighted-scorer");
+  const newInstance = core.repository.getInstance(wsResult.instanceId);
   assert.ok(newInstance);
   assert.notEqual(newInstance!.currentRoundId, wsResult.roundId, "currentRoundId should have changed");
 
@@ -499,7 +501,7 @@ test("stale baseline: submit with old baseRoundId after promote → rejected", a
   assert.throws(
     () => {
       core.controlPlane.submitProposal(
-        "default-weighted-tuner", "default-weighted-scorer",
+        "default-weighted-tuner", wsResult.instanceId,
         { baseRoundId: wsResult.roundId, parameters: validParams },
       );
     },
@@ -507,7 +509,7 @@ test("stale baseline: submit with old baseRoundId after promote → rejected", a
   );
 
   // Rejected proposal should still be persisted
-  const proposals = core.repository.listProposals("default-weighted-scorer");
+  const proposals = core.repository.listProposals(wsResult.instanceId);
   const rejected = proposals.filter((p) => p.status === "rejected");
   assert.ok(rejected.length >= 1, "stale-baseline proposal should be persisted as rejected");
 });
@@ -526,17 +528,18 @@ test("optimizer events: run.triggered and run.skipped for no-signal data", async
   const ports = mockPorts(candidates);
 
   await ensureWeightedScorerInstance(core, schedulers, ports);
+  const wsResult = await ensureWeightedScorerInstance(core, schedulers, ports);
 
   const optRegistry = new OptimizerRegistry(core.definitions, core.repository, core.events);
   optRegistry.registerOptimizer(weightedTunerDefinition);
   optRegistry.createOptimizerInstance(
     { kind: "optimizer", id: "weighted-tuner", version: "1.0.0" },
-    { instanceId: "default-weighted-tuner", config: {}, targetSchedulers: ["default-weighted-scorer"] },
+    { instanceId: "default-weighted-tuner", config: {}, targetSchedulers: [wsResult.instanceId] },
   );
 
   // Get current round for window
   const currentRound = core.repository.getRound(
-    core.repository.getInstance("default-weighted-scorer")!.currentRoundId,
+    core.repository.getInstance(wsResult.instanceId)!.currentRoundId,
   );
   assert.ok(currentRound);
 
@@ -556,8 +559,8 @@ test("optimizer events: run.triggered and run.skipped for no-signal data", async
   });
 
   // Get aggregates and call decide
-  const dataApi = new DataAPIImpl(db, core.repository, core.events, ["default-weighted-scorer"], "default-weighted-tuner");
-  const aggregates = dataApi.getCandidateAggregates("default-weighted-scorer", {
+  const dataApi = new DataAPIImpl(db, core.repository, core.events, [wsResult.instanceId], "default-weighted-tuner");
+  const aggregates = dataApi.getCandidateAggregates(wsResult.instanceId, {
     since: currentRound!.createdAt,
     until: now,
   }, "coder") as ModelAggregate[];
@@ -575,7 +578,7 @@ test("optimizer events: run.triggered and run.skipped for no-signal data", async
     identity: {
       traceId: "test",
       optimizerInstanceId: "default-weighted-tuner",
-      schedulerInstanceId: "default-weighted-scorer",
+      schedulerInstanceId: wsResult.instanceId,
     },
     payload: { instanceId: "default-weighted-tuner", reason: "no-actionable-signal" },
   });
@@ -602,7 +605,7 @@ test("production facade: seeded runs (role-less) → optimize() via facade → p
   const ports = mockPorts(candidates);
 
   const wsResult = await ensureWeightedScorerInstance(core, schedulers, ports);
-  assert.equal(wsResult.instanceId, "default-weighted-scorer");
+  assert.match(wsResult.instanceId, /^[0-9a-f-]{36}$/);
 
   // ── Set up optimizer ────────────────────────────────────────────────
   const optRegistry = new OptimizerRegistry(core.definitions, core.repository, core.events);
@@ -612,7 +615,7 @@ test("production facade: seeded runs (role-less) → optimize() via facade → p
     {
       instanceId: "default-weighted-tuner",
       config: { minSamples: 10, step: 0.05, margin: 0.1 },
-      targetSchedulers: ["default-weighted-scorer"],
+      targetSchedulers: [wsResult.instanceId],
     },
   );
 
@@ -668,7 +671,7 @@ test("optimizer facade: onRunTick fires after skip result", async () => {
   const ports = mockPorts(candidates);
 
   const wsResult = await ensureWeightedScorerInstance(core, schedulers, ports);
-  assert.equal(wsResult.instanceId, "default-weighted-scorer");
+  assert.match(wsResult.instanceId, /^[0-9a-f-]{36}$/);
 
   const optRegistry = new OptimizerRegistry(core.definitions, core.repository, core.events);
   optRegistry.registerOptimizer(weightedTunerDefinition);
@@ -677,7 +680,7 @@ test("optimizer facade: onRunTick fires after skip result", async () => {
     {
       instanceId: "default-weighted-tuner",
       config: { minSamples: 10, step: 0.05, margin: 0.1 },
-      targetSchedulers: ["default-weighted-scorer"],
+      targetSchedulers: [wsResult.instanceId],
     },
   );
 
@@ -706,7 +709,7 @@ test("optimizer facade: onRunTick fires after skip result", async () => {
 
   // onRunTick must have been called (even for skip)
   assert.ok(tickCalls.length >= 1, `onRunTick should fire after skip; got ${tickCalls.length} calls`);
-  assert.equal(tickCalls[0], "default-weighted-scorer");
+  assert.equal(tickCalls[0], wsResult.instanceId);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -728,11 +731,11 @@ test("optimizer facade: manual canaryStart emits optimizer.canary-started event"
   optRegistry.registerOptimizer(weightedTunerDefinition);
   optRegistry.createOptimizerInstance(
     { kind: "optimizer", id: "weighted-tuner", version: "1.0.0" },
-    { instanceId: "default-weighted-tuner", config: {}, targetSchedulers: ["default-weighted-scorer"] },
+    { instanceId: "default-weighted-tuner", config: {}, targetSchedulers: [wsResult.instanceId] },
   );
 
   // Submit a proposal → get a candidate round
-  const sub = core.controlPlane.submitProposal("default-weighted-tuner", "default-weighted-scorer", {
+  const sub = core.controlPlane.submitProposal("default-weighted-tuner", wsResult.instanceId, {
     baseRoundId: wsResult.roundId,
     parameters: { weights: { completion: 0.7, costEffectiveness: 0.1, performance: 0.1, benchmark: 0.1 }, topN: 3, pinBehavior: "respect", syncOnDispatch: false },
   });
@@ -754,7 +757,7 @@ test("optimizer facade: manual canaryStart emits optimizer.canary-started event"
   // Manual canary start
   const result = facade.canaryStart(sub.candidateRoundId);
   assert.ok(result.ok, `canaryStart should succeed: ${result.reason ?? ""}`);
-  assert.equal(result.schedulerInstanceId, "default-weighted-scorer");
+  assert.equal(result.schedulerInstanceId, wsResult.instanceId);
 
   // Round status should be "canary"
   const round = core.repository.getRound(sub.candidateRoundId);

@@ -230,7 +230,7 @@ export class ControlPlane {
       // Insert active SchedulerInstance.
       this.repository.insertInstance({
         id: spec.id,
-        name: spec.id,
+        name: spec.name ?? spec.id,
         definition: spec.schedulerDefinition,
         parameterModelVersion: definition.parameterModelVersion,
         agentDefinitionSchemaVersion: definition.agentDefinitionSchemaVersion,
