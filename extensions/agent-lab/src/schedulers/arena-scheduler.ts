@@ -2,9 +2,11 @@ import type {
   SchedulerImplementation,
   SchedulingInput,
   SchedulingResult,
+  SchedulerSDK,
   SettleContext,
   SettleOutcome,
 } from "../scheduler/contracts.ts";
+import type { BidBoard } from "../arena/bid-board.ts";
 import type { Ledger, ModelCaller, AgentState, ArenaTask } from "../arena/types.ts";
 import type { ModelInfo } from "../types.ts";
 import type { ArenaSchedulerParameters } from "./arena-definition.ts";
@@ -32,6 +34,73 @@ export interface ArenaSchedulerPorts {
   resolveAgent: (model: ModelInfo) => string;
   /** Resolve agent UUID → templateId (from lab_agent_instances.source_template_id). */
   resolveTemplate?: (agentId: string) => string | undefined;
+  /** WorkLoop 竞价收集板；与 engine:"workloop" 配合，缺失时回退 model-caller。 */
+  bidBoard?: BidBoard;
+}
+
+// ── WorkLoop bidding helpers ────────────────────────────────────────
+
+/** 受限并发 map：最多 limit 个 fn 同时跑，保持结果顺序。 */
+async function mapConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i] as T);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+/** 在基础竞价提示后追加 place_bid 工具调用指令（含一次性 token）。 */
+function renderWorkLoopBidPrompt(basePrompt: string, token: string): string {
+  return (
+    basePrompt +
+    `\n\n【竞价指令】请调用 place_bid 工具提交出价：place_bid(token="${token}", stake=<你的出价数字>, reasoning="<简短理由>")。` +
+    `token 必须原样使用。只调用一次 place_bid，不要执行任务本身，不要做其他事。`
+  );
+}
+
+/** 按引擎取原始出价：workloop → sdk.agents.run + BidBoard；否则 model-caller。 */
+async function solicitRawBid(
+  st: { agent: string; model: ModelInfo; balance: number },
+  prompt: string,
+  params: ArenaSchedulerParameters,
+  sdk: SchedulerSDK,
+  ports: ArenaSchedulerPorts,
+): Promise<number> {
+  const engine = params.bidding.engine ?? "model-caller";
+  if (engine === "workloop" && ports.bidBoard) {
+    const token = crypto.randomUUID();
+    ports.bidBoard.openToken(token, st.agent);
+    try {
+      await sdk.agents.run(st.agent, {
+        task: renderWorkLoopBidPrompt(prompt, token),
+        configOverrides: {
+          model: st.model.id,
+          skill: params.bidding.bidSkill ?? "agent-lab-bidding",
+          turnBudget: { maxTurns: params.bidding.bidTurnBudget ?? 3 },
+          result: { kind: "text" },
+        },
+        timeoutMs: params.bidding.timeoutMs,
+      });
+    } catch {
+      // fail-open：WorkLoop 竞价失败 → 0（与 model-caller 失败一致）
+    }
+    const entry = ports.bidBoard.collect(token);
+    ports.bidBoard.close(token);
+    return entry?.stake ?? 0;
+  }
+  // model-caller 引擎（默认 / fallback）
+  const reply = await ports.modelCaller.complete(st.model.id, prompt, params.bidding.timeoutMs);
+  return parseBidResponse(reply, st.balance);
 }
 
 // ── Factory ───────────────────────────────────────────────────────────
@@ -128,10 +197,10 @@ export function createArenaSchedulerImplementation(
       // 8. Bid: concurrent calls capped at maxCallsPerDispatch
       const bidders = selected.slice(0, params.bidding.maxCallsPerDispatch);
 
-      const bidPromises = bidders.map(
-        async (
-          st,
-        ): Promise<{ agent: string; stake: number; balance: number }> => {
+      const bidResults = await mapConcurrent(
+        bidders,
+        params.bidding.maxConcurrentBids ?? 3,
+        async (st): Promise<{ agent: string; stake: number; balance: number }> => {
           const prompt = renderBidPrompt(
             params.bidding.promptTemplate,
             {
@@ -156,62 +225,27 @@ export function createArenaSchedulerImplementation(
             },
           );
 
-          // balance_before + odds
-          sdk.telemetry.emit(
-            "scheduler.arena.balance_before",
-            { agent: st.agent },
-            { balance: st.balance },
-          );
-          sdk.telemetry.emit(
-            "scheduler.arena.odds",
-            { agent: st.agent },
-            { odds: task.odds },
-          );
+          sdk.telemetry.emit("scheduler.arena.balance_before", { agent: st.agent }, { balance: st.balance });
+          sdk.telemetry.emit("scheduler.arena.odds", { agent: st.agent }, { odds: task.odds });
 
-          // Aborted signal → skip remaining calls
           if (input.signal?.aborted) {
-            sdk.telemetry.emit(
-              "scheduler.arena.stake",
-              { agent: st.agent },
-              { stake: 0 },
-            );
+            sdk.telemetry.emit("scheduler.arena.stake", { agent: st.agent }, { stake: 0 });
             return { agent: st.agent, stake: 0, balance: st.balance };
           }
 
           try {
-            const reply = await ports.modelCaller.complete(
-              st.model.id,           // C1: 传 model id（非 agent UUID）
-              prompt,
-              params.bidding.timeoutMs,
-            );
-
-            const rawBid = parseBidResponse(reply, st.balance);
-
-            // Stake clamp: min(bid, balance, floor(balance * maxStakeRatio))
-            const maxByRatio = Math.floor(
-              st.balance * params.risk.maxStakeRatio,
-            );
+            const rawBid = await solicitRawBid(st, prompt, params, sdk, ports);
+            const maxByRatio = Math.floor(st.balance * params.risk.maxStakeRatio);
             const stake = Math.min(rawBid, st.balance, maxByRatio);
-
-            sdk.telemetry.emit(
-              "scheduler.arena.stake",
-              { agent: st.agent },
-              { stake },
-            );
+            sdk.telemetry.emit("scheduler.arena.stake", { agent: st.agent }, { stake });
             return { agent: st.agent, stake, balance: st.balance };
           } catch {
-            // fail-open: single call failure → stake 0
-            sdk.telemetry.emit(
-              "scheduler.arena.stake",
-              { agent: st.agent },
-              { stake: 0 },
-            );
+            // fail-open: single bid failure → stake 0
+            sdk.telemetry.emit("scheduler.arena.stake", { agent: st.agent }, { stake: 0 });
             return { agent: st.agent, stake: 0, balance: st.balance };
           }
         },
       );
-
-      const bidResults = await Promise.all(bidPromises);
 
       // 9. Opt-out tax: tax bidders who bid 0 + selected-but-not-bid
       if (params.settlement.tax > 0) {
