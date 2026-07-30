@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { registerTelemetry, createSettleDispatch } from "./src/telemetry/register.ts";
 import { registerInterceptor } from "./src/interceptor/register.ts";
 import { registerCommands } from "./src/commands/register.ts";
-import { findOrCreateAgentByModel } from "./src/arena/agent-id.ts";
+import { findOrCreateAgentByModel, ensureSessionAgent } from "./src/arena/agent-id.ts";
 import { SqliteLedger } from "./src/arena/ledger.ts";
 import { EndowmentPolicyV1 } from "./src/arena/policies.ts";
 import type { SchedulerRuntimeLike } from "./src/interceptor/scheduler-bridge.ts";
@@ -320,6 +320,21 @@ export default async function (pi: ExtensionAPI) {
   });
 
   registerInterceptor(pi, cfg, schedulerRuntimeFactory);
+
+  // ── 会话启动时建 agent 实例（C2：pit 设 PI_AGENT_INSTANCE_ID，agent-lab 拥有表）─────
+  pi.on("session_start", async () => {
+    const agentInstanceId = process.env.PI_AGENT_INSTANCE_ID;
+    if (!agentInstanceId) return;   // 非 pit agent run 起的会话
+    try {
+      if (bootstrapPromise) { try { await bootstrapPromise; } catch { /* fail-open */ } }
+      if (!schedulerCore) return;
+      const model = catalog.candidates()[0];   // 阶段 2 简化：用首个候选 model
+      if (!model) return;
+      ensureSessionAgent(schedulerCore, agentInstanceId, "default-arena", model, process.env.PI_TEMPLATE);
+    } catch (err) {
+      console.error("[agent-lab] session agent creation failed (fail-open):", err);
+    }
+  });
 
   // ── Arena smoke: real-bidding verification ───────────────────────
   const arenaSmoke = async (role: string, cmdCtx: ExtensionContext): Promise<string> => {

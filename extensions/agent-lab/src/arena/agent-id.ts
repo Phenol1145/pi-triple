@@ -38,3 +38,42 @@ export function findOrCreateAgentByModel(
   const created = core.repository.findAgentByModel(schedulerInstanceId, model.id);
   return created?.id ?? spec.id;
 }
+
+/**
+ * 会话启动时确保 agent 实例存在（pit 设 PI_AGENT_INSTANCE_ID，agent-lab 拥有表——C2）。
+ * 幂等：若该 model 已有 agent（UNIQUE scheduler_instance_id+model），复用其 id；
+ * 否则用 pit 给的 agentInstanceId 创建。返回实际用的 agent id。
+ */
+export function ensureSessionAgent(
+  core: LabCore,
+  agentInstanceId: string,
+  schedulerInstanceId: string,
+  model: ModelInfo,
+  sourceTemplateId?: string,
+): string {
+  // 若 model 已有 agent（bootstrap 建的），复用（避免 UNIQUE model 冲突）
+  const existingByModel = core.repository.findAgentByModel(schedulerInstanceId, model.id);
+  if (existingByModel) return existingByModel.id;
+
+  const spec = modelToAgentCreateSpec(model);
+  const instance = core.repository.getInstance(schedulerInstanceId);
+  const roundId = instance?.currentRoundId ?? "";
+
+  try {
+    core.repository.insertAgent({
+      id: agentInstanceId,   // pit 给的 UUID
+      schedulerInstanceId,
+      definition: spec.definition,
+      model: model.id,
+      sourceTemplateId,
+      createdAtRoundId: roundId,
+      status: "ready",
+      createdAt: Date.now(),
+    });
+    return agentInstanceId;
+  } catch {
+    // UNIQUE 冲突（并发或 model 已有 agent）：重查
+    const created = core.repository.findAgentByModel(schedulerInstanceId, model.id);
+    return created?.id ?? agentInstanceId;
+  }
+}
