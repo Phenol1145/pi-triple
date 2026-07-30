@@ -23,6 +23,7 @@ interface Deps {
   getEffectiveRouting?: () => string;
   arenaSmoke?: (role: string, cmdCtx: ExtensionContext, engine?: "model-caller" | "workloop") => Promise<string>;
   bench?: (cmdCtx: ExtensionContext, n?: number) => Promise<string>;
+  captureCommandContext?: (ctx: ExtensionContext) => void;
   executeDispatch?: (role: string, task: string) => Promise<string>;
   optimizerFacade?: OptimizerFacade;
   experimentFacade?: ExperimentFacade;
@@ -561,7 +562,7 @@ export function renderExperimentCompare(result: ExperimentCompareResult): string
 // ── Command registration ────────────────────────────────────────────
 
 export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
-  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, arenaSmoke, bench, executeDispatch, optimizerFacade, experimentFacade, runMigration } = deps;
+  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, arenaSmoke, bench, captureCommandContext, executeDispatch, optimizerFacade, experimentFacade, runMigration } = deps;
 
   const aggsFor = (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a]));
 
@@ -613,6 +614,7 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
   pi.registerCommand("lab", {
     description: "Agent Lab: recommend/stats/models/log/pin/unpin/config/doctor/scheduler",
     handler: async (args, ctx) => {
+      captureCommandContext?.(ctx);
       const argv = (args ?? "").trim().split(/\s+/).filter(Boolean);
       const cmd = argv[0];
       if (cmd === "recommend") {

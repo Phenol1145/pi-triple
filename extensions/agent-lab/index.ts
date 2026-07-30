@@ -817,6 +817,11 @@ export default async function (pi: ExtensionAPI) {
     },
     arenaSmoke,
     bench,
+    captureCommandContext: (ctx) => {
+      if (!capturedModelRegistry && ctx.modelRegistry) {
+        capturedModelRegistry = ctx.modelRegistry as unknown as ModelRegistryLike;
+      }
+    },
     executeDispatch,
     runMigration: (dryRun: boolean) => {
       const ensureArenaBinding = () => {
