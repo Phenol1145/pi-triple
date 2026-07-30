@@ -212,7 +212,6 @@ export default async function (pi: ExtensionAPI) {
             rt.core,
             rt.schedulers,
             ports,
-            { instanceId: cfg.scheduler?.instanceId },
           ).catch((err) => {
             console.error("[agent-lab] weighted-scorer bootstrap failed (fail-open):", err);
             return null;
