@@ -1,6 +1,11 @@
 /**
  * agent-lab-bidder — 提供 place_bid 工具，供 Arena WorkLoop 竞价 subagent 出价。
  *
+ * @deprecated-for-bidding 自 ADR-0001 后，Arena 竞价不再使用 place_bid 工具。
+ *   竞价为 arena-bid-loop WorkLoop 原生运行，经框架 ModelPort → subagent
+ *   complete；不再依赖本扩展的 place_bid + BidBoard 路径。
+ *   本扩展/place_bid 工具保留供可能的其他用途，代码不删除以避免破坏已部署扩展加载。
+ *
  * 出价写入 getBidBoard()（globalThis 单例），与 agent-lab 扩展的 arena
  * scheduler 共享同一实例。token 由 arena 生成并随竞价提示下发，一次性。
  */
