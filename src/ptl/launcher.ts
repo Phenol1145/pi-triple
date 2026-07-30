@@ -13,6 +13,7 @@
 
 import { spawn } from "node:child_process";
 import path from "node:path";
+import os from "node:os";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 
@@ -49,6 +50,12 @@ export interface LaunchOptions {
   resumeSession?: string;
   /** Extra args passed through to pi */
   extraArgs?: string[];
+  /** Agent instance UUID (set PI_AGENT_INSTANCE_ID env) */
+  agentInstanceId?: string;
+  /** Override cwd for agent workspace */
+  workspaceCwd?: string;
+  /** Agent system prompt (content → temp file → --append-system-prompt) */
+  systemPrompt?: string;
 }
 
 export interface PiBuildResult {
@@ -72,6 +79,9 @@ export async function buildPiLaunch(templateId: string, options: {
   continueSession?: boolean;
   resumeSession?: string;
   extraArgs?: string[];
+  agentInstanceId?: string;
+  workspaceCwd?: string;
+  systemPrompt?: string;
 }): Promise<PiBuildResult> {
   const platform = detectPlatform();
   const dataDir = abs(resolveDataDir());
@@ -84,7 +94,9 @@ export async function buildPiLaunch(templateId: string, options: {
     path.join(dataDir, "templates"),
   );
   const project = options.project ?? "default";
-  const cwd = await workspaceMgr.ensureWorkspace(templateId, project);
+  const cwd = options.workspaceCwd
+    ? (fs.mkdirSync(options.workspaceCwd, { recursive: true }), options.workspaceCwd)
+    : await workspaceMgr.ensureWorkspace(templateId, project);
 
   // build pi args
   const args: string[] = [];
@@ -108,6 +120,14 @@ export async function buildPiLaunch(templateId: string, options: {
     args.push("--append-system-prompt", tenantPromptPath);
   }
 
+  if (options.systemPrompt) {
+    const tmpDir = path.join(os.tmpdir(), "pit-system-prompt");
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const tmpFile = path.join(tmpDir, `${randomUUID()}.md`);
+    fs.writeFileSync(tmpFile, options.systemPrompt);
+    args.push("--append-system-prompt", tmpFile);
+  }
+
   if (options.extraArgs) args.push(...options.extraArgs);
 
   // ensure shared layer links
@@ -129,6 +149,7 @@ export async function buildPiLaunch(templateId: string, options: {
       PI_SESSION_ID: sessionId,
       AGENT_LAB_DB_PATH: path.join(sharedDir, "agent-lab", "agent-lab.db"),
       AGENT_LAB_CONFIG_DIR: path.join(piConfigDir, "agent-lab"),
+      ...(options.agentInstanceId ? { PI_AGENT_INSTANCE_ID: options.agentInstanceId } : {}),
     },
     cwd,
   };
@@ -162,6 +183,9 @@ export async function launchPi(options: LaunchOptions): Promise<number> {
     continueSession: options.continueSession,
     resumeSession: options.resumeSession,
     extraArgs: options.extraArgs,
+    agentInstanceId: options.agentInstanceId,
+    workspaceCwd: options.workspaceCwd,
+    systemPrompt: options.systemPrompt,
   });
 
   const alias = getTemplateAlias(options.templateId);
