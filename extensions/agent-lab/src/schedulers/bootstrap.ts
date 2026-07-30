@@ -101,34 +101,49 @@ export async function ensureWeightedScorerInstance(
   // 5. Default parameters
   const defaultParams = weightedScorerDefinition.defaultParameters as WeightedScorerParameters;
 
-  // 6. Create draft
-  core.controlPlane.createDraft({
-    id: instanceId,
-    schedulerDefinition: {
-      kind: "scheduler",
-      id: weightedScorerDefinition.id,
-      version: weightedScorerDefinition.version,
-    },
-    initialParameters: defaultParams,
-    agents,
-    fallbackChain: [{ type: "original-request" }],
-    routingBindings: [
-      { id: "default", priority: 0, match: {} },
-    ],
-    metadata: {},
-  });
+  // 6–7. Create draft → validate → activate.
+  // Concurrent safety (C2): activateDraft uses repository.transaction()
+  // (BEGIN IMMEDIATE) internally. If two processes race past the
+  // getInstance check, the loser hits a UNIQUE constraint on saveDraft
+  // and we re-check idempotently.
+  try {
+    core.controlPlane.createDraft({
+      id: instanceId,
+      schedulerDefinition: {
+        kind: "scheduler",
+        id: weightedScorerDefinition.id,
+        version: weightedScorerDefinition.version,
+      },
+      initialParameters: defaultParams,
+      agents,
+      fallbackChain: [{ type: "original-request" }],
+      routingBindings: [
+        { id: "default", priority: 0, match: {} },
+      ],
+      metadata: {},
+    });
 
-  // 7. Validate + activate
-  const validation = core.controlPlane.validateDraft(instanceId);
-  if (!validation.ok) {
-    const issueList = validation.issues.map((i) => `${i.path}: ${i.message}`).join("; ");
-    throw new Error(`draft validation failed: ${issueList}`);
+    const validation = core.controlPlane.validateDraft(instanceId);
+    if (!validation.ok) {
+      const issueList = validation.issues.map((i) => `${i.path}: ${i.message}`).join("; ");
+      throw new Error(`draft validation failed: ${issueList}`);
+    }
+
+    const { roundId } = core.controlPlane.activateDraft(instanceId);
+    const finalAgents = core.repository.listAgents(instanceId);
+
+    return { instanceId, roundId, agentCount: finalAgents.length };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE constraint") || msg.includes("already exists")) {
+      const winner = core.repository.getInstance(instanceId);
+      if (winner && winner.status === "active") {
+        const winnerAgents = core.repository.listAgents(instanceId);
+        return { instanceId, roundId: winner.currentRoundId, agentCount: winnerAgents.length };
+      }
+    }
+    throw err;
   }
-
-  const { roundId } = core.controlPlane.activateDraft(instanceId);
-  const finalAgents = core.repository.listAgents(instanceId);
-
-  return { instanceId, roundId, agentCount: finalAgents.length };
 }
 
 // ── syncWeightedScorerAgents ──────────────────────────────────────────
@@ -248,32 +263,45 @@ export async function ensureArenaInstance(
   // 7. Routing bindings (default: none; caller provides market-mode bindings)
   const routingBindings = opts?.routingBindings ?? [];
 
-  // 8. Create draft
-  core.controlPlane.createDraft({
-    id: instanceId,
-    schedulerDefinition: {
-      kind: "scheduler",
-      id: ARENA_DEFINITION.id,
-      version: ARENA_DEFINITION.version,
-    },
-    initialParameters: defaultParams,
-    agents,
-    fallbackChain,
-    routingBindings,
-    metadata: {},
-  });
+  // 8–9. Create draft → validate → activate.
+  // Concurrent safety (C2): activateDraft uses repository.transaction()
+  // (BEGIN IMMEDIATE) internally. UNIQUE catch for race losers.
+  try {
+    core.controlPlane.createDraft({
+      id: instanceId,
+      schedulerDefinition: {
+        kind: "scheduler",
+        id: ARENA_DEFINITION.id,
+        version: ARENA_DEFINITION.version,
+      },
+      initialParameters: defaultParams,
+      agents,
+      fallbackChain,
+      routingBindings,
+      metadata: {},
+    });
 
-  // 9. Validate + activate
-  const validation = core.controlPlane.validateDraft(instanceId);
-  if (!validation.ok) {
-    const issueList = validation.issues.map((i) => `${i.path}: ${i.message}`).join("; ");
-    throw new Error(`arena draft validation failed: ${issueList}`);
+    const validation = core.controlPlane.validateDraft(instanceId);
+    if (!validation.ok) {
+      const issueList = validation.issues.map((i) => `${i.path}: ${i.message}`).join("; ");
+      throw new Error(`arena draft validation failed: ${issueList}`);
+    }
+
+    const { roundId } = core.controlPlane.activateDraft(instanceId);
+    const finalAgents = core.repository.listAgents(instanceId);
+
+    return { instanceId, roundId, agentCount: finalAgents.length };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE constraint") || msg.includes("already exists")) {
+      const winner = core.repository.getInstance(instanceId);
+      if (winner && winner.status === "active") {
+        const winnerAgents = core.repository.listAgents(instanceId);
+        return { instanceId, roundId: winner.currentRoundId, agentCount: winnerAgents.length };
+      }
+    }
+    throw err;
   }
-
-  const { roundId } = core.controlPlane.activateDraft(instanceId);
-  const finalAgents = core.repository.listAgents(instanceId);
-
-  return { instanceId, roundId, agentCount: finalAgents.length };
 }
 
 // ── syncArenaAgents ───────────────────────────────────────────────────

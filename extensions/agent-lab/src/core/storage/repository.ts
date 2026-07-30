@@ -50,6 +50,9 @@ export class CoreRepository {
     this._applyCoreMigrations();
   }
 
+  /** Expose raw db handle for transaction control (bootstrap concurrent safety). */
+  get raw(): DatabaseSync { return this.db; }
+
   private _applyCoreMigrations(): void {
     // Add canary_round_id / canary_percent columns if missing (phase 5b additive)
     for (const col of ["canary_round_id", "canary_percent"]) {

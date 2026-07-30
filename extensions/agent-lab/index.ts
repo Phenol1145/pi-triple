@@ -64,7 +64,7 @@ export default async function (pi: ExtensionAPI) {
   await catalog.refresh().catch((e: Error) => console.error("[agent-lab] initial catalog refresh failed:", e?.message ?? e));
 
   const endowment = new EndowmentPolicyV1(cfg.arena);
-  const ledger = new SqliteLedger(localStore.raw, endowment);
+  const ledger = new SqliteLedger(sharedStore.raw, endowment);
 
   let schedulerCore: LabCore | undefined;
   let optimizerRegistry: OptimizerRegistry | undefined;
@@ -99,8 +99,8 @@ export default async function (pi: ExtensionAPI) {
   }
   // Audit-only migration.ledger-baseline snapshot (no state change).
   {
-    const creditsCount = (localStore.raw.prepare("SELECT COUNT(*) AS c FROM credits").get() as { c: number }).c;
-    const tasksCount = (localStore.raw.prepare("SELECT COUNT(*) AS c FROM market_tasks").get() as { c: number }).c;
+    const creditsCount = (sharedStore.raw.prepare("SELECT COUNT(*) AS c FROM credits").get() as { c: number }).c;
+    const tasksCount = (sharedStore.raw.prepare("SELECT COUNT(*) AS c FROM market_tasks").get() as { c: number }).c;
     const baselineEvent = {
       eventId: `migration-ledger-baseline-${Date.now()}`,
       eventType: "migration.ledger-baseline",
@@ -136,7 +136,7 @@ export default async function (pi: ExtensionAPI) {
           aggregates: (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a])),
           pinLookup: (role: string) => store.getPin(role),
         };
-        const rt = createSchedulerRuntime(localStore.raw, {});
+        const rt = createSchedulerRuntime(sharedStore.raw, {});
         schedulerCore = rt.core;
         optimizerRegistry = new OptimizerRegistry(rt.core.definitions, rt.core.repository, rt.core.events);
 
@@ -144,15 +144,15 @@ export default async function (pi: ExtensionAPI) {
         {
           const arenaRecord = schedulerCore.repository.getInstance("default-arena");
           if (arenaRecord && arenaRecord.currentRoundId.startsWith("smoke-round-")) {
-            const seq0 = localStore.raw.prepare(
+            const seq0 = sharedStore.raw.prepare(
               "SELECT id FROM lab_optimization_rounds WHERE scheduler_instance_id = ? AND sequence = 0 LIMIT 1"
             ).get("default-arena") as { id: string } | undefined;
             if (seq0) {
-              localStore.raw.prepare(
+              sharedStore.raw.prepare(
                 "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
               ).run(seq0.id, "default-arena");
             }
-            localStore.raw.prepare(
+            sharedStore.raw.prepare(
               "DELETE FROM lab_optimization_rounds WHERE scheduler_instance_id = ? AND id LIKE 'smoke-round-%'"
             ).run("default-arena");
             console.error("[agent-lab] startup guard: cleaned smoke-round residue for default-arena");
@@ -166,8 +166,8 @@ export default async function (pi: ExtensionAPI) {
           // derived→UUID agent id 迁移（旧 agent-arena-* / agent-* → UUID + model 列）。
           // 必须在 ensure*Instance 的 findOrCreateAgentByModel 之前跑，避免重复。
           try {
-            migrateDerivedAgentIds(rt.core, "default-weighted-scorer", localStore.raw);
-            migrateDerivedAgentIds(rt.core, "default-arena", localStore.raw);
+            migrateDerivedAgentIds(rt.core, "default-weighted-scorer", sharedStore.raw);
+            migrateDerivedAgentIds(rt.core, "default-arena", sharedStore.raw);
           } catch (err) {
             console.error("[agent-lab] derived→UUID agent migration failed (fail-open):", err);
           }
@@ -273,7 +273,7 @@ export default async function (pi: ExtensionAPI) {
                   evaluateShadow: (proposalId: string) => evaluateShadow({
                     repository: rt.core.repository,
                     events: rt.core.events,
-                    db: localStore.raw,
+                    db: sharedStore.raw,
                     getCatalogSnapshot: () => catalog.candidates(),
                     optimizerInstanceId: "default-weighted-tuner",
                     schedulerInstanceId: wsInstanceId,
@@ -281,7 +281,7 @@ export default async function (pi: ExtensionAPI) {
                   evaluateCanary: (sid: string) => evaluateCanary({
                     repository: rt.core.repository,
                     events: rt.core.events,
-                    db: localStore.raw,
+                    db: sharedStore.raw,
                   }, sid),
                   decideCanaryAction,
                 });
@@ -428,15 +428,15 @@ export default async function (pi: ExtensionAPI) {
         activatedAt: Date.now(),
       });
 
-      localStore.raw.prepare(
+      sharedStore.raw.prepare(
         "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
       ).run(tempRoundId, "default-arena");
 
       const restoreRound = () => {
-        localStore.raw.prepare(
+        sharedStore.raw.prepare(
           "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
         ).run(currentRound.id, "default-arena");
-        localStore.raw.prepare(
+        sharedStore.raw.prepare(
           "DELETE FROM lab_optimization_rounds WHERE id = ?"
         ).run(tempRoundId);
       };
@@ -662,7 +662,7 @@ export default async function (pi: ExtensionAPI) {
   const optimizerFacade: OptimizerFacade = buildOptimizerFacade({
     getCore: () => schedulerCore,
     getRegistry: () => optimizerRegistry,
-    getDb: () => localStore.raw,
+    getDb: () => sharedStore.raw,
     getCatalog: () => catalog.candidates(),
     getOptimizerConfig: () => cfg.optimizer,
     getAutoTriggerStatus: () => autoTrigger?.status(),
@@ -671,7 +671,7 @@ export default async function (pi: ExtensionAPI) {
 
   // ── Experiment facade (lazy: resolves DB at call time) ──────────
   const experimentFacade: ExperimentFacade = buildExperimentFacade({
-    getDb: () => localStore.raw,
+    getDb: () => sharedStore.raw,
   });
 
   registerCommands(pi, {
