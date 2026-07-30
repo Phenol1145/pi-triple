@@ -3,7 +3,7 @@
  */
 
 /** 有子命令语义的命令白名单（第二个位置参数 = subcommand） */
-export const SUBCOMMAND_COMMANDS = new Set(["template", "shared", "config", "flow"]);
+export const SUBCOMMAND_COMMANDS = new Set(["template", "shared", "config", "flow", "agent"]);
 
 export function parseArgs(args: string[]): { command: string; subcommand?: string; flags: Record<string, string>; passthrough: string[] } {
   const flags: Record<string, string> = {};
@@ -12,7 +12,7 @@ export function parseArgs(args: string[]): { command: string; subcommand?: strin
   let subcommand = "";
   let i = 0;
 
-  const VALUED_FLAGS = new Set(["template", "project", "model", "provider", "thinking", "name"]);
+  const VALUED_FLAGS = new Set(["template", "project", "model", "provider", "thinking", "name", "workspace"]);
 
   while (i < args.length) {
     const arg = args[i];

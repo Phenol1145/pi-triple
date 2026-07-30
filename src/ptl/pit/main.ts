@@ -44,6 +44,8 @@ export function printHelp(): void {
   console.log("    config set <key> <value>  修改配置项");
   console.log("    config unset <key> 删除模板可选配置项");
   console.log("    config init        初始化 pi-triple.json");
+  console.log("    agent run <template> <task>  从模板实例化 agent 执行");
+  console.log("    agent clean <agentId>     清理 agent 临时工作区 (--all)");
   console.log("    submit <dir>       提交 agent 程序到 PTH");
   console.log("    submit <dir> --dry-run  校验 + 打包（不上传）");
   console.log("    programs           列出 PTH 上已提交的程序");

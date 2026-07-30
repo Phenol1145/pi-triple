@@ -23,6 +23,7 @@ import {
   cmdFlowPropose, cmdFlowDiscard,
   cmdFlowEdit, cmdFlowSet, cmdFlowGraph, cmdFlowRm, cmdFlowValidate,
 } from "./flow/commands.js";
+import { cmdAgentRun, cmdAgentClean } from "./pit/agent.js";
 import { emitJsonError } from "./output.js";
 import path from "node:path";
 import {
@@ -223,6 +224,11 @@ async function main() {
       break;
     case "flow":
       await routeFlowCommand(subcommand, passthrough, flags);
+      break;
+    case "agent":
+      if (subcommand === "run") await cmdAgentRun(flags, passthrough);
+      else if (subcommand === "clean") cmdAgentClean(flags, passthrough);
+      else { console.log("  用法: pit agent run|clean ..."); console.log("  pit agent run <template> <task> [--workspace temp|main]"); console.log("  pit agent clean <agentId>"); }
       break;
     case "help":
     case "--help":
