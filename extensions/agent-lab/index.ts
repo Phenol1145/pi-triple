@@ -39,6 +39,7 @@ import { createAutoTrigger, type AutoTrigger } from "./src/optimizer/auto-trigge
 import { createAutoFlow } from "./src/optimizer/auto-flow.ts";
 import { evaluateShadow } from "./src/optimizer/shadow.ts";
 import { evaluateCanary, decideCanaryAction } from "./src/optimizer/canary-eval.ts";
+import { DEFAULT_MARKET_INSTANCE_ID, MARKET_DEFAULT_BINDING_ID } from "./src/schedulers/names.ts";
 
 const DIRECT_PREFIXES = ["deepseek", "moonshotai", "z-ai", "qwen"];
 
@@ -178,19 +179,19 @@ export default async function (pi: ExtensionAPI) {
 
         // ── Startup guard: clean smoke-round residue from prior crash ──
         {
-          const arenaRecord = schedulerCore.repository.getInstance("default-arena");
+          const arenaRecord = schedulerCore.repository.getInstance(DEFAULT_MARKET_INSTANCE_ID);
           if (arenaRecord && arenaRecord.currentRoundId.startsWith("smoke-round-")) {
             const seq0 = sharedStore.raw.prepare(
               "SELECT id FROM lab_optimization_rounds WHERE scheduler_instance_id = ? AND sequence = 0 LIMIT 1"
-            ).get("default-arena") as { id: string } | undefined;
+            ).get(DEFAULT_MARKET_INSTANCE_ID) as { id: string } | undefined;
             if (seq0) {
               sharedStore.raw.prepare(
                 "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
-              ).run(seq0.id, "default-arena");
+              ).run(seq0.id, DEFAULT_MARKET_INSTANCE_ID);
             }
             sharedStore.raw.prepare(
               "DELETE FROM lab_optimization_rounds WHERE scheduler_instance_id = ? AND id LIKE 'smoke-round-%'"
-            ).run("default-arena");
+            ).run(DEFAULT_MARKET_INSTANCE_ID);
             console.error("[agent-lab] startup guard: cleaned smoke-round residue for default-arena");
           }
         }
@@ -203,7 +204,7 @@ export default async function (pi: ExtensionAPI) {
           // 必须在 ensure*Instance 的 findOrCreateAgentByModel 之前跑，避免重复。
           try {
             migrateDerivedAgentIds(rt.core, "default-weighted-scorer", sharedStore.raw);
-            migrateDerivedAgentIds(rt.core, "default-arena", sharedStore.raw);
+            migrateDerivedAgentIds(rt.core, DEFAULT_MARKET_INSTANCE_ID, sharedStore.raw);
           } catch (err) {
             console.error("[agent-lab] derived→UUID agent migration failed (fail-open):", err);
           }
@@ -232,9 +233,9 @@ export default async function (pi: ExtensionAPI) {
               ledger,
               candidates: () => catalog.candidates(),
               modelCaller: arenaCaller,
-              resolveAgent: (m: ModelInfo) => findOrCreateAgentByModel(rt.core, "default-arena", m, process.env.PI_TEMPLATE),
+              resolveAgent: (m: ModelInfo) => findOrCreateAgentByModel(rt.core, DEFAULT_MARKET_INSTANCE_ID, m, process.env.PI_TEMPLATE),
               resolveTemplate: (agentId: string) => {
-                const agents = rt.core.repository.listAgents("default-arena");
+                const agents = rt.core.repository.listAgents(DEFAULT_MARKET_INSTANCE_ID);
                 return agents.find((a) => a.id === agentId)?.sourceTemplateId;
               },
               workLoopBidder: capturedWlRunner ? async (model, bidPrompt, opts) => {
@@ -248,7 +249,7 @@ export default async function (pi: ExtensionAPI) {
                   config: { model: model.id, balance: opts.balance },
                   task: bidPrompt,
                   signal: opts.signal,
-                  schedulerInstanceId: "default-arena",
+                  schedulerInstanceId: DEFAULT_MARKET_INSTANCE_ID,
                   dispatchId: opts.dispatchId,
                 });
                 if (result.status === "completed" && result.output?.custom) {
@@ -264,7 +265,7 @@ export default async function (pi: ExtensionAPI) {
             await ensureArenaInstance(rt.core, rt.schedulers, arenaPorts, {
               wsInstanceId: wsResult.instanceId,
               ...(cfg.mode === "market"
-                ? { routingBindings: [{ id: "arena-default", priority: 10, match: {} }] }
+                ? { routingBindings: [{ id: MARKET_DEFAULT_BINDING_ID, priority: 10, match: {} }] }
                 : {}),
             }).catch((err) => {
               console.error("[agent-lab] arena bootstrap failed (fail-open):", err);
@@ -276,7 +277,7 @@ export default async function (pi: ExtensionAPI) {
             // model→UUID mapping populated by ensureArenaInstance above.
             // Idempotent: already-migrated UUIDs skip (resolveAgentId returns undefined).
             try {
-              const agents = rt.core.repository.listAgents("default-arena");
+              const agents = rt.core.repository.listAgents(DEFAULT_MARKET_INSTANCE_ID);
               const modelToUuid = new Map(agents.filter(a => a.model).map(a => [a.model!, a.id]));
               if (modelToUuid.size > 0) ledger.migrateAgentKeys((v: string) => modelToUuid.get(v));
             } catch (err) {
@@ -394,7 +395,7 @@ export default async function (pi: ExtensionAPI) {
       if (!schedulerCore) return;
       const model = catalog.candidates()[0];   // 阶段 2 简化：用首个候选 model
       if (!model) return;
-      ensureSessionAgent(schedulerCore, agentInstanceId, "default-arena", model, process.env.PI_TEMPLATE);
+      ensureSessionAgent(schedulerCore, agentInstanceId, DEFAULT_MARKET_INSTANCE_ID, model, process.env.PI_TEMPLATE);
     } catch (err) {
       console.error("[agent-lab] session agent creation failed (fail-open):", err);
     }
@@ -438,7 +439,7 @@ export default async function (pi: ExtensionAPI) {
     if (!schedulerCore) {
       return "预检失败: Scheduler core not initialized. Check /lab scheduler status";
     }
-    const arena = schedulerCore.repository.getInstance("default-arena");
+    const arena = schedulerCore.repository.getInstance(DEFAULT_MARKET_INSTANCE_ID);
     if (!arena || arena.status !== "active") {
       return "预检失败: Arena instance not active. Check /lab scheduler status";
     }
@@ -486,7 +487,7 @@ export default async function (pi: ExtensionAPI) {
       const tempRoundId = `smoke-round-${traceId}`;
       schedulerCore.repository.insertRound({
         id: tempRoundId,
-        schedulerInstanceId: "default-arena",
+        schedulerInstanceId: DEFAULT_MARKET_INSTANCE_ID,
         sequence: 9999,
         parentRoundId: currentRound.id,
         parameters: smokeParams,
@@ -499,12 +500,12 @@ export default async function (pi: ExtensionAPI) {
 
       sharedStore.raw.prepare(
         "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
-      ).run(tempRoundId, "default-arena");
+      ).run(tempRoundId, DEFAULT_MARKET_INSTANCE_ID);
 
       const restoreRound = () => {
         sharedStore.raw.prepare(
           "UPDATE lab_scheduler_instances SET current_round_id = ? WHERE id = ?"
-        ).run(currentRound.id, "default-arena");
+        ).run(currentRound.id, DEFAULT_MARKET_INSTANCE_ID);
         sharedStore.raw.prepare(
           "DELETE FROM lab_optimization_rounds WHERE id = ?"
         ).run(tempRoundId);
@@ -696,7 +697,7 @@ export default async function (pi: ExtensionAPI) {
     const rt = schedulerRuntimeFactory();
     if (bootstrapPromise) { try { await bootstrapPromise; } catch { /* fail-open */ } }
     if (!rt || !schedulerCore) return "预检失败: Scheduler runtime unavailable. /lab scheduler status";
-    const arena = schedulerCore.repository.getInstance("default-arena");
+    const arena = schedulerCore.repository.getInstance(DEFAULT_MARKET_INSTANCE_ID);
     if (!arena || arena.status !== "active") return "预检失败: Arena instance not active. /lab scheduler status";
     if (catalog.candidates().length < 2) return "预检失败: Need >= 2 catalog candidates. /lab models --refresh";
 
@@ -733,7 +734,7 @@ export default async function (pi: ExtensionAPI) {
     const rt = schedulerRuntimeFactory();
     if (bootstrapPromise) { try { await bootstrapPromise; } catch { /* fail-open */ } }
     if (!rt || !schedulerCore) return "预检失败: Scheduler runtime unavailable. /lab scheduler status";
-    const arena = schedulerCore.repository.getInstance("default-arena");
+    const arena = schedulerCore.repository.getInstance(DEFAULT_MARKET_INSTANCE_ID);
     if (!arena || arena.status !== "active") return "预检失败: Arena instance not active. /lab scheduler status";
     if (!delegationBus) return "预检失败: Delegation bus unavailable — initiate a subagent call first to capture ctx.events";
 
@@ -795,7 +796,7 @@ export default async function (pi: ExtensionAPI) {
       let added = syncWeightedScorerAgents(schedulerCore, wsInstanceId, catalog.candidates());
       if (cfg.mode === "market") {
         try {
-          added += syncArenaAgents(schedulerCore, "default-arena", catalog.candidates());
+          added += syncArenaAgents(schedulerCore, DEFAULT_MARKET_INSTANCE_ID, catalog.candidates());
         } catch {
           // arena may not be bootstrapped yet — ignore
         }
@@ -808,7 +809,7 @@ export default async function (pi: ExtensionAPI) {
         return `explicit → ${cfg.scheduler.instanceId} (bypasses catch-all)`;
       }
       const bindings = schedulerCore.repository.listRoutingBindings();
-      const arenaBinding = bindings.find((b) => b.id === "arena-default" && b.schedulerInstanceId === "default-arena");
+      const arenaBinding = bindings.find((b) => b.id === MARKET_DEFAULT_BINDING_ID && b.schedulerInstanceId === DEFAULT_MARKET_INSTANCE_ID);
       if (arenaBinding) {
         return "catch-all → default-arena (market)";
       }
@@ -828,12 +829,12 @@ export default async function (pi: ExtensionAPI) {
         // before any dispatch must not strand the binding step.
         schedulerRuntimeFactory();
         if (!schedulerCore) return { ok: false, reason: "bootstrap-pending" };
-        const arena = schedulerCore.repository.getInstance("default-arena");
+        const arena = schedulerCore.repository.getInstance(DEFAULT_MARKET_INSTANCE_ID);
         if (!arena || arena.status !== "active") {
           return { ok: false, reason: "arena-bootstrap-pending (async; retry shortly or after any dispatch)" };
         }
         try {
-          schedulerCore.controlPlane.setCatchAllBinding("default-arena", true);
+          schedulerCore.controlPlane.setCatchAllBinding(DEFAULT_MARKET_INSTANCE_ID, true);
           return { ok: true };
         } catch (err) {
           return { ok: false, reason: (err as Error).message };

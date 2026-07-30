@@ -5,6 +5,7 @@ import type {
 import type { ArenaConfig } from "../types.ts";
 import { DEFAULT_ARENA_CONFIG } from "../config.ts";
 import { globMatch } from "../interceptor/model-scope.ts";
+import { MARKET_SCHEDULER_DEFINITION_ID } from "./names.ts";
 
 // ── Parameter model ────────────────────────────────────────────────
 
@@ -373,7 +374,7 @@ function validateTransition(
 
 export const ARENA_DEFINITION: SchedulerDefinition = {
   kind: "scheduler",
-  id: "arena",
+  id: MARKET_SCHEDULER_DEFINITION_ID,
   version: "1.0.0",
   sdkVersionRange: "^1.0.0",
   parameterModelVersion: "1.0.0",

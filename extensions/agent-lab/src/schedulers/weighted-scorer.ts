@@ -12,6 +12,7 @@ import type {
 } from "../scheduler/contracts.ts";
 import type { ModelInfo, Aggregate } from "../types.ts";
 import { scoreCandidates } from "../scorer/scorer.ts";
+import { WEIGHTED_SCORER_DEFINITION_ID } from "./names.ts";
 
 // ── Parameter model ────────────────────────────────────────────────
 
@@ -189,7 +190,7 @@ export function validateTransition(
 
 export const weightedScorerDefinition: SchedulerDefinition = {
   kind: "scheduler",
-  id: "weighted-scorer",
+  id: WEIGHTED_SCORER_DEFINITION_ID,
   version: "1.0.0",
   sdkVersionRange: "^1.0.0",
   parameterModelVersion: "1.0.0",
@@ -333,7 +334,7 @@ export function createWeightedScorer(ports: WeightedScorerPorts): {
   implementation: SchedulerImplementation;
 } {
   const impl: SchedulerImplementation = {
-    id: "weighted-scorer",
+    id: WEIGHTED_SCORER_DEFINITION_ID,
     version: "1.0.0",
 
     async schedule(

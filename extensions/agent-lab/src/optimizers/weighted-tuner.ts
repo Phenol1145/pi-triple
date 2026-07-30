@@ -1,3 +1,5 @@
+import { WEIGHTED_SCORER_DEFINITION_ID, WEIGHTED_TUNER_OPTIMIZER_ID } from "../schedulers/names.ts";
+
 /**
  * Reference optimizer: weighted-tuner@1.0.0
  *
@@ -79,7 +81,7 @@ function resolveConfig(raw: unknown): Required<WeightedTunerConfig> {
 
 export const weightedTunerDefinition: OptimizerDefinition = {
   kind: "optimizer",
-  id: "weighted-tuner",
+  id: WEIGHTED_TUNER_OPTIMIZER_ID,
   version: "1.0.0",
   sdkVersionRange: "^1.0.0",
   configurationSchema: {
@@ -92,7 +94,7 @@ export const weightedTunerDefinition: OptimizerDefinition = {
   },
   requiredMetrics: ["runs", "avgCompletion", "avgCost", "successRate"],
   compatibleSchedulers: [
-    { id: "weighted-scorer", versionRange: "^1.0.0" },
+    { id: WEIGHTED_SCORER_DEFINITION_ID, versionRange: "^1.0.0" },
   ],
   parameterModelVersionRange: "1.0.0",
 };

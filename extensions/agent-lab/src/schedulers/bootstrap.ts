@@ -14,6 +14,7 @@ import { ARENA_DEFINITION, ARENA_DEFAULT_PARAMETERS } from "./arena-definition.t
 import { createArenaSchedulerImplementation } from "./arena-scheduler.ts";
 import { findOrCreateAgentByModel } from "../arena/agent-id.ts";
 import { randomUUID } from "node:crypto";
+import { DEFAULT_WEIGHTED_SCORER_INSTANCE_ID, DEFAULT_MARKET_INSTANCE_ID } from "./names.ts";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -22,9 +23,6 @@ export interface BootstrapResult {
   roundId: string;
   agentCount: number;
 }
-
-const DEFAULT_INSTANCE_ID = "default-weighted-scorer";
-const DEFAULT_ARENA_INSTANCE_ID = "default-arena";
 
 // ── ensureWeightedScorerInstance ──────────────────────────────────────
 
@@ -47,7 +45,7 @@ export async function ensureWeightedScorerInstance(
   ports: WeightedScorerPorts,
   opts?: { instanceId?: string },
 ): Promise<BootstrapResult> {
-  const instanceId = opts?.instanceId ?? DEFAULT_INSTANCE_ID;
+  const instanceId = opts?.instanceId ?? DEFAULT_WEIGHTED_SCORER_INSTANCE_ID;
 
   // 0. Register definition + implementation FIRST (idempotent). Must run even
   // when the instance already exists: the in-memory SchedulerRegistry is rebuilt
@@ -202,7 +200,7 @@ export async function ensureArenaInstance(
   ports: ArenaSchedulerPorts,
   opts?: ArenaBootstrapOpts,
 ): Promise<BootstrapResult> {
-  const instanceId = opts?.instanceId ?? DEFAULT_ARENA_INSTANCE_ID;
+  const instanceId = opts?.instanceId ?? DEFAULT_MARKET_INSTANCE_ID;
 
   // 0. Register definition + implementation FIRST (idempotent). Must run even
   // when the instance already exists: the in-memory SchedulerRegistry is rebuilt

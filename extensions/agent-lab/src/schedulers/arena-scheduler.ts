@@ -9,6 +9,7 @@ import type {
 import type { Ledger, ModelCaller, AgentState, ArenaTask } from "../arena/types.ts";
 import type { ModelInfo } from "../types.ts";
 import type { ArenaSchedulerParameters } from "./arena-definition.ts";
+import { MARKET_SCHEDULER_DEFINITION_ID } from "./names.ts";
 import {
   matchEligibility,
   ARENA_DEFAULT_PARAMETERS,
@@ -99,7 +100,7 @@ export function createArenaSchedulerImplementation(
   ports: ArenaSchedulerPorts,
 ): SchedulerImplementation {
   return {
-    id: "arena",
+    id: MARKET_SCHEDULER_DEFINITION_ID,
     version: "1.0.0",
 
     // ── schedule ──────────────────────────────────────────────────
