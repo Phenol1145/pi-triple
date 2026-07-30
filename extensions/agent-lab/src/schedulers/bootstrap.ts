@@ -47,6 +47,13 @@ export async function ensureWeightedScorerInstance(
 ): Promise<BootstrapResult> {
   const instanceId = opts?.instanceId ?? DEFAULT_WEIGHTED_SCORER_INSTANCE_ID;
 
+  // Guard: reject dispatch-target ids passed as bootstrap ids (see ADR / 1e4eb56)
+  if (opts?.instanceId && opts.instanceId === DEFAULT_MARKET_INSTANCE_ID) {
+    throw new Error(
+      `ensureWeightedScorerInstance: instanceId "${opts.instanceId}" collides with the market scheduler's canonical instance id — cfg.scheduler.instanceId is a dispatch target, not a bootstrap id`,
+    );
+  }
+
   // 0. Register definition + implementation FIRST (idempotent). Must run even
   // when the instance already exists: the in-memory SchedulerRegistry is rebuilt
   // every boot, so the implementation must be re-registered regardless of DB
@@ -201,6 +208,13 @@ export async function ensureArenaInstance(
   opts?: ArenaBootstrapOpts,
 ): Promise<BootstrapResult> {
   const instanceId = opts?.instanceId ?? DEFAULT_MARKET_INSTANCE_ID;
+
+  // Guard: reject dispatch-target ids passed as bootstrap ids (see ADR / 1e4eb56)
+  if (opts?.instanceId && opts.instanceId === DEFAULT_WEIGHTED_SCORER_INSTANCE_ID) {
+    throw new Error(
+      `ensureArenaInstance: instanceId "${opts.instanceId}" collides with the weighted-scorer scheduler's canonical instance id — cfg.scheduler.instanceId is a dispatch target, not a bootstrap id`,
+    );
+  }
 
   // 0. Register definition + implementation FIRST (idempotent). Must run even
   // when the instance already exists: the in-memory SchedulerRegistry is rebuilt

@@ -209,6 +209,9 @@ export default async function (pi: ExtensionAPI) {
             console.error("[agent-lab] derived→UUID agent migration failed (fail-open):", err);
           }
 
+          // NOTE: bootstrap always uses the canonical instance id (names.ts). cfg.scheduler.instanceId
+          // is the DISPATCH target (which instance the interceptor routes to), NOT a bootstrap id.
+          // Passing it here previously caused a collision cascade (see 1e4eb56 / ADR).
           const wsResult = await ensureWeightedScorerInstance(
             rt.core,
             rt.schedulers,
