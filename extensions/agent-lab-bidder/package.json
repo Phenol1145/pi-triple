@@ -1,0 +1,23 @@
+{
+  "name": "agent-lab-bidder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Arena bidding tool (place_bid) for agent-lab WorkLoop bidding",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  }
+}
