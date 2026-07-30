@@ -46,7 +46,7 @@ async function buildPorts(caller: ModelCaller) {
   const ledger = new SqliteLedger(db, fixedEndow);
   const candidates = [model("openai/gpt-4o"), model("anthropic/claude-3")];
   const arenaPorts: ArenaSchedulerPorts = { ledger, candidates: () => candidates, modelCaller: caller, resolveAgent: (m: ModelInfo) => `agent-${m.id}` };
-  await ensureArenaInstance(core, schedulers, arenaPorts, {
+  const result = await ensureArenaInstance(core, schedulers, arenaPorts, {
     instanceId: "default-arena",
     routingBindings: [{ id: "arena-default", priority: 10, match: {} }],
   });
@@ -61,6 +61,7 @@ async function buildPorts(caller: ModelCaller) {
     matchEligibility: () => true,
     executeModel: (m: string, p: string) => caller.complete(m, p, 30000),
     genTimeoutMs: 30000, judgeTimeoutMs: 10000,
+    schedulerInstanceId: result.instanceId,
   };
   return { benchPorts, ledger, candidates, caller };
 }
@@ -140,6 +141,7 @@ test("I-1: routing_fallback — dispatch 返回 non-arena 结果时记录 status
     executeModel: async () => "",
     genTimeoutMs: 1000,
     judgeTimeoutMs: 1000,
+    schedulerInstanceId: "default-arena",
   };
   const report = await runBench(stubs, [HE0]);
   const r = report.results[0];

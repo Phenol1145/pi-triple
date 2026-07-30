@@ -10,7 +10,7 @@ import type { SchedulerRuntimeLike } from "../interceptor/scheduler-bridge.ts";
 import type { LabEvent } from "../core/contracts.ts";
 import type { MigrationReport } from "../migrate.ts";
 import { renderMigrationReport } from "../migrate.ts";
-import { DEFAULT_WEIGHTED_SCORER_INSTANCE_ID } from "../schedulers/names.ts";
+import { DEFAULT_WEIGHTED_SCORER_NAME } from "../schedulers/names.ts";
 
 interface Deps {
   store: Store;
@@ -739,7 +739,7 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
       } else if (cmd === "scheduler") {
         const sub = argv[1];
         if (sub === "status") {
-          const instanceId = cfg.scheduler?.instanceId ?? DEFAULT_WEIGHTED_SCORER_INSTANCE_ID;
+          const instanceId = cfg.scheduler?.instanceId ?? DEFAULT_WEIGHTED_SCORER_NAME;
           const enabled = cfg.scheduler?.enabled === true;
           const effectiveRouting = getEffectiveRouting?.();
           const rt = schedulerRuntime?.();

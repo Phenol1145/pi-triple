@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { DEFAULT_MARKET_INSTANCE_ID } from "../schedulers/names.ts";
 import type { DispatchRequest, DispatchResult } from "../scheduler/runner.ts";
 import type { SettleOutcome } from "../scheduler/contracts.ts";
 import type { MarketTaskRow } from "../arena/types.ts";
@@ -25,6 +24,8 @@ export interface BenchPorts {
   executeModel(model: string, prompt: string): Promise<string>;
   genTimeoutMs: number;
   judgeTimeoutMs: number;
+  /** UUID of the arena scheduler instance (ADR-0002). */
+  schedulerInstanceId: string;
 }
 
 export function codeGenPrompt(task: HumanEvalTask): string {
@@ -50,7 +51,7 @@ export async function runBench(
     try {
       dispatch = await ports.dispatch({
         traceId: settlementRef,
-        schedulerInstanceId: DEFAULT_MARKET_INSTANCE_ID,
+        schedulerInstanceId: ports.schedulerInstanceId,
         role: "coder",
         task: task.prompt,
         taskCategory: "humaneval",
@@ -69,7 +70,7 @@ export async function runBench(
     // ★ 三重成功判据（k3 BLOCKER-1/2）
     const routedToArena =
       dispatch.status === "completed" &&
-      dispatch.schedulerInstanceId === DEFAULT_MARKET_INSTANCE_ID &&
+      dispatch.schedulerInstanceId === ports.schedulerInstanceId &&
       dispatch.settlementRef != null;
     if (!routedToArena) {
       results.push({

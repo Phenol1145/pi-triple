@@ -266,8 +266,14 @@ export class SchedulerRunner {
     let bindingId: string | undefined;
 
     if (request.schedulerInstanceId) {
-      // Explicit wins
-      const inst = this.core.repository.getInstance(request.schedulerInstanceId);
+      // Resolve explicit instanceId: try UUID first, then name lookup.
+      // cfg.scheduler.instanceId is a logical name (user config), not a UUID.
+      let inst = this.core.repository.getInstance(request.schedulerInstanceId);
+      if (!inst) {
+        // Name lookup: try both scheduler definitions.
+        inst = this.core.repository.findInstanceByName("arena", request.schedulerInstanceId)
+            ?? this.core.repository.findInstanceByName("weighted-scorer", request.schedulerInstanceId);
+      }
       if (!inst || inst.status !== "active") {
         this.emitEvent(
           nextEventId("routing.failed"),
@@ -289,7 +295,7 @@ export class SchedulerRunner {
           attempts: [],
         };
       }
-      instanceId = request.schedulerInstanceId;
+      instanceId = inst.id;
     } else {
       // Static routing
       const bindings = this.core.repository.listRoutingBindings();
