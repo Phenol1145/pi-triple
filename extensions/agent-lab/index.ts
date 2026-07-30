@@ -129,8 +129,14 @@ export default async function (pi: ExtensionAPI) {
   let bootstrapPromise: Promise<void> | undefined;
   // Lazy arena model caller: populated from interceptor ctx on first tool_call.
   let arenaModelCaller: ModelCaller | undefined;
-  // Lazy delegation event bus: captured from ctx.events on first tool_call (Q1 verified).
-  let delegationBus: EventBus | undefined;
+  // Delegation event bus: pi.events is the single shared bus all extensions
+  // (incl. pi-subagents) subscribe to, so it works as the DelegationEventBus
+  // immediately at load — no need to wait for the first tool_call. This lets the
+  // WorkLoop runtime be built with delegation support before any tool_call fires
+  // (fixes workloop bidding in /lab arena smoke and /lab execute in fresh sessions).
+  // The tool_call handler below still captures ctx.events as a fallback if pi.events
+  // is somehow undefined here.
+  let delegationBus: EventBus | undefined = pi.events;
   const schedulerRuntimeFactory = (): SchedulerRuntimeLike | undefined => {
     if (!runtimeInitAttempted) {
       runtimeInitAttempted = true;
