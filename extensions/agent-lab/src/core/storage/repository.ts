@@ -71,10 +71,12 @@ export class CoreRepository {
         this.db.exec(`ALTER TABLE lab_agent_instances ADD COLUMN ${col} TEXT`);
       }
     }
-    // model 列就绪后建 UNIQUE 索引（防同 instance 同 model 重复 agent）。
+    // model 列就绪后建 UNIQUE 索引（防同 instance 同 model 同 template 重复 agent）。
+    // 阶段 3a 联邦统一市场：UNIQUE 加 source_template_id，允许跨模板同 model 的 agent 共存。
     // 不放 CORE_SCHEMA：旧库表已存在但无 model 列，CREATE INDEX 会先于 ALTER 失败。
+    this.db.exec(`DROP INDEX IF EXISTS idx_lab_agents_model`);
     this.db.exec(
-      `CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_agents_model ON lab_agent_instances(scheduler_instance_id, model)`
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_agents_model ON lab_agent_instances(scheduler_instance_id, model, source_template_id)`
     );
   }
 
@@ -303,12 +305,14 @@ export class CoreRepository {
     );
   }
 
-  findAgentByModel(schedulerInstanceId: string, model: string): AgentInstanceRecord | undefined {
+  findAgentByModel(schedulerInstanceId: string, model: string, templateId?: string): AgentInstanceRecord | undefined {
     const row = this.db.prepare(
       `SELECT id, definition_json, model, source_template_id, source_agent_id, clone_operation_id,
               created_round_id, status, created_ts
-       FROM lab_agent_instances WHERE scheduler_instance_id = ? AND model = ? LIMIT 1`
-    ).get(schedulerInstanceId, model) as {
+       FROM lab_agent_instances
+       WHERE scheduler_instance_id = ? AND model = ? AND (source_template_id = ? OR (? IS NULL AND source_template_id IS NULL))
+       LIMIT 1`
+    ).get(schedulerInstanceId, model, templateId ?? null, templateId ?? null) as {
       id: string; definition_json: string; model: string | null; source_template_id: string | null;
       source_agent_id: string | null; clone_operation_id: string | null;
       created_round_id: string; status: string; created_ts: number;

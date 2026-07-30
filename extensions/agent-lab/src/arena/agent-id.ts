@@ -12,7 +12,7 @@ export function findOrCreateAgentByModel(
   model: ModelInfo,
   sourceTemplateId?: string,
 ): string {
-  const existing = core.repository.findAgentByModel(schedulerInstanceId, model.id);
+  const existing = core.repository.findAgentByModel(schedulerInstanceId, model.id, sourceTemplateId);
   if (existing) return existing.id;
 
   const spec = modelToAgentCreateSpec(model);
@@ -32,10 +32,10 @@ export function findOrCreateAgentByModel(
       createdAt: Date.now(),
     });
   } catch {
-    // UNIQUE 约束冲突：另一条执行路径已创建同 model agent，重查
+    // UNIQUE 约束冲突：另一条执行路径已创建同 model+template agent，重查
   }
 
-  const created = core.repository.findAgentByModel(schedulerInstanceId, model.id);
+  const created = core.repository.findAgentByModel(schedulerInstanceId, model.id, sourceTemplateId);
   return created?.id ?? spec.id;
 }
 
@@ -51,8 +51,8 @@ export function ensureSessionAgent(
   model: ModelInfo,
   sourceTemplateId?: string,
 ): string {
-  // 若 model 已有 agent（bootstrap 建的），复用（避免 UNIQUE model 冲突）
-  const existingByModel = core.repository.findAgentByModel(schedulerInstanceId, model.id);
+  // 若 model+template 已有 agent（bootstrap 建的），复用（避免 UNIQUE 冲突）
+  const existingByModel = core.repository.findAgentByModel(schedulerInstanceId, model.id, sourceTemplateId);
   if (existingByModel) return existingByModel.id;
 
   const spec = modelToAgentCreateSpec(model);
@@ -72,8 +72,8 @@ export function ensureSessionAgent(
     });
     return agentInstanceId;
   } catch {
-    // UNIQUE 冲突（并发或 model 已有 agent）：重查
-    const created = core.repository.findAgentByModel(schedulerInstanceId, model.id);
+    // UNIQUE 冲突（并发或 model+template 已有 agent）：重查
+    const created = core.repository.findAgentByModel(schedulerInstanceId, model.id, sourceTemplateId);
     return created?.id ?? agentInstanceId;
   }
 }
