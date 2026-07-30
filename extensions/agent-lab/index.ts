@@ -39,7 +39,7 @@ import { createAutoTrigger, type AutoTrigger } from "./src/optimizer/auto-trigge
 import { createAutoFlow } from "./src/optimizer/auto-flow.ts";
 import { evaluateShadow } from "./src/optimizer/shadow.ts";
 import { evaluateCanary, decideCanaryAction } from "./src/optimizer/canary-eval.ts";
-import { DEFAULT_MARKET_INSTANCE_ID, MARKET_DEFAULT_BINDING_ID } from "./src/schedulers/names.ts";
+import { DEFAULT_MARKET_INSTANCE_ID, DEFAULT_WEIGHTED_SCORER_INSTANCE_ID, DEFAULT_WEIGHTED_TUNER_INSTANCE_ID, MARKET_DEFAULT_BINDING_ID } from "./src/schedulers/names.ts";
 
 const DIRECT_PREFIXES = ["deepseek", "moonshotai", "z-ai", "qwen"];
 
@@ -203,7 +203,7 @@ export default async function (pi: ExtensionAPI) {
           // derived→UUID agent id 迁移（旧 agent-arena-* / agent-* → UUID + model 列）。
           // 必须在 ensure*Instance 的 findOrCreateAgentByModel 之前跑，避免重复。
           try {
-            migrateDerivedAgentIds(rt.core, "default-weighted-scorer", sharedStore.raw);
+            migrateDerivedAgentIds(rt.core, DEFAULT_WEIGHTED_SCORER_INSTANCE_ID, sharedStore.raw);
             migrateDerivedAgentIds(rt.core, DEFAULT_MARKET_INSTANCE_ID, sharedStore.raw);
           } catch (err) {
             console.error("[agent-lab] derived→UUID agent migration failed (fail-open):", err);
@@ -296,7 +296,7 @@ export default async function (pi: ExtensionAPI) {
                   optimizerRegistry!.createOptimizerInstance(
                     { kind: "optimizer", id: "weighted-tuner", version: "1.0.0" },
                     {
-                      instanceId: "default-weighted-tuner",
+                      instanceId: DEFAULT_WEIGHTED_TUNER_INSTANCE_ID,
                       config: {},
                       targetSchedulers: [wsResult.instanceId],
                     },
@@ -337,7 +337,7 @@ export default async function (pi: ExtensionAPI) {
                     events: rt.core.events,
                     db: sharedStore.raw,
                     getCatalogSnapshot: () => catalog.candidates(),
-                    optimizerInstanceId: "default-weighted-tuner",
+                    optimizerInstanceId: DEFAULT_WEIGHTED_TUNER_INSTANCE_ID,
                     schedulerInstanceId: wsInstanceId,
                   }, proposalId),
                   evaluateCanary: (sid: string) => evaluateCanary({
@@ -367,7 +367,7 @@ export default async function (pi: ExtensionAPI) {
   // Lazy auto-trigger hook: captures autoTrigger ref (set during bootstrap).
   // Fail-open by design: never throws into telemetry handler (L7/I7).
   registerTelemetry(pi, store, cfg, settleDispatch, () => {
-    try { autoTrigger?.maybeTrigger("default-weighted-tuner"); } catch { /* swallow */ }
+    try { autoTrigger?.maybeTrigger(DEFAULT_WEIGHTED_TUNER_INSTANCE_ID); } catch { /* swallow */ }
   });
   // Populate arena model caller from interceptor ctx (needed by arena scheduler bidding).
   // This runs before the main interceptor so arenaModelCaller is available on first dispatch.
@@ -795,7 +795,7 @@ export default async function (pi: ExtensionAPI) {
     },
     syncSchedulerAgents: () => {
       if (!schedulerCore) return 0;
-      const wsInstanceId = cfg.scheduler?.instanceId ?? "default-weighted-scorer";
+      const wsInstanceId = cfg.scheduler?.instanceId ?? DEFAULT_WEIGHTED_SCORER_INSTANCE_ID;
       let added = syncWeightedScorerAgents(schedulerCore, wsInstanceId, catalog.candidates());
       if (cfg.mode === "market") {
         try {
