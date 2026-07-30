@@ -358,7 +358,7 @@ export default async function (pi: ExtensionAPI) {
   });
 
   // ── Arena smoke: real-bidding verification ───────────────────────
-  const arenaSmoke = async (role: string, cmdCtx: ExtensionContext): Promise<string> => {
+  const arenaSmoke = async (role: string, cmdCtx: ExtensionContext, engine?: "model-caller" | "workloop"): Promise<string> => {
     const evidence: string[] = [];
     const errors: string[] = [];
     const traceId = `smoke-${Date.now()}`;
@@ -430,10 +430,10 @@ export default async function (pi: ExtensionAPI) {
       const smokeParams: ArenaSchedulerParameters = {
         ...params,
         market: { ...params.market, maxBidders: 2 },
-        bidding: { ...params.bidding, maxCallsPerDispatch: 2 },
+        bidding: { ...params.bidding, maxCallsPerDispatch: 2, ...(engine ? { engine } : {}) },
       };
 
-      stage("Guard Rails", `maxBidders: 2 (overridden from ${params.market.maxBidders})`, `maxCallsPerDispatch: 2 (overridden from ${params.bidding.maxCallsPerDispatch})`);
+      stage("Guard Rails", `maxBidders: 2 (overridden from ${params.market.maxBidders})`, `maxCallsPerDispatch: 2 (overridden from ${params.bidding.maxCallsPerDispatch})${engine ? ` · engine: ${engine} (overridden from ${params.bidding.engine})` : ""}`);
 
       const tempRoundId = `smoke-round-${traceId}`;
       schedulerCore.repository.insertRound({

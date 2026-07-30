@@ -21,7 +21,7 @@ interface Deps {
   getSchedulerEvents?: (limit: number) => LabEvent[];
   syncSchedulerAgents?: () => number;
   getEffectiveRouting?: () => string;
-  arenaSmoke?: (role: string, cmdCtx: ExtensionContext) => Promise<string>;
+  arenaSmoke?: (role: string, cmdCtx: ExtensionContext, engine?: "model-caller" | "workloop") => Promise<string>;
   bench?: (cmdCtx: ExtensionContext, n?: number) => Promise<string>;
   executeDispatch?: (role: string, task: string) => Promise<string>;
   optimizerFacade?: OptimizerFacade;
@@ -697,13 +697,19 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
           ctx.ui.notify("Arena post 已废弃 — 调度器现已通过 catch-all binding 自动接管模型选择，无需手动派发", "warning");
         } else if (sub === "smoke") {
           const role = argv[2];
-          if (!role) { ctx.ui.notify("用法: /lab arena smoke <role>", "error"); return; }
+          if (!role || role.startsWith("--")) { ctx.ui.notify("用法: /lab arena smoke <role> [--engine model-caller|workloop]", "error"); return; }
           if (!arenaSmoke) {
             ctx.ui.notify("Arena smoke unavailable — arena not bootstrapped. Check /lab scheduler status", "error");
             return;
           }
+          const engineIdx = argv.indexOf("--engine");
+          const engineArg = engineIdx >= 0 ? argv[engineIdx + 1] : undefined;
+          if (engineArg !== undefined && engineArg !== "model-caller" && engineArg !== "workloop") {
+            ctx.ui.notify("--engine 必须是 model-caller 或 workloop", "error");
+            return;
+          }
           try {
-            const output = await arenaSmoke(role, ctx);
+            const output = await arenaSmoke(role, ctx, engineArg as "model-caller" | "workloop" | undefined);
             ctx.ui.notify(output, "info");
           } catch (err) {
             ctx.ui.notify(`Smoke failed: ${(err as Error).message}`, "error");
