@@ -834,7 +834,7 @@ export default async function (pi: ExtensionAPI) {
           return { ok: false, reason: "arena-bootstrap-pending (async; retry shortly or after any dispatch)" };
         }
         try {
-          schedulerCore.controlPlane.setCatchAllBinding(DEFAULT_MARKET_INSTANCE_ID, true);
+          schedulerCore.controlPlane.setCatchAllBinding(DEFAULT_MARKET_INSTANCE_ID, MARKET_DEFAULT_BINDING_ID, true);
           return { ok: true };
         } catch (err) {
           return { ok: false, reason: (err as Error).message };

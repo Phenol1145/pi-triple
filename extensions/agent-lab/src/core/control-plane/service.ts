@@ -291,7 +291,7 @@ export class ControlPlane {
     });
   }
 
-  setCatchAllBinding(schedulerInstanceId: string, enabled: boolean): void {
+  setCatchAllBinding(schedulerInstanceId: string, bindingId: string, enabled: boolean): void {
     const instance = this.repository.getInstance(schedulerInstanceId);
     if (!instance) {
       throw new InstanceNotActiveError(schedulerInstanceId);
@@ -301,7 +301,7 @@ export class ControlPlane {
     }
 
     const binding = {
-      id: "arena-default",
+      id: bindingId,
       priority: 10,
       match: {} as Record<string, never>,
     };
@@ -323,7 +323,7 @@ export class ControlPlane {
       });
     } else {
       this.repository.transaction(() => {
-        const deleted = this.repository.deleteRoutingBinding("arena-default");
+        const deleted = this.repository.deleteRoutingBinding(bindingId);
         if (deleted > 0) {
           this.events.append({
             eventId: `routing.binding.removed:${schedulerInstanceId}`,

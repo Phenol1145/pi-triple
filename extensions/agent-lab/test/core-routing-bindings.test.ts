@@ -154,7 +154,7 @@ test("deleteRoutingBinding returns 0 when binding does not exist", () => {
 test("setCatchAllBinding throws InstanceNotActiveError when instance not found", () => {
   const { db, service } = setup();
   assert.throws(
-    () => service.setCatchAllBinding("missing", true),
+    () => service.setCatchAllBinding("missing", "arena-default", true),
     InstanceNotActiveError,
   );
   db.close();
@@ -177,7 +177,7 @@ test("setCatchAllBinding throws InstanceNotActiveError when instance is not acti
     {},
   );
   assert.throws(
-    () => service.setCatchAllBinding("arena-1", true),
+    () => service.setCatchAllBinding("arena-1", "arena-default", true),
     InstanceNotActiveError,
   );
   db.close();
@@ -187,7 +187,7 @@ test("setCatchAllBinding succeeds when instance is active", () => {
   const { db, repository, service } = setup();
   insertActiveInstance(repository, "arena-1");
   // Should not throw
-  service.setCatchAllBinding("arena-1", true);
+  service.setCatchAllBinding("arena-1", "arena-default", true);
   db.close();
 });
 
@@ -196,7 +196,7 @@ test("setCatchAllBinding succeeds when instance is active", () => {
 test("setCatchAllBinding enabled=true creates arena-default binding", () => {
   const { db, repository, service } = setup();
   insertActiveInstance(repository, "arena-1");
-  service.setCatchAllBinding("arena-1", true);
+  service.setCatchAllBinding("arena-1", "arena-default", true);
 
   const bindings = repository.listRoutingBindings();
   assert.equal(bindings.length, 1);
@@ -210,8 +210,8 @@ test("setCatchAllBinding enabled=true creates arena-default binding", () => {
 test("setCatchAllBinding enabled=true is idempotent (does not duplicate)", () => {
   const { db, repository, service } = setup();
   insertActiveInstance(repository, "arena-1");
-  service.setCatchAllBinding("arena-1", true);
-  service.setCatchAllBinding("arena-1", true);
+  service.setCatchAllBinding("arena-1", "arena-default", true);
+  service.setCatchAllBinding("arena-1", "arena-default", true);
   assert.equal(repository.listRoutingBindings().length, 1);
   db.close();
 });
@@ -221,10 +221,10 @@ test("setCatchAllBinding enabled=true is idempotent (does not duplicate)", () =>
 test("setCatchAllBinding enabled=false removes arena-default binding", () => {
   const { db, repository, service } = setup();
   insertActiveInstance(repository, "arena-1");
-  service.setCatchAllBinding("arena-1", true);
+  service.setCatchAllBinding("arena-1", "arena-default", true);
   assert.equal(repository.listRoutingBindings().length, 1);
 
-  service.setCatchAllBinding("arena-1", false);
+  service.setCatchAllBinding("arena-1", "arena-default", false);
   assert.equal(repository.listRoutingBindings().length, 0);
   db.close();
 });
@@ -233,7 +233,7 @@ test("setCatchAllBinding enabled=false is idempotent (no error when binding abse
   const { db, repository, service } = setup();
   insertActiveInstance(repository, "arena-1");
   // No binding exists yet
-  service.setCatchAllBinding("arena-1", false);
+  service.setCatchAllBinding("arena-1", "arena-default", false);
   assert.equal(repository.listRoutingBindings().length, 0);
   db.close();
 });
@@ -243,7 +243,7 @@ test("setCatchAllBinding enabled=false is idempotent (no error when binding abse
 test("setCatchAllBinding enabled=true emits routing.binding.added event", () => {
   const { db, repository, events, service } = setup();
   insertActiveInstance(repository, "arena-1");
-  service.setCatchAllBinding("arena-1", true);
+  service.setCatchAllBinding("arena-1", "arena-default", true);
 
   const evts = events.query({ eventType: "routing.binding.added" });
   assert.equal(evts.length, 1);
@@ -259,8 +259,8 @@ test("setCatchAllBinding enabled=true emits routing.binding.added event", () => 
 test("setCatchAllBinding enabled=false emits routing.binding.removed event", () => {
   const { db, repository, events, service } = setup();
   insertActiveInstance(repository, "arena-1");
-  service.setCatchAllBinding("arena-1", true);
-  service.setCatchAllBinding("arena-1", false);
+  service.setCatchAllBinding("arena-1", "arena-default", true);
+  service.setCatchAllBinding("arena-1", "arena-default", false);
 
   const evts = events.query({ eventType: "routing.binding.removed" });
   assert.equal(evts.length, 1);
@@ -277,7 +277,7 @@ test("setCatchAllBinding emits no removed event when binding did not exist", () 
   const { db, repository, events, service } = setup();
   insertActiveInstance(repository, "arena-1");
   // No binding was ever added
-  service.setCatchAllBinding("arena-1", false);
+  service.setCatchAllBinding("arena-1", "arena-default", false);
 
   const evts = events.query({ eventType: "routing.binding.removed" });
   assert.equal(evts.length, 0);
@@ -291,16 +291,16 @@ test("setCatchAllBinding round-trip: enable → binding exists, disable → gone
   insertActiveInstance(repository, "arena-1");
 
   // Enable
-  service.setCatchAllBinding("arena-1", true);
+  service.setCatchAllBinding("arena-1", "arena-default", true);
   assert.equal(repository.listRoutingBindings().length, 1);
   assert.equal(repository.listRoutingBindings()[0].id, "arena-default");
 
   // Disable
-  service.setCatchAllBinding("arena-1", false);
+  service.setCatchAllBinding("arena-1", "arena-default", false);
   assert.equal(repository.listRoutingBindings().length, 0);
 
   // Re-enable
-  service.setCatchAllBinding("arena-1", true);
+  service.setCatchAllBinding("arena-1", "arena-default", true);
   assert.equal(repository.listRoutingBindings().length, 1);
   assert.equal(repository.listRoutingBindings()[0].id, "arena-default");
 
@@ -314,7 +314,7 @@ test("setCatchAllBinding is atomic: binding + event in same transaction", () => 
   insertActiveInstance(repository, "arena-1");
 
   // Simulate post-transaction verification: both binding and event must be visible
-  service.setCatchAllBinding("arena-1", true);
+  service.setCatchAllBinding("arena-1", "arena-default", true);
 
   const bindings = repository.listRoutingBindings();
   const evts = events.query({ eventType: "routing.binding.added" });
