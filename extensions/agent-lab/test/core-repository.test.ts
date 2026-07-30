@@ -103,6 +103,174 @@ test("listRoutingBindings returns empty array when no bindings exist", () => {
   db.close();
 });
 
+// ── UUID-identity: find by name methods ──
+
+test("findInstanceByName returns instance when (definition_id, name) matches", () => {
+  const { db, repo } = setup();
+  const instanceId = crypto.randomUUID();
+  const instance: SchedulerInstanceDraftSpec = {
+    id: instanceId,
+    schedulerDefinition: { kind: "scheduler", id: "market", version: "1.0.0" },
+    initialParameters: {},
+    agents: [],
+    fallbackChain: [{ type: "original-request" }],
+    routingBindings: [],
+  };
+  repo.transaction(() => {
+    repo.insertInstance(
+      {
+        id: instanceId,
+        name: "default-market",
+        definition: { kind: "scheduler", id: "market", version: "1.0.0" },
+        parameterModelVersion: "1.0.0",
+        agentDefinitionSchemaVersion: "1.0.0",
+        status: "active",
+        currentRoundId: `${instanceId}:round:0`,
+        fallbackChain: [{ type: "original-request" }],
+        createdAt: Date.now(),
+      },
+      { owner: "test" },
+    );
+  });
+
+  const found = repo.findInstanceByName("market", "default-market");
+  assert.ok(found, "should find instance by name");
+  assert.equal(found!.id, instanceId, "should return the UUID id");
+  assert.equal(found!.name, "default-market");
+  assert.equal(found!.definition.id, "market");
+
+  // getInstance by UUID id also works
+  const byId = repo.getInstance(instanceId);
+  assert.ok(byId);
+  assert.equal(byId!.id, instanceId);
+  assert.equal(byId!.name, "default-market");
+
+  db.close();
+});
+
+test("findInstanceByName returns undefined for non-existent name", () => {
+  const { db, repo } = setup();
+  assert.equal(repo.findInstanceByName("market", "no-such-name"), undefined);
+  db.close();
+});
+
+test("findRoutingBindingByName finds binding by (scheduler_instance_id, name)", () => {
+  const { db, repo } = setup();
+  const instanceId = crypto.randomUUID();
+  repo.transaction(() => {
+    repo.insertInstance(
+      {
+        id: instanceId,
+        name: "test-scheduler",
+        definition: { kind: "scheduler", id: "weighted-scorer", version: "1.0.0" },
+        parameterModelVersion: "1.0.0",
+        agentDefinitionSchemaVersion: "1.0.0",
+        status: "active",
+        currentRoundId: `${instanceId}:round:0`,
+        fallbackChain: [{ type: "original-request" }],
+        createdAt: Date.now(),
+      },
+      { owner: "test" },
+    );
+    repo.insertRoutingBinding(instanceId, {
+      id: crypto.randomUUID(),
+      priority: 10,
+      match: { role: "worker" },
+    });
+  });
+
+  // insertRoutingBinding uses binding.id as the name, so look up by that id
+  const bindings = repo.listRoutingBindings();
+  assert.equal(bindings.length, 1);
+  const bindingName = bindings[0].name;
+
+  const found = repo.findRoutingBindingByName(instanceId, bindingName);
+  assert.ok(found, "should find routing binding by name");
+  assert.equal(found!.schedulerInstanceId, instanceId);
+  assert.equal(found!.priority, 10);
+  assert.deepEqual(found!.match, { role: "worker" });
+
+  db.close();
+});
+
+test("findRoutingBindingByName returns undefined for non-existent name", () => {
+  const { db, repo } = setup();
+  assert.equal(repo.findRoutingBindingByName("no-such-si", "no-such-name"), undefined);
+  db.close();
+});
+
+test("deleteRoutingBindingByName deletes by (scheduler_instance_id, name)", () => {
+  const { db, repo } = setup();
+  const instanceId = crypto.randomUUID();
+  repo.transaction(() => {
+    repo.insertInstance(
+      {
+        id: instanceId,
+        name: "test-scheduler",
+        definition: { kind: "scheduler", id: "weighted-scorer", version: "1.0.0" },
+        parameterModelVersion: "1.0.0",
+        agentDefinitionSchemaVersion: "1.0.0",
+        status: "active",
+        currentRoundId: `${instanceId}:round:0`,
+        fallbackChain: [{ type: "original-request" }],
+        createdAt: Date.now(),
+      },
+      { owner: "test" },
+    );
+    repo.insertRoutingBinding(instanceId, {
+      id: crypto.randomUUID(),
+      priority: 5,
+      match: {},
+    });
+  });
+
+  const bindings = repo.listRoutingBindings();
+  assert.equal(bindings.length, 1);
+  const bindingName = bindings[0].name;
+
+  const deleted = repo.deleteRoutingBindingByName(instanceId, bindingName);
+  assert.equal(deleted, 1);
+  assert.equal(repo.listRoutingBindings().length, 0);
+  assert.equal(repo.findRoutingBindingByName(instanceId, bindingName), undefined);
+
+  // Deleting again returns 0 changes
+  assert.equal(repo.deleteRoutingBindingByName(instanceId, bindingName), 0);
+
+  db.close();
+});
+
+test("findOptimizerByName finds optimizer by (definition_id, name)", () => {
+  const { db, repo } = setup();
+  const optimizerId = crypto.randomUUID();
+  repo.insertOptimizerInstance({
+    id: optimizerId,
+    name: "default-optimizer",
+    definitionId: "weighted-tuner",
+    definitionVersion: "1.0.0",
+    config: { stepSize: 0.1 },
+    targetSchedulers: ["scheduler-1"],
+    status: "active",
+    createdAt: Date.now(),
+  });
+
+  const found = repo.findOptimizerByName("weighted-tuner", "default-optimizer");
+  assert.ok(found, "should find optimizer by name");
+  assert.equal(found!.id, optimizerId);
+  assert.equal(found!.name, "default-optimizer");
+  assert.equal(found!.definitionId, "weighted-tuner");
+  assert.equal(found!.status, "active");
+
+  // getOptimizerInstance by UUID id also works
+  const byId = repo.getOptimizerInstance(optimizerId);
+  assert.ok(byId);
+  assert.equal(byId!.id, optimizerId);
+
+  // Non-existent returns undefined
+  assert.equal(repo.findOptimizerByName("weighted-tuner", "no-such"), undefined);
+
+  db.close();
+});
+
 test("Core schema is additive and does not alter legacy tables", () => {
   const db = new DatabaseSync(":memory:");
   db.exec("CREATE TABLE runs (id INTEGER PRIMARY KEY, role TEXT NOT NULL)");

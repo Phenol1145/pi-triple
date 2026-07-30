@@ -199,6 +199,35 @@ export class CoreRepository {
     };
   }
 
+  findInstanceByName(definitionId: string, name: string): SchedulerInstanceRecord | undefined {
+    const row = this.db.prepare(
+      `SELECT id, name, definition_id, definition_version, parameter_model_version, agent_schema_version,
+              status, current_round_id, canary_round_id, canary_percent, fallback_chain_json, created_ts
+       FROM lab_scheduler_instances WHERE definition_id = ? AND name = ?`
+    ).get(definitionId, name) as {
+      id: string; name: string; definition_id: string; definition_version: string; parameter_model_version: string;
+      agent_schema_version: string; status: string; current_round_id: string;
+      canary_round_id: string | null; canary_percent: number | null;
+      fallback_chain_json: string; created_ts: number;
+    } | undefined;
+
+    if (!row) return undefined;
+
+    return {
+      id: row.id,
+      name: row.name,
+      definition: { kind: "scheduler" as const, id: row.definition_id, version: row.definition_version },
+      parameterModelVersion: row.parameter_model_version,
+      agentDefinitionSchemaVersion: row.agent_schema_version,
+      status: row.status as SchedulerInstanceRecord["status"],
+      currentRoundId: row.current_round_id,
+      canaryRoundId: row.canary_round_id ?? undefined,
+      canaryPercent: row.canary_percent ?? undefined,
+      fallbackChain: JSON.parse(row.fallback_chain_json) as SchedulerInstanceRecord["fallbackChain"],
+      createdAt: row.created_ts,
+    };
+  }
+
   listInstances(): SchedulerInstanceRecord[] {
     const rows = this.db.prepare(
       `SELECT id, name, definition_id, definition_version, parameter_model_version, agent_schema_version,
@@ -407,6 +436,42 @@ export class CoreRepository {
     return result.changes;
   }
 
+  findRoutingBindingByName(schedulerInstanceId: string, name: string): {
+    id: string;
+    name: string;
+    schedulerInstanceId: string;
+    priority: number;
+    match: { role?: string; taskCategory?: string; labels?: Record<string, string>; caller?: string };
+  } | undefined {
+    const row = this.db.prepare(
+      `SELECT id, name, scheduler_instance_id, priority, match_json
+       FROM lab_routing_bindings WHERE scheduler_instance_id = ? AND name = ?`
+    ).get(schedulerInstanceId, name) as {
+      id: string;
+      name: string;
+      scheduler_instance_id: string;
+      priority: number;
+      match_json: string;
+    } | undefined;
+
+    if (!row) return undefined;
+
+    return {
+      id: row.id,
+      name: row.name,
+      schedulerInstanceId: row.scheduler_instance_id,
+      priority: row.priority,
+      match: JSON.parse(row.match_json) as { role?: string; taskCategory?: string; labels?: Record<string, string>; caller?: string },
+    };
+  }
+
+  deleteRoutingBindingByName(schedulerInstanceId: string, name: string): number {
+    const result = this.db.prepare(
+      `DELETE FROM lab_routing_bindings WHERE scheduler_instance_id = ? AND name = ?`
+    ).run(schedulerInstanceId, name);
+    return result.changes;
+  }
+
   listRoutingBindings(): Array<{
     id: string;
     name: string;
@@ -436,6 +501,29 @@ export class CoreRepository {
   }
 
   // ── Optimizer instance methods ──
+
+  findOptimizerByName(definitionId: string, name: string): OptimizerInstanceRecord | undefined {
+    const row = this.db.prepare(
+      `SELECT id, name, definition_id, definition_version, config_json, target_schedulers_json, status, created_at
+       FROM lab_optimizer_instances WHERE definition_id = ? AND name = ?`
+    ).get(definitionId, name) as {
+      id: string; name: string; definition_id: string; definition_version: string; config_json: string;
+      target_schedulers_json: string; status: string; created_at: number;
+    } | undefined;
+
+    if (!row) return undefined;
+
+    return {
+      id: row.id,
+      name: row.name,
+      definitionId: row.definition_id,
+      definitionVersion: row.definition_version,
+      config: JSON.parse(row.config_json) as unknown,
+      targetSchedulers: JSON.parse(row.target_schedulers_json) as string[],
+      status: row.status as OptimizerInstanceRecord["status"],
+      createdAt: row.created_at,
+    };
+  }
 
   insertOptimizerInstance(record: OptimizerInstanceRecord): void {
     this.db.prepare(
