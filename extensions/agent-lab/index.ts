@@ -39,7 +39,7 @@ import { createAutoTrigger, type AutoTrigger } from "./src/optimizer/auto-trigge
 import { createAutoFlow } from "./src/optimizer/auto-flow.ts";
 import { evaluateShadow } from "./src/optimizer/shadow.ts";
 import { evaluateCanary, decideCanaryAction } from "./src/optimizer/canary-eval.ts";
-import { DEFAULT_MARKET_INSTANCE_ID, DEFAULT_WEIGHTED_SCORER_INSTANCE_ID, DEFAULT_WEIGHTED_TUNER_INSTANCE_ID, MARKET_DEFAULT_BINDING_ID } from "./src/schedulers/names.ts";
+import { DEFAULT_MARKET_INSTANCE_ID, DEFAULT_WEIGHTED_SCORER_INSTANCE_ID, DEFAULT_WEIGHTED_TUNER_INSTANCE_ID, MARKET_DEFAULT_BINDING_ID, WEIGHTED_TUNER_OPTIMIZER_ID } from "./src/schedulers/names.ts";
 
 const DIRECT_PREFIXES = ["deepseek", "moonshotai", "z-ai", "qwen"];
 
@@ -294,7 +294,7 @@ export default async function (pi: ExtensionAPI) {
               if (wsRec) {
                 try {
                   optimizerRegistry!.createOptimizerInstance(
-                    { kind: "optimizer", id: "weighted-tuner", version: "1.0.0" },
+                    { kind: "optimizer", id: WEIGHTED_TUNER_OPTIMIZER_ID, version: "1.0.0" },
                     {
                       instanceId: DEFAULT_WEIGHTED_TUNER_INSTANCE_ID,
                       config: {},
