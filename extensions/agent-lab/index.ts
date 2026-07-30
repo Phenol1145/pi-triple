@@ -12,6 +12,7 @@ import { registerCommands } from "./src/commands/register.ts";
 import { findOrCreateAgentByModel, ensureSessionAgent } from "./src/arena/agent-id.ts";
 import { SqliteLedger } from "./src/arena/ledger.ts";
 import { EndowmentPolicyV1 } from "./src/arena/policies.ts";
+import { getBidBoard } from "./src/arena/bid-board.ts";
 import type { SchedulerRuntimeLike } from "./src/interceptor/scheduler-bridge.ts";
 import { createSchedulerRuntime } from "./src/runtime/create-scheduler-runtime.ts";
 import { ensureWeightedScorerInstance, syncWeightedScorerAgents, ensureArenaInstance, syncArenaAgents, migrateDerivedAgentIds } from "./src/schedulers/bootstrap.ts";
@@ -214,6 +215,7 @@ export default async function (pi: ExtensionAPI) {
                 const agents = rt.core.repository.listAgents("default-arena");
                 return agents.find((a) => a.id === agentId)?.sourceTemplateId;
               },
+              bidBoard: getBidBoard(),
             };
 
             // Arena is always bootstrapped (registered/activated, addressable by
