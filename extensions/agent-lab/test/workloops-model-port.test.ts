@@ -31,6 +31,7 @@ import {
   createPiModelPort,
   createToolPort,
   createMemoryArtifactPort,
+  resolveModel,
 } from "../src/workloops/model-port.ts";
 import type {
   ModelRegistryLike,
@@ -558,4 +559,61 @@ test("createMultiModelPort resolves different models per call (core design)", as
   assert.ok(calls.some(([p, m]) => p === "anthropic" && m === "claude-A"));
   // Second call: openrouter fallback → openrouter/claude-B
   assert.ok(calls.some(([p, m]) => p === "openrouter" && m === "claude-B"));
+});
+
+// ── resolveModel ───────────────────────────────────────────────────
+
+test("resolveModel: openrouter passthrough clones base model for uncataloged id", () => {
+  const base = {
+    provider: "openrouter",
+    id: "moonshotai/kimi-k2.6",
+    name: "kimi",
+    baseUrl: "https://openrouter.ai/api/v1",
+  };
+  const reg = {
+    find: (provider: string, id: string) =>
+      provider === "openrouter" && id === "moonshotai/kimi-k2.6" ? base : undefined,
+    hasConfiguredAuth: () => true,
+    getApiKeyAndHeaders: async () =>
+      ({ ok: true as const, apiKey: "k", headers: {} }),
+  };
+  const m = resolveModel(reg as never, "google/lyria-3-clip-preview");
+  assert.ok(m);
+  assert.equal(m!.id, "google/lyria-3-clip-preview");
+  assert.equal(m!.provider, "openrouter");
+  assert.equal(m!.baseUrl, "https://openrouter.ai/api/v1");
+});
+
+test("resolveModel: provider split still works (exact catalog match)", () => {
+  const ds = {
+    provider: "deepseek",
+    id: "deepseek-chat",
+    baseUrl: "https://api.deepseek.com",
+  };
+  const reg = {
+    find: (p: string, id: string) =>
+      p === "deepseek" && id === "deepseek-chat" ? ds : undefined,
+    hasConfiguredAuth: () => true,
+    getApiKeyAndHeaders: async () =>
+      ({ ok: true as const, apiKey: "k", headers: {} }),
+  };
+  const m = resolveModel(reg as never, "deepseek/deepseek-chat");
+  assert.equal(m, ds);
+});
+
+test("resolveModel: openrouter fallback for slashed model (was missing)", () => {
+  const or = {
+    provider: "openrouter",
+    id: "google/gemini-pro",
+    baseUrl: "https://openrouter.ai/api/v1",
+  };
+  const reg = {
+    find: (p: string, id: string) =>
+      p === "openrouter" && id === "google/gemini-pro" ? or : undefined,
+    hasConfiguredAuth: () => true,
+    getApiKeyAndHeaders: async () =>
+      ({ ok: true as const, apiKey: "k", headers: {} }),
+  };
+  const m = resolveModel(reg as never, "google/gemini-pro");
+  assert.equal(m, or);
 });

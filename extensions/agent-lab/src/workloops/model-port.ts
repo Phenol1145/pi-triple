@@ -185,24 +185,40 @@ export interface ModelRegistryLike {
   >;
 }
 
+/** pi's default openrouter model id — used as a base for openrouter passthrough. */
+const OPENROUTER_DEFAULT_MODEL = "moonshotai/kimi-k2.6";
+
 /**
  * Resolve a `modelId` string into a registry model entry.
  *
- * - If modelId contains a `/`, the prefix is the provider and the rest is
- *   the model id (`provider/model` split).
- * - Otherwise, falls back to `openrouter` as the default provider.
+ * Resolution order:
+ * 1. If modelId contains a `/`, try provider/model split.
+ * 2. Try openrouter catalog match (full modelId as an openrouter model).
+ * 3. Openrouter passthrough: clone a base openrouter model (which carries
+ *    the openrouter baseUrl/provider config) and override its id/name to
+ *    call the target model directly.  OpenRouter accepts any model id with
+ *    a valid key — the bundled catalog may not include the newest models.
  *
- * Returns `undefined` if no match is found.
+ * Returns `undefined` only if step 3 fails (base model not in registry).
  */
-function resolveModel(
+export function resolveModel(
   reg: ModelRegistryLike,
   modelId: string,
 ): Model<import("@earendil-works/pi-ai").Api> | undefined {
+  // 1. provider/model split (e.g. "deepseek/deepseek-chat" → provider "deepseek")
   if (modelId.includes("/")) {
     const idx = modelId.indexOf("/");
-    return reg.find(modelId.slice(0, idx), modelId.slice(idx + 1));
+    const m = reg.find(modelId.slice(0, idx), modelId.slice(idx + 1));
+    if (m) return m;
   }
-  return reg.find("openrouter", modelId);
+  // 2. openrouter catalog match (full id as an openrouter model)
+  const or = reg.find("openrouter", modelId);
+  if (or) return or;
+  // 3. openrouter passthrough: clone a base openrouter model and override
+  //    its id/name to call the target model directly.
+  const base = reg.find("openrouter", OPENROUTER_DEFAULT_MODEL);
+  if (base) return { ...base, id: modelId, name: modelId };
+  return undefined;
 }
 
 /**
