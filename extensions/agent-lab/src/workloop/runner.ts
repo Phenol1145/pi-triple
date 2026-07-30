@@ -157,8 +157,24 @@ export class WorkLoopRunner {
       };
     }
 
-    // ── Load CAS snapshot ───────────────────────────────────────
-    const snapshot = this.stateStore.get(agentInstanceId);
+    // ── Load CAS snapshot (auto-initialize on first run) ────────
+    // First run for an agent (e.g. arena bidding candidates, fresh execute
+    // agents) has no snapshot yet. Initialize it from the implementation's
+    // initialContext/initialState. Per-agent single-flight (this.tails)
+    // serializes runs for the same agent, so concurrent initialize races are
+    // not expected; the VersionConflictError catch re-reads just in case.
+    let snapshot = this.stateStore.get(agentInstanceId);
+    if (!snapshot) {
+      try {
+        snapshot = this.stateStore.initialize(
+          agentInstanceId,
+          implementation.initialContext(config),
+          implementation.initialState(config),
+        );
+      } catch {
+        snapshot = this.stateStore.get(agentInstanceId);
+      }
+    }
     if (!snapshot) {
       this.emitEvent(
         nextEventId("agent.failed"),

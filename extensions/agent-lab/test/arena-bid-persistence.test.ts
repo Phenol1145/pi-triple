@@ -106,6 +106,17 @@ function bidRequest(overrides: Partial<WorkLoopRunRequest> = {}): WorkLoopRunReq
 
 // ── Tests ────────────────────────────────────────────────────────────
 
+test("0. runner auto-initializes snapshot on first run (no explicit initialize)", async () => {
+  const { runner } = buildArenaRunner();
+  // NOTE: no stateStore.initialize() call — the runner must auto-init
+  const result = await runner.run(
+    bidRequest({ agentInstanceId: "agent-autoinit", traceId: "trace-autoinit", executionId: "exec-autoinit" }),
+  );
+  assert.equal(result.status, "completed");
+  const stake = (result.output?.custom as { stake: number } | undefined)?.stake;
+  assert.equal(stake, 37);
+});
+
 test("1. per-candidate single-flight: same agent bids serialized, 2 checkpoints", async () => {
   const { runner, stateStore, eventLog, checkpointStore } = buildArenaRunner();
 

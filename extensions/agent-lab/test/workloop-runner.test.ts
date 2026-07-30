@@ -904,17 +904,16 @@ test("6. CAS conflict: returns state-conflict error, preserves winning state", a
   assert.ok(types.includes("agent.failed"), "should include agent.failed");
 });
 
-// ── Additional: runtime snapshot missing ───────────────────────────
+// ── Additional: runtime snapshot auto-initialized on first run ─────
 
-test("runtime snapshot missing returns workloop-error", async () => {
+test("runtime snapshot auto-initialized on first run (no explicit initialize)", async () => {
   const { runner } = buildRunner();
-  // Do NOT initialize agent-1
+  // Do NOT initialize agent-1 — runner auto-inits from implementation.initialContext/initialState
 
   const result = await runner.run(defaultRequest());
 
-  assert.equal(result.status, "failed");
-  assert.equal(result.error?.standard?.code, "workloop-error");
-  assert.ok(result.error?.standard?.message.includes("no runtime snapshot"));
+  assert.equal(result.status, "completed");
+  assert.equal((result.state as { counter: number }).counter, 1);
 });
 
 // ── Additional: implementation throws unexpectedly ─────────────────
