@@ -386,6 +386,11 @@ export default async function (pi: ExtensionAPI) {
       return "预检失败: Scheduler not enabled. Enable with /lab config scheduler.enabled true";
     }
 
+    // ── Initialize runtime + await bootstrap (mirror execute/bench) ──
+    // bootstrap 是 fire-and-forget 异步；新会话不先初始化则 arena 实现未注册、schedulerCore 为空。
+    schedulerRuntimeFactory();
+    if (bootstrapPromise) { try { await bootstrapPromise; } catch { /* fail-open */ } }
+
     // ── Precondition 2: arena instance active ──────────────────────
     if (!schedulerCore) {
       return "预检失败: Scheduler core not initialized. Check /lab scheduler status";
