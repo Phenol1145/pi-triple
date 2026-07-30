@@ -8,10 +8,12 @@ test("scheduler definition ids are non-empty and distinct", () => {
   assert.notEqual(names.MARKET_SCHEDULER_DEFINITION_ID, names.WEIGHTED_SCORER_DEFINITION_ID);
 });
 
-test("default instance ids are non-empty and distinct", () => {
-  const ids = [names.DEFAULT_MARKET_INSTANCE_ID, names.DEFAULT_WEIGHTED_SCORER_INSTANCE_ID];
-  assert.ok(ids.every((x) => x.length > 0));
-  assert.equal(new Set(ids).size, ids.length);
+test("logical names are non-empty and distinct", () => {
+  assert.ok(names.DEFAULT_MARKET_NAME.length > 0);
+  assert.ok(names.DEFAULT_WEIGHTED_SCORER_NAME.length > 0);
+  assert.ok(names.DEFAULT_WEIGHTED_TUNER_NAME.length > 0);
+  assert.ok(names.MARKET_DEFAULT_BINDING_NAME.length > 0);
+  assert.notEqual(names.DEFAULT_MARKET_NAME, names.DEFAULT_WEIGHTED_SCORER_NAME);
 });
 
 test("optimizer + binding ids are non-empty", () => {

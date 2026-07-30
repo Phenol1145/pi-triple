@@ -332,7 +332,7 @@ test("no legacy fields detected: report still marks detect step ok", () => {
   // mode, autoApply, and arena.* are always present in DEFAULT_CONFIG
   assert.ok(detect!.detail!.includes("mode"));
   assert.ok(detect!.detail!.includes("autoApply"));
-  assert.ok(detect!.detail!.includes("arena.*"));
+  assert.ok(detect!.detail!.includes("market.*"));
 
   deps.store.close();
 });

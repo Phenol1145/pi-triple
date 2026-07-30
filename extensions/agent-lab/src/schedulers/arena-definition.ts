@@ -2,8 +2,8 @@ import type {
   SchedulerDefinition,
   ValidationResult,
 } from "../core/contracts.ts";
-import type { ArenaConfig } from "../types.ts";
-import { DEFAULT_ARENA_CONFIG } from "../config.ts";
+import type { MarketConfig } from "../types.ts";
+import { DEFAULT_MARKET_CONFIG } from "../config.ts";
 import { globMatch } from "../interceptor/model-scope.ts";
 import { MARKET_SCHEDULER_DEFINITION_ID } from "./names.ts";
 
@@ -41,19 +41,19 @@ export interface ArenaSchedulerParameters {
 }
 
 export const ARENA_DEFAULT_PARAMETERS: ArenaSchedulerParameters = {
-  endowment: { ...DEFAULT_ARENA_CONFIG.endowment },
-  odds: { ...DEFAULT_ARENA_CONFIG.odds },
-  settlement: { ...DEFAULT_ARENA_CONFIG.settlement },
+  endowment: { ...DEFAULT_MARKET_CONFIG.endowment },
+  odds: { ...DEFAULT_MARKET_CONFIG.odds },
+  settlement: { ...DEFAULT_MARKET_CONFIG.settlement },
   cost: {
-    ...DEFAULT_ARENA_CONFIG.cost,
-    toolWeights: { ...DEFAULT_ARENA_CONFIG.cost.toolWeights },
+    ...DEFAULT_MARKET_CONFIG.cost,
+    toolWeights: { ...DEFAULT_MARKET_CONFIG.cost.toolWeights },
   },
   bidding: {
-    ...DEFAULT_ARENA_CONFIG.bidding,
-    maxCallsPerDispatch: DEFAULT_ARENA_CONFIG.bidding.maxCallsPerDispatch,
+    ...DEFAULT_MARKET_CONFIG.bidding,
+    maxCallsPerDispatch: DEFAULT_MARKET_CONFIG.bidding.maxCallsPerDispatch,
   },
-  market: { ...DEFAULT_ARENA_CONFIG.market },
-  risk: { ...DEFAULT_ARENA_CONFIG.risk },
+  market: { ...DEFAULT_MARKET_CONFIG.market },
+  risk: { ...DEFAULT_MARKET_CONFIG.risk },
 };
 
 const TUNABLE_PATHS: string[] = [
@@ -96,11 +96,11 @@ export function matchEligibility(eligibility: string, modelId: string): boolean 
 // ── Parameter bridge ──────────────────────────────────────────────
 
 /**
- * Map arena scheduler parameters to the ArenaConfig shape used by policy classes.
+ * Map market scheduler parameters to the MarketConfig shape used by policy classes.
  * Only endowment/odds/settlement/cost are explicitly mapped (policy classes need
  * just these four sub-objects). Remaining fields fall back to defaults.
  */
-export function arenaParamsToArenaConfig(params: unknown): ArenaConfig {
+export function arenaParamsToMarketConfig(params: unknown): MarketConfig {
   const p = (params ?? {}) as Record<string, unknown>;
   const endowment = (p.endowment ?? ARENA_DEFAULT_PARAMETERS.endowment) as Record<string, number>;
   const odds = (p.odds ?? ARENA_DEFAULT_PARAMETERS.odds) as Record<string, number>;

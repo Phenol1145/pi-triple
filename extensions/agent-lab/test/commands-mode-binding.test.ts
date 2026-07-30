@@ -47,7 +47,7 @@ function defaultCfg(overrides?: Partial<LabConfig>): LabConfig {
     topN: 5,
     catalogTtlMs: 60000,
     mode: "classic",
-    arena: {
+    market: {
       endowment: { K: 100, floor: 10 },
       odds: { easy: 1.5, medium: 2.0, hard: 2.5 },
       settlement: { tax: 0.1, errorMode: "stakeOnly" },
@@ -137,18 +137,18 @@ test("/lab recommend shows deprecation notice", async () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
-//  Tests: /lab arena post — deprecation notice
+//  Tests: /lab market post — deprecation notice
 // ════════════════════════════════════════════════════════════════════
 
-test("/lab arena post shows deprecation notice", async () => {
+test("/lab market post shows deprecation notice", async () => {
   const { pi, handler, ctx, notifies } = mockPi();
   const cfg = defaultCfg();
   const deps = placeholderDeps({ cfg });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena post", ctx());
+  await handler()("market post", ctx());
 
-  assert.ok(findNotify(notifies, "Arena post 已废弃", "warning"));
+  assert.ok(findNotify(notifies, "Market post 已废弃", "warning"));
   assert.ok(findNotify(notifies, "catch-all binding"));
 });
 
@@ -180,7 +180,7 @@ test("/lab config autoApply — dead key rejected", async () => {
   assert.ok(findNotify(notifies, "/lab migrate"));
 });
 
-test("/lab config arena.* — dead key rejected (endowment.K)", async () => {
+test("/lab config market.* — dead key rejected (endowment.K)", async () => {
   const { pi, handler, ctx, notifies } = mockPi();
   const cfg = defaultCfg();
   const deps = placeholderDeps({ cfg });
@@ -192,7 +192,7 @@ test("/lab config arena.* — dead key rejected (endowment.K)", async () => {
   assert.ok(findNotify(notifies, "/lab migrate"));
 });
 
-test("/lab config arena.* — dead key rejected (risk.maxStakeRatio)", async () => {
+test("/lab config market.* — dead key rejected (risk.maxStakeRatio)", async () => {
   const { pi, handler, ctx, notifies } = mockPi();
   const cfg = defaultCfg();
   const deps = placeholderDeps({ cfg });
@@ -265,9 +265,9 @@ test("scheduler status — effectiveRouting catch-all displayed", () => {
     instanceId: "default-weighted-scorer",
     enabled: true,
     runtimeAvailable: true,
-    effectiveRouting: "catch-all → default-arena (market)",
+    effectiveRouting: "catch-all → default-market (market)",
   });
-  assert.ok(out.includes("Routing: catch-all → default-arena (market)"));
+  assert.ok(out.includes("Routing: catch-all → default-market (market)"));
   assert.ok(!out.includes("Instance: default-weighted-scorer"));
 });
 

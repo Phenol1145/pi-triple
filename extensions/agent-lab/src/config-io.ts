@@ -35,7 +35,13 @@ export function ensureDataDir(): void { mkdirSync(dataDir(), { recursive: true }
 export function loadConfig(): LabConfig {
   try {
     const raw = readFileSync(configPath(), "utf8");
-    return mergeConfig(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    // Backward compat: migrate arena→market for existing configs
+    if (parsed.arena && !parsed.market) {
+      parsed.market = parsed.arena;
+      delete parsed.arena;
+    }
+    return mergeConfig(parsed);
   } catch {
     return mergeConfig(undefined);
   }

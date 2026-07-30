@@ -1,6 +1,6 @@
-import type { ArenaConfig, LabConfig, OptimizerConfig } from "./types.ts";
+import type { MarketConfig, LabConfig, OptimizerConfig } from "./types.ts";
 
-export const DEFAULT_ARENA_CONFIG: ArenaConfig = {
+export const DEFAULT_MARKET_CONFIG: MarketConfig = {
   endowment: { K: 100, floor: 0.05 },
   odds: { easy: 1.5, medium: 3.0, hard: 5.0 },
   settlement: { tax: 5, errorMode: "stakeTimesOdds" },
@@ -19,7 +19,7 @@ export const DEFAULT_CONFIG: LabConfig = {
   topN: 3,
   catalogTtlMs: 21_600_000,
   mode: "classic",
-  arena: mergeArena(DEFAULT_ARENA_CONFIG),
+  market: mergeMarket(DEFAULT_MARKET_CONFIG),
 };
 
 export const DEFAULT_OPTIMIZER_CONFIG: OptimizerConfig = {
@@ -32,7 +32,7 @@ export const DEFAULT_OPTIMIZER_CONFIG: OptimizerConfig = {
 
 export function mergeConfig(partial: Partial<LabConfig> | undefined): LabConfig {
   if (!partial) {
-    return { ...DEFAULT_CONFIG, weights: { ...DEFAULT_CONFIG.weights }, acceptanceScoreMap: { ...DEFAULT_CONFIG.acceptanceScoreMap }, arena: mergeArena(DEFAULT_ARENA_CONFIG) };
+    return { ...DEFAULT_CONFIG, weights: { ...DEFAULT_CONFIG.weights }, acceptanceScoreMap: { ...DEFAULT_CONFIG.acceptanceScoreMap }, market: mergeMarket(DEFAULT_MARKET_CONFIG) };
   }
   const scheduler = partial.scheduler ? { ...partial.scheduler } : undefined;
   const optimizer = partial.optimizer ? mergeOptimizer(DEFAULT_OPTIMIZER_CONFIG, partial.optimizer) : undefined;
@@ -41,13 +41,13 @@ export function mergeConfig(partial: Partial<LabConfig> | undefined): LabConfig 
     ...partial,
     weights: { ...DEFAULT_CONFIG.weights, ...(partial.weights ?? {}) },
     acceptanceScoreMap: { ...DEFAULT_CONFIG.acceptanceScoreMap, ...(partial.acceptanceScoreMap ?? {}) },
-    arena: mergeArena(DEFAULT_ARENA_CONFIG, partial.arena),
+    market: mergeMarket(DEFAULT_MARKET_CONFIG, partial.market ?? partial.arena as MarketConfig | undefined),
     scheduler,
     optimizer,
   };
 }
 
-function mergeArena(base: ArenaConfig, partial?: ArenaConfig): ArenaConfig {
+function mergeMarket(base: MarketConfig, partial?: MarketConfig): MarketConfig {
   return {
     endowment: { ...base.endowment, ...(partial?.endowment ?? {}) },
     odds: { ...base.odds, ...(partial?.odds ?? {}) },

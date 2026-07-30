@@ -8,6 +8,7 @@ import { NamespacedStore } from "../src/core/storage/namespaced-store.ts";
 import { ControlPlane } from "../src/core/control-plane/service.ts";
 import { SchedulerRegistry } from "../src/scheduler/registry.ts";
 import { createLabCore } from "../src/core/create-core.ts";
+import { MARKET_SCHEDULER_DEFINITION_ID } from "../src/schedulers/names.ts";
 import type { LabCore } from "../src/core/create-core.ts";
 import type { ModelInfo } from "../src/types.ts";
 import type { SchedulerDefinition } from "../src/core/contracts.ts";
@@ -119,7 +120,7 @@ test("1. ensureArenaInstance registers definition, creates draft, validates, act
   assert.equal(inst.status, "active");
   assert.equal(inst.name, "default-market");
   assert.equal(inst.currentRoundId, result.roundId);
-  assert.equal(inst.definition.id, "arena");
+  assert.equal(inst.definition.id, "market");
   assert.equal(inst.definition.version, "1.0.0");
 
   // Verify round
@@ -140,7 +141,7 @@ test("1. ensureArenaInstance registers definition, creates draft, validates, act
   assert.ok(inst.fallbackChain.some((f) => f.type === "original-request"));
 
   // Verify by-name lookup works
-  const byName = core.repository.findInstanceByName("arena", "default-market");
+  const byName = core.repository.findInstanceByName(MARKET_SCHEDULER_DEFINITION_ID, "default-market");
   assert.ok(byName);
   assert.equal(byName.id, result.instanceId);
 

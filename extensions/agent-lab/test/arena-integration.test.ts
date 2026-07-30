@@ -266,9 +266,9 @@ test("Scenario 1: end-to-end select flow — dispatch → arena bids+freezes →
   assert.ok(eventTypes.includes("scheduling.requested"), "should have scheduling.requested");
   assert.ok(eventTypes.includes("routing.resolved"), "should have routing.resolved");
   assert.ok(eventTypes.includes("scheduler.started"), "should have scheduler.started");
-  assert.ok(eventTypes.includes("scheduler.arena.bid_call"), "should have arena.bid_call");
-  assert.ok(eventTypes.includes("scheduler.arena.stake"), "should have arena.stake");
-  assert.ok(eventTypes.includes("scheduler.arena.balance_after"), "should have arena.balance_after");
+  assert.ok(eventTypes.includes("scheduler.market.bid_call"), "should have arena.bid_call");
+  assert.ok(eventTypes.includes("scheduler.market.stake"), "should have arena.stake");
+  assert.ok(eventTypes.includes("scheduler.market.balance_after"), "should have arena.balance_after");
   assert.ok(eventTypes.includes("scheduler.completed"), "should have scheduler.completed");
 
   // Verify scheduler.settled from settle path
@@ -541,7 +541,7 @@ test("Scenario 5: bankruptcy — settle leaves balance 0 → bankrupt metric emi
   // Check bankrupt event
   const events1 = rt.core.events.query({ traceId: "bankrupt-trace-1" });
   const bankruptEvents = events1.filter(
-    (e) => e.eventType === "scheduler.arena.bankrupt",
+    (e) => e.eventType === "scheduler.market.bankrupt",
   );
   // Bankrupt may or may not fire depending on exact D/U calculation
   // At minimum, check that balance is now 0

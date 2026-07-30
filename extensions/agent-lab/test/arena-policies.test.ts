@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EndowmentPolicyV1, OddsPolicyV1, SettlementPolicyV1, CostModelV1, parseBidResponse, renderBidPrompt, DEFAULT_BID_PROMPT } from "../src/arena/policies.ts";
-import { DEFAULT_ARENA_CONFIG } from "../src/config.ts";
+import { DEFAULT_MARKET_CONFIG } from "../src/config.ts";
 import type { ModelInfo } from "../src/types.ts";
 import type { ArenaTask, Outcome } from "../src/arena/types.ts";
 
-const cfg = DEFAULT_ARENA_CONFIG;
+const cfg = DEFAULT_MARKET_CONFIG;
 function model(price?: { in: number; out: number }): ModelInfo {
   const free = price != null && price.in === 0 && price.out === 0;
   return { id: "x/y", provider: "x", name: "y", pricing: price, accessRoute: free ? "free" : "direct" };

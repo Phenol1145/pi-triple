@@ -16,6 +16,7 @@ import { EndowmentPolicyV1 } from "./src/arena/policies.ts";
 import type { SchedulerRuntimeLike } from "./src/interceptor/scheduler-bridge.ts";
 import { createSchedulerRuntime } from "./src/runtime/create-scheduler-runtime.ts";
 import { ensureWeightedScorerInstance, syncWeightedScorerAgents, ensureArenaInstance, syncArenaAgents, migrateDerivedAgentIds } from "./src/schedulers/bootstrap.ts";
+import type { BootstrapResult } from "./src/schedulers/bootstrap.ts";
 import type { LabCore } from "./src/core/create-core.ts";
 import type { ModelCaller } from "./src/arena/types.ts";
 import { createModelCaller } from "./src/arena/model-caller.ts";
@@ -68,7 +69,7 @@ export default async function (pi: ExtensionAPI) {
   const catalog = new CatalogService({ directPrefixes: DIRECT_PREFIXES, ttlMs: cfg.catalogTtlMs });
   await catalog.refresh().catch((e: Error) => console.error("[agent-lab] initial catalog refresh failed:", e?.message ?? e));
 
-  const endowment = new EndowmentPolicyV1(cfg.arena);
+  const endowment = new EndowmentPolicyV1(cfg.market);
   const ledger = new SqliteLedger(sharedStore.raw, endowment);
 
   let schedulerCore: LabCore | undefined;
@@ -77,7 +78,7 @@ export default async function (pi: ExtensionAPI) {
   let autoFlow: ReturnType<typeof createAutoFlow> | undefined;
   // UUID identity cache (populated after bootstrap; ADR-0002)
   let arenaInstanceId: string | undefined;
-  let wsInstanceIdCache: string | undefined;
+  let wsInstanceId: string | undefined;
 
   /** Resolve the arena UUID — cached from bootstrap, with fallback name lookup. */
   function getArenaId(): string | undefined {
@@ -88,7 +89,16 @@ export default async function (pi: ExtensionAPI) {
     return inst?.id;
   }
 
-  for (const t of ledger.staleTasks(cfg.arena.market.staleTaskTimeoutMs)) {
+  /** Resolve the weighted-scorer UUID — cached from bootstrap, with fallback name lookup. */
+  function getWsId(): string | undefined {
+    if (wsInstanceId) return wsInstanceId;
+    if (!schedulerCore) return undefined;
+    const inst = schedulerCore.repository.findInstanceByName(WEIGHTED_SCORER_DEFINITION_ID, DEFAULT_WEIGHTED_SCORER_NAME);
+    if (inst) wsInstanceId = inst.id;
+    return inst?.id;
+  }
+
+  for (const t of ledger.staleTasks(cfg.market.market.staleTaskTimeoutMs)) {
     ledger.recoverStaleTask(t.taskId);
   }
 
@@ -247,6 +257,9 @@ export default async function (pi: ExtensionAPI) {
               },
             };
 
+            // Forward-declared: assigned below after ensureArenaInstance.
+            let arenaResult: BootstrapResult | null = null;
+
             const arenaPorts = {
               ledger,
               candidates: () => catalog.candidates(),
@@ -280,7 +293,7 @@ export default async function (pi: ExtensionAPI) {
             // Arena is always bootstrapped (registered/activated, addressable by
             // explicit instance id). The catch-all routing binding is only added
             // in market mode — static per boot; switching /lab mode needs restart.
-            const arenaResult = await ensureArenaInstance(rt.core, rt.schedulers, arenaPorts, {
+            arenaResult = await ensureArenaInstance(rt.core, rt.schedulers, arenaPorts, {
               wsInstanceId: wsResult.instanceId,
               ...(cfg.mode === "market"
                 ? { routingBindings: [{ id: MARKET_DEFAULT_BINDING_ID, name: MARKET_DEFAULT_BINDING_NAME, priority: 10, match: {} }] }
@@ -291,7 +304,7 @@ export default async function (pi: ExtensionAPI) {
             });
 
             // Cache UUID identities for all downstream references (ADR-0002).
-            wsInstanceIdCache = wsResult.instanceId;
+            wsInstanceId = wsResult.instanceId;
             if (arenaResult) arenaInstanceId = arenaResult.instanceId;
 
             // ── Ledger key migration: model id → agent UUID ──────────
@@ -614,10 +627,10 @@ export default async function (pi: ExtensionAPI) {
         if (schedulerCore && dispatchResult.status === "completed") {
           const events = schedulerCore.events.query({ traceId, limit: 500 });
 
-          const bidCalls = events.filter((e) => e.eventType === "scheduler.arena.bid_call");
-          const stakes = events.filter((e) => e.eventType === "scheduler.arena.stake");
-          const balanceBefores = events.filter((e) => e.eventType === "scheduler.arena.balance_before");
-          const balanceAfters = events.filter((e) => e.eventType === "scheduler.arena.balance_after");
+          const bidCalls = events.filter((e) => e.eventType === "scheduler.market.bid_call");
+          const stakes = events.filter((e) => e.eventType === "scheduler.market.stake");
+          const balanceBefores = events.filter((e) => e.eventType === "scheduler.market.balance_before");
+          const balanceAfters = events.filter((e) => e.eventType === "scheduler.market.balance_after");
 
           if (bidCalls.length > 0) {
             stage("Bid Calls",
@@ -821,11 +834,10 @@ export default async function (pi: ExtensionAPI) {
     },
     syncSchedulerAgents: () => {
       if (!schedulerCore) return 0;
-      const wsName = cfg.scheduler?.instanceId ?? DEFAULT_WEIGHTED_SCORER_NAME;
-      const wsInst = schedulerCore.repository.findInstanceByName(WEIGHTED_SCORER_DEFINITION_ID, wsName);
+      const wsUuid = getWsId();
       let added = 0;
-      if (wsInst) {
-        added = syncWeightedScorerAgents(schedulerCore, wsInst.id, catalog.candidates());
+      if (wsUuid) {
+        added = syncWeightedScorerAgents(schedulerCore, wsUuid, catalog.candidates());
       }
       if (cfg.mode === "market") {
         try {
@@ -848,9 +860,9 @@ export default async function (pi: ExtensionAPI) {
       const arenaId = getArenaId();
       const arenaBinding = bindings.find((b) => b.id === MARKET_DEFAULT_BINDING_ID && arenaId && b.schedulerInstanceId === arenaId);
       if (arenaBinding) {
-        return "catch-all → default-arena (market)";
+        return "catch-all → default-market (market)";
       }
-      return "catch-all → default-arena (classic — no binding)";
+      return "catch-all → default-market (classic — no binding)";
     },
     arenaSmoke,
     bench,

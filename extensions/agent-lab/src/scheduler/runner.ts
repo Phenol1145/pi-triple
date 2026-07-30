@@ -10,6 +10,7 @@ import type {
 } from "../workloop/contracts.ts";
 import { WorkLoopRunner, type WorkLoopRunRequest } from "../workloop/runner.ts";
 import { SchedulerRegistry } from "./registry.ts";
+import { MARKET_SCHEDULER_DEFINITION_ID, WEIGHTED_SCORER_DEFINITION_ID } from "../schedulers/names.ts";
 import type {
   SchedulingMode,
   SchedulingResult,
@@ -266,13 +267,19 @@ export class SchedulerRunner {
     let bindingId: string | undefined;
 
     if (request.schedulerInstanceId) {
-      // Resolve explicit instanceId: try UUID first, then name lookup.
-      // cfg.scheduler.instanceId is a logical name (user config), not a UUID.
-      let inst = this.core.repository.getInstance(request.schedulerInstanceId);
+      // Resolve explicit instanceId: UUIDs get a fast id lookup first;
+      // non-UUID values (e.g. cfg.scheduler.instanceId names) go straight
+      // to name lookup to avoid a wasted DB roundtrip on primary key.
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.schedulerInstanceId);
+      let inst = isUuid ? this.core.repository.getInstance(request.schedulerInstanceId) : undefined;
       if (!inst) {
         // Name lookup: try both scheduler definitions.
-        inst = this.core.repository.findInstanceByName("arena", request.schedulerInstanceId)
-            ?? this.core.repository.findInstanceByName("weighted-scorer", request.schedulerInstanceId);
+        inst = this.core.repository.findInstanceByName(MARKET_SCHEDULER_DEFINITION_ID, request.schedulerInstanceId)
+            ?? this.core.repository.findInstanceByName(WEIGHTED_SCORER_DEFINITION_ID, request.schedulerInstanceId);
+        // Fallback: non-UUID string ids from legacy tests.
+        if (!inst && !isUuid) {
+          inst = this.core.repository.getInstance(request.schedulerInstanceId);
+        }
       }
       if (!inst || inst.status !== "active") {
         this.emitEvent(

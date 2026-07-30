@@ -16,7 +16,7 @@ import type {
   SettleOutcome,
 } from "../src/scheduler/contracts.ts";
 import {
-  arenaParamsToArenaConfig,
+  arenaParamsToMarketConfig,
   ARENA_DEFAULT_PARAMETERS,
   type ArenaSchedulerParameters,
 } from "../src/schedulers/arena-definition.ts";
@@ -228,7 +228,7 @@ test("SettleContext.parameters is undefined when roundId is absent", async () =>
   // (roundId exists case from normal flow).
   //
   // For the "round exists but parameters missing" edge case, we verify via
-  // arenaParamsToArenaConfig below.
+  // arenaParamsToMarketConfig below.
 
   // Instead: test that when roundId exists but getRound returns undefined
   // (e.g., round deleted), ctx.parameters is undefined.
@@ -273,43 +273,43 @@ test("SettleContext.parameters is undefined when roundId is absent", async () =>
   db.close();
 });
 
-// ── Tests: arenaParamsToArenaConfig ────────────────────────────────────
+// ── Tests: arenaParamsToMarketConfig ────────────────────────────────────
 
-test("arenaParamsToArenaConfig maps endowment correctly", () => {
+test("arenaParamsToMarketConfig maps endowment correctly", () => {
   const params: ArenaSchedulerParameters = {
     ...ARENA_DEFAULT_PARAMETERS,
     endowment: { K: 500, floor: 50 },
   };
 
-  const cfg = arenaParamsToArenaConfig(params);
+  const cfg = arenaParamsToMarketConfig(params);
   assert.equal(cfg.endowment.K, 500);
   assert.equal(cfg.endowment.floor, 50);
 });
 
-test("arenaParamsToArenaConfig maps odds correctly", () => {
+test("arenaParamsToMarketConfig maps odds correctly", () => {
   const params: ArenaSchedulerParameters = {
     ...ARENA_DEFAULT_PARAMETERS,
     odds: { easy: 1.5, medium: 3.0, hard: 6.0 },
   };
 
-  const cfg = arenaParamsToArenaConfig(params);
+  const cfg = arenaParamsToMarketConfig(params);
   assert.equal(cfg.odds.easy, 1.5);
   assert.equal(cfg.odds.medium, 3.0);
   assert.equal(cfg.odds.hard, 6.0);
 });
 
-test("arenaParamsToArenaConfig maps settlement correctly", () => {
+test("arenaParamsToMarketConfig maps settlement correctly", () => {
   const params: ArenaSchedulerParameters = {
     ...ARENA_DEFAULT_PARAMETERS,
     settlement: { tax: 10, errorMode: "stakeTimesOdds" },
   };
 
-  const cfg = arenaParamsToArenaConfig(params);
+  const cfg = arenaParamsToMarketConfig(params);
   assert.equal(cfg.settlement.tax, 10);
   assert.equal(cfg.settlement.errorMode, "stakeTimesOdds");
 });
 
-test("arenaParamsToArenaConfig maps cost correctly", () => {
+test("arenaParamsToMarketConfig maps cost correctly", () => {
   const params: ArenaSchedulerParameters = {
     ...ARENA_DEFAULT_PARAMETERS,
     cost: {
@@ -321,7 +321,7 @@ test("arenaParamsToArenaConfig maps cost correctly", () => {
     },
   };
 
-  const cfg = arenaParamsToArenaConfig(params);
+  const cfg = arenaParamsToMarketConfig(params);
   assert.equal(cfg.cost.tokenMult, 1.5);
   assert.equal(cfg.cost.toolMult, 2.0);
   assert.equal(cfg.cost.latencyMult, 0.5);
@@ -329,17 +329,17 @@ test("arenaParamsToArenaConfig maps cost correctly", () => {
   assert.deepStrictEqual(cfg.cost.toolWeights, { read: 0.8, write: 1.2 });
 });
 
-test("arenaParamsToArenaConfig uses default for null/undefined input", () => {
-  const cfg1 = arenaParamsToArenaConfig(null);
+test("arenaParamsToMarketConfig uses default for null/undefined input", () => {
+  const cfg1 = arenaParamsToMarketConfig(null);
   assert.equal(cfg1.endowment.K, ARENA_DEFAULT_PARAMETERS.endowment.K);
   assert.equal(cfg1.endowment.floor, ARENA_DEFAULT_PARAMETERS.endowment.floor);
 
-  const cfg2 = arenaParamsToArenaConfig(undefined);
+  const cfg2 = arenaParamsToMarketConfig(undefined);
   assert.equal(cfg2.odds.easy, ARENA_DEFAULT_PARAMETERS.odds.easy);
 });
 
-test("arenaParamsToArenaConfig uses defaults for missing sub-objects", () => {
-  const cfg = arenaParamsToArenaConfig({});
+test("arenaParamsToMarketConfig uses defaults for missing sub-objects", () => {
+  const cfg = arenaParamsToMarketConfig({});
   assert.equal(cfg.endowment.K, ARENA_DEFAULT_PARAMETERS.endowment.K);
   assert.equal(cfg.odds.medium, ARENA_DEFAULT_PARAMETERS.odds.medium);
   assert.equal(cfg.settlement.tax, ARENA_DEFAULT_PARAMETERS.settlement.tax);
@@ -349,13 +349,13 @@ test("arenaParamsToArenaConfig uses defaults for missing sub-objects", () => {
   );
 });
 
-test("arenaParamsToArenaConfig fields bidding/market/risk come from defaults", () => {
+test("arenaParamsToMarketConfig fields bidding/market/risk come from defaults", () => {
   const params: ArenaSchedulerParameters = {
     ...ARENA_DEFAULT_PARAMETERS,
     endowment: { K: 999, floor: 1 },
   };
 
-  const cfg = arenaParamsToArenaConfig(params);
+  const cfg = arenaParamsToMarketConfig(params);
 
   // endowment is mapped from params
   assert.equal(cfg.endowment.K, 999);
@@ -375,8 +375,8 @@ test("arenaParamsToArenaConfig fields bidding/market/risk come from defaults", (
   );
 });
 
-test("arenaParamsToArenaConfig handles partial cost with defaults", () => {
-  const cfg = arenaParamsToArenaConfig({
+test("arenaParamsToMarketConfig handles partial cost with defaults", () => {
+  const cfg = arenaParamsToMarketConfig({
     endowment: { K: 100, floor: 10 },
     odds: { easy: 1, medium: 2, hard: 3 },
     settlement: { tax: 0, errorMode: "stakeOnly" },
@@ -400,9 +400,9 @@ test("arenaParamsToArenaConfig handles partial cost with defaults", () => {
 
 // ── Tests: arena-scheduler settle uses ctx.parameters ──────────────────
 
-test("arena settle uses ctx.parameters when present via arenaParamsToArenaConfig", () => {
+test("arena settle uses ctx.parameters when present via arenaParamsToMarketConfig", () => {
   // Verify that when ctx.parameters contains custom settlement, the policies
-  // receive those values. We test this by checking that the ArenaConfig
+  // receive those values. We test this by checking that the MarketConfig
   // passed has the custom values.
 
   const customParams: Partial<ArenaSchedulerParameters> = {
@@ -418,7 +418,7 @@ test("arena settle uses ctx.parameters when present via arenaParamsToArenaConfig
     },
   };
 
-  const cfg = arenaParamsToArenaConfig(customParams);
+  const cfg = arenaParamsToMarketConfig(customParams);
 
   // Verify the custom values flow through
   assert.equal(cfg.endowment.K, 500);
@@ -435,7 +435,7 @@ test("arena settle uses ctx.parameters when present via arenaParamsToArenaConfig
 });
 
 test("arena settle falls back to defaults when ctx.parameters is undefined", () => {
-  const cfg = arenaParamsToArenaConfig(ARENA_DEFAULT_PARAMETERS);
+  const cfg = arenaParamsToMarketConfig(ARENA_DEFAULT_PARAMETERS);
 
   assert.equal(cfg.endowment.K, ARENA_DEFAULT_PARAMETERS.endowment.K);
   assert.equal(cfg.odds.easy, ARENA_DEFAULT_PARAMETERS.odds.easy);

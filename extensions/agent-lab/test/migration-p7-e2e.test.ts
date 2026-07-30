@@ -35,7 +35,7 @@ function legacyConfig(): LabConfig {
     topN: DEFAULT_CONFIG.topN,
     catalogTtlMs: DEFAULT_CONFIG.catalogTtlMs,
     mode: "market",
-    arena: {
+    market: {
       endowment: { K: 100, floor: 0.05 },
       odds: { easy: 1.5, medium: 3.0, hard: 5.0 },
       settlement: { tax: 5, errorMode: "stakeTimesOdds" },
@@ -78,7 +78,7 @@ test("e2e: legacy config → migrate → binding ensured + backup + marker", () 
     assert.equal(detect!.status, "ok");
     assert.ok(detect!.detail!.includes("mode"), "should detect mode");
     assert.ok(detect!.detail!.includes("autoApply"), "should detect autoApply");
-    assert.ok(detect!.detail!.includes("arena.*"), "should detect arena.*");
+    assert.ok(detect!.detail!.includes("market.*"), "should detect market.*");
 
     // Arena catch-all binding ensured
     assert.ok(bindingEnsured, "ensureArenaBinding should have been called");

@@ -16,7 +16,7 @@ function cfg(sched?: SchedulerConfig): LabConfig & { scheduler: SchedulerConfig 
     topN: 3,
     catalogTtlMs: 21_600_000,
     mode: "classic",
-    arena: {
+    market: {
       endowment: { K: 100, floor: 0.05 },
       odds: { easy: 1.5, medium: 3.0, hard: 5.0 },
       settlement: { tax: 5, errorMode: "stakeTimesOdds" },

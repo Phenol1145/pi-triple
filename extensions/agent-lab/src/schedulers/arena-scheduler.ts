@@ -13,7 +13,7 @@ import { MARKET_SCHEDULER_DEFINITION_ID } from "./names.ts";
 import {
   matchEligibility,
   ARENA_DEFAULT_PARAMETERS,
-  arenaParamsToArenaConfig,
+  arenaParamsToMarketConfig,
 } from "./arena-definition.ts";
 import {
   TopBalanceSelector,
@@ -182,7 +182,7 @@ export function createArenaSchedulerImplementation(
         odds: 0,
         reward: 0,
       };
-      const oddsPolicy = new OddsPolicyV1(arenaParamsToArenaConfig(params));
+      const oddsPolicy = new OddsPolicyV1(arenaParamsToMarketConfig(params));
       task.odds = oddsPolicy.odds(task);
 
       // 8. Bid: concurrent calls capped at maxCallsPerDispatch
@@ -209,7 +209,7 @@ export function createArenaSchedulerImplementation(
           const priceIn = st.model.pricing?.in ?? 0;
           const estimatedCost = (estimatedTokens * priceIn) / 1_000_000;
           sdk.telemetry.emit(
-            "scheduler.arena.bid_call",
+            "scheduler.market.bid_call",
             { agent: st.agent },
             {
               estimated_tokens: estimatedTokens,
@@ -217,11 +217,11 @@ export function createArenaSchedulerImplementation(
             },
           );
 
-          sdk.telemetry.emit("scheduler.arena.balance_before", { agent: st.agent }, { balance: st.balance });
-          sdk.telemetry.emit("scheduler.arena.odds", { agent: st.agent }, { odds: task.odds });
+          sdk.telemetry.emit("scheduler.market.balance_before", { agent: st.agent }, { balance: st.balance });
+          sdk.telemetry.emit("scheduler.market.odds", { agent: st.agent }, { odds: task.odds });
 
           if (input.signal?.aborted) {
-            sdk.telemetry.emit("scheduler.arena.stake", { agent: st.agent }, { stake: 0 });
+            sdk.telemetry.emit("scheduler.market.stake", { agent: st.agent }, { stake: 0 });
             return { agent: st.agent, stake: 0, balance: st.balance };
           }
 
@@ -229,11 +229,11 @@ export function createArenaSchedulerImplementation(
             const rawBid = await solicitRawBid(st, prompt, params, ports, input, String(round));
             const maxByRatio = Math.floor(st.balance * params.risk.maxStakeRatio);
             const stake = Math.min(rawBid, st.balance, maxByRatio);
-            sdk.telemetry.emit("scheduler.arena.stake", { agent: st.agent }, { stake });
+            sdk.telemetry.emit("scheduler.market.stake", { agent: st.agent }, { stake });
             return { agent: st.agent, stake, balance: st.balance };
           } catch {
             // fail-open: single bid failure → stake 0
-            sdk.telemetry.emit("scheduler.arena.stake", { agent: st.agent }, { stake: 0 });
+            sdk.telemetry.emit("scheduler.market.stake", { agent: st.agent }, { stake: 0 });
             return { agent: st.agent, stake: 0, balance: st.balance };
           }
         },
@@ -328,7 +328,7 @@ export function createArenaSchedulerImplementation(
 
       // 14. Emit balance_after
       sdk.telemetry.emit(
-        "scheduler.arena.balance_after",
+        "scheduler.market.balance_after",
         { agent: winner.agent },
         { balance: ports.ledger.balance(winner.agent) },
       );
@@ -389,7 +389,7 @@ export function createArenaSchedulerImplementation(
 
       // Use round parameters when threaded from schedule-time, otherwise
       // fall back to default parameters for settlement computation.
-      const params = arenaParamsToArenaConfig(
+      const params = arenaParamsToMarketConfig(
         ctx.parameters ?? ARENA_DEFAULT_PARAMETERS,
       );
 
@@ -413,7 +413,7 @@ export function createArenaSchedulerImplementation(
 
       // NULL winnerModel: U=0 + warn（旧 task 无 winner_model 列，N1）
       if (!row.winnerModel) {
-        sdk.telemetry.emit("scheduler.arena.missing_winner_model", { taskId: taskRef });
+        sdk.telemetry.emit("scheduler.market.missing_winner_model", { taskId: taskRef });
       }
 
       const D = settlementPolicy.settle(arenaTask, row.stake, outcome);
@@ -444,14 +444,14 @@ export function createArenaSchedulerImplementation(
 
       // Emit settled metric
       ctx.telemetry.emit(
-        "scheduler.arena.settled",
+        "scheduler.market.settled",
         { taskRef, winner: row.winner },
         { delta: D, usageCost: U, net },
       );
 
       // Emit balance_after
       ctx.telemetry.emit(
-        "scheduler.arena.balance_after",
+        "scheduler.market.balance_after",
         { agent: row.winner },
         { balance: ports.ledger.balance(row.winner) },
       );
@@ -459,7 +459,7 @@ export function createArenaSchedulerImplementation(
       // Bankrupt check
       if (ports.ledger.balance(row.winner) <= 0) {
         ctx.telemetry.emit(
-          "scheduler.arena.bankrupt",
+          "scheduler.market.bankrupt",
           { agent: row.winner },
           { balance: 0 },
         );

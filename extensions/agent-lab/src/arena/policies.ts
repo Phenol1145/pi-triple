@@ -1,10 +1,10 @@
-import type { ArenaConfig, ModelInfo } from "../types.ts";
+import type { MarketConfig, ModelInfo } from "../types.ts";
 import type { AgentState, ArenaTask, BidderSelector, CostModel, EndowmentPolicy, ModelCaller, OddsPolicy, Outcome, SettlementPolicy } from "./types.ts";
 import { blendedPrice } from "../catalog/parse.ts";
 
 export class EndowmentPolicyV1 implements EndowmentPolicy {
-  private cfg: ArenaConfig;
-  constructor(cfg: ArenaConfig) { this.cfg = cfg; }
+  private cfg: MarketConfig;
+  constructor(cfg: MarketConfig) { this.cfg = cfg; }
   initialCredits(m: ModelInfo): number {
     const price = blendedPrice(m);
     return Math.round(this.cfg.endowment.K / Math.max(price, this.cfg.endowment.floor));
@@ -12,8 +12,8 @@ export class EndowmentPolicyV1 implements EndowmentPolicy {
 }
 
 export class OddsPolicyV1 implements OddsPolicy {
-  private cfg: ArenaConfig;
-  constructor(cfg: ArenaConfig) { this.cfg = cfg; }
+  private cfg: MarketConfig;
+  constructor(cfg: MarketConfig) { this.cfg = cfg; }
   odds(t: ArenaTask): number {
     if (t.odds && t.odds > 0) return t.odds;
     if (t.difficulty === "easy") return this.cfg.odds.easy;
@@ -23,8 +23,8 @@ export class OddsPolicyV1 implements OddsPolicy {
 }
 
 export class SettlementPolicyV1 implements SettlementPolicy {
-  private cfg: ArenaConfig;
-  constructor(cfg: ArenaConfig) { this.cfg = cfg; }
+  private cfg: MarketConfig;
+  constructor(cfg: MarketConfig) { this.cfg = cfg; }
   settle(t: ArenaTask, stake: number, o: Outcome): number {
     const O = t.odds;
     if (o.majorError) return this.cfg.settlement.errorMode === "stakeOnly" ? -stake : -stake * O;
@@ -34,8 +34,8 @@ export class SettlementPolicyV1 implements SettlementPolicy {
 }
 
 export class CostModelV1 implements CostModel {
-  private cfg: ArenaConfig;
-  constructor(cfg: ArenaConfig) { this.cfg = cfg; }
+  private cfg: MarketConfig;
+  constructor(cfg: MarketConfig) { this.cfg = cfg; }
   usageCost(o: Outcome, m: ModelInfo): number {
     const priceIn = m.pricing?.in ?? 0;
     const priceOut = m.pricing?.out ?? 0;

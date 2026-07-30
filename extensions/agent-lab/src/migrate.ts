@@ -35,8 +35,8 @@ function detectLegacyConfig(cfg: LabConfig): string[] {
   if (cfg.mode !== undefined) found.push("mode");
   // autoApply is a legacy config field
   if (cfg.autoApply !== undefined) found.push("autoApply");
-  // arena subtree (market, bidding, etc.) is legacy
-  if (cfg.arena) found.push("arena.*");
+  // market subtree (former arena) — legacy config needs migration
+  if (cfg.market) found.push("market.*");
   return found;
 }
 

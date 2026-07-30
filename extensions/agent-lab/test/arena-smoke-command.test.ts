@@ -49,7 +49,7 @@ function defaultCfg(overrides?: Partial<LabConfig>): LabConfig {
     topN: 5,
     catalogTtlMs: 60000,
     mode: "market",
-    arena: {
+    market: {
       endowment: { K: 100, floor: 10 },
       odds: { easy: 1.5, medium: 2.0, hard: 2.5 },
       settlement: { tax: 0.1, errorMode: "stakeOnly" },
@@ -150,8 +150,8 @@ function fakeSmokeOutput(role: string): string {
     `  openai/gpt-4o: 85 (delta=-15)`,
     ``,
     `── Event Trace (5 events) ──`,
-    `  2026-07-26T... scheduler.arena.bid_call`,
-    `  2026-07-26T... scheduler.arena.stake`,
+    `  2026-07-26T... scheduler.market.bid_call`,
+    `  2026-07-26T... scheduler.market.stake`,
     `  ...`,
   ].join("\n");
 }
@@ -176,7 +176,7 @@ test("/lab arena smoke <role> — happy path with staged evidence", async () => 
   });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena smoke coder", ctx());
+  await handler()("market smoke coder", ctx());
 
   assert.equal(smokeRole, "coder");
   assert.equal(smokeCtxPassed, true);
@@ -204,9 +204,9 @@ test("/lab arena smoke — missing role shows usage", async () => {
   });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena smoke", ctx());
+  await handler()("market smoke", ctx());
 
-  assert.ok(findNotify(notifies, "用法: /lab arena smoke <role>", "error"));
+  assert.ok(findNotify(notifies, "用法: /lab market smoke <role>", "error"));
   assert.ok(!notifies.some((n) => n.level === "info" && n.message.includes("Arena Smoke")));
 });
 
@@ -217,9 +217,9 @@ test("/lab arena smoke — arenaSmoke dep not available", async () => {
   });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena smoke coder", ctx());
+  await handler()("market smoke coder", ctx());
 
-  assert.ok(findNotify(notifies, "Arena smoke unavailable", "error"));
+  assert.ok(findNotify(notifies, "Market smoke unavailable", "error"));
   assert.ok(findNotify(notifies, "not bootstrapped"));
 });
 
@@ -232,7 +232,7 @@ test("/lab arena smoke — smoke throws, error handled", async () => {
   });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena smoke coder", ctx());
+  await handler()("market smoke coder", ctx());
 
   assert.ok(findNotify(notifies, "Smoke failed", "error"));
   assert.ok(findNotify(notifies, "dispatch timeout"));
@@ -258,7 +258,7 @@ test("arenaSmoke precondition — scheduler not enabled", async () => {
   });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena smoke coder", ctx());
+  await handler()("market smoke coder", ctx());
 
   assert.equal(smokeCalled, true);
   const output = notifies.find((n) => n.level === "info");
@@ -276,7 +276,7 @@ test("arenaSmoke precondition — arena instance not active", async () => {
   });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena smoke coder", ctx());
+  await handler()("market smoke coder", ctx());
 
   const output = notifies.find((n) => n.level === "info");
   assert.ok(output);
@@ -292,7 +292,7 @@ test("arenaSmoke precondition — < 2 candidates", async () => {
   });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena smoke coder", ctx());
+  await handler()("market smoke coder", ctx());
 
   const output = notifies.find((n) => n.level === "info");
   assert.ok(output);
@@ -309,7 +309,7 @@ test("arenaSmoke precondition — modelCaller not available", async () => {
   });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena smoke coder", ctx());
+  await handler()("market smoke coder", ctx());
 
   const output = notifies.find((n) => n.level === "info");
   assert.ok(output);
@@ -338,7 +338,7 @@ test("arenaSmoke — settle failure degradation (fail-open with partial evidence
   });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena smoke reviewer", ctx());
+  await handler()("market smoke reviewer", ctx());
 
   const output = notifies.find((n) => n.level === "info");
   assert.ok(output);
@@ -370,7 +370,7 @@ test("arenaSmoke — guard-rail values actually passed", async () => {
   });
 
   registerCommands(pi as Parameters<typeof registerCommands>[0], deps as Parameters<typeof registerCommands>[1]);
-  await handler()("arena smoke coder", ctx());
+  await handler()("market smoke coder", ctx());
 
   const output = notifies.find((n) => n.level === "info");
   assert.ok(output);
@@ -406,7 +406,7 @@ test("arenaSmoke — two sequential smokes both succeed", async () => {
   registerCommands(pi1 as Parameters<typeof registerCommands>[0], deps1 as Parameters<typeof registerCommands>[1]);
 
   // First smoke
-  await handler1()("arena smoke coder", ctx1());
+  await handler1()("market smoke coder", ctx1());
   assert.equal(callCount, 1);
   const out1 = notifies1.find((n) => n.level === "info");
   assert.ok(out1);
@@ -433,7 +433,7 @@ test("arenaSmoke — two sequential smokes both succeed", async () => {
   });
 
   registerCommands(pi2 as Parameters<typeof registerCommands>[0], deps2 as Parameters<typeof registerCommands>[1]);
-  await handler2()("arena smoke coder", ctx2());
+  await handler2()("market smoke coder", ctx2());
 
   assert.equal(callCount, 2);
   const out2 = notifies2.find((n) => n.level === "info");

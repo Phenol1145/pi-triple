@@ -64,7 +64,7 @@ export interface LabConfig {
   topN: number;
   catalogTtlMs: number;
   mode: Mode;
-  arena: ArenaConfig;
+  market: MarketConfig;
   scheduler?: SchedulerConfig;
   optimizer?: OptimizerConfig;
 }
@@ -76,7 +76,7 @@ export interface SchedulerConfig {
 
 export type Mode = "classic" | "market";
 
-export interface ArenaConfig {
+export interface MarketConfig {
   endowment: { K: number; floor: number };
   odds: { easy: number; medium: number; hard: number };
   settlement: { tax: number; errorMode: "stakeOnly" | "stakeTimesOdds" };

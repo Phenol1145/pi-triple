@@ -6,17 +6,17 @@ import {
   validateArenaParameters,
   type ArenaSchedulerParameters,
 } from "../src/schedulers/arena-definition.ts";
-import { DEFAULT_ARENA_CONFIG, mergeConfig } from "../src/config.ts";
+import { DEFAULT_MARKET_CONFIG, mergeConfig } from "../src/config.ts";
 
 // ── Definition shape ───────────────────────────────────────────────
 
 test("ARENA_DEFINITION has correct id, version, kind", () => {
   assert.equal(ARENA_DEFINITION.kind, "scheduler");
-  assert.equal(ARENA_DEFINITION.id, "arena");
+  assert.equal(ARENA_DEFINITION.id, "market");
   assert.equal(ARENA_DEFINITION.version, "1.0.0");
 });
 
-test("ARENA_DEFINITION defaultParameters maps full ArenaConfig fields", () => {
+test("ARENA_DEFINITION defaultParameters maps full MarketConfig fields", () => {
   const p = ARENA_DEFINITION.defaultParameters as ArenaSchedulerParameters;
   // endowment
   assert.equal(typeof p.endowment.K, "number");
@@ -94,8 +94,8 @@ test("ARENA_DEFINITION has validateAgentDefinition function", () => {
 
 // ── ARENA_DEFAULT_PARAMETERS ───────────────────────────────────────
 
-test("ARENA_DEFAULT_PARAMETERS derives from DEFAULT_ARENA_CONFIG", () => {
-  const d = DEFAULT_ARENA_CONFIG;
+test("ARENA_DEFAULT_PARAMETERS derives from DEFAULT_MARKET_CONFIG", () => {
+  const d = DEFAULT_MARKET_CONFIG;
   const p = ARENA_DEFAULT_PARAMETERS;
   assert.equal(p.endowment.K, d.endowment.K);
   assert.equal(p.endowment.floor, d.endowment.floor);
@@ -276,24 +276,24 @@ test("validateArenaParameters rejects bidding.maxCallsPerDispatch < 1", () => {
 
 // ── Config merge: risk.maxStakeRatio and bidding.maxCallsPerDispatch round-trip ──
 
-test("config: risk.maxStakeRatio merges from partial ArenaConfig", () => {
-  const cfg = mergeConfig({ arena: { risk: { maxStakeRatio: 0.3 } } as any });
-  assert.equal(cfg.arena.risk.maxStakeRatio, 0.3);
+test("config: risk.maxStakeRatio merges from partial MarketConfig", () => {
+  const cfg = mergeConfig({ market: { risk: { maxStakeRatio: 0.3 } } as any });
+  assert.equal(cfg.market.risk.maxStakeRatio, 0.3);
 });
 
-test("config: bidding.maxCallsPerDispatch merges from partial ArenaConfig", () => {
-  const cfg = mergeConfig({ arena: { bidding: { maxCallsPerDispatch: 4 } } as any });
-  assert.equal(cfg.arena.bidding.maxCallsPerDispatch, 4);
+test("config: bidding.maxCallsPerDispatch merges from partial MarketConfig", () => {
+  const cfg = mergeConfig({ market: { bidding: { maxCallsPerDispatch: 4 } } as any });
+  assert.equal(cfg.market.bidding.maxCallsPerDispatch, 4);
 });
 
 test("config: default risk.maxStakeRatio is 0.5", () => {
   const cfg = mergeConfig(undefined);
-  assert.equal(cfg.arena.risk.maxStakeRatio, 0.5);
+  assert.equal(cfg.market.risk.maxStakeRatio, 0.5);
 });
 
 test("config: default bidding.maxCallsPerDispatch equals market.maxBidders", () => {
   const cfg = mergeConfig(undefined);
-  assert.equal(cfg.arena.bidding.maxCallsPerDispatch, cfg.arena.market.maxBidders);
+  assert.equal(cfg.market.bidding.maxCallsPerDispatch, cfg.market.market.maxBidders);
 });
 
 // ── eligibility glob matching via modelAllowed ──────────────────────

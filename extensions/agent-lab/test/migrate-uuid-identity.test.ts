@@ -24,7 +24,7 @@ function setupLegacy(): {
        agent_schema_version, status, current_round_id, canary_round_id,
        canary_percent, fallback_chain_json, metadata_json, created_ts)
     VALUES
-      ('default-arena', '', 'arena', '1.0.0', '1.0.0', '1.0.0',
+      ('default-arena', '', 'market', '1.0.0', '1.0.0', '1.0.0',
        'active', 'default-arena:round:0', NULL, NULL,
        '[]', '{}', ${now}),
       ('default-weighted-scorer', '', 'weighted-scorer', '1.0.0', '1.0.0', '1.0.0',
@@ -113,7 +113,7 @@ test("migrates legacy string ids to UUIDs with consistent FKs", async () => {
   const market = schedulerRows.find((r) => r.definition_id === "market")!;
   assert.ok(market, "market scheduler should exist");
   assert.ok(isUuid(market.id), "market scheduler id should be UUID");
-  assert.equal(market.name, "default-market");
+  assert.equal(market.name, "default-arena");
   // definition_id "arena" → "market"
   assert.equal(market.definition_id, "market");
   // current_round_id should have been remapped to a UUID

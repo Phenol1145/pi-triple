@@ -678,7 +678,7 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
         }
       } else if (cmd === "mode") {
         ctx.ui.notify("模式切换已废弃 — 请使用 /lab migrate 完成迁移，然后通过 scheduler binding 控制路由", "warning");
-      } else if (cmd === "arena") {
+      } else if (cmd === "market") {
         const sub = argv[1];
         if (sub === "credits" || sub === "leaderboard") ctx.ui.notify(renderLeaderboard(ledger), "info");
         else if (sub === "history") {
@@ -689,20 +689,20 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
         } else if (sub === "task") {
           const id = argv[2];
           if (id) {
-            const staleIds = new Set(ledger.staleTasks(cfg.arena.market.staleTaskTimeoutMs).map((t) => t.taskId));
+            const staleIds = new Set(ledger.staleTasks(cfg.market.market.staleTaskTimeoutMs).map((t) => t.taskId));
             if (staleIds.has(id)) ledger.recoverStaleTask(id);
           }
           const t = id ? ledger.getTask(id) : undefined;
           ctx.ui.notify(t ? JSON.stringify(t, null, 2) : "未找到任务", "info");
         } else if (sub === "doctor") {
-          ctx.ui.notify(`Arena: round=${ledger.currentRound()} agents=${ledger.leaderboard().length}`, "info");
+          ctx.ui.notify(`Market: round=${ledger.currentRound()} agents=${ledger.leaderboard().length}`, "info");
         } else if (sub === "post") {
-          ctx.ui.notify("Arena post 已废弃 — 调度器现已通过 catch-all binding 自动接管模型选择，无需手动派发", "warning");
+          ctx.ui.notify("Market post 已废弃 — 调度器现已通过 catch-all binding 自动接管模型选择，无需手动派发", "warning");
         } else if (sub === "smoke") {
           const role = argv[2];
-          if (!role || role.startsWith("--")) { ctx.ui.notify("用法: /lab arena smoke <role> [--engine model-caller|workloop]", "error"); return; }
+          if (!role || role.startsWith("--")) { ctx.ui.notify("用法: /lab market smoke <role> [--engine model-caller|workloop]", "error"); return; }
           if (!arenaSmoke) {
-            ctx.ui.notify("Arena smoke unavailable — arena not bootstrapped. Check /lab scheduler status", "error");
+            ctx.ui.notify("Market smoke unavailable — market not bootstrapped. Check /lab scheduler status", "error");
             return;
           }
           const engineIdx = argv.indexOf("--engine");
@@ -718,7 +718,7 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
             ctx.ui.notify(`Smoke failed: ${(err as Error).message}`, "error");
           }
         } else {
-          ctx.ui.notify("用法: /lab arena <credits|history|task|doctor|post|smoke> ...", "info");
+          ctx.ui.notify("用法: /lab market <credits|history|task|doctor|post|smoke> ...", "info");
         }
       } else if (cmd === "bench") {
         if (!bench) { ctx.ui.notify("bench unavailable — enable scheduler first", "error"); return; }
@@ -1029,7 +1029,7 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
       } else if (cmd === "doctor") {
         ctx.ui.notify(`Agent Lab 状态:\n候选模型: ${catalog.candidates().length}\n目录新鲜: ${catalog.isFresh}\n角色数: ${store.listRoles().length}\nautoApply: ${cfg.autoApply}`, "info");
       } else {
-        ctx.ui.notify("用法: /lab <recommend|stats|models|log|pin|unpin|config|mode|migrate|arena|scheduler|optimizer|experiment|doctor> ...\n  stats [role] [--global] [--tenant <alias|uuid>]", "info");
+        ctx.ui.notify("用法: /lab <recommend|stats|models|log|pin|unpin|config|mode|migrate|market|scheduler|optimizer|experiment|doctor> ...\n  stats [role] [--global] [--tenant <alias|uuid>]", "info");
       }
     },
   });

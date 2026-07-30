@@ -121,7 +121,7 @@ test("smoke --engine workloop → arenaSmoke called with engine='workloop'", asy
     deps as Parameters<typeof registerCommands>[1],
   );
 
-  await handler()("arena smoke default --engine workloop", ctx());
+  await handler()("market smoke default --engine workloop", ctx());
 
   assert.equal(smokeCalls.length, 1);
   assert.equal(smokeCalls[0]!.role, "default");
@@ -142,7 +142,7 @@ test("smoke --engine model-caller → arenaSmoke called with engine='model-calle
     deps as Parameters<typeof registerCommands>[1],
   );
 
-  await handler()("arena smoke default --engine model-caller", ctx());
+  await handler()("market smoke default --engine model-caller", ctx());
 
   assert.equal(smokeCalls.length, 1);
   assert.equal(smokeCalls[0]!.engine, "model-caller");
@@ -162,7 +162,7 @@ test("smoke without --engine → arenaSmoke called with engine=undefined", async
     deps as Parameters<typeof registerCommands>[1],
   );
 
-  await handler()("arena smoke default", ctx());
+  await handler()("market smoke default", ctx());
 
   assert.equal(smokeCalls.length, 1);
   assert.equal(smokeCalls[0]!.engine, undefined);
@@ -182,7 +182,7 @@ test("smoke --engine bogus → error notify, arenaSmoke not called", async () =>
     deps as Parameters<typeof registerCommands>[1],
   );
 
-  await handler()("arena smoke default --engine bogus", ctx());
+  await handler()("market smoke default --engine bogus", ctx());
 
   assert.equal(arenaSmokeCalled, false);
   const err = findNotify(notifies, "--engine 必须是", "error");
@@ -203,7 +203,7 @@ test("smoke missing role still caught", async () => {
     deps as Parameters<typeof registerCommands>[1],
   );
 
-  await handler()("arena smoke", ctx());
+  await handler()("market smoke", ctx());
 
   assert.equal(arenaSmokeCalled, false);
   const err = findNotify(notifies, "用法:", "error");
@@ -224,7 +224,7 @@ test("smoke with role starting '--' is rejected as missing role", async () => {
     deps as Parameters<typeof registerCommands>[1],
   );
 
-  await handler()("arena smoke --engine workloop", ctx());
+  await handler()("market smoke --engine workloop", ctx());
 
   assert.equal(arenaSmokeCalled, false);
   const err = findNotify(notifies, "用法:", "error");

@@ -191,14 +191,14 @@ test("full select flow succeeds: bidding, freeze, createTask, completed with set
   assert.equal(task!.winner, result.model);
 
   // Verify bid_call metrics were emitted
-  const bidCalls = events.filter((e) => e.eventType === "scheduler.arena.bid_call");
+  const bidCalls = events.filter((e) => e.eventType === "scheduler.market.bid_call");
   assert.ok(bidCalls.length > 0, "should have bid_call events");
 
   // Verify stake + odds + balance_before metrics
-  assert.ok(findEvent(events, "scheduler.arena.stake"));
-  assert.ok(findEvent(events, "scheduler.arena.odds"));
-  assert.ok(findEvent(events, "scheduler.arena.balance_before"));
-  assert.ok(findEvent(events, "scheduler.arena.balance_after"));
+  assert.ok(findEvent(events, "scheduler.market.stake"));
+  assert.ok(findEvent(events, "scheduler.market.odds"));
+  assert.ok(findEvent(events, "scheduler.market.balance_before"));
+  assert.ok(findEvent(events, "scheduler.market.balance_after"));
 
   // Verify winner balance decreased by stake
   const winnerBalance = ledger.balance(result.model!);
@@ -525,8 +525,8 @@ test("settle: full settlement flow — unfreeze, credit, task status settled", a
   );
 
   // Metrics emitted
-  assert.ok(findEvent(settleEvents, "scheduler.arena.settled"));
-  assert.ok(findEvent(settleEvents, "scheduler.arena.balance_after"));
+  assert.ok(findEvent(settleEvents, "scheduler.market.settled"));
+  assert.ok(findEvent(settleEvents, "scheduler.market.balance_after"));
 });
 
 test("settle: idempotent — second settle on same task returns early", async () => {
@@ -542,7 +542,7 @@ test("settle: idempotent — second settle on same task returns early", async ()
 
   const settleEvents1: TelemetryEvent[] = [];
   await scheduler.settle!(settleCtx(settleEvents1), "settle-ref-1", settleOutcome());
-  assert.ok(findEvent(settleEvents1, "scheduler.arena.settled"), "first settle should emit settled");
+  assert.ok(findEvent(settleEvents1, "scheduler.market.settled"), "first settle should emit settled");
 
   // Now settle again on same taskRef
   const settleEvents2: TelemetryEvent[] = [];
@@ -550,7 +550,7 @@ test("settle: idempotent — second settle on same task returns early", async ()
 
   // Second settle should not emit settled event (returned early)
   assert.equal(
-    findEvent(settleEvents2, "scheduler.arena.settled"),
+    findEvent(settleEvents2, "scheduler.market.settled"),
     undefined,
     "second settle should not emit settled event",
   );
@@ -609,7 +609,7 @@ test("settle: bankrupt metric when balance reaches 0", async () => {
 
   // Due to errorMode = stakeTimesOdds, the loss could be > balance
   // Check for bankrupt event
-  const bankrupt = findEvent(settleEvents, "scheduler.arena.bankrupt");
+  const bankrupt = findEvent(settleEvents, "scheduler.market.bankrupt");
   // Bankrupt may or may not fire depending on D/U computation
   // At minimum, balance should be low
   const finalBalance = ledger.balance(modelId);
@@ -966,7 +966,7 @@ test("bid_call metric includes estimated tokens and cost", async () => {
 
   await scheduler.schedule(input, params, sdk);
 
-  const bidCall = findEvent(events, "scheduler.arena.bid_call");
+  const bidCall = findEvent(events, "scheduler.market.bid_call");
   assert.ok(bidCall);
   assert.ok(
     typeof bidCall!.metrics?.estimated_tokens === "number",

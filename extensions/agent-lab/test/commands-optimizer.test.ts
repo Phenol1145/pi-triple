@@ -74,7 +74,7 @@ function defaultCfg(overrides?: Partial<LabConfig>): LabConfig {
     topN: 5,
     catalogTtlMs: 60000,
     mode: "classic",
-    arena: {
+    market: {
       endowment: { K: 100, floor: 10 },
       odds: { easy: 1.5, medium: 2.0, hard: 2.5 },
       settlement: {

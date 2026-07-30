@@ -1,7 +1,7 @@
-import type { ArenaConfig, LabConfig, OptimizerConfig } from "../src/types.ts";
+import type { MarketConfig, LabConfig, OptimizerConfig } from "../src/types.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_CONFIG, mergeConfig, DEFAULT_ARENA_CONFIG, DEFAULT_OPTIMIZER_CONFIG } from "../src/config.ts";
+import { DEFAULT_CONFIG, mergeConfig, DEFAULT_MARKET_CONFIG, DEFAULT_OPTIMIZER_CONFIG } from "../src/config.ts";
 
 test("mergeConfig returns defaults when no partial", () => {
   const cfg = mergeConfig(undefined);
@@ -25,16 +25,16 @@ test("default weights sum to 1", () => {
 test("mode defaults to classic and arena defaults present", () => {
   const cfg = mergeConfig(undefined);
   assert.equal(cfg.mode, "classic");
-  assert.equal(cfg.arena.endowment.K, 100);
-  assert.equal(cfg.arena.odds.hard, 5.0);
-  assert.equal(cfg.arena.settlement.errorMode, "stakeTimesOdds");
+  assert.equal(cfg.market.endowment.K, 100);
+  assert.equal(cfg.market.odds.hard, 5.0);
+  assert.equal(cfg.market.settlement.errorMode, "stakeTimesOdds");
 });
 
 test("arena deep-merge keeps siblings", () => {
-  const cfg = mergeConfig({ arena: { endowment: { K: 200 } } as ArenaConfig });
-  assert.equal(cfg.arena.endowment.K, 200);
-  assert.equal(cfg.arena.endowment.floor, 0.05);
-  assert.equal(cfg.arena.odds.easy, 1.5);
+  const cfg = mergeConfig({ market: { endowment: { K: 200 } } as MarketConfig });
+  assert.equal(cfg.market.endowment.K, 200);
+  assert.equal(cfg.market.endowment.floor, 0.05);
+  assert.equal(cfg.market.odds.easy, 1.5);
 });
 
 test("scheduler absent in defaults", () => {
@@ -127,7 +127,7 @@ test("optimizer merge does not break existing config sections", () => {
   const cfg = mergeConfig({ weights: { completion: 0.9 } as LabConfig["weights"], optimizer: { shadow: { enabled: true }, canaryPercent: 10 } });
   assert.equal(cfg.weights.completion, 0.9);
   assert.equal(cfg.weights.costEffectiveness, 0.25);
-  assert.equal(cfg.arena.endowment.K, 100);
+  assert.equal(cfg.market.endowment.K, 100);
   assert.equal(cfg.optimizer!.shadow?.enabled, true);
   assert.equal(cfg.optimizer!.canaryPercent, 10);
 });
