@@ -27,6 +27,7 @@ import type {
 // module are exercised indirectly via createPiModelPort with mocks.
 import {
   createInstrumentedModelPort,
+  createMultiModelPort,
   createPiModelPort,
   createToolPort,
   createMemoryArtifactPort,
@@ -416,4 +417,145 @@ test("createMemoryArtifactPort put accepts various media types", async () => {
 
   assert.equal(await port.get(ref1), "data");
   assert.ok(Buffer.isBuffer(await port.get(ref2)));
+});
+
+// ── createMultiModelPort ────────────────────────────────────────────
+
+test("createMultiModelPort throws when options.model is missing", async () => {
+  const reg: ModelRegistryLike = {
+    find: () => fakeModel() as any,
+    hasConfiguredAuth: () => true,
+    getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "k", headers: {} }),
+  };
+
+  const port = createMultiModelPort({ modelRegistry: reg });
+
+  await assert.rejects(
+    () => port.complete(makeContext(), {}),
+    /options\.model is required per call/,
+  );
+});
+
+test("createMultiModelPort throws when options.model is not a string", async () => {
+  const reg: ModelRegistryLike = {
+    find: () => fakeModel() as any,
+    hasConfiguredAuth: () => true,
+    getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "k", headers: {} }),
+  };
+
+  const port = createMultiModelPort({ modelRegistry: reg });
+
+  await assert.rejects(
+    () => port.complete(makeContext(), { model: 42 }),
+    /options\.model is required per call/,
+  );
+});
+
+test("createMultiModelPort throws when options is undefined", async () => {
+  const reg: ModelRegistryLike = {
+    find: () => fakeModel() as any,
+    hasConfiguredAuth: () => true,
+    getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "k", headers: {} }),
+  };
+
+  const port = createMultiModelPort({ modelRegistry: reg });
+
+  await assert.rejects(
+    () => port.complete(makeContext()),
+    /options\.model is required per call/,
+  );
+});
+
+test("createMultiModelPort throws 'model not in registry' when model unknown", async () => {
+  const reg: ModelRegistryLike = {
+    find: () => undefined,
+    hasConfiguredAuth: () => false,
+    getApiKeyAndHeaders: async () => ({ ok: false, error: "nope" }),
+  };
+
+  const port = createMultiModelPort({ modelRegistry: reg });
+
+  await assert.rejects(
+    () => port.complete(makeContext(), { model: "unknown/provider" }),
+    /model not in registry/,
+  );
+});
+
+test("createMultiModelPort throws 'no configured auth' when auth missing", async () => {
+  const reg: ModelRegistryLike = {
+    find: () => fakeModel() as any,
+    hasConfiguredAuth: () => false,
+    getApiKeyAndHeaders: async () => ({ ok: false, error: "nope" }),
+  };
+
+  const port = createMultiModelPort({ modelRegistry: reg });
+
+  await assert.rejects(
+    () => port.complete(makeContext(), { model: "anthropic/claude-sonnet" }),
+    /no configured auth/,
+  );
+});
+
+test("createMultiModelPort throws 'auth failed' when auth returns error", async () => {
+  const reg: ModelRegistryLike = {
+    find: () => fakeModel() as any,
+    hasConfiguredAuth: () => true,
+    getApiKeyAndHeaders: async () => ({ ok: false, error: "invalid key" }),
+  };
+
+  const port = createMultiModelPort({ modelRegistry: reg });
+
+  await assert.rejects(
+    () => port.complete(makeContext(), { model: "openrouter/test-model" }),
+    /auth failed.*invalid key/,
+  );
+});
+
+test("createMultiModelPort tries openrouter fallback when no slash in model", async () => {
+  const calls: Array<[string, string]> = [];
+  const reg: ModelRegistryLike = {
+    find(provider: string, modelId: string) {
+      calls.push([provider, modelId]);
+      return undefined;
+    },
+    hasConfiguredAuth: () => false,
+    getApiKeyAndHeaders: async () => ({ ok: false, error: "nope" }),
+  };
+
+  const port = createMultiModelPort({ modelRegistry: reg });
+
+  await assert.rejects(() => port.complete(makeContext(), { model: "test-model" }));
+  assert.ok(
+    calls.some(([p, m]) => p === "openrouter" && m === "test-model"),
+    "should have tried openrouter fallback",
+  );
+});
+
+test("createMultiModelPort resolves different models per call (core design)", async () => {
+  // Verify that calling complete twice with different options.model hits
+  // the registry with different modelId values. The dispatch to pi-ai
+  // will fail (no real network) but the resolution path is fully exercised.
+  const calls: Array<[string, string]> = [];
+  const reg: ModelRegistryLike = {
+    find(provider: string, modelId: string) {
+      calls.push([provider, modelId]);
+      return undefined;
+    },
+    hasConfiguredAuth: () => false,
+    getApiKeyAndHeaders: async () => ({ ok: false, error: "nope" }),
+  };
+
+  const port = createMultiModelPort({ modelRegistry: reg });
+
+  await assert.rejects(
+    () => port.complete(makeContext(), { model: "anthropic/claude-A" }),
+  );
+  await assert.rejects(
+    () => port.complete(makeContext(), { model: "openrouter/claude-B" }),
+  );
+
+  // First call: provider/model split → anthropic/claude-A
+  assert.ok(calls.some(([p, m]) => p === "anthropic" && m === "claude-A"));
+  // Second call: openrouter fallback → openrouter/claude-B
+  assert.ok(calls.some(([p, m]) => p === "openrouter" && m === "claude-B"));
 });

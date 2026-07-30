@@ -186,6 +186,150 @@ export interface ModelRegistryLike {
 }
 
 /**
+ * Resolve a `modelId` string into a registry model entry.
+ *
+ * - If modelId contains a `/`, the prefix is the provider and the rest is
+ *   the model id (`provider/model` split).
+ * - Otherwise, falls back to `openrouter` as the default provider.
+ *
+ * Returns `undefined` if no match is found.
+ */
+function resolveModel(
+  reg: ModelRegistryLike,
+  modelId: string,
+): Model<import("@earendil-works/pi-ai").Api> | undefined {
+  if (modelId.includes("/")) {
+    const idx = modelId.indexOf("/");
+    return reg.find(modelId.slice(0, idx), modelId.slice(idx + 1));
+  }
+  return reg.find("openrouter", modelId);
+}
+
+/**
+ * Shared pi-ai dispatch body, used by both createPiModelPort and
+ * createMultiModelPort.  Assumes `model` has already been resolved and
+ * `auth` has been fetched; maps WorkContext to pi-ai Context, dispatches
+ * with a 2-minute timeout, and returns the standard {message, usage}
+ * result with observed-or-derived usage capture.
+ */
+async function completeViaPiAi(
+  model: Model<import("@earendil-works/pi-ai").Api>,
+  auth: { ok: true; apiKey: string; headers: Record<string, string> },
+  context: WorkContext,
+): Promise<{ message: WorkMessage; usage?: StandardAgentOutput["usage"] }> {
+  // ── Map WorkContext → pi-ai Context ────────────────────
+  const piMessages = context.messages.map((m) => ({
+    role: m.role as "user" | "assistant" | "toolResult",
+    content: m.content,
+  }));
+
+  const piContext: import("@earendil-works/pi-ai").Context = {
+    messages: piMessages as import("@earendil-works/pi-ai").Context["messages"],
+  };
+  if (context.systemPrompt) {
+    piContext.systemPrompt = context.systemPrompt;
+  }
+  if (context.tools?.length) {
+    piContext.tools = context.tools.map((t) => ({
+      name: t.name,
+      description: (t as Record<string, unknown>).description as string ?? "",
+      parameters: (t as Record<string, unknown>).parameters as import("@earendil-works/pi-ai").Tool["parameters"],
+    }));
+  }
+
+  // ── Dispatch ───────────────────────────────────────────
+  const ctrl = new AbortController();
+  const timeoutMs = 120_000; // 2-minute default timeout
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  let msg: AssistantMessage;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    msg = await complete(model, piContext, {
+      apiKey: auth.apiKey,
+      headers: auth.headers,
+      signal: ctrl.signal,
+    } as any);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  // ── Build result ───────────────────────────────────────
+  const text = contentText(msg.content);
+  const workMsg: WorkMessage = {
+    role: msg.role,
+    content: text,
+  };
+
+  const usage = msg.usage;
+
+  if (usage) {
+    // Observed usage from provider
+    const stdUsage: StandardAgentOutput["usage"] = {
+      input: usage.input,
+      output: usage.output,
+      cacheRead: usage.cacheRead,
+      cacheWrite: usage.cacheWrite,
+      cost: usage.cost.total,
+      turns: 1,
+      toolCalls: 0,
+      durationMs: 0, // filled by instrumented wrapper
+    };
+    return { message: workMsg, usage: stdUsage };
+  }
+
+  // ── Derived fallback from catalog pricing ──────────────
+  // Usage was absent from the result — derive cost from catalog.
+  // The _source annotation is added by the instrumented wrapper
+  // (metrics.source is the canonical carrier), not leaked here.
+  const derivedUsage: StandardAgentOutput["usage"] = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: 0,
+    turns: 1,
+    toolCalls: 0,
+    durationMs: 0,
+  };
+
+  // Throw on provider errors so the instrumented wrapper emits
+  // model.failed, not model.completed.
+  if (msg.stopReason === "error" || msg.errorMessage) {
+    throw new Error(`model error: ${msg.errorMessage ?? msg.stopReason}`);
+  }
+
+  // Estimate tokens from content length (heuristic: chars/4)
+  const inputEstimate = piMessages.reduce(
+    (sum, m) => sum + Math.ceil(JSON.stringify(m.content).length / 4),
+    0,
+  );
+  const outputEstimate = Math.ceil(text.length / 4);
+
+  derivedUsage.input = inputEstimate;
+  derivedUsage.output = outputEstimate;
+
+  // Cost from catalog tiers
+  const catalogCost = model.cost;
+  if (catalogCost) {
+    // Check if any tier applies based on input estimate
+    let rates = catalogCost;
+    if (catalogCost.tiers) {
+      for (const tier of catalogCost.tiers) {
+        if (inputEstimate > tier.inputTokensAbove) {
+          rates = tier;
+        }
+      }
+    }
+    derivedUsage.cost =
+      (inputEstimate / 1_000_000) * rates.input +
+      (outputEstimate / 1_000_000) * rates.output;
+  }
+
+  return { message: workMsg, usage: derivedUsage };
+}
+
+/**
  * Create a ModelPort backed by the Pi extension context's model registry
  * and the pi-ai `complete()` dispatch.
  *
@@ -216,19 +360,8 @@ export function createPiModelPort(
       context: WorkContext,
       _options?: Record<string, unknown>,
     ): Promise<{ message: WorkMessage; usage?: StandardAgentOutput["usage"] }> {
-      // ── Resolve model ──────────────────────────────────────
-      let model: Model<import("@earendil-works/pi-ai").Api> | undefined;
-
-      // Try provider/model split
-      if (modelId.includes("/")) {
-        const idx = modelId.indexOf("/");
-        model = reg.find(modelId.slice(0, idx), modelId.slice(idx + 1));
-      }
-      // Fallback: try openrouter as default provider
-      if (!model) {
-        model = reg.find("openrouter", modelId);
-      }
-
+      // ── Resolve model (closure-bound) ────────────────────────
+      const model = resolveModel(reg, modelId);
       if (!model) {
         throw new Error(`model not in registry: ${modelId}`);
       }
@@ -238,121 +371,61 @@ export function createPiModelPort(
       }
 
       // ── Auth ───────────────────────────────────────────────
-      const auth = await reg.getApiKeyAndHeaders(model);
-      if (!auth.ok) {
-        throw new Error(`auth failed for model ${modelId}: ${auth.error}`);
+      const authResult = await reg.getApiKeyAndHeaders(model);
+      if (!authResult.ok) {
+        throw new Error(`auth failed for model ${modelId}: ${authResult.error}`);
       }
 
-      // ── Map WorkContext → pi-ai Context ────────────────────
-      const piMessages = context.messages.map((m) => ({
-        role: m.role as "user" | "assistant" | "toolResult",
-        content: m.content,
-      }));
+      // ── Dispatch via shared helper ──────────────────────
+      return completeViaPiAi(model, authResult, context);
+    },
+  };
+}
 
-      const piContext: import("@earendil-works/pi-ai").Context = {
-        messages: piMessages as import("@earendil-works/pi-ai").Context["messages"],
-      };
-      if (context.systemPrompt) {
-        piContext.systemPrompt = context.systemPrompt;
-      }
-      if (context.tools?.length) {
-        piContext.tools = context.tools.map((t) => ({
-          name: t.name,
-          description: (t as Record<string, unknown>).description as string ?? "",
-          parameters: (t as Record<string, unknown>).parameters as import("@earendil-works/pi-ai").Tool["parameters"],
-        }));
-      }
+/**
+ * Multi-model ModelPort: resolves the target model from
+ * `options.model` on EVERY call.  Used by Arena bidding — the same
+ * port targets different candidate models without needing to
+ * construct a new port per model.
+ *
+ * `options.model` must be a non-empty string in either `provider/model`
+ * or bare model id (openrouter fallback) form.
+ */
+export function createMultiModelPort(
+  ctxLike: { modelRegistry: ModelRegistryLike },
+): ModelPort {
+  const reg = ctxLike.modelRegistry;
 
-      // ── Dispatch ───────────────────────────────────────────
-      const ctrl = new AbortController();
-      const timeoutMs = 120_000; // 2-minute default timeout
-      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-
-      let msg: AssistantMessage;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        msg = await complete(model, piContext, {
-          apiKey: auth.apiKey,
-          headers: auth.headers,
-          signal: ctrl.signal,
-        } as any);
-      } finally {
-        clearTimeout(timer);
+  return {
+    async complete(
+      context: WorkContext,
+      options?: Record<string, unknown>,
+    ): Promise<{ message: WorkMessage; usage?: StandardAgentOutput["usage"] }> {
+      const modelId = (options as { model?: unknown } | undefined)?.model;
+      if (typeof modelId !== "string" || modelId.length === 0) {
+        throw new Error(
+          "createMultiModelPort: options.model is required per call",
+        );
       }
 
-      // ── Build result ───────────────────────────────────────
-      const text = contentText(msg.content);
-      const workMsg: WorkMessage = {
-        role: msg.role,
-        content: text,
-      };
-
-      const usage = msg.usage;
-
-      if (usage) {
-        // Observed usage from provider
-        const stdUsage: StandardAgentOutput["usage"] = {
-          input: usage.input,
-          output: usage.output,
-          cacheRead: usage.cacheRead,
-          cacheWrite: usage.cacheWrite,
-          cost: usage.cost.total,
-          turns: 1,
-          toolCalls: 0,
-          durationMs: 0, // filled by instrumented wrapper
-        };
-        return { message: workMsg, usage: stdUsage };
+      // ── Resolve model (per-call) ────────────────────────────
+      const model = resolveModel(reg, modelId);
+      if (!model) {
+        throw new Error(`model not in registry: ${modelId}`);
       }
 
-      // ── Derived fallback from catalog pricing ──────────────
-      // Usage was absent from the result — derive cost from catalog.
-      // The _source annotation is added by the instrumented wrapper
-      // (metrics.source is the canonical carrier), not leaked here.
-      const derivedUsage: StandardAgentOutput["usage"] = {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        cost: 0,
-        turns: 1,
-        toolCalls: 0,
-        durationMs: 0,
-      };
-
-      // Throw on provider errors so the instrumented wrapper emits
-      // model.failed, not model.completed.
-      if (msg.stopReason === "error" || msg.errorMessage) {
-        throw new Error(`model error: ${msg.errorMessage ?? msg.stopReason}`);
+      if (!reg.hasConfiguredAuth(model)) {
+        throw new Error(`no configured auth for model: ${modelId}`);
       }
 
-      // Estimate tokens from content length (heuristic: chars/4)
-      const inputEstimate = piMessages.reduce(
-        (sum, m) => sum + Math.ceil(JSON.stringify(m.content).length / 4),
-        0,
-      );
-      const outputEstimate = Math.ceil(text.length / 4);
-
-      derivedUsage.input = inputEstimate;
-      derivedUsage.output = outputEstimate;
-
-      // Cost from catalog tiers
-      const catalogCost = model.cost;
-      if (catalogCost) {
-        // Check if any tier applies based on input estimate
-        let rates = catalogCost;
-        if (catalogCost.tiers) {
-          for (const tier of catalogCost.tiers) {
-            if (inputEstimate > tier.inputTokensAbove) {
-              rates = tier;
-            }
-          }
-        }
-        derivedUsage.cost =
-          (inputEstimate / 1_000_000) * rates.input +
-          (outputEstimate / 1_000_000) * rates.output;
+      // ── Auth ───────────────────────────────────────────────
+      const authResult = await reg.getApiKeyAndHeaders(model);
+      if (!authResult.ok) {
+        throw new Error(`auth failed for model ${modelId}: ${authResult.error}`);
       }
 
-      return { message: workMsg, usage: derivedUsage };
+      // ── Dispatch via shared helper ──────────────────────
+      return completeViaPiAi(model, authResult, context);
     },
   };
 }
