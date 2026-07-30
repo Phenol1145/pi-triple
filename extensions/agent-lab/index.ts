@@ -12,7 +12,7 @@ import { registerCommands } from "./src/commands/register.ts";
 import { findOrCreateAgentByModel, ensureSessionAgent } from "./src/arena/agent-id.ts";
 import { SqliteLedger } from "./src/arena/ledger.ts";
 import { EndowmentPolicyV1 } from "./src/arena/policies.ts";
-import { getBidBoard } from "./src/arena/bid-board.ts";
+
 import type { SchedulerRuntimeLike } from "./src/interceptor/scheduler-bridge.ts";
 import { createSchedulerRuntime } from "./src/runtime/create-scheduler-runtime.ts";
 import { ensureWeightedScorerInstance, syncWeightedScorerAgents, ensureArenaInstance, syncArenaAgents, migrateDerivedAgentIds } from "./src/schedulers/bootstrap.ts";
@@ -22,6 +22,8 @@ import { createModelCaller } from "./src/arena/model-caller.ts";
 import { matchEligibility } from "./src/schedulers/arena-definition.ts";
 import type { ArenaSchedulerParameters } from "./src/schedulers/arena-definition.ts";
 import type { SettleOutcome } from "./src/scheduler/contracts.ts";
+import { createMultiModelPort, type ModelRegistryLike } from "./src/workloops/model-port.ts";
+import type { WorkLoopRunner } from "./src/workloop/runner.ts";
 import { runBench, type BenchPorts } from "./src/bench/run.ts";
 import { loadHumanEval } from "./src/bench/humaneval.ts";
 import { renderBenchReport, writeBenchJson } from "./src/bench/report.ts";
@@ -129,6 +131,10 @@ export default async function (pi: ExtensionAPI) {
   let bootstrapPromise: Promise<void> | undefined;
   // Lazy arena model caller: populated from interceptor ctx on first tool_call.
   let arenaModelCaller: ModelCaller | undefined;
+  // Lazy model registry: populated from ctx on first tool_call.
+  let capturedModelRegistry: ModelRegistryLike | undefined;
+  // Lazy workloop runner: captured from scheduler runtime when created.
+  let capturedWlRunner: WorkLoopRunner | undefined;
   // Delegation event bus: pi.events is the single shared bus all extensions
   // (incl. pi-subagents) subscribe to, so it works as the DelegationEventBus
   // immediately at load — no need to wait for the first tool_call. This lets the
@@ -148,8 +154,11 @@ export default async function (pi: ExtensionAPI) {
         };
         const rt = createSchedulerRuntime(sharedStore.raw, delegationBus ? {
           eventBus: delegationBus,
-          // pi-default-loop delegates via eventBus; stub ports satisfy the constructor.
-          model: { async complete() { throw new Error("stub: pi-default-loop uses eventBus delegation"); } },
+          // pi-default-loop delegates via eventBus, doesn't use model port.
+          // arena-bid-loop uses the model port for multi-model bidding.
+          model: capturedModelRegistry
+            ? createMultiModelPort({ modelRegistry: capturedModelRegistry })
+            : { async complete() { throw new Error("stub: pi-default-loop uses eventBus delegation"); } },
           tools: { async execute() { throw new Error("stub: tools not available in managed loop v1"); } },
           artifacts: {
             async put() { return crypto.randomUUID(); },
@@ -157,6 +166,7 @@ export default async function (pi: ExtensionAPI) {
           },
         } : {});
         schedulerCore = rt.core;
+        capturedWlRunner = rt.workloopRuntime?.runner ?? undefined;
         optimizerRegistry = new OptimizerRegistry(rt.core.definitions, rt.core.repository, rt.core.events);
 
         // ── Startup guard: clean smoke-round residue from prior crash ──
@@ -221,7 +231,25 @@ export default async function (pi: ExtensionAPI) {
                 const agents = rt.core.repository.listAgents("default-arena");
                 return agents.find((a) => a.id === agentId)?.sourceTemplateId;
               },
-              bidBoard: getBidBoard(),
+              workLoopBidder: capturedWlRunner ? async (model, bidPrompt, opts) => {
+                const result = await capturedWlRunner!.run({
+                  traceId: opts.traceId,
+                  executionId: `${opts.traceId}:bid:${model.id}:${crypto.randomUUID().slice(0, 8)}`,
+                  agentInstanceId: opts.agentId,
+                  optimizationRoundId: opts.roundId,
+                  workLoopId: "arena-bid-loop",
+                  workLoopVersion: "1.0.0",
+                  config: { model: model.id, balance: opts.balance },
+                  task: bidPrompt,
+                  signal: opts.signal,
+                  schedulerInstanceId: "default-arena",
+                  dispatchId: opts.dispatchId,
+                });
+                if (result.status === "completed" && result.output?.custom) {
+                  return result.output.custom as { stake: number; reasoning?: string };
+                }
+                return undefined; // fail-open
+              } : undefined,
             };
 
             // Arena is always bootstrapped (registered/activated, addressable by
@@ -340,6 +368,9 @@ export default async function (pi: ExtensionAPI) {
       } catch {
         // fail-open: arena bidding will error on first use
       }
+    }
+    if (!capturedModelRegistry && ctx.modelRegistry) {
+      capturedModelRegistry = ctx.modelRegistry as unknown as ModelRegistryLike;
     }
     if (!delegationBus && ctx.events) {
       delegationBus = ctx.events;

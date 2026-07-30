@@ -12,11 +12,33 @@ import { PiSubagentsAdapter } from "./pi-subagents-adapter.ts";
 import type { DelegationEventBus } from "./pi-subagents-adapter.ts";
 import { createPiDefaultLoop } from "../workloops/pi-default-loop.ts";
 import { PI_DEFAULT_LOOP_DEFINITION } from "./create-runtime.ts";
+import { arenaBidLoop } from "../workloops/arena-bid-loop.ts";
+import type { WorkLoopDefinition } from "../core/contracts.ts";
 import type {
   ModelPort,
   ToolPort,
   ArtifactPort,
 } from "../workloop/contracts.ts";
+
+// ── arena-bid-loop@1.0.0 definition ────────────────────────────────
+
+export const ARENA_BID_LOOP_DEFINITION: WorkLoopDefinition = {
+  kind: "workloop",
+  id: "arena-bid-loop",
+  version: "1.0.0",
+  sdkVersionRange: "^1.0.0",
+  configSchema: {
+    type: "object",
+    properties: {
+      model: { type: "string" },
+      balance: { type: "number" },
+      promptTemplate: { type: "string" },
+    },
+    required: [],
+  },
+  requiredCapabilities: [],
+  cloneModes: ["fresh"],
+};
 
 // ── Runtime composite ───────────────────────────────────────────────
 
@@ -68,10 +90,16 @@ export function createSchedulerRuntime(
 ): SchedulerRuntime {
   const core = createLabCore(db);
 
-  // Register pi-default-loop definition (required for validation of
+  // Register workloop definitions (required for validation of
   // agent workloop references during bootstrap)
   try {
     core.definitions.register(PI_DEFAULT_LOOP_DEFINITION);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("already registered")) throw err;
+  }
+  try {
+    core.definitions.register(ARENA_BID_LOOP_DEFINITION);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!msg.includes("already registered")) throw err;
@@ -120,9 +148,15 @@ export function createSchedulerRuntime(
     artifacts,
   );
 
-  // Register pi-default-loop implementation
+  // Register workloop implementations
   const loop = createPiDefaultLoop(adapter);
   wlRegistry.register(loop);
+  try {
+    wlRegistry.register(arenaBidLoop);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("already registered")) throw err;
+  }
 
   const workloopRuntime: WorkLoopRuntimeLite = {
     core,
