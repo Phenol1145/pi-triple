@@ -6,7 +6,6 @@ import type {
   SettleContext,
   SettleOutcome,
 } from "../scheduler/contracts.ts";
-import type { BidBoard } from "../arena/bid-board.ts";
 import type { Ledger, ModelCaller, AgentState, ArenaTask } from "../arena/types.ts";
 import type { ModelInfo } from "../types.ts";
 import type { ArenaSchedulerParameters } from "./arena-definition.ts";
@@ -34,8 +33,12 @@ export interface ArenaSchedulerPorts {
   resolveAgent: (model: ModelInfo) => string;
   /** Resolve agent UUID → templateId (from lab_agent_instances.source_template_id). */
   resolveTemplate?: (agentId: string) => string | undefined;
-  /** WorkLoop 竞价收集板；与 engine:"workloop" 配合，缺失时回退 model-caller。 */
-  bidBoard?: BidBoard;
+  /** WorkLoop 竞价（框架原生）：经 ModelPort 跑 arena-bid-loop 取 stake。缺失时 workloop 引擎回退 model-caller。 */
+  workLoopBidder?: (
+    model: ModelInfo,
+    bidPrompt: string,
+    opts: { agentId: string; balance: number; timeoutMs: number; traceId: string; roundId: string; dispatchId: string; signal?: AbortSignal },
+  ) => Promise<{ stake: number; reasoning?: string } | undefined>;
 }
 
 // ── WorkLoop bidding helpers ────────────────────────────────────────
@@ -59,44 +62,31 @@ async function mapConcurrent<T, R>(
   return results;
 }
 
-/** 在基础竞价提示后追加 place_bid 工具调用指令（含一次性 token）。 */
-function renderWorkLoopBidPrompt(basePrompt: string, token: string): string {
-  return (
-    basePrompt +
-    `\n\n【竞价指令】请调用 place_bid 工具提交出价：place_bid(token="${token}", stake=<你的出价数字>, reasoning="<简短理由>")。` +
-    `token 必须原样使用。只调用一次 place_bid，不要执行任务本身，不要做其他事。`
-  );
-}
-
-/** 按引擎取原始出价：workloop → sdk.agents.run + BidBoard；否则 model-caller。 */
+/** 按引擎取原始出价：workloop → workLoopBidder port；否则 model-caller。 */
 async function solicitRawBid(
   st: { agent: string; model: ModelInfo; balance: number },
   prompt: string,
   params: ArenaSchedulerParameters,
-  sdk: SchedulerSDK,
   ports: ArenaSchedulerPorts,
+  input: SchedulingInput,
+  roundId: string,
 ): Promise<number> {
   const engine = params.bidding.engine ?? "model-caller";
-  if (engine === "workloop" && ports.bidBoard) {
-    const token = crypto.randomUUID();
-    ports.bidBoard.openToken(token, st.agent);
+  if (engine === "workloop" && ports.workLoopBidder) {
     try {
-      await sdk.agents.run(st.agent, {
-        task: renderWorkLoopBidPrompt(prompt, token),
-        configOverrides: {
-          model: st.model.id,
-          skill: params.bidding.bidSkill ?? "agent-lab-bidding",
-          turnBudget: { maxTurns: params.bidding.bidTurnBudget ?? 3 },
-          result: { kind: "text" },
-        },
+      const bid = await ports.workLoopBidder(st.model, prompt, {
+        agentId: st.agent,
+        balance: st.balance,
         timeoutMs: params.bidding.timeoutMs,
+        traceId: input.traceId,
+        roundId,
+        dispatchId: input.dispatchId,
+        signal: input.signal,
       });
+      return bid?.stake ?? 0;
     } catch {
-      // fail-open：WorkLoop 竞价失败 → 0（与 model-caller 失败一致）
+      return 0; // fail-open
     }
-    const entry = ports.bidBoard.collect(token);
-    ports.bidBoard.close(token);
-    return entry?.stake ?? 0;
   }
   // model-caller 引擎（默认 / fallback）
   const reply = await ports.modelCaller.complete(st.model.id, prompt, params.bidding.timeoutMs);
@@ -196,6 +186,7 @@ export function createArenaSchedulerImplementation(
 
       // 8. Bid: concurrent calls capped at maxCallsPerDispatch
       const bidders = selected.slice(0, params.bidding.maxCallsPerDispatch);
+      const round = ports.ledger.nextRound();
 
       const bidResults = await mapConcurrent(
         bidders,
@@ -234,7 +225,7 @@ export function createArenaSchedulerImplementation(
           }
 
           try {
-            const rawBid = await solicitRawBid(st, prompt, params, sdk, ports);
+            const rawBid = await solicitRawBid(st, prompt, params, ports, input, String(round));
             const maxByRatio = Math.floor(st.balance * params.risk.maxStakeRatio);
             const stake = Math.min(rawBid, st.balance, maxByRatio);
             sdk.telemetry.emit("scheduler.arena.stake", { agent: st.agent }, { stake });
@@ -332,7 +323,6 @@ export function createArenaSchedulerImplementation(
       // 13. Create task (winner UUID + modelId + templateId)
       const winnerModel = states.find(s => s.agent === winner.agent)!.model.id;
       const winnerTemplate = ports.resolveTemplate?.(winner.agent);
-      const round = ports.ledger.nextRound();
       ports.ledger.createTask(task, winner.agent, winner.stake, round, winnerModel, winnerTemplate);
 
       // 14. Emit balance_after

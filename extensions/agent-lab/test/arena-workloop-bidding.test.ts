@@ -2,7 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { SqliteLedger } from "../src/arena/ledger.ts";
-import { BidBoard } from "../src/arena/bid-board.ts";
 import {
   createArenaSchedulerImplementation,
   type ArenaSchedulerPorts,
@@ -25,98 +24,73 @@ function input(): SchedulingInput {
   return { traceId: "t", dispatchId: "d", role: "default", task: "write fn", taskCategory: "coding", mode: "select", settlementRef: "ref-1" };
 }
 
-function buildSDK(bidBoard: BidBoard, bidsByAgent: Record<string, number>, runCalls: { agentId: string; task: string; config: unknown }[]): SchedulerSDK {
+function buildSDK(): SchedulerSDK {
   return {
-    agents: {
-      list: async () => [],
-      create: async () => ({ id: "x" }),
-      run: async (agentId: string, req: { task: string; configOverrides?: Record<string, unknown>; timeoutMs?: number }) => {
-        runCalls.push({ agentId, task: req.task, config: req.configOverrides });
-        // 模拟 subagent 解析 token 并调用 place_bid
-        const m = req.task.match(/token="([^"]+)"/);
-        const stake = bidsByAgent[agentId] ?? 0;
-        if (m) bidBoard.place(m[1]!, stake, "simulated");
-        return { status: "completed" as const, output: { text: "bid placed" } };
-      },
-    },
+    agents: { list: async () => [], create: async () => ({ id: "x" }), run: async () => ({ status: "completed" as const, output: { text: "" } }) },
     storage: { get: () => undefined, put: () => ({ value: undefined as unknown, version: 1 }) },
     telemetry: { emit() {} },
     control: { signal: new AbortController().signal },
   };
 }
 
-test("workloop engine: bids collected via BidBoard, winner = highest stake", async () => {
-  const bidBoard = new BidBoard();
-  const runCalls: { agentId: string; task: string; config: unknown }[] = [];
+test("workloop engine: bids collected via workLoopBidder port, winner = highest stake", async () => {
+  const calls: { model: string; agentId: string }[] = [];
+  const bidsByAgent: Record<string, number> = { "agent-openai/gpt-4": 30, "agent-anthropic/claude-3": 80 };
   const candidates = [model("openai/gpt-4"), model("anthropic/claude-3")];
   const ports: ArenaSchedulerPorts = {
     ledger: new SqliteLedger(new DatabaseSync(":memory:"), fixedEndow),
     candidates: () => candidates,
     modelCaller: { async complete() { throw new Error("should not be called in workloop engine"); } },
     resolveAgent: (m) => `agent-${m.id}`,
-    bidBoard,
+    workLoopBidder: async (m, _prompt, opts) => {
+      calls.push({ model: m.id, agentId: opts.agentId });
+      const stake = bidsByAgent[opts.agentId] ?? 0;
+      return { stake, reasoning: "sim" };
+    },
   };
   const scheduler = createArenaSchedulerImplementation(ports);
-  const sdk = buildSDK(bidBoard, { "agent-openai/gpt-4": 30, "agent-anthropic/claude-3": 80 }, runCalls);
 
-  const result = await scheduler.schedule(input(), params({ engine: "workloop", maxConcurrentBids: 2 }), sdk);
+  const result = await scheduler.schedule(input(), params({ engine: "workloop", maxConcurrentBids: 2 }), buildSDK());
 
   assert.equal(result.status, "completed");
-  assert.equal(runCalls.length, 2);
-  // 每次 run 都带 skill + turnBudget（候选自己的模型）
-  for (const c of runCalls) {
-    const cfg = c.config as Record<string, unknown>;
-    assert.equal(cfg.skill, "agent-lab-bidding");
-    assert.deepEqual(cfg.turnBudget, { maxTurns: 3 });
-    assert.ok(typeof cfg.model === "string");
-  }
+  assert.equal(calls.length, 2);
 });
 
-test("workloop engine: subagent that never calls place_bid → stake 0 (fail-open)", async () => {
-  const bidBoard = new BidBoard();
+test("workloop engine: workLoopBidder returns undefined → stake 0 (fail-open)", async () => {
   const candidates = [model("openai/gpt-4")];
   const ports: ArenaSchedulerPorts = {
     ledger: new SqliteLedger(new DatabaseSync(":memory:"), fixedEndow),
     candidates: () => candidates,
     modelCaller: { async complete() { return "50"; } },
     resolveAgent: (m) => `agent-${m.id}`,
-    bidBoard,
+    workLoopBidder: async () => undefined,
   };
   const scheduler = createArenaSchedulerImplementation(ports);
-  // run 不 place 任何 bid
-  const sdk: SchedulerSDK = {
-    agents: { list: async () => [], create: async () => ({ id: "x" }), run: async () => ({ status: "completed" as const, output: { text: "" } }) },
-    storage: { get: () => undefined, put: () => ({ value: undefined as unknown, version: 1 }) },
-    telemetry: { emit() {} },
-    control: { signal: new AbortController().signal },
-  };
-  const result = await scheduler.schedule(input(), params({ engine: "workloop" }), sdk);
-  // 唯一候选出价 0 → failed (no-eligible-bids)，与 model-caller 0 价行为一致
+  const result = await scheduler.schedule(input(), params({ engine: "workloop" }), buildSDK());
+  // 唯一候选出价 0 → failed (no-eligible-bids)
   assert.equal(result.status, "failed");
   assert.equal((result as { error?: { code?: string } }).error?.code, "no-eligible-bids");
 });
 
-test("model-caller engine (default): ModelCaller used, bidBoard untouched", async () => {
-  const bidBoard = new BidBoard();
+test("model-caller engine (default): ModelCaller used, workLoopBidder NOT called", async () => {
   let callerHits = 0;
+  let bidderCalled = false;
   const candidates = [model("openai/gpt-4")];
   const ports: ArenaSchedulerPorts = {
     ledger: new SqliteLedger(new DatabaseSync(":memory:"), fixedEndow),
     candidates: () => candidates,
     modelCaller: { async complete() { callerHits++; return "55"; } },
     resolveAgent: (m) => `agent-${m.id}`,
-    bidBoard,
+    workLoopBidder: async () => { bidderCalled = true; return { stake: 99 }; },
   };
   const scheduler = createArenaSchedulerImplementation(ports);
-  const runCalls: unknown[] = [];
-  const sdk = buildSDK(bidBoard, {}, runCalls as never);
-  const result = await scheduler.schedule(input(), params({ engine: "model-caller" }), sdk);
+  const result = await scheduler.schedule(input(), params({ engine: "model-caller" }), buildSDK());
   assert.equal(result.status, "completed");
   assert.equal(callerHits, 1);
-  assert.equal(runCalls.length, 0); // agents.run 未被调用
+  assert.equal(bidderCalled, false);
 });
 
-test("workloop engine without bidBoard port → falls back to model-caller", async () => {
+test("workloop engine without workLoopBidder port → falls back to model-caller", async () => {
   let callerHits = 0;
   const candidates = [model("openai/gpt-4")];
   const ports: ArenaSchedulerPorts = {
@@ -124,11 +98,10 @@ test("workloop engine without bidBoard port → falls back to model-caller", asy
     candidates: () => candidates,
     modelCaller: { async complete() { callerHits++; return "40"; } },
     resolveAgent: (m) => `agent-${m.id}`,
-    // 无 bidBoard
+    // 无 workLoopBidder
   };
   const scheduler = createArenaSchedulerImplementation(ports);
-  const sdk = buildSDK(new BidBoard(), {}, []);
-  const result = await scheduler.schedule(input(), params({ engine: "workloop" }), sdk);
+  const result = await scheduler.schedule(input(), params({ engine: "workloop" }), buildSDK());
   assert.equal(result.status, "completed");
   assert.equal(callerHits, 1);
 });
