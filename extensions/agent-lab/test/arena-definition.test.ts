@@ -69,8 +69,10 @@ test("ARENA_DEFINITION tunablePaths covers exactly the specified paths", () => {
     "market.maxBidders",
     "market.staleTaskTimeoutMs",
     "market.eligibility",
+    "market.diversityFactor",
     "bidding.timeoutMs",
     "bidding.maxCallsPerDispatch",
+    "bidding.minStake",
     "risk.maxStakeRatio",
   ];
   assert.deepEqual([...ARENA_DEFINITION.tunablePaths].sort(), [...expected].sort());

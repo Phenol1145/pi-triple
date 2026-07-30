@@ -257,7 +257,18 @@ export function createArenaSchedulerImplementation(
         }
       }
 
-      // 10. No eligible bids → failed (triggers fallback, not abstain)
+      // 10. minStake floor: raise small positive bids to min(minStake, balance×maxStakeRatio) (N1 clamp)
+      const minStake = params.bidding.minStake ?? 0;
+      if (minStake > 0) {
+        for (const b of bidResults) {
+          if (b.stake > 0 && b.stake < minStake) {
+            const cap = b.balance * params.risk.maxStakeRatio;
+            b.stake = Math.min(minStake, cap);
+          }
+        }
+      }
+
+      // 11. No eligible bids → failed (triggers fallback, not abstain)
       const eligibleBids = bidResults.filter((b) => b.stake > 0);
       if (eligibleBids.length === 0) {
         return {
@@ -360,10 +371,21 @@ export function createArenaSchedulerImplementation(
       const D = settlementPolicy.settle(arenaTask, row.stake, outcome);
       const U = model ? costModel.usageCost(outcome, model) : 0;
 
+      // Diversity penalty: reduce reward for templates that already won many tasks.
+      // reward × 1/(1 + N × diversityFactor) where N = prior settled wins for same template.
+      const diversityFactor = (ctx.parameters as ArenaSchedulerParameters | undefined)?.market?.diversityFactor ?? 0;
+      let net = D - U;
+      if (diversityFactor > 0 && row.templateId) {
+        const priorWins = ports.ledger.countSettledByTemplate(row.templateId, taskRef);
+        if (priorWins > 0) {
+          const penalty = 1 / (1 + priorWins * diversityFactor);
+          net = net * penalty;
+        }
+      }
+
       // Unfreeze the stake
       ports.ledger.unfreeze(row.winner, taskRef);
 
-      const net = D - U;
       if (net >= 0) {
         ports.ledger.credit(row.winner, net, "settle", taskRef, row.round, row.templateId);
       } else {

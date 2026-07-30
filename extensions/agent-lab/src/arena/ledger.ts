@@ -172,6 +172,18 @@ export class SqliteLedger implements Ledger {
     this.unfreeze(row.winner, taskId);
     this.setTaskStatus(taskId, "failed");
   }
+  countSettledByTemplate(templateId: string, excludeTaskId?: string): number {
+    if (excludeTaskId) {
+      const row = this.db.prepare(
+        `SELECT COUNT(*) AS n FROM market_tasks WHERE template_id = ? AND status = 'settled' AND task_id != ?`
+      ).get(templateId, excludeTaskId) as { n: number };
+      return Number(row.n);
+    }
+    const row = this.db.prepare(
+      `SELECT COUNT(*) AS n FROM market_tasks WHERE template_id = ? AND status = 'settled'`
+    ).get(templateId) as { n: number };
+    return Number(row.n);
+  }
 
   reconcileFrozenResidue(): { agent: string; frozenBefore: number }[] {
     const rows = this.db.prepare(

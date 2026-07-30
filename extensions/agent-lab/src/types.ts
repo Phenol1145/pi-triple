@@ -81,8 +81,8 @@ export interface ArenaConfig {
   odds: { easy: number; medium: number; hard: number };
   settlement: { tax: number; errorMode: "stakeOnly" | "stakeTimesOdds" };
   cost: { tokenMult: number; toolMult: number; latencyMult: number; resourceFactor: number; toolWeights: Record<string, number> };
-  bidding: { timeoutMs: number; promptTemplate: string; maxCallsPerDispatch: number };
-  market: { staleTaskTimeoutMs: number; eligibility: string; maxBidders: number; bidderSelector: string; };
+  bidding: { timeoutMs: number; promptTemplate: string; maxCallsPerDispatch: number; minStake: number };
+  market: { staleTaskTimeoutMs: number; eligibility: string; maxBidders: number; bidderSelector: string; diversityFactor: number };
   risk: { maxStakeRatio: number };
 }
 

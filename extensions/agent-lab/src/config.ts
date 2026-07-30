@@ -5,8 +5,8 @@ export const DEFAULT_ARENA_CONFIG: ArenaConfig = {
   odds: { easy: 1.5, medium: 3.0, hard: 5.0 },
   settlement: { tax: 5, errorMode: "stakeTimesOdds" },
   cost: { tokenMult: 1.0, toolMult: 1.0, latencyMult: 1.0, resourceFactor: 1.0, toolWeights: { bash: 1.0, edit: 0.8, write: 0.8, read: 0.2 } },
-  bidding: { timeoutMs: 10000, promptTemplate: "任务：{prompt}（角色 {role}），难度 {difficulty}，赔率 {odds}。你当前 credits：{balance}。可押不超过可用余额。你押多少 credits 接此任务？只回一个数字。", maxCallsPerDispatch: 6 },
-  market: { staleTaskTimeoutMs: 600000, eligibility: "all", maxBidders: 6, bidderSelector: "top-balance" },
+  bidding: { timeoutMs: 10000, promptTemplate: "任务：{prompt}（角色 {role}），难度 {difficulty}，赔率 {odds}。你当前 credits：{balance}。可押不超过可用余额。你押多少 credits 接此任务？只回一个数字。", maxCallsPerDispatch: 6, minStake: 10 },
+  market: { staleTaskTimeoutMs: 600000, eligibility: "all", maxBidders: 6, bidderSelector: "top-balance", diversityFactor: 0.1 },
   risk: { maxStakeRatio: 0.5 },
 };
 

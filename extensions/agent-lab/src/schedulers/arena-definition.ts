@@ -23,12 +23,14 @@ export interface ArenaSchedulerParameters {
     timeoutMs: number;
     promptTemplate: string;
     maxCallsPerDispatch: number;
+    minStake: number;
   };
   market: {
     staleTaskTimeoutMs: number;
     eligibility: string;
     maxBidders: number;
     bidderSelector: string;
+    diversityFactor: number;
   };
   risk: { maxStakeRatio: number };
 }
@@ -62,6 +64,8 @@ const TUNABLE_PATHS: string[] = [
   "market.eligibility",
   "bidding.timeoutMs",
   "bidding.maxCallsPerDispatch",
+  "bidding.minStake",
+  "market.diversityFactor",
   "risk.maxStakeRatio",
 ];
 
@@ -283,12 +287,14 @@ export function validateArenaParameters(value: unknown): ValidationResult<ArenaS
         timeoutMs: (bidding as Record<string, number>).timeoutMs,
         promptTemplate: (bidding as Record<string, string>).promptTemplate ?? "",
         maxCallsPerDispatch: (bidding as Record<string, number>).maxCallsPerDispatch,
+        minStake: (bidding as Record<string, number>).minStake ?? 10,
       },
       market: {
         staleTaskTimeoutMs: (market as Record<string, number>).staleTaskTimeoutMs ?? 600000,
         eligibility: (market as Record<string, string>).eligibility,
         maxBidders: (market as Record<string, number>).maxBidders,
         bidderSelector: (market as Record<string, string>).bidderSelector ?? "top-balance",
+        diversityFactor: (market as Record<string, number>).diversityFactor ?? 0.1,
       },
       risk: {
         maxStakeRatio: (risk as Record<string, number>).maxStakeRatio,
@@ -383,6 +389,7 @@ export const ARENA_DEFINITION: SchedulerDefinition = {
           timeoutMs: { type: "number" },
           promptTemplate: { type: "string" },
           maxCallsPerDispatch: { type: "integer", minimum: 1 },
+          minStake: { type: "number", minimum: 0 },
         },
         required: ["timeoutMs", "maxCallsPerDispatch"],
       },
@@ -393,6 +400,7 @@ export const ARENA_DEFINITION: SchedulerDefinition = {
           eligibility: { type: "string" },
           maxBidders: { type: "integer", minimum: 1 },
           bidderSelector: { type: "string" },
+          diversityFactor: { type: "number", minimum: 0 },
         },
         required: ["maxBidders", "eligibility"],
       },

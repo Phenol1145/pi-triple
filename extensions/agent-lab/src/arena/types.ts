@@ -68,6 +68,8 @@ export interface Ledger {
   setTaskStatus(taskId: string, status: string): void;
   staleTasks(timeoutMs: number): MarketTaskRow[];
   recoverStaleTask(taskId: string): void;
+  /** Count settled tasks won by agents of the given template (excluding excludeTaskId). */
+  countSettledByTemplate(templateId: string, excludeTaskId?: string): number;
 }
 
 export interface MarketAllocation { winner: AgentId; model: string; stake: number; taskId: string; round: number; }
