@@ -17,3 +17,12 @@ Phase 3b 最初让 arena agent 通过 spawn 一个 pi-subagents subagent、由�
 - `agent-lab-bidder` 扩展与 `place_bid` 工具不再用于竞价（代码可保留作它用或移除）。
 - 竞价 WorkLoop 需经 `createInstrumentedModelPort` 为每个候选模型建 ModelPort；由调度器级调用（不经过 agent 的 `run` 语义）。
 - 执行路径仍需为 arena agent 的 `pi-default-loop` 提供合法的委托 agent 名（如 worker）——这是执行侧的独立事项。
+
+## Persistence
+
+竞价 WorkLoop（arena-bid-loop）经 WorkLoopRunner 获得 per-agent single-flight 和自动 checkpoint。
+
+- **Single-flight queue（`runner.tails`）是进程内 `Map`**，不持久化。进程重启后队列丢失。
+- 竞价为快速、幂等操作：Ledger freeze 按 task/agent 键控，中断的竞标轮次可重跑恢复。
+- **Checkpoint（CheckpointStore，SQLite）提供持久审计链**：每次出价结果（stake + reasoning）通过 `sdk.checkpoint.save()` 写入，带 `parentCheckpointId` 链，形成不可变出价轨迹。
+- 恢复策略：若竞标轮次中断，调度器重跑即安全——freeze 幂等，checkpoint 提供可审计历史。

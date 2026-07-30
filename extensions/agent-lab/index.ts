@@ -156,9 +156,16 @@ export default async function (pi: ExtensionAPI) {
           eventBus: delegationBus,
           // pi-default-loop delegates via eventBus, doesn't use model port.
           // arena-bid-loop uses the model port for multi-model bidding.
-          model: capturedModelRegistry
-            ? createMultiModelPort({ modelRegistry: capturedModelRegistry })
-            : { async complete() { throw new Error("stub: pi-default-loop uses eventBus delegation"); } },
+          // Defensive closure: resolves capturedModelRegistry PER CALL so that
+          // a late-captured registry (after first tool_call) still works.
+          // Without this, if the factory runs before any tool_call, the stub
+          // sticks forever.
+          model: {
+            async complete(ctx, opts) {
+              if (!capturedModelRegistry) throw new Error("model registry not yet captured");
+              return createMultiModelPort({ modelRegistry: capturedModelRegistry }).complete(ctx, opts);
+            },
+          },
           tools: { async execute() { throw new Error("stub: tools not available in managed loop v1"); } },
           artifacts: {
             async put() { return crypto.randomUUID(); },
