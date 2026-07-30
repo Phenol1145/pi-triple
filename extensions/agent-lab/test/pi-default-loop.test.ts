@@ -973,3 +973,74 @@ test("10. 'acceptance_failed' status is NOT in the explicit mapping — verifies
   ];
   assert.ok(!failedStatuses.includes("acceptance_failed"));
 });
+
+// ── Phase 3b Task 2 helpers ──────────────────────────────────────────
+
+function stubAdapter(captured: { req?: SubagentDelegationV2Request }): PiSubagentsAdapter {
+  return {
+    async delegate(req: SubagentDelegationV2Request): Promise<SubagentDelegationV2TerminalResponse> {
+      captured.req = req;
+      return {
+        version: req.version,
+        requestId: req.requestId,
+        ownerRunId: req.ownerRunId,
+        nodeId: req.nodeId,
+        status: "completed",
+        result: { kind: "text", text: "ok" },
+      } as SubagentDelegationV2TerminalResponse;
+    },
+  } as PiSubagentsAdapter;
+}
+
+function bidInput(config: PiDefaultLoopConfig) {
+  return {
+    executionId: "exec-1",
+    traceId: "trace-1",
+    agentInstanceId: "agent-1",
+    task: "bid task",
+    config,
+    context: { messages: [], metadata: { contextId: "c", sourceRefs: [], artifactRefs: [] } },
+    state: {},
+  } as never;
+}
+
+const bidSdk = {
+  telemetry: { emit() {} },
+  control: { signal: new AbortController().signal },
+} as never;
+
+// ── Phase 3b Task 2: skill/turnBudget/toolBudget pass-through ────────
+
+test("Phase 3b: buildV2Request passes skill/turnBudget/toolBudget through", async () => {
+  const captured: { req?: SubagentDelegationV2Request } = {};
+  const loop = createPiDefaultLoop(stubAdapter(captured));
+  await loop.run(
+    bidInput({
+      agent: "agent-x",
+      cwd: "/tmp",
+      contextMode: "fresh",
+      model: "minimax/minimax-m3",
+      skill: "agent-lab-bidding",
+      turnBudget: { maxTurns: 3 },
+      toolBudget: { hard: 5 },
+      result: { kind: "text" },
+    }),
+    bidSdk,
+  );
+  assert.equal(captured.req?.skill, "agent-lab-bidding");
+  assert.deepEqual(captured.req?.turnBudget, { maxTurns: 3 });
+  assert.deepEqual(captured.req?.toolBudget, { hard: 5 });
+  assert.equal(captured.req?.model, "minimax/minimax-m3");
+});
+
+test("Phase 3b: buildV2Request omits skill/turnBudget when unset", async () => {
+  const captured: { req?: SubagentDelegationV2Request } = {};
+  const loop = createPiDefaultLoop(stubAdapter(captured));
+  await loop.run(
+    bidInput({ agent: "a", cwd: "/tmp", contextMode: "fresh" }),
+    bidSdk,
+  );
+  assert.equal(captured.req?.skill, undefined);
+  assert.equal(captured.req?.turnBudget, undefined);
+  assert.equal(captured.req?.toolBudget, undefined);
+});

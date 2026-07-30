@@ -5,6 +5,8 @@ import type {
   SubagentDelegationV2Status,
   SubagentDelegationV2Thinking,
   SubagentDelegationV2ResultRequest,
+  SubagentDelegationTurnBudget,
+  SubagentDelegationToolBudget,
 } from "../runtime/delegation-v2.ts";
 import { SUBAGENT_DELEGATION_V2_PROTOCOL_VERSION } from "../runtime/delegation-v2.ts";
 import type {
@@ -26,6 +28,9 @@ export interface PiDefaultLoopConfig {
   thinking?: SubagentDelegationV2Thinking;
   timeoutMs?: number;
   result?: SubagentDelegationV2ResultRequest;
+  skill?: string | string[] | boolean;
+  turnBudget?: SubagentDelegationTurnBudget;
+  toolBudget?: SubagentDelegationToolBudget;
 }
 
 // ── Status → WorkLoopResult mapping ────────────────────────────────
@@ -77,6 +82,9 @@ function buildV2Request(
     thinking: cfg.thinking,
     timeoutMs: cfg.timeoutMs,
     result: cfg.result ?? { kind: "text" },
+    skill: cfg.skill,
+    turnBudget: cfg.turnBudget,
+    toolBudget: cfg.toolBudget,
   };
 }
 
