@@ -57,6 +57,7 @@ test("listRoutingBindings returns all bindings with parsed match JSON", () => {
     repo.insertInstance(
       {
         id: "coding-scheduler",
+        name: "coding-scheduler",
         definition: { kind: "scheduler", id: "weighted-scorer", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",

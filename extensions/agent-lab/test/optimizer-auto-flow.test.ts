@@ -300,6 +300,7 @@ function setup(): SetupResult {
   const optimizerInstanceId = "test-optimizer";
   repository.insertOptimizerInstance({
     id: optimizerInstanceId,
+    name: optimizerInstanceId,
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.0",
     config: {},

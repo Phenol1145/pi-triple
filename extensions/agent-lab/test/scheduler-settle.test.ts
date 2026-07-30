@@ -78,6 +78,7 @@ function buildCore(opts?: {
     repository.insertInstance(
       {
         id: instanceId,
+        name: instanceId,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",

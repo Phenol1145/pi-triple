@@ -145,6 +145,7 @@ function setup(): SetupResult {
   const optInstId = "tuner-1";
   repository.insertOptimizerInstance({
     id: optInstId,
+    name: optInstId,
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.0",
     config: {},
@@ -197,6 +198,7 @@ test("submitProposal gate 1: rejects when optimizer does not target scheduler", 
   // Create second optimizer instance NOT targeting coding-scorer
   repository.insertOptimizerInstance({
     id: "tuner-2",
+    name: "tuner-2",
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.0",
     config: {},
@@ -225,6 +227,7 @@ test("submitProposal gate 2: rejects on incompatible scheduler version", () => {
   }));
   repository.insertOptimizerInstance({
     id: "tuner-v2",
+    name: "tuner-v2",
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.1",
     config: {},
@@ -249,6 +252,7 @@ test("submitProposal gate 2: rejects on incompatible parameterModelVersion", () 
   }));
   repository.insertOptimizerInstance({
     id: "tuner-pmv",
+    name: "tuner-pmv",
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.2",
     config: {},
@@ -328,6 +332,7 @@ test("submitProposal gate 6: rejects untunable path change", () => {
 
   repo.insertOptimizerInstance({
     id: "tuner-x",
+    name: "tuner-x",
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.0",
     config: {},
@@ -769,6 +774,7 @@ test("promoteRound re-validates tunable paths against current round", () => {
 
   repo.insertOptimizerInstance({
     id: "tuner-tt",
+    name: "tuner-tt",
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.0",
     config: {},

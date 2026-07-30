@@ -59,6 +59,7 @@ function insertActiveInstance(repo: CoreRepository, id: string) {
   repo.insertInstance(
     {
       id,
+      name: id,
       definition: { kind: "scheduler", id: "weighted-scorer", version: "1.0.0" },
       parameterModelVersion: "1",
       agentDefinitionSchemaVersion: "1",
@@ -166,6 +167,7 @@ test("setCatchAllBinding throws InstanceNotActiveError when instance is not acti
   repository.insertInstance(
     {
       id: "arena-1",
+      name: "arena-1",
       definition: { kind: "scheduler", id: "weighted-scorer", version: "1.0.0" },
       parameterModelVersion: "1",
       agentDefinitionSchemaVersion: "1",

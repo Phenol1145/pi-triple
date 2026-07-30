@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS lab_scheduler_drafts (
 
 CREATE TABLE IF NOT EXISTS lab_scheduler_instances (
   id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
   definition_id TEXT NOT NULL,
   definition_version TEXT NOT NULL,
   parameter_model_version TEXT NOT NULL,
@@ -20,7 +21,8 @@ CREATE TABLE IF NOT EXISTS lab_scheduler_instances (
   canary_percent REAL,
   fallback_chain_json TEXT NOT NULL,
   metadata_json TEXT NOT NULL,
-  created_ts INTEGER NOT NULL
+  created_ts INTEGER NOT NULL,
+  UNIQUE(definition_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS lab_optimization_rounds (
@@ -54,10 +56,12 @@ CREATE INDEX IF NOT EXISTS idx_lab_agents_scheduler ON lab_agent_instances(sched
 
 CREATE TABLE IF NOT EXISTS lab_routing_bindings (
   id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
   scheduler_instance_id TEXT NOT NULL,
   priority INTEGER NOT NULL,
   match_json TEXT NOT NULL,
-  created_ts INTEGER NOT NULL
+  created_ts INTEGER NOT NULL,
+  UNIQUE(scheduler_instance_id, name)
 );
 CREATE INDEX IF NOT EXISTS idx_lab_routes_priority ON lab_routing_bindings(priority DESC, id);
 
@@ -88,12 +92,14 @@ CREATE TABLE IF NOT EXISTS lab_namespace_kv (
 
 CREATE TABLE IF NOT EXISTS lab_optimizer_instances (
   id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
   definition_id TEXT NOT NULL,
   definition_version TEXT NOT NULL,
   config_json TEXT NOT NULL,
   target_schedulers_json TEXT NOT NULL,
   status TEXT NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  UNIQUE(definition_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS lab_proposals (

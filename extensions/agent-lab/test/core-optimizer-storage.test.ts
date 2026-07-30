@@ -21,8 +21,10 @@ function setupLog() {
 // ── Optimizer instance helpers ──
 
 function optInstance(overrides: Partial<OptimizerInstanceRecord> = {}): OptimizerInstanceRecord {
+  const id = overrides.id ?? "opt-1";
   return {
-    id: "opt-1",
+    id,
+    name: id,
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.0",
     config: { minSamples: 20 },
@@ -245,6 +247,7 @@ test("updateInstanceCurrentRound changes the current_round_id on scheduler insta
     repo.insertInstance(
       {
         id: "scheduler-1",
+        name: "scheduler-1",
         definition: { kind: "scheduler", id: "ws", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",
@@ -501,6 +504,7 @@ test("existing getInstance / listInstances / getRound still work after schema ex
     repo.insertInstance(
       {
         id: "sid-1",
+        name: "sid-1",
         definition: { kind: "scheduler", id: "ws", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",

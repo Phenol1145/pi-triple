@@ -10,6 +10,7 @@ import type {
 
 export interface OptimizerInstanceRecord {
   id: string;
+  name: string;
   definitionId: string;
   definitionVersion: string;
   config: unknown;
@@ -81,6 +82,22 @@ export class CoreRepository {
     this.db.exec(
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_agents_model ON lab_agent_instances(scheduler_instance_id, model, source_template_id)`
     );
+
+    // ── UUID-identity refactoring (ADR-0002): add name column + UNIQUE index for existing DBs ──
+    const migrationTables: Array<{ table: string; uniqueCols: string; indexName: string }> = [
+      { table: "lab_scheduler_instances", uniqueCols: "definition_id, name", indexName: "idx_lab_scheduler_instances_def_name" },
+      { table: "lab_optimizer_instances", uniqueCols: "definition_id, name", indexName: "idx_lab_optimizer_instances_def_name" },
+      { table: "lab_routing_bindings", uniqueCols: "scheduler_instance_id, name", indexName: "idx_lab_routing_bindings_si_name" },
+    ];
+    for (const { table, uniqueCols, indexName } of migrationTables) {
+      const cols = this.db.prepare(
+        `PRAGMA table_info(${table})`
+      ).all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === "name")) {
+        this.db.exec(`ALTER TABLE ${table} ADD COLUMN name TEXT NOT NULL DEFAULT ''`);
+      }
+      this.db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS ${indexName} ON ${table}(${uniqueCols})`);
+    }
   }
 
   transaction<T>(fn: () => T): T {
@@ -155,11 +172,11 @@ export class CoreRepository {
 
   getInstance(id: string): SchedulerInstanceRecord | undefined {
     const row = this.db.prepare(
-      `SELECT definition_id, definition_version, parameter_model_version, agent_schema_version,
+      `SELECT name, definition_id, definition_version, parameter_model_version, agent_schema_version,
               status, current_round_id, canary_round_id, canary_percent, fallback_chain_json, created_ts
        FROM lab_scheduler_instances WHERE id = ?`
     ).get(id) as {
-      definition_id: string; definition_version: string; parameter_model_version: string;
+      name: string; definition_id: string; definition_version: string; parameter_model_version: string;
       agent_schema_version: string; status: string; current_round_id: string;
       canary_round_id: string | null; canary_percent: number | null;
       fallback_chain_json: string; created_ts: number;
@@ -169,6 +186,7 @@ export class CoreRepository {
 
     return {
       id,
+      name: row.name,
       definition: { kind: "scheduler" as const, id: row.definition_id, version: row.definition_version },
       parameterModelVersion: row.parameter_model_version,
       agentDefinitionSchemaVersion: row.agent_schema_version,
@@ -183,11 +201,11 @@ export class CoreRepository {
 
   listInstances(): SchedulerInstanceRecord[] {
     const rows = this.db.prepare(
-      `SELECT id, definition_id, definition_version, parameter_model_version, agent_schema_version,
+      `SELECT id, name, definition_id, definition_version, parameter_model_version, agent_schema_version,
               status, current_round_id, canary_round_id, canary_percent, fallback_chain_json, created_ts
        FROM lab_scheduler_instances ORDER BY created_ts`
     ).all() as Array<{
-      id: string; definition_id: string; definition_version: string; parameter_model_version: string;
+      id: string; name: string; definition_id: string; definition_version: string; parameter_model_version: string;
       agent_schema_version: string; status: string; current_round_id: string;
       canary_round_id: string | null; canary_percent: number | null;
       fallback_chain_json: string; created_ts: number;
@@ -195,6 +213,7 @@ export class CoreRepository {
 
     return rows.map((row) => ({
       id: row.id,
+      name: row.name,
       definition: { kind: "scheduler" as const, id: row.definition_id, version: row.definition_version },
       parameterModelVersion: row.parameter_model_version,
       agentDefinitionSchemaVersion: row.agent_schema_version,
@@ -269,11 +288,12 @@ export class CoreRepository {
   insertInstance(record: SchedulerInstanceRecord, metadata: Record<string, string>): void {
     this.db.prepare(
       `INSERT INTO lab_scheduler_instances
-       (id, definition_id, definition_version, parameter_model_version, agent_schema_version,
+       (id, name, definition_id, definition_version, parameter_model_version, agent_schema_version,
         status, current_round_id, canary_round_id, canary_percent, fallback_chain_json, metadata_json, created_ts)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       record.id,
+      record.name,
       record.definition.id,
       record.definition.version,
       record.parameterModelVersion,
@@ -359,9 +379,9 @@ export class CoreRepository {
     binding: SchedulerInstanceDraftSpec["routingBindings"][number],
   ): void {
     this.db.prepare(
-      `INSERT INTO lab_routing_bindings (id, scheduler_instance_id, priority, match_json, created_ts)
-       VALUES (?, ?, ?, ?, ?)`
-    ).run(binding.id, schedulerInstanceId, binding.priority, JSON.stringify(binding.match), Date.now());
+      `INSERT INTO lab_routing_bindings (id, name, scheduler_instance_id, priority, match_json, created_ts)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(binding.id, binding.id, schedulerInstanceId, binding.priority, JSON.stringify(binding.match), Date.now());
   }
 
   upsertRoutingBinding(
@@ -369,14 +389,15 @@ export class CoreRepository {
     binding: SchedulerInstanceDraftSpec["routingBindings"][number],
   ): void {
     this.db.prepare(
-      `INSERT INTO lab_routing_bindings (id, scheduler_instance_id, priority, match_json, created_ts)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO lab_routing_bindings (id, name, scheduler_instance_id, priority, match_json, created_ts)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
          scheduler_instance_id = excluded.scheduler_instance_id,
          priority = excluded.priority,
          match_json = excluded.match_json,
          created_ts = excluded.created_ts`
-    ).run(binding.id, schedulerInstanceId, binding.priority, JSON.stringify(binding.match), Date.now());
+    ).run(binding.id, binding.id, schedulerInstanceId, binding.priority, JSON.stringify(binding.match), Date.now());
   }
 
   deleteRoutingBinding(id: string): number {
@@ -388,16 +409,18 @@ export class CoreRepository {
 
   listRoutingBindings(): Array<{
     id: string;
+    name: string;
     schedulerInstanceId: string;
     priority: number;
     match: { role?: string; taskCategory?: string; labels?: Record<string, string>; caller?: string };
   }> {
     const rows = this.db.prepare(
-      `SELECT id, scheduler_instance_id, priority, match_json
+      `SELECT id, name, scheduler_instance_id, priority, match_json
        FROM lab_routing_bindings
        ORDER BY priority DESC, id ASC`
     ).all() as Array<{
       id: string;
+      name: string;
       scheduler_instance_id: string;
       priority: number;
       match_json: string;
@@ -405,6 +428,7 @@ export class CoreRepository {
 
     return rows.map((row) => ({
       id: row.id,
+      name: row.name,
       schedulerInstanceId: row.scheduler_instance_id,
       priority: row.priority,
       match: JSON.parse(row.match_json) as { role?: string; taskCategory?: string; labels?: Record<string, string>; caller?: string },
@@ -416,10 +440,11 @@ export class CoreRepository {
   insertOptimizerInstance(record: OptimizerInstanceRecord): void {
     this.db.prepare(
       `INSERT INTO lab_optimizer_instances
-       (id, definition_id, definition_version, config_json, target_schedulers_json, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+       (id, name, definition_id, definition_version, config_json, target_schedulers_json, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       record.id,
+      record.name,
       record.definitionId,
       record.definitionVersion,
       JSON.stringify(record.config),
@@ -431,10 +456,10 @@ export class CoreRepository {
 
   getOptimizerInstance(id: string): OptimizerInstanceRecord | undefined {
     const row = this.db.prepare(
-      `SELECT definition_id, definition_version, config_json, target_schedulers_json, status, created_at
+      `SELECT name, definition_id, definition_version, config_json, target_schedulers_json, status, created_at
        FROM lab_optimizer_instances WHERE id = ?`
     ).get(id) as {
-      definition_id: string; definition_version: string; config_json: string;
+      name: string; definition_id: string; definition_version: string; config_json: string;
       target_schedulers_json: string; status: string; created_at: number;
     } | undefined;
 
@@ -442,6 +467,7 @@ export class CoreRepository {
 
     return {
       id,
+      name: row.name,
       definitionId: row.definition_id,
       definitionVersion: row.definition_version,
       config: JSON.parse(row.config_json) as unknown,
@@ -453,15 +479,16 @@ export class CoreRepository {
 
   listOptimizerInstances(): OptimizerInstanceRecord[] {
     const rows = this.db.prepare(
-      `SELECT id, definition_id, definition_version, config_json, target_schedulers_json, status, created_at
+      `SELECT id, name, definition_id, definition_version, config_json, target_schedulers_json, status, created_at
        FROM lab_optimizer_instances ORDER BY created_at`
     ).all() as Array<{
-      id: string; definition_id: string; definition_version: string; config_json: string;
+      id: string; name: string; definition_id: string; definition_version: string; config_json: string;
       target_schedulers_json: string; status: string; created_at: number;
     }>;
 
     return rows.map((row) => ({
       id: row.id,
+      name: row.name,
       definitionId: row.definition_id,
       definitionVersion: row.definition_version,
       config: JSON.parse(row.config_json) as unknown,

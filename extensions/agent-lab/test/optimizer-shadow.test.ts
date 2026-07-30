@@ -191,6 +191,7 @@ function setup(overrides?: {
   const optimizerInstanceId = "test-optimizer";
   repository.insertOptimizerInstance({
     id: optimizerInstanceId,
+    name: optimizerInstanceId,
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.0",
     config: {},
@@ -445,6 +446,7 @@ test("shadow: missing dataWindow returns failed", async () => {
 
   repository.insertOptimizerInstance({
     id: "test-optimizer",
+    name: "test-optimizer",
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.0",
     config: {},

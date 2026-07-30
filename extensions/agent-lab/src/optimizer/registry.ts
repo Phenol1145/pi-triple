@@ -320,6 +320,7 @@ export class OptimizerRegistry {
     const now = Date.now();
     const record: OptimizerInstanceRecord = {
       id: opts.instanceId,
+      name: opts.instanceId,
       definitionId: definitionRef.id,
       definitionVersion: definitionRef.version,
       config: opts.config,

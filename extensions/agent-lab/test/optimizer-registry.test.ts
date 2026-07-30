@@ -50,8 +50,10 @@ function schedulerDef(overrides: Partial<SchedulerDefinition> = {}): SchedulerDe
 }
 
 function schedulerInstance(overrides: Partial<SchedulerInstanceRecord> = {}): SchedulerInstanceRecord {
+  const id = overrides.id ?? "ws-1";
   return {
-    id: "ws-1",
+    id,
+    name: id,
     definition: { kind: "scheduler", id: "weighted-scorer", version: "1.0.0" },
     parameterModelVersion: "1.0.0",
     agentDefinitionSchemaVersion: "1.0.0",

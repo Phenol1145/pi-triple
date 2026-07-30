@@ -127,6 +127,7 @@ function setup(opts: {
   const optimizerInstanceId = "tuner-ctx";
   core.repository.insertOptimizerInstance({
     id: optimizerInstanceId,
+    name: optimizerInstanceId,
     definitionId: "context-experiment-tuner",
     definitionVersion: "1.0.0",
     config: {},
@@ -225,6 +226,7 @@ test("gate 1: rejects when optimizer does not target scheduler", () => {
   );
   core.repository.insertOptimizerInstance({
     id: "tuner-other",
+    name: "tuner-other",
     definitionId: "other-tuner",
     definitionVersion: "1.0.0",
     config: {},
@@ -261,6 +263,7 @@ test("gate 2: rejects on incompatible scheduler version", () => {
   );
   core.repository.insertOptimizerInstance({
     id: "tuner-bad-ver",
+    name: "tuner-bad-ver",
     definitionId: "context-experiment-tuner",
     definitionVersion: "2.0.0",
     config: {},
@@ -290,6 +293,7 @@ test("gate 2: rejects on incompatible parameterModelVersion", () => {
   );
   core.repository.insertOptimizerInstance({
     id: "tuner-bad-pmv",
+    name: "tuner-bad-pmv",
     definitionId: "context-experiment-tuner",
     definitionVersion: "1.0.1",
     config: {},
@@ -508,6 +512,7 @@ test("gate 5: transition validation rejects invalid proposed shape", () => {
 
   core.repository.insertOptimizerInstance({
     id: "tuner-ttest",
+    name: "tuner-ttest",
     definitionId: "context-experiment-tuner",
     definitionVersion: "1.0.0",
     config: {},
@@ -604,6 +609,7 @@ test("gate 6: rejects assignments change when tunablePaths is restrictive (whole
 
   core.repository.insertOptimizerInstance({
     id: "tuner-restr",
+    name: "tuner-restr",
     definitionId: "context-experiment-tuner",
     definitionVersion: "1.0.0",
     config: {},

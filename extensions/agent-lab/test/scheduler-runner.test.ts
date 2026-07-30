@@ -177,6 +177,7 @@ function buildCore(opts?: {
     repository.insertInstance(
       {
         id: instanceId,
+        name: instanceId,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",
@@ -437,6 +438,7 @@ test("C2: missing round → scheduler.failed", async () => {
   repository.insertInstance(
     {
       id: "broken-instance",
+      name: "broken-instance",
       definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
       parameterModelVersion: "1.0.0",
       agentDefinitionSchemaVersion: "1.0.0",
@@ -633,6 +635,7 @@ test("F: SDK agents.run delegates to WorkLoopRunner with merged config; rejects 
     repository.insertInstance(
       {
         id: instanceId,
+        name: instanceId,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",
@@ -843,6 +846,7 @@ test("G2: fail target → returns failed with that error code", async () => {
     repo2.insertInstance(
       {
         id: iid,
+        name: iid,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",
@@ -940,6 +944,7 @@ test("G3: scheduler-instance fallback re-enters dispatch; maxDepth 3 aborts", as
     repo.insertInstance(
       {
         id: iid1,
+        name: iid1,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",
@@ -964,6 +969,7 @@ test("G3: scheduler-instance fallback re-enters dispatch; maxDepth 3 aborts", as
     repo.insertInstance(
       {
         id: iid2,
+        name: iid2,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",
@@ -1080,6 +1086,7 @@ test("G4: maxDepth exceeded → failed", async () => {
       repo.insertInstance(
         {
           id: iid,
+          name: iid,
           definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
           parameterModelVersion: "1.0.0",
           agentDefinitionSchemaVersion: "1.0.0",
@@ -1179,6 +1186,7 @@ test("G5: cycle detection aborts with routing/fallback failure event", async () 
     repo.insertInstance(
       {
         id: iid1,
+        name: iid1,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",
@@ -1203,6 +1211,7 @@ test("G5: cycle detection aborts with routing/fallback failure event", async () 
     repo.insertInstance(
       {
         id: iid2,
+        name: iid2,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",
@@ -1430,6 +1439,7 @@ function buildCanaryCore(opts: {
     repository.insertInstance(
       {
         id: instanceId,
+        name: instanceId,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",
@@ -1736,6 +1746,7 @@ test("P: canary-pinned failure triggers fallback; attempts carry canary roundId"
     repo.insertInstance(
       {
         id: iidA,
+        name: iidA,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",
@@ -1771,6 +1782,7 @@ test("P: canary-pinned failure triggers fallback; attempts carry canary roundId"
     repo.insertInstance(
       {
         id: iidB,
+        name: iidB,
         definition: { kind: "scheduler", id: "test-scheduler", version: "1.0.0" },
         parameterModelVersion: "1.0.0",
         agentDefinitionSchemaVersion: "1.0.0",

@@ -114,6 +114,7 @@ export interface SchedulerInstanceDraftSpec {
 
 export interface SchedulerInstanceRecord {
   id: string;
+  name: string;
   definition: DefinitionRef;
   parameterModelVersion: string;
   agentDefinitionSchemaVersion: string;

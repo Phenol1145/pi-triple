@@ -91,6 +91,7 @@ function buildCoreWithRound(opts?: {
     repository.insertInstance(
       {
         id: instanceId,
+        name: instanceId,
         definition: {
           kind: "scheduler",
           id: "test-scheduler",

@@ -196,6 +196,7 @@ function fullSetup(opts?: {
   const optimizerInstanceId = "test-optimizer";
   repository.insertOptimizerInstance({
     id: optimizerInstanceId,
+    name: optimizerInstanceId,
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.0",
     config: {},
@@ -779,6 +780,7 @@ test("abortCanary: all mutations in single transaction (rollback safety)", () =>
   const si = "test-instance";
   repository.insertOptimizerInstance({
     id: "test-optimizer",
+    name: "test-optimizer",
     definitionId: "weighted-tuner",
     definitionVersion: "1.0.0",
     config: {},

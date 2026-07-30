@@ -52,6 +52,7 @@ function draft(overrides: Partial<SchedulerInstanceDraftSpec> = {}): SchedulerIn
     initialParameters: { topN: 2 },
     agents: [{
       id: "coding-agent-1",
+      name: "coding-agent-1",
       definition: {
         standard: { name: "Coding Agent", capabilities: ["code"], executionKind: "pi-subagent", labels: {} },
         workLoop: { id: "pi-default-loop", version: "1.0.0", config: {} },
@@ -92,6 +93,7 @@ test("validateDraft rejects indirect fallback cycles", () => {
   const { db, repository, service } = setup();
   repository.insertInstance({
     id: "existing",
+    name: "existing",
     definition: { kind: "scheduler", id: "weighted-scorer", version: "1.0.0" },
     parameterModelVersion: "1",
     agentDefinitionSchemaVersion: "1",
