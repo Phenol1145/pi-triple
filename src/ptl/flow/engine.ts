@@ -532,7 +532,9 @@ async function executeWaveLoop(
               env.PI_CODING_AGENT_DIR = path.resolve(dataDir, "pi-config", resolved.id);
               env.PI_TEMPLATE = resolved.id;
             }
-          } catch { /* config unavailable */ }
+          } catch (err) {
+            console.error("[flow] 模板环境注入失败 — 无法设置 PI_CODING_AGENT_DIR / PI_TEMPLATE，节点将在无模板上下文环境中运行");
+          }
         }
 
         const nodeStartedAt = Date.now();

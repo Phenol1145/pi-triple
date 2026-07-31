@@ -11,7 +11,7 @@ import { pipeToProcess } from "./pipe.js";
 
 export async function cmdDev(dir: string, passthrough: string[], flags: Record<string, string>): Promise<void> {
   if (!dir) {
-    console.log("  用法: pit dev <dir> [pi args...]");
+    console.log("  用法: pit hub dev <dir> [pi args...]");
     process.exit(1);
   }
 

@@ -127,11 +127,16 @@ export function PitApp() {
       unmountInk();
       process.stdin.pause();
       const { spawnSync } = await import("node:child_process");
-      const r = spawnSync(result.handoff.cmd, result.handoff.args, {
-        stdio: "inherit",
-        env: { ...process.env, TERM: process.env.TERM ?? "xterm-256color" },
-      });
-      process.exit(r.status ?? 0);
+      try {
+        const r = spawnSync(result.handoff.cmd, result.handoff.args, {
+          stdio: "inherit",
+          env: { ...process.env, TERM: process.env.TERM ?? "xterm-256color" },
+        });
+        process.exit(r.status ?? 0);
+      } catch (err: any) {
+        console.error(`\x1b[31m❌ 无法启动 ${result.handoff.cmd}: ${err.message}\x1b[0m`);
+        process.exit(1);
+      }
       return;
     }
 

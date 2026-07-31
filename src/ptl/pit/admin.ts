@@ -31,8 +31,8 @@ export async function handleUpdate(flags: Record<string, string>): Promise<void>
   const latest = spawnSync("npm", ["view", "@earendil-works/pi-coding-agent", "version"], { encoding: "utf-8" });
   if (cur.status !== 0 || latest.status !== 0) {
     console.log(`  \x1b[31m❌ 无法检查更新\x1b[0m`);
-    if (cur.status !== 0) console.log(`  pi --version 失败: ${cur.stderr?.trim() || cur.error}`);
-    if (latest.status !== 0) console.log(`  npm view 失败: ${latest.stderr?.trim() || latest.error}`);
+    if (cur.status !== 0) console.log(`  pi --version 失败: ${cur.stderr?.trim() || cur.error?.message || String(cur.error ?? "未知错误")}`);
+    if (latest.status !== 0) console.log(`  npm view 失败: ${latest.stderr?.trim() || latest.error?.message || String(latest.error ?? "未知错误")}`);
     return;
   }
   const curVer = cur.stdout?.trim() ?? "unknown";

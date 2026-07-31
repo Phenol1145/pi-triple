@@ -13,7 +13,7 @@ export async function cmdSubmit(passthrough: string[], flags: Record<string, str
   const dir = passthrough[0];
 
   if (!dir) {
-    console.log("  用法: pit submit <dir> [--dry-run]");
+    console.log("  用法: pit hub submit <dir> [--dry-run]");
     process.exit(1);
   }
 

@@ -122,7 +122,7 @@ function helpCommand(): Promise<CommandResult> {
 export async function dispatchCommand(cmd: string, args: string[]): Promise<CommandResult> {
   const target = resolveDispatch(cmd, args);
   if (!target) {
-    return { ok: false, message: "", error: { code: "UNKNOWN_COMMAND", message: `未知命令: ${cmd}` } };
+    return { ok: false, message: "", error: { code: "UNKNOWN_COMMAND", message: `未知命令: ${cmd}。运行 help 查看可用命令` } };
   }
   if (target.kind === "handoff") {
     return { ok: true, message: "", handoff: { cmd: target.cmd, args: target.args } };

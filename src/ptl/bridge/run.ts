@@ -31,7 +31,7 @@ function parseInput(args: string[]): string | Record<string, string> {
 
 export async function cmdRun(name: string, args: string[], flags: Record<string, string>): Promise<void> {
   if (!name) {
-    console.log("  用法: pit run <program> [k=v...] [--version N]");
+    console.log("  用法: pit hub run <program> [k=v...] [--version N]");
     process.exit(1);
   }
 
