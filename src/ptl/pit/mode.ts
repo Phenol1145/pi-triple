@@ -66,7 +66,11 @@ export async function routeJsonCommand(command: string, subcommand: string | und
 
 export function doPrintCommand(result: Awaited<ReturnType<typeof execTemplateLs>>): void {
   printBanner();
-  console.log(result.message);
+  if (result.ok) {
+    console.log(result.message);
+  } else {
+    console.log(`  \x1b[31m❌ ${result.error?.message ?? "Unknown error"}\x1b[0m`);
+  }
   console.log("");
   if (!result.ok) process.exit(1);
 }
