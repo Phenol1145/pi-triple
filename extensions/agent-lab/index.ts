@@ -596,6 +596,7 @@ export default async function (pi: ExtensionAPI) {
             task: `smoke test for ${role}`,
             mode: "select",
             settlementRef,
+            schedulerInstanceId: arenaId,
           });
         } catch (err) {
           restoreRound();
