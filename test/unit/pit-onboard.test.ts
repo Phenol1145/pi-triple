@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { cmdOnboard, type OnboardPrompter, type OnboardDeps } from "../../src/ptl/pit/onboard.js";
 
 function fakeDeps(): OnboardDeps {

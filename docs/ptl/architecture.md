@@ -18,7 +18,7 @@ PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      pit CLI（入口）                         │
-│  pit onboard/start/pi/ui/lab/template/config/doctor/install… │
+│  pit onboard/start/pi/tui/hub/template/config/doctor/install… │
 ├──────────────────────────────────────────────────────────────┤
 │  pit TUI (Ink)               │  pi 进程 × N (tmux)          │
 │  ┌──────────┐ ┌────────────┐ │  ┌────────┐ ┌────────┐      │

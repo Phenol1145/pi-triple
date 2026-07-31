@@ -6,6 +6,7 @@ import { emitJson, emitJsonError } from "../output.js";
 import {
   execTemplateLs, execTemplateNew, execTemplateRm,
   execStatus, execLs, execStop, execSharedStatus,
+  type CommandResult,
 } from "../commands.js";
 import { FlowStore } from "../flow/store.js";
 import { printBanner } from "./main.js";
@@ -78,7 +79,7 @@ export async function routeJsonCommand(command: string, subcommand: string | und
   return true;
 }
 
-export function doPrintCommand(result: Awaited<ReturnType<typeof execTemplateLs>>): void {
+export function doPrintCommand(result: CommandResult): void {
   printBanner();
   if (result.ok) {
     console.log(result.message);

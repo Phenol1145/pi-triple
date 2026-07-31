@@ -11,7 +11,7 @@ import { OutputPanel } from "./output-panel.js";
 import type { CommandResult } from "../commands.js";
 import { dispatchCommand } from "../commands/dispatch.js";
 import { loadConfig, listTemplates } from "../config.js";
-import { listPitSessions, startPitSession } from "../tmux.js";
+import { listPitSessions } from "../tmux.js";
 
 const TABS = ["Dashboard", "Templates", "Sessions", "Extensions", "Config"];
 

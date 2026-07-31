@@ -7,7 +7,7 @@
  */
 
 import { parseArgs } from "./pit/args.js";
-import { printHelp, printBanner, printGettingStarted, printNamespaceHelp, printCommandHelp } from "./pit/main.js";
+import { printHelp, printBanner, printGettingStarted, printCommandHelp } from "./pit/main.js";
 import { cmdOnboard } from "./pit/onboard.js";
 import { cmdPi, cmdStart, cmdAttach, cmdSwitch, cmdDetach } from "./pit/sessions.js";
 import { cmdConfig } from "./pit/config-cmd.js";

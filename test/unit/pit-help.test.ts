@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { printHelp, printGettingStarted, printNamespaceHelp, printCommandHelp } from "../../src/ptl/pit/main.js";
 
 function capture(fn: () => void): string {

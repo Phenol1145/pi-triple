@@ -13,7 +13,7 @@ Pi-Triple 是基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-co
 | 适用 | 个人/小组 · 交互式调试 | 团队/联邦 · 集中治理 · 弹性伸缩 |
 | 源码 | `src/ptl/` | `src/pth/` |
 
-两者共享 `src/shared/`（SDK 适配、模型路由、工作目录、跨 OS 适配、日志），并通过 **PTL→PTH 桥**（`pit submit/run`）打通：PTL 本地开发的 agent 程序可打包提交到 PTH 以联邦模式运行。
+两者共享 `src/shared/`（SDK 适配、模型路由、工作目录、跨 OS 适配、日志），并通过 **PTL→PTH 桥**（`pit hub submit/run`）打通：PTL 本地开发的 agent 程序可打包提交到 PTH 以联邦模式运行。
 
 ```
                          ┌─────────────────────────────┐
@@ -24,7 +24,7 @@ Pi-Triple 是基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-co
                 ┌───────────────────────┴───────────────────────┐
                 │                                               │
         ┌───────▼────────┐                              ┌───────▼────────┐
-        │   src/ptl/     │   pit submit / pit run       │   src/pth/     │
+        │   src/ptl/     │   pit hub submit / pit hub run       │   src/pth/     │
         │  pit CLI + TUI │ ──────────── 桥 ───────────→ │  Fastify 网关   │
         │  pi × tmux     │        (bridge/)             │  AgentEngine   │
         │  pit-flow 引擎  │                              │  Redis + BullMQ │
@@ -57,7 +57,7 @@ pi-platform/
 │   │   ├── launcher.ts            #   pi 进程启动参数构建
 │   │   ├── shared-layer.ts        #   共享扩展层（symlink + manifest + prune）
 │   │   ├── doctor.ts / migrate.ts #   环境诊断 / ~/.pi/agent 迁移
-│   │   ├── tui-pit/               #   pit ui（Dashboard/Templates/Sessions/Extensions/Config）
+│   │   ├── tui-pit/               #   pit tui（Dashboard/Templates/Sessions/Extensions/Config）
 │   │   ├── tui-lab/               #   lab ui（Telemetry/Arena/Events/Compare/Config）
 │   │   └── tui-shared/            #   TUI 组件库 + Screen 布局模板 + 层级命令栏
 │   │
@@ -127,14 +127,14 @@ LangGraph 风格的本地工作流引擎，声明式 JSON 图（节点 + 条件�
 
 把 PTL 本地开发的 agent 程序（`agent.json` manifest + skills + systemPrompt）打包提交到 PTH 运行。
 
-- `pit submit`（打包上传，`pack.ts` + 手写 `ustar.ts`，零外部依赖）
-- `pit run <program> [k=v]`（提交并以 SSE 流式回显）· `pit dev`（本地直跑）· `pit programs`（列表）
+- `pit hub submit`（打包上传，`pack.ts` + 手写 `ustar.ts`，零外部依赖）
+- `pit hub run <program> [k=v]`（提交并以 SSE 流式回显）· `pit hub dev`（本地直跑）· `pit hub programs`（列表）
 - `pipe.ts` 将程序的 systemPrompt + skills 注入 pi 启动参数
 - 服务端：`src/pth/programs/store.ts`（INCR 版本 + tar 安全解包 + GC）+ `gateway/routes-programs.ts`
 
 ### 4. lab 遥测数据层（`src/ptl/lab-data/`）
 
-`pit lab` TUI 的数据底座。SQLite（WAL + busy_timeout）：共享 `runs` DB（跨模板调用遥测）+ per-template arena/events/config。模块：`telemetry.ts` · `arena.ts` · `events.ts` · `open-db.ts` · `schema.ts`。
+`pit tui lab` TUI 的数据底座。SQLite（WAL + busy_timeout）：共享 `runs` DB（跨模板调用遥测）+ per-template arena/events/config。模块：`telemetry.ts` · `arena.ts` · `events.ts` · `open-db.ts` · `schema.ts`。
 
 ### 5. 双 TUI + 共享组件（`tui-pit/` · `tui-lab/` · `tui-shared/`）
 
@@ -215,10 +215,10 @@ Redis：`session:{tenant}:{sid}:*` · `auth:token:{token}` · `session-index:{te
 ### A. PTL→PTH 程序提交
 
 ```
-pit submit ./my-agent
+pit hub submit ./my-agent
   → pack.ts 读 agent.json（manifest.ts 校验）+ skills → ustar.ts 打 tar
   → POST /api/v1/programs（ProgramStore：INCR 版本 + 安全解包）
-pit run my-agent key=val
+pit hub run my-agent key=val
   → POST /api/v1/programs/my-agent/run → AgentEngine 起一次性 session
   → SSE 双信封 {seq,type,data} 直推 → pit 解包渲染 → 流结束自动销毁 session
 ```
