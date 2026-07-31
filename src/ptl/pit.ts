@@ -199,7 +199,7 @@ async function main() {
       break;
     }
     case "stop": {
-      const sr = await dispatchCommand("stop", [subcommand || passthrough[0] || ""]);
+      const sr = await dispatchCommand("stop", [subcommand || passthrough[0] || "", ...flattenFlags(flags)]);
       if (sr.ok) console.log(sr.message);
       else console.log(`  \x1b[31m❌ ${sr.error?.message}\x1b[0m`);
       if (!sr.ok) process.exit(1);

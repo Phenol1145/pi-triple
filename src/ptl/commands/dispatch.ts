@@ -15,7 +15,7 @@ import { loadConfig, resolveTemplateId, renameTemplate } from "../config.js";
 import {
   execSessionLs, execSessionShow, execSessionFork, execSessionClone,
   execSessionTransfer, execSessionBranch, execSessionTree, execSessionResume,
-  execSessionAttach, execSessionStop,
+  execSessionAttach, execSessionStop, parseFlags,
 } from "./session.js";
 import { execTraceLs, execTraceShow, execTraceTimeline } from "./trace.js";
 
@@ -45,7 +45,7 @@ export function resolveDispatch(cmd: string, args: string[]): DispatchTarget | n
     case "ls":
       return { kind: "exec", fn: () => execLs() };
     case "stop":
-      return { kind: "exec", fn: () => execStop(args[0] ?? "") };
+      return { kind: "exec", fn: () => execStop(args[0] ?? "", parseFlags(args).flags) };
     case "start":
       return { kind: "exec", fn: () => execStartBg(args[0] ?? "", args[1] ?? "") };
     case "shared":

@@ -20,11 +20,14 @@ import {
   hasTmux,
   hasPitSession,
   listPitSessions,
+  listPitPanesDetailed,
   sessionsForTenant,
   killPitSession,
   formatAge,
   startPitSession,
 } from "./tmux.js";
+import { loadRegistry, markStopped } from "./session-registry.js";
+import { classifySession, isPidAlive } from "./session-state.js";
 
 
 // ─── Types ───────────────────────────────────────────────────
@@ -206,27 +209,76 @@ export async function execStatus(): Promise<CommandResult> {
 }
 
 export async function execLs(): Promise<CommandResult> {
-  const sessions = listPitSessions();
+  const config = loadConfig();
+  const tmuxSessions = listPitSessions();
+  const panes = listPitPanesDetailed();
+  const registry = loadRegistry(resolveDataDir(config));
 
-  if (sessions.length === 0) {
+  const liveByName = new Map(tmuxSessions.map((s) => [s.name, s]));
+  const sessions = new Set([...tmuxSessions.map((s) => s.name), ...Object.keys(registry.sessions)]);
+
+  const rows: { name: string; status: string; template: string; model: string; info: string }[] = [];
+  for (const name of sessions) {
+    const live = liveByName.get(name);
+    const entry = registry.sessions[name];
+    const status = classifySession(
+      {
+        exists: !!live,
+        pid: live ? panes.get(`pit-${name}`)?.pid : undefined,
+        currentCommand: live ? panes.get(`pit-${name}`)?.currentCommand : undefined,
+      },
+      entry ?? null,
+    );
+    if (!status) continue; // absent / indeterminate
+    const template = entry?.templateId
+      ? (getTemplateAlias(entry.templateId, config) ?? entry.templateId)
+      : (name.includes("-") ? name.split("-")[0] : name);
+    const age = live ? formatAge(Date.now() - live.created.getTime()) : "—";
+    const model = entry?.model ? ` ${entry.model}` : "";
+    rows.push({
+      name,
+      status,
+      template,
+      model: model.trim() || "(default)",
+      info: `${status === "running" ? age : status === "empty" ? "已退出（空壳）" : "待恢复"}`,
+    });
+  }
+  rows.sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name) : a.status.localeCompare(b.status)));
+
+  if (rows.length === 0) {
     return { ok: true, message: "  无后台会话\n  启动: pit start --bg --name coding", data: { sessions: [] } };
   }
 
-  const lines: string[] = ["  \x1b[2mNAME              WINDOWS  CREATED\x1b[0m"];
-  const data: any[] = [];
-  for (const s of sessions) {
-    const age = formatAge(Date.now() - s.created.getTime());
-    lines.push(`  \x1b[1m${s.name.padEnd(18)}\x1b[0m${String(s.windows).padEnd(9)}${age}`);
-    data.push({ name: s.name, windows: s.windows, createdAt: Math.floor(s.created.getTime() / 1000), createdAgo: age });
-  }
-  lines.push("\n  接入: \x1b[36mpit attach <name>\x1b[0m · 停止: \x1b[36mpit stop <name>\x1b[0m");
-
-  return { ok: true, message: lines.join("\n"), data: { sessions: data } };
+  const MARK: Record<string, string> = { running: "●", empty: "○", orphan: "×" };
+  const lines = [
+    "  \x1b[2m状态  NAME              TEMPLATE   MODEL\x1b[0m",
+    ...rows.map((r) => `  ${MARK[r.status]}  ${r.name.padEnd(18)}${r.template.slice(0, 10).padEnd(11)}${r.model.slice(0, 24)}  ${r.info}`),
+    "\n  接入: \x1b[36mpit attach <name>\x1b[0m · 停止: \x1b[36mpit stop <name>\x1b[0m · 恢复: \x1b[36mpit restore\x1b[0m",
+  ];
+  return { ok: true, message: lines.join("\n"), data: { sessions: rows } };
 }
 
-export async function execStop(name: string): Promise<CommandResult> {
+export async function execStop(name: string, flags: Record<string, string> = {}): Promise<CommandResult> {
+  const dataDir = resolveDataDir(loadConfig());
+  if (flags["stale"] === "true") {
+    const panes = listPitPanesDetailed();
+    const tmuxNames = listPitSessions();
+    const stale: string[] = [];
+    for (const s of tmuxNames) {
+      const pid = panes.get(`pit-${s.name}`)?.pid;
+      if (!isPidAlive(pid)) stale.push(s.name);
+    }
+    for (const n of stale) { killPitSession(n); markStopped(n, dataDir); }
+    return { ok: true, message: stale.length === 0 ? "  无空壳会话" : stale.map((s) => `  ✅ 已清理空壳 ${s}`).join("\n"), data: { stale } };
+  }
+  if (flags["orphans"] === "true") {
+    const registry = loadRegistry(dataDir);
+    const orphans = Object.values(registry.sessions).filter((e) => !hasPitSession(e.name)).map((e) => e.name);
+    for (const n of orphans) markStopped(n, dataDir);
+    return { ok: true, message: orphans.length === 0 ? "  无孤儿条目" : orphans.map((n) => `  ✅ 已清理孤儿 ${n}`).join("\n"), data: { orphans } };
+  }
   if (!name) {
-    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: pit stop <name>" } };
+    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: pit stop <name> | --stale | --orphans" } };
   }
   if (!hasTmux()) {
     return { ok: false, message: "", error: { code: ERR.TMUX_NOT_INSTALLED, message: "tmux 未安装" } };
@@ -240,6 +292,7 @@ export async function execStop(name: string): Promise<CommandResult> {
     const stopped: string[] = [];
     for (const s of pits) {
       killPitSession(s.name);
+      markStopped(s.name, dataDir);
       stopped.push(s.name);
     }
     return {
@@ -250,6 +303,7 @@ export async function execStop(name: string): Promise<CommandResult> {
   }
 
   if (killPitSession(name)) {
+    markStopped(name, dataDir);
     return { ok: true, message: `  ✅ 已停止 "${name}"`, data: { stopped: [name] } };
   }
   return { ok: false, message: "", error: { code: ERR.SESSION_NOT_FOUND, message: `会话 "${name}" 不存在` } };
