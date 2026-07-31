@@ -41,6 +41,13 @@ const HELP_GROUPS: HelpGroup[] = [
     ],
   },
   {
+    title: "会话与追踪", intro: "纸带（session）与状态追踪（trace）",
+    commands: [
+      ["session ls|show|fork|clone|transfer|branch|tree|resume|attach|stop", "纸带操作（会话）"],
+      ["trace ls|show|timeline <agent>", "状态追踪（credit 变化）"],
+    ],
+  },
+  {
     title: "远端程序", intro: "PTH",
     commands: [
       ["hub submit <dir> [--dry-run]", "提交 agent 程序"],
@@ -138,6 +145,21 @@ const NAMESPACE_HELP: Record<string, Array<[string, string]>> = {
     ["flow show|status <runId>", "状态/详情"],
     ["flow approve|reject <runId>", "人工审批"],
     ["flow validate <flow.json>", "校验定义"],
+  ],
+  session: [
+    ["session ls [--template x] [--workloop pi]", "列出纸带会话"],
+    ["session show <id>", "会话详情"],
+    ["session fork|clone <id> [--template x]", "分叉/克隆会话"],
+    ["session transfer <id> --template x", "转移会话到其他模板"],
+    ["session branch <id> --at <nodeId> [--template x]", "在节点处分支（--list-nodes 列出节点）"],
+    ["session tree [--template x]", "会话谱系森林"],
+    ["session resume <id> [--name n]", "后台恢复纸带会话"],
+    ["session attach <name> | stop <id|name>", "接入/停止会话"],
+  ],
+  trace: [
+    ["trace ls [--template x] [--agent a]", "列出状态追踪"],
+    ["trace show <id>", "追踪详情"],
+    ["trace timeline <agentId>", "agent 完整轨迹"],
   ],
 };
 

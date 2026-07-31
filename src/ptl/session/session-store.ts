@@ -45,6 +45,15 @@ export function resolveTrace(input: string): TraceRecord | null {
   return null;
 }
 
+/** 聚合各 trace provider 的 timeline（按 agent 查轨迹） */
+export function traceTimeline(agentId: string): TraceRecord[] {
+  const out: TraceRecord[] = [];
+  for (const p of traceProviders) {
+    if (p.timeline) out.push(...p.timeline(agentId));
+  }
+  return out;
+}
+
 const NOT_SUPPORTED = (workloop: string, op: string): CommandResult => ({
   ok: false,
   message: "",

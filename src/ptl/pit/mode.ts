@@ -12,6 +12,8 @@ import { FlowStore } from "../flow/store.js";
 import { printBanner } from "./main.js";
 import { cmdAgentRun, cmdAgentClean } from "./agent.js";
 import { PthClient } from "../bridge/client.js";
+import { execSessionLs } from "../commands/session.js";
+import { execTraceLs } from "../commands/trace.js";
 
 type PitMode = "print" | "json";
 
@@ -61,6 +63,14 @@ const JSON_ROUTERS: Record<string, (sub: string | undefined, passthrough: string
       }
     }
     return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "hub 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
+  },
+  session: async (sub) => {
+    if (sub === "ls" || sub === "") return execSessionLs(["--json"]);
+    return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "session 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
+  },
+  trace: async (sub) => {
+    if (sub === "ls" || sub === "") return execTraceLs(["--json"]);
+    return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "trace 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
   },
 };
 

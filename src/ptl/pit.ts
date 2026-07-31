@@ -7,7 +7,7 @@
  */
 
 import { parseArgs } from "./pit/args.js";
-import { printHelp, printBanner, printGettingStarted, printCommandHelp } from "./pit/main.js";
+import { printHelp, printBanner, printGettingStarted, printCommandHelp, printNamespaceHelp } from "./pit/main.js";
 import { cmdOnboard } from "./pit/onboard.js";
 import { cmdPi, cmdStart, cmdAttach, cmdSwitch, cmdDetach } from "./pit/sessions.js";
 import { cmdConfig } from "./pit/config-cmd.js";
@@ -23,6 +23,8 @@ import {
 import { cmdAgentRun, cmdAgentClean } from "./pit/agent.js";
 import { emitJsonError } from "./output.js";
 import { dispatchCommand } from "./commands/dispatch.js";
+import { registerPiSessionProvider } from "./session/pi-provider.js";
+import { registerBiddingTraceProvider } from "./session/trace-provider.js";
 
 // Re-export for test compatibility
 export { parseArgs };
@@ -99,9 +101,43 @@ async function routeFlowCommand(subcmd: string | undefined, args: string[], flag
   }
 }
 
+// ─── Session / Trace 路由（共享分发）──────────────────────────
+
+/** 把 parseArgs 提取出的 flags 重新展平为 --flag [value] 参数（供 dispatch 的 parseFlags 消费） */
+function flattenFlags(flags: Record<string, string>): string[] {
+  return [
+    ...Object.entries(flags).filter(([, v]) => v === "true" || v === "").map(([k]) => `--${k}`),
+    ...Object.entries(flags).filter(([, v]) => v !== "true" && v !== "").flatMap(([k, v]) => [`--${k}`, v]),
+  ];
+}
+
+async function routeSessionCommand(subcmd: string | undefined, args: string[], flags: Record<string, string>): Promise<void> {
+  if (!subcmd && args.length === 0) {
+    printNamespaceHelp("session");
+    return;
+  }
+  const all = [subcmd ?? "ls", ...args, ...flattenFlags(flags)];
+  const r = await dispatchCommand("session", all);
+  doPrintCommand(r);
+}
+
+async function routeTraceCommand(subcmd: string | undefined, args: string[], flags: Record<string, string>): Promise<void> {
+  if (!subcmd && args.length === 0) {
+    printNamespaceHelp("trace");
+    return;
+  }
+  const all = [subcmd ?? "ls", ...args, ...flattenFlags(flags)];
+  const r = await dispatchCommand("trace", all);
+  doPrintCommand(r);
+}
+
 // ─── Main ────────────────────────────────────────────────────
 
 async function main() {
+  // 注册纸带/追踪 providers（CLI 启动；TUI 各自初始化时同样注册）
+  registerPiSessionProvider();
+  registerBiddingTraceProvider();
+
   const args = process.argv.slice(2);
   let command: string;
   let subcommand: string | undefined;
@@ -227,6 +263,12 @@ async function main() {
     }
     case "flow":
       await routeFlowCommand(subcommand, passthrough, flags);
+      break;
+    case "session":
+      await routeSessionCommand(subcommand, passthrough, flags);
+      break;
+    case "trace":
+      await routeTraceCommand(subcommand, passthrough, flags);
       break;
     case "agent":
       if (subcommand === "run") await cmdAgentRun(flags, passthrough);

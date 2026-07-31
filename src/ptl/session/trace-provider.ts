@@ -10,7 +10,7 @@ export function createBiddingTraceProvider(dbOverride?: DatabaseSync): TraceProv
     try {
       const rows = db.prepare(`SELECT id, ts, agent, delta, reason, task_id FROM credit_tx ORDER BY ts DESC LIMIT 200`).all() as any[];
       return rows.map((r) => ({
-        id: r.id,
+        id: String(r.id),
         kind: "trace" as const,
         workloop: "bidding",
         templateId: "",

@@ -1,0 +1,154 @@
+/**
+ * pit/commands/session — pit session 命令族（纸带操作，CLI/TUI 共享）
+ *
+ * 读侧（ls/show/tree/resume）直接读 session-store / pi-scan / pi-tree；
+ * 写侧（fork/clone/transfer/branch）委托 operateSession → provider 能力分发。
+ * 均为纯函数返回 CommandResult，由调用方决定渲染（print/json/TUI）。
+ */
+import type { CommandResult } from "../commands.js";
+import { execStop } from "../commands.js";
+import {
+  listAllSessions, resolveSession, operateSession,
+} from "../session/session-store.js";
+import { scanSessionFiles, listNodes } from "../session/pi-scan.js";
+import { buildSessionTree } from "../session/pi-tree.js";
+import { loadConfig, getTemplateAlias } from "../config.js";
+
+/** 解析 args 中的 --flag 与位置参数（--flag value；无值 → "true"） */
+export function parseFlags(args: string[]): { flags: Record<string, string>; rest: string[] } {
+  const flags: Record<string, string> = {};
+  const rest: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a.startsWith("--")) {
+      const key = a.slice(2);
+      const next = args[i + 1];
+      if (next && !next.startsWith("--")) { flags[key] = next; i++; } else { flags[key] = "true"; }
+    } else {
+      rest.push(a);
+    }
+  }
+  return { flags, rest };
+}
+
+// ─── ls ─────────────────────────────────────────────────────
+
+export function execSessionLs(args: string[]): CommandResult {
+  const { flags } = parseFlags(args);
+  const sessions = listAllSessions();
+  const filtered = sessions.filter((s) =>
+    (!flags.template || s.templateAlias === flags.template || s.templateId === flags.template) &&
+    (!flags.workloop || s.workloop === flags.workloop));
+  if (flags.json === "true") {
+    return { ok: true, message: "", data: { sessions: filtered } };
+  }
+  if (filtered.length === 0) {
+    return { ok: true, message: "  无会话（纸带）。启动: pit start --bg --name <name>", data: { sessions: filtered } };
+  }
+  const lines = filtered.map((s) =>
+    `  ${s.status === "running" ? "●" : "○"} [${s.workloop}] ${s.id.slice(0, 8)}…  ${s.templateAlias}  ${s.summary}`);
+  return { ok: true, message: lines.join("\n"), data: { sessions: filtered } };
+}
+
+// ─── show ───────────────────────────────────────────────────
+
+export function execSessionShow(id: string): CommandResult {
+  const r = resolveSession(id);
+  if (!r) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话 "${id}" 不存在（pit session ls 查看）` } };
+  const detail = Object.entries(r.detail).map(([k, v]) => `  ${k}: ${v}`).join("\n");
+  return { ok: true, message: `  会话 ${r.id}\n  状态: ${r.summary}\n${detail}` };
+}
+
+// ─── fork / clone / transfer（委托 operateSession）────────────
+
+export function execSessionFork(id: string, args: string[]): CommandResult {
+  const { flags } = parseFlags(args);
+  return operateSession("fork", id, { templateId: flags.template });
+}
+
+export function execSessionClone(id: string, args: string[]): CommandResult {
+  const { flags } = parseFlags(args);
+  return operateSession("clone", id, { templateId: flags.template });
+}
+
+export function execSessionTransfer(id: string, args: string[]): CommandResult {
+  const { flags } = parseFlags(args);
+  if (!flags.template) return { ok: false, message: "", error: { code: "USAGE", message: "用法: pit session transfer <id> --template <tpl>" } };
+  return operateSession("transfer", id, { templateId: flags.template });
+}
+
+// ─── branch（--at 必填；--list-nodes 列出可选节点）────────────
+
+function listNodesFor(id: string): string | null {
+  const cfg = loadConfig();
+  const f = scanSessionFiles(cfg).find((x) => x.id === id);
+  return f ? f.file : null;
+}
+
+export function execSessionBranch(id: string, args: string[]): CommandResult {
+  const { flags } = parseFlags(args);
+  if (!flags.at && flags["list-nodes"] !== "true") {
+    return { ok: false, message: "", error: { code: "USAGE", message: "用法: pit session branch <id> --at <nodeId> [--template <tpl>]\n  列出节点: pit session branch <id> --list-nodes" } };
+  }
+  const record = resolveSession(id);
+  if (!record) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话 "${id}" 不存在` } };
+  if (flags["list-nodes"] === "true") {
+    const file = listNodesFor(record.id);
+    if (!file) return { ok: false, message: "", error: { code: "NODE_NOT_FOUND", message: "无法读取会话节点" } };
+    const nodes = listNodes(file);
+    return { ok: true, message: nodes.map((n) => `  ${n.id}  ${n.summary}`).join("\n"), data: { nodes } };
+  }
+  return operateSession("branch", id, { at: flags.at, templateId: flags.template });
+}
+
+// ─── tree（谱系森林，按模板过滤）──────────────────────────────
+
+export function execSessionTree(args: string[]): CommandResult {
+  const { flags } = parseFlags(args);
+  const cfg = loadConfig();
+  let files = scanSessionFiles(cfg);
+  if (flags.template) {
+    files = files.filter((f) =>
+      f.templateId === flags.template || getTemplateAlias(f.templateId, cfg) === flags.template);
+  }
+  if (files.length === 0) return { ok: true, message: "  无会话谱系（先 fork 产生分支）" };
+  return { ok: true, message: buildSessionTree(files) };
+}
+
+// ─── resume（仅 pi 纸带会话可恢复）────────────────────────────
+
+export async function execSessionResume(id: string, args: string[]): Promise<CommandResult> {
+  const { flags } = parseFlags(args);
+  const r = resolveSession(id);
+  if (!r) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话 "${id}" 不存在` } };
+  if (r.workloop !== "pi") {
+    return { ok: false, message: "", error: { code: "NOT_SUPPORTED", message: `会话类型（${r.workloop}）不支持 resume——只有纸带（pi 会话）可恢复` } };
+  }
+  const cfg = loadConfig();
+  const tpl = cfg.templates[r.templateId] ?? {};
+  const { buildPiLaunch } = await import("../launcher.js");
+  const launch = await buildPiLaunch(r.templateId, {
+    provider: tpl.provider, model: tpl.model, thinking: tpl.thinking, tools: tpl.tools, excludeTools: tpl.excludeTools,
+    resumeSession: r.id,
+  });
+  const name = flags.name || `${getTemplateAlias(r.templateId, cfg)}-${Date.now().toString(36)}`;
+  const { startPitSession } = await import("../tmux.js");
+  const result = startPitSession(launch, name, true);
+  if (result.status === 0) {
+    return { ok: true, message: `✅ 已后台恢复会话 ${r.id.slice(0, 8)}…\n接入: pit attach ${name}`, data: { name } };
+  }
+  return { ok: false, message: "", error: { code: "START_FAILED", message: `启动失败: ${result.stderr}` } };
+}
+
+// ─── attach / stop（委托共享命令层）────────────────────────────
+
+export function execSessionAttach(name: string): CommandResult {
+  if (!name) return { ok: false, message: "", error: { code: "USAGE", message: "用法: pit session attach <name>" } };
+  return { ok: true, message: "", handoff: { cmd: "pit", args: ["attach", name] } };
+}
+
+export async function execSessionStop(idOrName: string): Promise<CommandResult> {
+  if (!idOrName) return { ok: false, message: "", error: { code: "USAGE", message: "用法: pit session stop <id|name>" } };
+  // 会话名（pit-<name>）或会话 id → 转 execStop
+  return execStop(idOrName);
+}

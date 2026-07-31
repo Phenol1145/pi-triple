@@ -12,11 +12,17 @@ import {
   type CommandResult,
 } from "../commands.js";
 import { loadConfig, resolveTemplateId, renameTemplate } from "../config.js";
+import {
+  execSessionLs, execSessionShow, execSessionFork, execSessionClone,
+  execSessionTransfer, execSessionBranch, execSessionTree, execSessionResume,
+  execSessionAttach, execSessionStop,
+} from "./session.js";
+import { execTraceLs, execTraceShow, execTraceTimeline } from "./trace.js";
 
 // ─── 类型 ────────────────────────────────────────────────────
 
 export type DispatchTarget =
-  | { kind: "exec"; fn: () => Promise<CommandResult> }
+  | { kind: "exec"; fn: () => CommandResult | Promise<CommandResult> }
   | { kind: "handoff"; cmd: string; args: string[] };
 
 // ─── 纯映射（可测）───────────────────────────────────────────
@@ -44,6 +50,23 @@ export function resolveDispatch(cmd: string, args: string[]): DispatchTarget | n
       return { kind: "exec", fn: () => execStartBg(args[0] ?? "", args[1] ?? "") };
     case "shared":
       if (sub === "status") return { kind: "exec", fn: () => execSharedStatus() };
+      return null;
+    case "session":
+      if (sub === "ls" || sub === "list" || sub === "") return { kind: "exec", fn: () => execSessionLs(rest) };
+      if (sub === "show") return { kind: "exec", fn: () => execSessionShow(rest[0] ?? "") };
+      if (sub === "fork") return { kind: "exec", fn: () => execSessionFork(rest[0] ?? "", rest.slice(1)) };
+      if (sub === "clone") return { kind: "exec", fn: () => execSessionClone(rest[0] ?? "", rest.slice(1)) };
+      if (sub === "transfer") return { kind: "exec", fn: () => execSessionTransfer(rest[0] ?? "", rest.slice(1)) };
+      if (sub === "branch") return { kind: "exec", fn: () => execSessionBranch(rest[0] ?? "", rest.slice(1)) };
+      if (sub === "tree") return { kind: "exec", fn: () => execSessionTree(rest) };
+      if (sub === "resume") return { kind: "exec", fn: () => execSessionResume(rest[0] ?? "", rest.slice(1)) };
+      if (sub === "attach") return { kind: "exec", fn: () => execSessionAttach(rest[0] ?? "") };
+      if (sub === "stop") return { kind: "exec", fn: () => execSessionStop(rest[0] ?? "") };
+      return null;
+    case "trace":
+      if (sub === "ls" || sub === "list" || sub === "") return { kind: "exec", fn: () => execTraceLs(rest) };
+      if (sub === "show") return { kind: "exec", fn: () => execTraceShow(rest[0] ?? "") };
+      if (sub === "timeline") return { kind: "exec", fn: () => execTraceTimeline(rest[0] ?? "") };
       return null;
     case "detach":
       return { kind: "exec", fn: detachCommand };
