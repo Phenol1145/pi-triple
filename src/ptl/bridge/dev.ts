@@ -16,8 +16,10 @@ export async function cmdDev(dir: string, passthrough: string[], flags: Record<s
   }
 
   const absDir = path.resolve(dir);
-  if (!fs.existsSync(absDir) || !fs.statSync(absDir).isDirectory()) {
-    console.log(`  \x1b[31m❌ 目录不存在: ${dir}\x1b[0m`);
+  let isDir = false;
+  try { isDir = fs.statSync(absDir).isDirectory(); } catch { /* 不存在或不可读 */ }
+  if (!isDir) {
+    console.log(`  \x1b[31m❌ 目录不存在或不可访问: ${dir}\x1b[0m`);
     process.exit(1);
   }
 

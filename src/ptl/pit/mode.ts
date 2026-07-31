@@ -12,7 +12,7 @@ import { printBanner } from "./main.js";
 import { cmdAgentRun, cmdAgentClean } from "./agent.js";
 import { PthClient } from "../bridge/client.js";
 
-type PitMode = "print" | "json" | "fatal";
+type PitMode = "print" | "json";
 
 export function resolveMode(command: string, flags: Record<string, string>): PitMode {
   if (flags.json === "true") return "json";

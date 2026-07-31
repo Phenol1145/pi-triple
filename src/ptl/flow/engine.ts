@@ -532,7 +532,7 @@ async function executeWaveLoop(
               env.PI_CODING_AGENT_DIR = path.resolve(dataDir, "pi-config", resolved.id);
               env.PI_TEMPLATE = resolved.id;
             }
-          } catch (err) {
+          } catch {
             console.error("[flow] 模板环境注入失败 — 无法设置 PI_CODING_AGENT_DIR / PI_TEMPLATE，节点将在无模板上下文环境中运行");
           }
         }
@@ -542,7 +542,12 @@ async function executeWaveLoop(
         try {
           result = await spawnAgent(nodeSnapshot, renderedPrompt, nodeCwd, env);
         } catch (err: any) {
-          result = { output: "", exitCode: -1, signal: err.message };
+          const msg = err?.message ?? String(err);
+          result = {
+            output: "",
+            exitCode: -1,
+            signal: /ENOENT/.test(msg) ? "spawn 失败：pi CLI 未安装或不在 PATH 中（运行 pit doctor 检查）" : msg,
+          };
         }
         const nodeFinishedAt = Date.now();
 

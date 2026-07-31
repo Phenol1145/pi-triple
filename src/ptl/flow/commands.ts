@@ -19,7 +19,7 @@ function store(): FlowStore {
 
 /** runId 解析：支持完整 UUID 或唯一前缀 */
 function resolveRunId(s: FlowStore, input: string): string {
-  if (!input) { console.log("  \x1b[31m❌ 缺少 runId\x1b[0m"); process.exit(1); }
+  if (!input) { console.log("  \x1b[31m❌ 缺少 runId（运行 pit flow ls 查看已有工作流）\x1b[0m"); process.exit(1); }
   if (s.hasRun(input)) return input;
   const matches = s.listRuns().filter((r) => r.runId.startsWith(input)).map((r) => r.runId);
   if (matches.length === 1) return matches[0]!;
@@ -349,6 +349,7 @@ export async function cmdFlowEdit(runId: string): Promise<void> {
   const result = await editGraph(s, runId);
   if (!result.ok) {
     console.log(`  \x1b[31m❌ 编辑失败: ${result.error}\x1b[0m`);
+    console.log("  可先运行 pit flow show <runId> 查看当前图定义");
     if (result.error && result.error.includes("临时文件")) console.log(`  ${result.error}`);
     process.exit(1);
   }

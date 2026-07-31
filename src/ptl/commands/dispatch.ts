@@ -87,7 +87,12 @@ function renameTemplateCommand(oldName: string, newName: string): Promise<Comman
 }
 
 function detachCommand(): Promise<CommandResult> {
-  const r = spawnSync("tmux", ["detach-client"], { encoding: "utf-8" });
+  let r: ReturnType<typeof spawnSync>;
+  try {
+    r = spawnSync("tmux", ["detach-client"], { encoding: "utf-8" });
+  } catch {
+    return Promise.resolve({ ok: false, message: "", error: { code: "TMUX_NOT_INSTALLED", message: "tmux 未安装或不在 PATH 中（brew install tmux）" } });
+  }
   return Promise.resolve(r.status === 0
     ? { ok: true, message: "已脱离当前会话" }
     : { ok: false, message: "", error: { code: "NOT_IN_TMUX", message: "不在 tmux 会话中" } });

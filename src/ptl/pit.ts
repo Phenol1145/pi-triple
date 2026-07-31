@@ -127,7 +127,6 @@ async function main() {
   }
 
   const mode = resolveMode(command, flags);
-  if (mode === "fatal") { process.exit(1); return; }
 
   if (mode === "json") {
     const routed = await routeJsonCommand(command, subcommand, flags, passthrough);
@@ -158,7 +157,8 @@ async function main() {
     case "ls": {
       const lr = await dispatchCommand("ls", []);
       printBanner();
-      console.log(lr.message);
+      if (lr.ok) console.log(lr.message);
+      else console.log(`  \x1b[31m❌ ${lr.error?.message ?? "Unknown error"}\x1b[0m`);
       console.log("");
       break;
     }
@@ -172,7 +172,8 @@ async function main() {
     case "status": {
       const sr = await dispatchCommand("status", []);
       printBanner();
-      console.log(sr.message);
+      if (sr.ok) console.log(sr.message);
+      else console.log(`  \x1b[31m❌ ${sr.error?.message ?? "Unknown error"}\x1b[0m`);
       console.log("");
       if (!sr.ok) process.exit(1);
       break;
@@ -197,7 +198,8 @@ async function main() {
       if (subcommand === "status") {
         const sr = await dispatchCommand("shared", ["status"]);
         printBanner();
-        console.log(sr.message);
+        if (sr.ok) console.log(sr.message);
+        else console.log(`  \x1b[31m❌ ${sr.error?.message ?? "Unknown error"}\x1b[0m`);
         console.log("");
         if (!sr.ok) process.exit(1);
       } else {

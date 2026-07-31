@@ -25,6 +25,7 @@ export function PitApp() {
   const [commandMode, setCommandMode] = useState(false);
   const [outputLines, setOutputLines] = useState<string[] | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [completionKey, setCompletionKey] = useState(0);
 
   // Input gating: pages and tab switching disabled when command bar / output panel / confirm active
   const gated = !commandMode && !outputLines && !confirmAction;
@@ -53,7 +54,7 @@ export function PitApp() {
       "template rm": templateAliases,
       "template rename": templateAliases,
     };
-  }, [commandMode]); // refresh when command bar opens
+  }, [commandMode, completionKey]); // refresh when command bar opens
 
   // Global input handling
   useInput((input, key) => {
@@ -148,6 +149,7 @@ export function PitApp() {
     } else {
       setOutputLines(lines);
     }
+    setCompletionKey((k) => k + 1);  // 命令执行后刷新补全（template rm 后别名不再出现）
   }
 
   const safeW = Math.max(40, Math.min(columns, 120));
