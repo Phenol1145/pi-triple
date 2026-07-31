@@ -61,6 +61,43 @@ export function aggregateByRole(
   }
 }
 
+export interface TrendPoint {
+  date: string;
+  successRate: number;
+}
+
+/** 按天分桶成功率（本地日；空日补 0） */
+export function dailyTrend(db: DatabaseSync, templateId: string | undefined, days = 7): TrendPoint[] {
+  const out: TrendPoint[] = [];
+  const now = new Date();
+  const dayStart = (d: Date): number => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const start = dayStart(now) - (days - 1) * 86400_000;
+  try {
+    const rows = templateId
+      ? (db.prepare(`SELECT ts, completion FROM runs WHERE template_id = ? AND ts >= ?`).all(templateId, start) as unknown as Array<{ ts: number; completion: number }>)
+      : (db.prepare(`SELECT ts, completion FROM runs WHERE ts >= ?`).all(start) as unknown as Array<{ ts: number; completion: number }>);
+    const perDay = new Map<number, { ok: number; total: number }>();
+    for (const r of rows) {
+      const d = dayStart(new Date(r.ts));
+      const cur = perDay.get(d) ?? { ok: 0, total: 0 };
+      cur.total++;
+      if (r.completion >= 1) cur.ok++;
+      perDay.set(d, cur);
+    }
+    for (let i = 0; i < days; i++) {
+      const d = new Date(start + i * 86400_000);
+      const cur = perDay.get(d.getTime());
+      out.push({
+        date: `${d.getMonth() + 1}/${d.getDate()}`,
+        successRate: cur ? cur.ok / cur.total : 0,
+      });
+    }
+    return out;
+  } catch {
+    return Array.from({ length: days }, () => ({ date: "", successRate: 0 }));
+  }
+}
+
 export function listRoles(db: DatabaseSync, templateId?: string, days = 7): string[] {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
   let sql = `SELECT DISTINCT role FROM runs WHERE ts > ?`;

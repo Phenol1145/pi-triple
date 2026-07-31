@@ -2,12 +2,14 @@
  * tui-lab/telemetry — 遥测仪表盘
  *
  * 数据源：共享 DB（runs 表）
+ * TREND 列：真实 7 日成功率 sparkline（dailyTrend 按天分桶，本地日，空日补 0）。
+ * 选择：DataTable 受控选择（无窗口切片 → 索引即绝对索引）；选中行底部渲染 LineChart。
  */
 import React, { useMemo } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useInput } from "ink";
 import type { DatabaseSync } from "node:sqlite";
-import { aggregateByRole } from "../lab-data/telemetry.js";
-import { DataTable } from "../tui-shared/data-table.js";
+import { aggregateByRole, dailyTrend } from "../lab-data/telemetry.js";
+import { DataTable, LineChart, useTableSelection } from "../tui-shared/index.js";
 import type { ColumnDef } from "../tui-shared/data-table.js";
 
 interface Props {
@@ -28,19 +30,12 @@ const COLUMNS: ColumnDef[] = [
 
 export function TelemetryPage({ db, templateId, refreshKey }: Props) {
   const data = useMemo(() => {
-    if (!db) return { rows: [], trendData: new Map<string, number[]>() };
+    if (!db) return { rows: [], trend: [] as number[] };
 
     const agg = aggregateByRole(db, undefined, templateId, 7);
 
-    // Synthetic trend data: collect 7-day per-model success rates as SparkLine data points
-    // We approximate by bucketing the aggregate data — refined in v2
-    const trendMap = new Map<string, number[]>();
-    for (const row of agg) {
-      const key = `${row.role}:${row.model}`;
-      // Show the avgSuccess as a single-point trend for now
-      // In real implementation, we'd bucket by day
-      trendMap.set(key, [row.avgSuccess * 100]);
-    }
+    // 真实 7 日趋势：runs 表按天分桶（接口无 role/model 维度 → 模板级单序列，空日补 0）
+    const trend = dailyTrend(db, templateId, 7).map((t) => t.successRate);
 
     const rows = agg.slice(0, 50).map((r) => ({
       role: r.role,
@@ -49,18 +44,29 @@ export function TelemetryPage({ db, templateId, refreshKey }: Props) {
       success: (r.avgSuccess * 100).toFixed(1) + "%",
       avgTokens: r.runs > 0 ? String(Math.round((r.totalTokensIn + r.totalTokensOut) / r.runs)) : "0",
       avgCost: r.avgCost != null ? "$" + r.avgCost.toFixed(4) : "n/a",
-      trend: trendMap.get(`${r.role}:${r.model}`) ?? [],
     }));
 
-    return { rows, trendData: trendMap };
+    return { rows, trend };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey, templateId, db]);
+
+  const sel = useTableSelection(data.rows.length);
+
+  useInput((input, key) => {
+    if (key.upArrow) {
+      sel.move(-1);
+      return;
+    }
+    if (key.downArrow) {
+      sel.move(1);
+      return;
+    }
+  });
 
   if (!db) {
     return (
       <Box flexDirection="column">
-        <Text dimColor>Shared telemetry DB not available.</Text>
-        <Text dimColor>Run pit onboard or ensure AGENT_LAB_DB_PATH is set.</Text>
+        <Text dimColor>共享遥测 DB 不可用 — 确保 AGENT_LAB_DB_PATH 已设置或运行 pit onboard</Text>
       </Box>
     );
   }
@@ -68,11 +74,12 @@ export function TelemetryPage({ db, templateId, refreshKey }: Props) {
   if (data.rows.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text dimColor>No telemetry data yet.</Text>
-        <Text dimColor>Run agent-lab workloads to populate the runs table.</Text>
+        <Text dimColor>暂无遥测数据 — 运行 pit flow submit 生成数据</Text>
       </Box>
     );
   }
+
+  const selected = data.rows[sel.index];
 
   return (
     <Box flexDirection="column">
@@ -86,8 +93,11 @@ export function TelemetryPage({ db, templateId, refreshKey }: Props) {
         columns={COLUMNS}
         rows={data.rows.map((r) => ({
           ...r,
-          trend: renderSpark(r.trend as number[]),
+          trend: renderSpark(data.trend),
         }))}
+        selectable
+        selectedIndex={sel.index}
+        onSelectionChange={sel.setIndex}
         rowColor={(row) => {
           const pct = parseFloat(String(row.success ?? "0").replace("%", "")) || 0;
           if (pct >= 95) return "green";
@@ -95,6 +105,21 @@ export function TelemetryPage({ db, templateId, refreshKey }: Props) {
           return undefined;
         }}
       />
+
+      {selected ? (
+        <Box marginTop={1} flexDirection="column">
+          <LineChart
+            points={data.trend}
+            width={60}
+            height={8}
+            label={`7日成功率 · ${selected.role}/${selected.model}`}
+          />
+        </Box>
+      ) : null}
+
+      <Box marginTop={1}>
+        <Text dimColor>↑↓ 选择行 · r 刷新 · / 命令 · /quit 退出</Text>
+      </Box>
     </Box>
   );
 }

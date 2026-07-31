@@ -6,7 +6,7 @@
 import React, { useMemo } from "react";
 import { Box, Text } from "ink";
 import type { DatabaseSync } from "node:sqlite";
-import { getBalances, getRecentSettlements, getFrozenTasks } from "../lab-data/arena.js";
+import { getBalances, getRecentSettlements, getFrozenTasks, getWorkloops, agentKeyFromModel } from "../lab-data/arena.js";
 import { DataTable } from "../tui-shared/data-table.js";
 import type { ColumnDef } from "../tui-shared/data-table.js";
 
@@ -18,6 +18,7 @@ interface Props {
 
 const BALANCE_COLS: ColumnDef[] = [
   { key: "agent", label: "AGENT", width: 24 },
+  { key: "workloop", label: "WORKLOOP", width: 20 },
   { key: "balance", label: "BALANCE", width: 10, align: "right" },
   { key: "frozen", label: "FROZEN", width: 10, align: "right" },
   { key: "wins", label: "WINS", width: 8, align: "right" },
@@ -52,10 +53,21 @@ export function ArenaPage({ db, refreshKey, templateAlias }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey, db]);
 
+  // agent → workLoop.id（definition_json 解析；表缺失/解析失败时降级）
+  const workloops = useMemo(() => {
+    if (!db) return {};
+    return getWorkloops(db);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey, db]);
+
+  // 消费侧两级查找：credits.agent 是模型名，instance id 是 agent-arena-<sanitized>；
+  // exact → agentKeyFromModel 回退 → "-"（supervisor 批准的回退方案）
+  const workloopOf = (agent: string): string => workloops[agent] ?? workloops[agentKeyFromModel(agent)] ?? "-";
+
   if (!db) {
     return (
       <Box flexDirection="column">
-        <Text dimColor>Local Arena DB not available for tenant: {templateAlias}</Text>
+        <Text dimColor>本地 Arena DB 不可用（模板: {templateAlias}）— 运行竞价任务生成数据</Text>
       </Box>
     );
   }
@@ -63,14 +75,14 @@ export function ArenaPage({ db, refreshKey, templateAlias }: Props) {
   if (balances.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text dimColor>Arena not initialized for tenant: {templateAlias}</Text>
-        <Text dimColor>Start agent-lab workloads to create agents and begin bidding.</Text>
+        <Text dimColor>Arena 未初始化（模板: {templateAlias}）— 运行竞价任务生成数据</Text>
       </Box>
     );
   }
 
   const balanceRows = balances.map((b) => ({
     agent: truncate(b.agent, 24),
+    workloop: truncate(workloopOf(b.agent), 20),
     balance: String(Math.round(b.balance)),
     frozen: b.frozen > 0 ? String(Math.round(b.frozen)) : "0",
     wins: String(b.wins),

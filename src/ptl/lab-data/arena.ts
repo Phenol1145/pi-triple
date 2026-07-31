@@ -73,6 +73,36 @@ export interface FrozenRow {
   createdTs: number;
 }
 
+/** agent → workLoop.id（definition_json 解析；缺 workLoop → "(none)"，非法 JSON → "(unparsed)"） */
+export function getWorkloops(db: DatabaseSync): Record<string, string> {
+  try {
+    const rows = db
+      .prepare(`SELECT id, definition_json FROM lab_agent_instances`)
+      .all() as unknown as Array<{ id: string; definition_json: string }>;
+    const out: Record<string, string> = {};
+    for (const r of rows) {
+      try {
+        const def = JSON.parse(r.definition_json) as { workLoop?: { id?: string } } | null;
+        out[r.id] = def?.workLoop?.id ?? "(none)";
+      } catch {
+        out[r.id] = "(unparsed)";
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 模型名 → lab_agent_instances.id（agent-lab 命名约定：agent-arena-<非字母数字→->）。
+ * credits.agent 存模型名，而 instance id 带 agent-arena- 前缀且已 sanitize，
+ * 消费侧（arena.tsx）用 exact → agentKeyFromModel 回退两级查找。
+ */
+export function agentKeyFromModel(model: string): string {
+  return "agent-arena-" + model.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
 export function getFrozenTasks(db: DatabaseSync): FrozenRow[] {
   try {
     return db

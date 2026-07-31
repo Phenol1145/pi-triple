@@ -202,7 +202,7 @@ export function SessionsPage({
             rows={sessionRows}
             selectable
             selectedIndex={sel.index - win.offset}
-            onSelectionChange={sel.setIndex}
+            onSelectionChange={(rel) => sel.setIndex(rel + win.offset)}
             rowColor={(r) => (r.status === "●" ? "green" : undefined)}
           />
 
