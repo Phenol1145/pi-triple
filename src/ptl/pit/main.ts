@@ -1,5 +1,5 @@
 /**
- * pit/main — banner / help / version print helpers
+ * pit/main — banner / 分组帮助 / 上手指引 / 单命令详情 渲染
  */
 
 const VERSION = "0.1.0";
@@ -12,70 +12,182 @@ export function printBanner(): void {
 
 export function getVersion(): string { return VERSION; }
 
+// ─── 分组帮助 ───────────────────────────────────────────────
+
+interface HelpGroup { title: string; intro?: string; commands: Array<[string, string]>; }
+
+const HELP_GROUPS: HelpGroup[] = [
+  {
+    title: "日常使用", intro: "会话生命周期",
+    commands: [
+      ["start [--template x] [--bg --name n]", "启动会话（日常主操作）"],
+      ["pi", "原生前台启动（无 tmux）"],
+      ["attach|switch|detach|stop <name>", "会话管理"],
+      ["ls", "列出会话"],
+    ],
+  },
+  {
+    title: "可视化 TUI", intro: "低门槛可视化操作",
+    commands: [
+      ["tui dashboard", "系统总控面板"],
+      ["tui lab [--template x] [--global]", "开发面板"],
+    ],
+  },
+  {
+    title: "模板与配置",
+    commands: [
+      ["template ls|new|rm|rename", "模板管理"],
+      ["config get|set|unset|init", "配置管理"],
+    ],
+  },
+  {
+    title: "远端程序", intro: "PTH",
+    commands: [
+      ["hub submit <dir> [--dry-run]", "提交 agent 程序"],
+      ["hub run <name> [k=v…]", "远端运行程序"],
+      ["hub programs", "列出已提交程序"],
+      ["hub dev <dir>", "本地调试程序"],
+    ],
+  },
+  {
+    title: "工作流与 Agent",
+    commands: [
+      ["flow run|ls|show|approve|…", "工作流编排"],
+      ["agent run|clean", "agent 实例"],
+    ],
+  },
+  {
+    title: "系统与维护",
+    commands: [
+      ["onboard", "首次导引向导"],
+      ["status | doctor", "健康检查"],
+      ["update", "更新本体"],
+      ["install | remove", "安装/卸载扩展"],
+      ["migrate", "迁移扩展到当前模板"],
+      ["shared status|init", "共享层"],
+      ["help [cmd] | version", "帮助 / 版本"],
+    ],
+  },
+];
+
 export function printHelp(): void {
   printBanner();
   console.log("  用法: pit <command> [options]");
   console.log("");
-  console.log("  命令:");
-  console.log("    onboard            首次导引（检查→安装→模板→迁移→验证）");
-  console.log("    start [args...]    启动 tmux 会话并接入（--bg 纯后台，--name 命名）");
-  console.log("    pi [args...]       原生前台启动 pi（无 tmux）");
-  console.log("    ui                 系统总控 TUI（无参数时也进入）");
-  console.log("    lab                模型调试 TUI（--template/--global）");
-  console.log("    attach <name>      接入后台会话（同一终端切换）");
-  console.log("    switch <name>      切换会话（tmux 内瞬移，外则 attach）");
-  console.log("    detach             脱离当前会话（保持运行）");
-  console.log("    ls                 列出所有会话（前台+后台）");
-  console.log("    stop <name>        停止后台会话");
-  console.log("    status             快速健康检查");
-  console.log("    doctor             完整健康检查 + 交互修复");
-  console.log("    tenant ls          列出所有模板（别名 + UUID）");
-  console.log("    tenant new [alias] 新建模板");
-  console.log("    tenant rm <alias>  删除模板");
-  console.log("    tenant rename <old> <new>  重命名模板别名");
-  console.log("    update             更新 pi 本体（--extensions 扩展包，--all 全部）");
-  console.log("    install <source>    安装 pi 扩展 (--shared 装到共享层)");
-  console.log("    remove <source>     卸载 pi 扩展");
-  console.log("    migrate            迁移 pi 扩展到当前模板");
-  console.log("    shared status       查看共享层状态");
-  console.log("    shared init         初始化共享层（从默认模板提升）");
-  console.log("    config             显示当前配置");
-  console.log("    config get <key>   读取配置项");
-  console.log("    config set <key> <value>  修改配置项");
-  console.log("    config unset <key> 删除模板可选配置项");
-  console.log("    config init        初始化 pi-triple.json");
-  console.log("    agent run <template> <task>  从模板实例化 agent 执行");
-  console.log("    agent clean <agentId>     清理 agent 临时工作区 (--all)");
-  console.log("    submit <dir>       提交 agent 程序到 PTH");
-  console.log("    submit <dir> --dry-run  校验 + 打包（不上传）");
-  console.log("    programs           列出 PTH 上已提交的程序");
-  console.log("    run <name> [k=v...]  远端运行程序（SSE 流式输出）");
-  console.log("    dev <dir>           本地调试程序（pi 交互会话）");
-  console.log("    flow run <file> [k=v]  运行工作流");
-  console.log("    flow ls                列出工作流");
-  console.log("    flow show/status <id>  状态/详情");
-  console.log("    flow approve/reject <id> 人工审批");
-  console.log("    flow validate <file>   校验定义");
-  console.log("    help               显示帮助");
+  for (const g of HELP_GROUPS) {
+    const intro = g.intro ? `  \x1b[2m— ${g.intro}\x1b[0m` : "";
+    console.log(`  \x1b[1m${g.title}\x1b[0m${intro}`);
+    for (const [cmd, desc] of g.commands) {
+      console.log(`    ${cmd.padEnd(42)} \x1b[2m${desc}\x1b[0m`);
+    }
+    console.log("");
+  }
+  console.log("  \x1b[2m选项: --template <alias|uuid>  --project <name>  --model <model>\x1b[0m");
+  console.log("  \x1b[2m详情: pit help <cmd>   示例: pit help start\x1b[0m");
   console.log("");
-  console.log("  选项:");
-  console.log("    --template <alias|uuid>  指定模板（别名或 UUID）");
-  console.log("    --project <name>       指定项目");
-  console.log("    --model <model>        覆盖模型");
+}
+
+// ─── 上手指引（裸 pit）──────────────────────────────────────
+
+export function printGettingStarted(): void {
+  printBanner();
+  console.log("  首次使用？   \x1b[36mpit onboard\x1b[0m");
+  console.log("  日常开发？   \x1b[36mpit start\x1b[0m");
+  console.log("  可视化？     \x1b[36mpit tui dashboard\x1b[0m");
+  console.log("  查看全部？   \x1b[36mpit help\x1b[0m");
   console.log("");
-  console.log("  示例:");
-  console.log("    pit start                          # 默认模板，tmux 接入");
-  console.log("    pit start --template dev             # 指定模板（别名）");
-  console.log("    pit start --bg --name coding       # 纯后台启动");
-  console.log("    pit pi                             # 原生前台启动（无 tmux）");
-  console.log("    pit attach coding                  # 接入后台会话");
-  console.log("    pit config set pth.url http://...  # 连接 PTH");
-  console.log("    pit submit my-agent                 # 提交程序");
-  console.log("    pit run code-reviewer repo=./x pr=42  # 远端运行");
-  console.log("    pit dev my-agent                    # 本地调试");
-  console.log("    pit flow run pr-review.json pr=123  # 运行工作流");
-  console.log("    pit flow ls                          # 列出工作流");
-  console.log("    pit template new my-team             # 新建模板");
-  console.log("    pit template ls                        # 列出模板");
+}
+
+// ─── 命名空间帮助 ───────────────────────────────────────────
+
+const NAMESPACE_HELP: Record<string, Array<[string, string]>> = {
+  tui: [
+    ["tui dashboard", "系统总控面板"],
+    ["tui lab [--template x] [--global]", "开发面板"],
+  ],
+  hub: [
+    ["hub submit <dir> [--dry-run]", "提交 agent 程序到 PTH"],
+    ["hub run <name> [k=v…]", "远端运行程序"],
+    ["hub programs", "列出已提交程序"],
+    ["hub dev <dir>", "本地调试程序"],
+  ],
+  template: [
+    ["template ls", "列出模板（别名 + UUID）"],
+    ["template new [alias]", "新建模板"],
+    ["template rm <alias>", "删除模板"],
+    ["template rename <old> <new>", "重命名别名"],
+  ],
+  config: [
+    ["config", "显示当前配置"],
+    ["config get <key>", "读取配置项"],
+    ["config set <key> <value>", "修改配置项"],
+    ["config unset <key>", "删除可选配置项"],
+    ["config init", "初始化 pi-triple.json"],
+  ],
+  agent: [
+    ["agent run <template> <task>", "从模板实例化 agent 执行"],
+    ["agent clean <agentId>", "清理临时工作区 (--all)"],
+  ],
+  shared: [
+    ["shared status", "查看共享层状态"],
+    ["shared init", "初始化共享层"],
+  ],
+  flow: [
+    ["flow run <flow.json> [k=v…]", "启动工作流"],
+    ["flow ls [--json]", "列出全部"],
+    ["flow show|status <runId>", "状态/详情"],
+    ["flow approve|reject <runId>", "人工审批"],
+    ["flow validate <flow.json>", "校验定义"],
+  ],
+};
+
+export function printNamespaceHelp(ns: string): void {
+  const rows = NAMESPACE_HELP[ns];
+  if (!rows) { printHelp(); return; }
+  console.log("");
+  console.log(`  \x1b[36m\x1b[1mpit ${ns}\x1b[0m`);
+  console.log("");
+  for (const [cmd, desc] of rows) {
+    console.log(`    ${cmd.padEnd(38)} \x1b[2m${desc}\x1b[0m`);
+  }
+  console.log("");
+}
+
+// ─── 单命令详情 ─────────────────────────────────────────────
+
+const COMMAND_HELP: Record<string, { usage: string; desc: string; flags?: Array<[string, string]>; examples?: string[] }> = {
+  start: {
+    usage: "pit start [--template x] [--bg --name n] [--model m]",
+    desc: "启动 tmux 会话并接入（日常主操作）",
+    flags: [["--template <alias|uuid>", "指定模板"], ["--bg", "纯后台不接入"], ["--name <n>", "命名会话"], ["--model <m>", "覆盖模型"]],
+    examples: ["pit start", "pit start --template dev", "pit start --bg --name coding"],
+  },
+  tui: { usage: "pit tui [dashboard|lab]", desc: "打开可视化 TUI 面板（默认 dashboard）" },
+  hub: { usage: "pit hub <submit|run|programs|dev>", desc: "PTH 远端程序管理" },
+  onboard: { usage: "pit onboard", desc: "首次导引向导：环境检查→配置→模板→验证" },
+  doctor: { usage: "pit doctor", desc: "完整健康检查 + 交互修复" },
+};
+
+export function printCommandHelp(cmd: string): void {
+  const entry = COMMAND_HELP[cmd];
+  if (!entry) {
+    // 命名空间或未知：命名空间有则给命名空间帮助，否则全量帮助
+    if (NAMESPACE_HELP[cmd]) { printNamespaceHelp(cmd); return; }
+    printHelp();
+    return;
+  }
+  console.log("");
+  console.log(`  \x1b[1m${entry.usage}\x1b[0m`);
+  console.log(`  \x1b[2m${entry.desc}\x1b[0m`);
+  if (entry.flags) {
+    console.log("");
+    console.log("  选项:");
+    for (const [f, d] of entry.flags) console.log(`    ${f.padEnd(28)} \x1b[2m${d}\x1b[0m`);
+  }
+  if (entry.examples) {
+    console.log("");
+    console.log("  示例:");
+    for (const e of entry.examples) console.log(`    ${e}`);
+  }
   console.log("");
 }
