@@ -4,7 +4,7 @@
 
 import { spawnSync } from "node:child_process";
 import {
-  loadConfig, getTemplateAlias, listTemplates,
+  loadConfig, getTemplateAlias, listTemplates, resolveDataDir,
 } from "../config.js";
 import { runDoctor } from "../doctor.js";
 import { launchPi, buildPiLaunch } from "../launcher.js";
@@ -15,7 +15,11 @@ import {
   buildTmuxSessionArgs,
   hasPitSession,
   startPitSession,
+  getPanePid,
+  validateSessionName,
 } from "../tmux.js";
+import { loadRegistry, markStarted } from "../session-registry.js";
+import { scanSessionFiles } from "../session/pi-scan.js";
 import { resolveTemplateAndMigrate, resolveOrFail } from "./onboard.js";
 
 /**
@@ -94,6 +98,11 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
   const templateConfig = config.templates[templateId] ?? {};
   const alias = getTemplateAlias(templateId, config);
   const name = flags.name ?? `${alias}-${Date.now().toString(36)}`;
+  const nameErr = validateSessionName(name);
+  if (nameErr) {
+    console.log(`  \x1b[31m❌ ${nameErr}\x1b[0m`);
+    process.exit(1);
+  }
   const session = tmuxSessionName(name);
 
   const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
@@ -124,15 +133,44 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
       console.log(`  \x1b[31m❌ 创建会话失败: ${create.stderr}\x1b[0m`);
       process.exit(1);
     }
+    const pid = getPanePid(session);
+    markStarted({
+      name, templateId,
+      model: templateConfig.model, provider: templateConfig.provider, thinking: templateConfig.thinking,
+      extraArgs: piPassthrough, startedAt: Date.now(), pid,
+    }, resolveDataDir(config));
     console.log(`  会话: ${name} · 模板: ${alias} · 切换到新会话…`);
     spawnSync("tmux", ["switch-client", "-t", `=${session}`], { stdio: "inherit" });
     return;
   }
 
+  // 前台非嵌套：先 new-session -d 拿 pid 登记，再 attach 接管（体验与 new-session 直连一致）
+  const create = spawnSync("tmux", buildTmuxSessionArgs(launch, session, true), { encoding: "utf-8" });
+  if (create.status !== 0) {
+    console.log(`  \x1b[31m❌ 创建会话失败: ${create.stderr}\x1b[0m`);
+    process.exit(1);
+  }
+  const pid = getPanePid(session);
+  if (!pid) {
+    console.log(`  \x1b[31m❌ 会话 "${name}" 启动后立即退出\x1b[0m`);
+    console.log("  排查: pit pi --template " + alias + "  （前台模式查看启动错误）");
+    process.exit(1);
+  }
+  markStarted({
+    name, templateId,
+    model: templateConfig.model, provider: templateConfig.provider, thinking: templateConfig.thinking,
+    extraArgs: piPassthrough, startedAt: Date.now(), pid,
+  }, resolveDataDir(config));
+
   console.log(`  会话: ${name} · 模板: ${alias} · Ctrl+B d 脱离（会话保持运行）`);
 
-  const tmuxArgs = buildTmuxSessionArgs(launch, session, false);
-  const result = spawnSync("tmux", tmuxArgs, { stdio: "inherit" });
+  const result = spawnSync("tmux", ["attach", "-t", `=${session}`], {
+    stdio: "inherit",
+    env: { ...process.env, TERM: process.env.TERM ?? "xterm-256color" },
+  });
+  if (result.status !== 0) {
+    console.log(`  \x1b[31m❌ 接入会话失败（pi 可能立即退出，请前台运行排查: pit pi --template ${alias}）\x1b[0m`);
+  }
   process.exit(result.status ?? 0);
 }
 
@@ -142,6 +180,11 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
   if (!templateId) { process.exit(1); }
   const alias = getTemplateAlias(templateId, config);
   const name = flags.name ?? `${alias}-${Date.now().toString(36)}`;
+  const nameErr = validateSessionName(name);
+  if (nameErr) {
+    console.log(`  \x1b[31m❌ ${nameErr}\x1b[0m`);
+    process.exit(1);
+  }
 
   if (!hasTmux()) {
     console.log("  \x1b[31m❌ tmux 未安装\x1b[0m");
@@ -180,6 +223,12 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
       console.log("  排查: pit pi --template " + alias + "  （前台模式查看启动错误）");
       process.exit(1);
     }
+    const pid = getPanePid(result.session);
+    markStarted({
+      name, templateId,
+      model: templateConfig.model, provider: templateConfig.provider, thinking: templateConfig.thinking,
+      extraArgs: passthrough, startedAt: Date.now(), pid,
+    }, resolveDataDir(config));
     console.log(`  \x1b[32m✅ 后台会话已启动\x1b[0m`);
     console.log(`  名称: ${name} · 模板: ${alias} (${templateId.slice(0, 8)}…) · 工作区: ${launch.cwd}`);
     console.log(`  接入: \x1b[36mpit attach ${name}\x1b[0m`);
@@ -230,4 +279,77 @@ export function cmdDetach(): void {
     return;
   }
   spawnSync("tmux", ["detach-client"], { stdio: "inherit" });
+}
+
+// ─── cmdRestore ─────────────────────────────────────────────
+
+/** 恢复目标解析（纯逻辑，可测）：无 name → 全部注册表条目；有 name → 只取指定（缺失静默丢弃） */
+export function resolveRestoreTargets(
+  names: string[],
+  dataDir: string,
+): { name: string; entry: import("../session-registry.js").RegistryEntry }[] {
+  const reg = loadRegistry(dataDir);
+  if (names.length === 0) {
+    return Object.entries(reg.sessions).map(([name, entry]) => ({ name, entry }));
+  }
+  return names
+    .filter((n) => reg.sessions[n])
+    .map((n) => ({ name: n, entry: reg.sessions[n]! }));
+}
+
+/** 按注册表恢复会话：重启后重建 tmux 会话 + resume 原模板最新纸带（--new 则全新） */
+export async function cmdRestore(flags: Record<string, string>, passthrough: string[]): Promise<void> {
+  const config = loadConfig();
+  const dataDir = resolveDataDir(config);
+  const targets = resolveRestoreTargets(passthrough, dataDir);
+  if (targets.length === 0) {
+    console.log(passthrough.length > 0
+      ? `  \x1b[31m❌ 注册表中无指定会话（pit ls 查看 × 状态）\x1b[0m`
+      : "  无待恢复会话（注册表为空）");
+    return;
+  }
+
+  const { buildPiLaunch } = await import("../launcher.js");
+  let ok = 0;
+  let failed = 0;
+  for (const { name, entry } of targets) {
+    const session = tmuxSessionName(name);
+    const exists = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" }).status === 0;
+    if (exists) {
+      console.log(`  ⚠️  ${name} 已在运行，跳过`);
+      continue;
+    }
+    try {
+      let resumeSession: string | undefined;
+      if (flags["new"] !== "true") {
+        const files = scanSessionFiles(config);
+        const latest = files
+          .filter((f) => f.templateId === entry.templateId)
+          .sort((a, b) => b.modified - a.modified)[0];
+        resumeSession = latest?.id;
+      }
+      const launch = await buildPiLaunch(entry.templateId, {
+        provider: entry.provider,
+        model: entry.model,
+        thinking: entry.thinking,
+        extraArgs: entry.extraArgs,
+        resumeSession,
+      });
+      const result = startPitSession(launch, name, true);
+      if (result.status !== 0) {
+        console.log(`  \x1b[31m❌ 恢复 ${name} 失败: ${result.stderr}\x1b[0m`);
+        failed++;
+        continue;
+      }
+      const pid = getPanePid(session);
+      markStarted({ ...entry, pid, startedAt: Date.now() }, dataDir);
+      console.log(`  ✅ 已恢复 ${name}${resumeSession ? `（resume ${resumeSession.slice(0, 8)}…）` : "（全新）"}`);
+      ok++;
+    } catch (err: any) {
+      console.log(`  \x1b[31m❌ 恢复 ${name} 失败: ${err?.message ?? err}\x1b[0m`);
+      failed++;
+    }
+  }
+  console.log(`\n  ${failed === 0 ? "\x1b[32m✅" : "\x1b[33m⚠️"} 恢复完成: ${ok} 成功${failed ? `，${failed} 失败` : ""}\x1b[0m`);
+  if (ok > 0) console.log("  接入: pit attach <name>");
 }

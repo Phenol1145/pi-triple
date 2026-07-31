@@ -9,7 +9,7 @@
 import { parseArgs } from "./pit/args.js";
 import { printHelp, printBanner, printGettingStarted, printCommandHelp, printNamespaceHelp } from "./pit/main.js";
 import { cmdOnboard } from "./pit/onboard.js";
-import { cmdPi, cmdStart, cmdAttach, cmdSwitch, cmdDetach } from "./pit/sessions.js";
+import { cmdPi, cmdStart, cmdAttach, cmdSwitch, cmdDetach, cmdRestore } from "./pit/sessions.js";
 import { cmdConfig } from "./pit/config-cmd.js";
 import { resolveMode, routeJsonCommand, doPrintCommand } from "./pit/mode.js";
 import { cmdMigrate, handleUpdate, handleInstallRemove, handleShared } from "./pit/admin.js";
@@ -180,6 +180,9 @@ async function main() {
       break;
     case "start":
       await cmdStart(flags, passthrough);
+      break;
+    case "restore":
+      await cmdRestore(flags, passthrough);
       break;
     case "attach":
       cmdAttach(subcommand || passthrough[0] || "");

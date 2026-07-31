@@ -44,6 +44,7 @@ const HELP_GROUPS: HelpGroup[] = [
     title: "会话与追踪", intro: "纸带（session）与状态追踪（trace）",
     commands: [
       ["session ls|show|fork|clone|transfer|branch|tree|resume|attach|stop", "纸带操作（会话）"],
+      ["restore [name…]", "按注册表恢复会话（重启后重建 + resume 原纸带）"],
       ["trace ls|show|timeline <agent>", "状态追踪（credit 变化）"],
     ],
   },

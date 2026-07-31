@@ -147,10 +147,12 @@ export function killPitSession(name: string): boolean {
   return r.status === 0;
 }
 
-/** 指定会话 pane 的主进程 pid（创建后调用） */
+/** 指定会话 pane 的主进程 pid（创建后调用）
+ * 注：不用 `=` 精确前缀 — tmux 3.6b 的 display-message 对 `=name` 目标静默返回空；
+ * 裸 `pit-<name>` 先精确匹配，安全（会话名唯一 + 消毒后无歧义）。 */
 export function getPanePid(sessionName: string): number | null {
   if (!hasTmux()) return null;
-  const r = spawnSync("tmux", ["display-message", "-p", "-t", `=${sessionName}`, "#{pane_pid}"], { encoding: "utf-8" });
+  const r = spawnSync("tmux", ["display-message", "-p", "-t", sessionName, "#{pane_pid}"], { encoding: "utf-8" });
   const pid = parseInt((r.stdout ?? "").trim(), 10);
   return Number.isFinite(pid) && pid > 0 ? pid : null;
 }
