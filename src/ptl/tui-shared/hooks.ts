@@ -39,7 +39,7 @@ export function tableNextIndex(current: number, dir: 1 | -1, rowCount: number): 
 }
 
 /** 表格行选择 hook */
-export function useTableSelection(rowCount: number, enabled = true): { index: number; move: (dir: 1 | -1) => void; reset: () => void } {
+export function useTableSelection(rowCount: number, enabled = true): { index: number; move: (dir: 1 | -1) => void; reset: () => void; setIndex: React.Dispatch<React.SetStateAction<number>> } {
   const [index, setIndex] = useState(0);
   const move = useCallback(
     (dir: 1 | -1) => {
@@ -49,7 +49,18 @@ export function useTableSelection(rowCount: number, enabled = true): { index: nu
     [enabled, rowCount],
   );
   const reset = useCallback(() => setIndex(0), []);
-  return { index, move, reset };
+  // 数据收缩时钳制选中行（如刷新后列表变短）
+  useEffect(() => {
+    setIndex((i) => (i >= rowCount ? Math.max(0, rowCount - 1) : i));
+  }, [rowCount]);
+  return { index, move, reset, setIndex };
+}
+
+/** 纯函数：超出上限时把选中行保持在可视窗口内（滚动窗口） */
+export function tableWindow<T>(rows: T[], selected: number, cap: number): { rows: T[]; offset: number } {
+  if (cap <= 0 || rows.length <= cap) return { rows, offset: 0 };
+  const offset = Math.max(0, Math.min(selected, rows.length - cap));
+  return { rows: rows.slice(offset, offset + cap), offset };
 }
 
 export function useTerminalSize() {

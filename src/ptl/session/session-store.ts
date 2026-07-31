@@ -12,8 +12,13 @@ export function _resetForTests(): void {
   traceProviders.length = 0;
 }
 
-export function registerSessionProvider(p: SessionProvider): void { sessionProviders.push(p); }
-export function registerTraceProvider(p: TraceProvider): void { traceProviders.push(p); }
+/** 注册（幂等）：providers 按 workloop 唯一（operateSession 的 find 亦依赖此假设） */
+export function registerSessionProvider(p: SessionProvider): void {
+  if (!sessionProviders.some((x) => x.workloop === p.workloop)) sessionProviders.push(p);
+}
+export function registerTraceProvider(p: TraceProvider): void {
+  if (!traceProviders.some((x) => x.workloop === p.workloop)) traceProviders.push(p);
+}
 
 export function listAllSessions(): SessionRecord[] {
   return sessionProviders.flatMap((p) => p.list());

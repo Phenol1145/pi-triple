@@ -12,6 +12,12 @@ import type { CommandResult } from "../commands.js";
 import { dispatchCommand } from "../commands/dispatch.js";
 import { loadConfig, listTemplates } from "../config.js";
 import { listPitSessions } from "../tmux.js";
+import { registerPiSessionProvider } from "../session/pi-provider.js";
+import { registerBiddingTraceProvider } from "../session/trace-provider.js";
+
+// TUI 启动即注册纸带/追踪 providers（session-store 按 workloop 幂等，CLI 已注册时无副作用）
+registerPiSessionProvider();
+registerBiddingTraceProvider();
 
 const TABS = ["Dashboard", "Templates", "Sessions", "Extensions", "Config"];
 
@@ -26,9 +32,11 @@ export function PitApp() {
   const [outputLines, setOutputLines] = useState<string[] | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [completionKey, setCompletionKey] = useState(0);
+  // Dashboard/Sessions 的模态菜单/对话框打开时禁用全局导航
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // Input gating: pages and tab switching disabled when command bar / output panel / confirm active
-  const gated = !commandMode && !outputLines && !confirmAction;
+  // Input gating: pages and tab switching disabled when command bar / output panel / confirm / modal menu active
+  const gated = !commandMode && !outputLines && !confirmAction && !menuOpen;
 
   // Tab navigation gated by focus state
   const { activeTab, setActiveTab, tabIndex } = useTabs(TABS, gated);
@@ -59,6 +67,9 @@ export function PitApp() {
   // Global input handling
   useInput((input, key) => {
     if (key.ctrl && input === "c") process.exit(130);
+
+    // 页面模态菜单/对话框独占输入（dashboard/sessions 菜单打开时）
+    if (menuOpen) return;
 
     // Output panel open: only Esc to close
     if (outputLines) {
@@ -156,6 +167,17 @@ export function PitApp() {
   const safeH = Math.max(5, rows - 7);
   const sharedProps = { width: safeW, height: safeH };
 
+  // 页面命令执行（复用命令管线：handoff/输出面板/通知）
+  const runCommand = (cmd: string, args: string[]): Promise<void> =>
+    doExecuteCommand(cmd, args, [cmd, ...args].join(" "));
+  const dashProps = {
+    ...sharedProps,
+    onNotify: setNotification,
+    onCommand: runCommand,
+    onMenuChange: setMenuOpen,
+  };
+  const sessionsProps = { ...sharedProps, onNotify: setNotification, onCommand: runCommand, onMenuChange: setMenuOpen };
+
   // ── Content 层 ─────────────────────────────────────────
   let content: React.ReactNode;
   if (outputLines) {
@@ -164,9 +186,9 @@ export function PitApp() {
     content = (
       <Box flexDirection="column">
         <Box minHeight={Math.max(5, rows - 12)}>
-          {tabIndex === 0 && <DashboardPage {...sharedProps} />}
+          {tabIndex === 0 && <DashboardPage {...dashProps} enabled={false} />}
           {tabIndex === 1 && <TemplatesPage {...sharedProps} enabled={false} />}
-          {tabIndex === 2 && <SessionsPage {...sharedProps} enabled={false} />}
+          {tabIndex === 2 && <SessionsPage {...sessionsProps} enabled={false} />}
           {tabIndex === 3 && <ExtensionsPage {...sharedProps} />}
           {tabIndex === 4 && <ConfigPage {...sharedProps} />}
         </Box>
@@ -182,9 +204,9 @@ export function PitApp() {
   } else {
     content = (
       <Box flexDirection="column" minHeight={Math.max(5, rows - 9)}>
-        {tabIndex === 0 && <DashboardPage {...sharedProps} />}
+        {tabIndex === 0 && <DashboardPage {...dashProps} enabled={gated} />}
         {tabIndex === 1 && <TemplatesPage {...sharedProps} enabled={gated} />}
-        {tabIndex === 2 && <SessionsPage {...sharedProps} enabled={gated} />}
+        {tabIndex === 2 && <SessionsPage {...sessionsProps} enabled={gated} />}
         {tabIndex === 3 && <ExtensionsPage {...sharedProps} />}
         {tabIndex === 4 && <ConfigPage {...sharedProps} />}
       </Box>

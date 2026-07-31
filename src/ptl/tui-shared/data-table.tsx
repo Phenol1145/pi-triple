@@ -57,6 +57,17 @@ function truncate(str: string, width: number): string {
 export function DataTable({ columns, rows, rowColor, selectable, selectedIndex, onSelectionChange }: DataTableProps) {
   const widths = computeWidths(columns, rows);
 
+  // 受控选择变化上报（Task 6 遗留：prop 此前从未触发）。挂载首帧不上报。
+  const firstRender = React.useRef(true);
+  React.useEffect(() => {
+    if (!selectable || selectedIndex == null) return;
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    onSelectionChange?.(selectedIndex);
+  }, [selectable, selectedIndex, onSelectionChange]);
+
   return (
     <Box flexDirection="column">
       {/* Header row */}

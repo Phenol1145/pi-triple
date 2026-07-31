@@ -5,6 +5,8 @@ import {
   DataTable,
   SelectList,
   ConfirmDialog,
+  useTableSelection,
+  tableWindow,
 } from "../tui-shared/index.js";
 import type { ColumnDef, SelectItem } from "../tui-shared/index.js";
 import {
@@ -13,13 +15,12 @@ import {
   getTemplateAlias,
 } from "../config.js";
 import { buildPiLaunch } from "../launcher.js";
+import { listAllSessions } from "../session/session-store.js";
+import type { SessionRecord } from "../session/session-provider.js";
+import { SessionMenuPanel, sessionTmuxName, bareTmuxName } from "./session-menu.js";
 import {
-  listPitSessions,
-  formatAge,
   killPitSession,
   buildTmuxSessionArgs,
-  startPitSession,
-  type PitSession,
 } from "../tmux.js";
 
 interface SessionsPageProps {
@@ -27,6 +28,9 @@ interface SessionsPageProps {
   height: number;
   unmount?: () => void;
   enabled?: boolean;
+  onNotify?: (msg: string) => void;
+  onCommand?: (cmd: string, args: string[]) => void;
+  onMenuChange?: (open: boolean) => void;
 }
 
 export function handoffTerminal(cmd: string, args: string[], unmount?: () => void) {
@@ -36,47 +40,78 @@ export function handoffTerminal(cmd: string, args: string[], unmount?: () => voi
   process.exit(result.status ?? 0);
 }
 
-export function SessionsPage({ width, height: _h, unmount, enabled = true }: SessionsPageProps) {
-  const [selectedIdx, setSelectedIdx] = useState(0);
+export function SessionsPage({
+  width,
+  height,
+  unmount,
+  enabled = true,
+  onNotify,
+  onCommand,
+  onMenuChange,
+}: SessionsPageProps) {
   const [mode, setMode] = useState<"list" | "start-template" | "delete-confirm">("list");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<PitSession[]>([]);
+  const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [menuRecord, setMenuRecord] = useState<SessionRecord | null>(null);
 
-  // Defer tmux I/O off the render path
-  useEffect(() => { setSessions(listPitSessions()); }, []);
-  const refreshSessions = () => setSessions(listPitSessions());
+  // 数据源：listAllSessions()（含已停止会话 + 状态列）
+  useEffect(() => { setSessions(listAllSessions()); }, [refreshKey]);
+  const refreshSessions = () => setRefreshKey((k) => k + 1);
 
   const config = loadConfig();
   const templates = listTemplates(config);
+  const sel = useTableSelection(sessions.length, enabled);
 
   const sessionCols: ColumnDef[] = [
-    { key: "name", label: "NAME", width: 18 },
-    { key: "windows", label: "WIN", width: 5 },
-    { key: "age", label: "CREATED", width: 12 },
+    { key: "status", label: "", width: 2 },
+    { key: "workloop", label: "LOOP", width: 8 },
+    { key: "template", label: "TEMPLATE", width: 16 },
+    { key: "id", label: "ID" },
+    { key: "summary", label: "SUMMARY" },
   ];
 
-  const sessionRows = sessions.map((s) => ({
-    name: s.name,
-    windows: String(s.windows),
-    age: formatAge(Date.now() - s.created.getTime()),
+  const cap = Math.max(3, Math.floor((height ?? 24) / 4));
+  const win = tableWindow(sessions, sel.index, cap);
+  const sessionRows = win.rows.map((s) => ({
+    status: s.status === "running" ? "●" : "○",
+    workloop: s.workloop,
+    template: s.templateAlias,
+    id: s.id.slice(0, 8) + "…",
+    summary: s.summary,
   }));
+
+  // attach：tmux 内 switch-client 瞬移；tmux 外 handoff（pit attach 接管终端）
+  const attachSession = (rec: SessionRecord) => {
+    const full = sessionTmuxName(rec);
+    if (!full) { onNotify?.("会话未在运行（tmux 无匹配）"); return; }
+    if (process.env.TMUX) {
+      spawnSync("tmux", ["switch-client", "-t", `=${full}`]);
+    } else if (onCommand) {
+      onCommand("session", ["attach", bareTmuxName(full)]);
+    } else {
+      handoffTerminal("tmux", ["attach", "-t", full], unmount);
+    }
+  };
 
   useInput((input, key) => {
     if (!enabled) return;
+    if (menuRecord) return; // 模态菜单独占输入
     if (mode === "list") {
-      if (key.upArrow) { setSelectedIdx((i) => Math.max(0, i - 1)); return; }
-      if (key.downArrow) { setSelectedIdx((i) => Math.min(sessions.length - 1, i + 1)); return; }
-      if (input === "a" && sessions[selectedIdx]) {
-        // tmux 内：switch-client 瞬移（ pit ui 保持运行）；tmux 外：attach（handoff）
-        if (process.env.TMUX) {
-          spawnSync("tmux", ["switch-client", "-t", `=pit-${sessions[selectedIdx].name}`]);
-        } else {
-          handoffTerminal("tmux", ["attach", "-t", `pit-${sessions[selectedIdx].name}`], unmount);
-        }
+      if (key.upArrow) { sel.move(-1); return; }
+      if (key.downArrow) { sel.move(1); return; }
+      if (key.return && sessions[sel.index]) {
+        setMenuRecord(sessions[sel.index]!);
         return;
       }
-      if (input === "x" && sessions[selectedIdx]) {
-        setDeleteTarget(sessions[selectedIdx].name);
+      if (input === "a" && sessions[sel.index]) {
+        attachSession(sessions[sel.index]!);
+        return;
+      }
+      if (input === "x" && sessions[sel.index]) {
+        const full = sessionTmuxName(sessions[sel.index]!);
+        if (!full) { onNotify?.("会话未在运行"); return; }
+        setDeleteTarget(bareTmuxName(full));
         setMode("delete-confirm");
         return;
       }
@@ -137,33 +172,55 @@ export function SessionsPage({ width, height: _h, unmount, enabled = true }: Ses
     );
   }
 
+  // 模态菜单：打开时独占面板
+  if (menuRecord) {
+    return (
+      <SessionMenuPanel
+        record={menuRecord}
+        onClose={() => setMenuRecord(null)}
+        onNotify={onNotify}
+        onRefresh={refreshSessions}
+        onCommand={onCommand}
+        onMenuChange={onMenuChange}
+      />
+    );
+  }
+
   return (
     <Box flexDirection="column" gap={1}>
       <Box justifyContent="space-between">
-        <Text bold underline>Background Sessions ({sessions.length})</Text>
+        <Text bold underline>Sessions ({sessions.length})</Text>
         <Text dimColor>[s] start  [a] attach  [x] stop  [r] refresh</Text>
       </Box>
 
       {sessions.length === 0 ? (
-        <Text dimColor>  No background sessions. Press [s] to start one.</Text>
+        <Text dimColor>  无会话 — 启动: pit start --bg --name &lt;name&gt;</Text>
       ) : (
         <>
-          <DataTable columns={sessionCols} rows={sessionRows} />
+          <DataTable
+            columns={sessionCols}
+            rows={sessionRows}
+            selectable
+            selectedIndex={sel.index - win.offset}
+            onSelectionChange={sel.setIndex}
+            rowColor={(r) => (r.status === "●" ? "green" : undefined)}
+          />
 
           <Box marginTop={1}>
-            <Text dimColor>↑↓ select · [a] attach/switch · [x] stop · [s] start new</Text>
+            <Text dimColor>↑↓ select · Enter 菜单 · [a] attach/switch · [x] stop · [s] start new</Text>
           </Box>
         </>
       )}
 
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>Hints:</Text>
+        <Text dimColor>  - 列表含已停止会话（○）；仅运行中（●）可 attach/stop</Text>
         <Text dimColor>  - Inside tmux: [a] switches instantly (pit ui keeps running)</Text>
         <Text dimColor>  - Outside tmux: [a] attaches (pit ui exits) · pit detach 脱离</Text>
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>[s] 启动 · [a] 接入 · [x] 停止 · / 命令模式</Text>
+        <Text dimColor>[s] 启动 · [a] 接入 · [x] 停止 · [r] 刷新 · Enter 菜单 · / 命令</Text>
       </Box>
     </Box>
   );
