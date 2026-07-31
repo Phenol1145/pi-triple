@@ -203,7 +203,7 @@ const proc = spawn(spawnSpec.command, spawnSpec.args, {
 **思路**：不改 subagent 派发机制，而是让 lab 本身"多租户化"——每个 pit 租户运行自己的 lab 配置（独立的 scheduler instance、agent 群体、账本）。lab 数据的路径断裂（已知 bug）先行修好，让每个租户的 `AGENT_LAB_CONFIG_DIR` 指向独立 DB。
 
 **改动点**：
-1. 修 `pit lab` TUI "DB offline"——lab-data/open-db.ts 默认 DATA_DIR 改为 `pitHome()/data`
+1. 修 `pit tui lab` TUI "DB offline"——lab-data/open-db.ts 默认 DATA_DIR 改为 `pitHome()/data`
 2. lab ledger/tasks 数据从 `lab_agent_instances` 等表按 `tenantId` 隔离（租户 A 的 arena 与租户 B 隔离）
 3. `AGENT_LAB_DB_PATH` 已有（`buildPiLaunch` 设了），但 lab 侧 `localConfigDir()` + ledger 的 DB 路径与之不一致——需统一。
 

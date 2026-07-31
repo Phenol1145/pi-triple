@@ -22,7 +22,7 @@ PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己
 ├──────────────────────────────────────────────────────────────┤
 │  pit TUI (Ink)               │  pi 进程 × N (tmux)          │
 │  ┌──────────┐ ┌────────────┐ │  ┌────────┐ ┌────────┐      │
-│  │ pit ui   │ │ lab ui     │ │  │ process│ │ process│ ...  │
+│  │ pit tui  │ │ lab ui     │ │  │ process│ │ process│ ...  │
 │  │ 控制面板  │ │ 模型调试   │ │  │ tmpl   │ │ tmpl   │      │
 │  └──────────┘ └────────────┘ │  │ A      │ │ B      │      │
 ├──────────────────────────────┤  └────────┘ └────────┘      │
@@ -52,8 +52,8 @@ PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己
 | | `pit start --bg --name <n>` | 纯后台 tmux |
 | **会话** | `pit ls` / `pit attach` / `pit stop` | 列出/接入/停止会话 |
 | | `pit switch` / `pit detach` | 瞬移/脱离（tmux 内） |
-| **TUI** | `pit` / `pit ui` | 系统总控 TUI |
-| | `pit lab` | agent-lab 模型调试 TUI |
+| **TUI** | `pit tui dashboard` | 系统总控 TUI |
+| | `pit tui lab` | agent-lab 模型调试 TUI |
 | **模板** | `pit template ls/new/rm/rename` | UUID + alias 管理（agent 配置蓝图） |
 | **配置** | `pit config/get/set/unset` | 读写 pi-triple.json |
 | **扩展** | `pit install/remove/update` | pi 扩展管理 |
@@ -63,8 +63,8 @@ PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己
 | **流程** | `pit flow run/status/show/ls` | pit-flow 波次工作流引擎 |
 | | `pit flow approve/reject/resume` | human gate 审批 / 恢复 |
 | | `pit flow set/edit/propose/discard` | 运行中热修改（停波护栏） |
-| **桥** | `pit submit/run/dev` | PTL→PTH agent 程序提交/运行 |
-| | `pit programs` | 列出 PTH 上的程序 |
+| **桥** | `pit hub submit/run/dev` | PTL→PTH agent 程序提交/运行 |
+| | `pit hub programs` | 列出 PTH 上的程序 |
 
 ### 模式分辨
 
@@ -72,8 +72,9 @@ PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己
 pit start                      → print 模式（直接启动 pi/tmux）
 pit config get redis            → print 模式（输出纯文本值）
 pit config get redis --json     → JSON 模式（`{"ok":true,"data":"redis://..."}`）
-pit                             → 交互 TTY → pit ui TUI
-                                 → 非 TTY   → print help
+pit tui dashboard               → 交互 TTY → 系统总控 TUI
+                                 → 非 TTY   → "TUI 需要交互式终端"
+pit                             → 打印上手指引
 ```
 
 所有参数解析在 `src/ptl/pit/args.ts`，模式路由在 `src/ptl/pit/mode.ts`。
@@ -255,21 +256,21 @@ pi 内直接管理 tmux 会话。替代 `Ctrl+B d/s`。
 `src/ptl/bridge/` —— 把 PTL 本地开发的 agent 程序（`agent.json` manifest + skills + systemPrompt）打包提交到 PTH 运行。
 
 ```
-pit submit ./my-agent
+pit hub submit ./my-agent
   → pack.ts 读 agent.json（manifest.ts 校验）+ skills → ustar.ts 打 tar（零外部依赖）
   → POST /api/v1/programs（PTH ProgramStore：INCR 版本 + tar 安全解包 + GC）
-pit run my-agent key=val
+pit hub run my-agent key=val
   → POST /api/v1/programs/my-agent/run → AgentEngine 起一次性 session
   → SSE 双信封 {seq,type,data} 直推 → pit 解包渲染 → 流结束自动销毁 session
-pit dev ./my-agent      ← 本地直跑（pipe.ts 注入 systemPrompt+skills 到 pi 启动参数）
-pit programs            ← 列出 PTH 上的程序
+pit hub dev ./my-agent      ← 本地直跑（pipe.ts 注入 systemPrompt+skills 到 pi 启动参数）
+pit hub programs            ← 列出 PTH 上的程序
 ```
 
 模块：`client.ts`（PTH HTTP 客户端）· `pack.ts` + `ustar.ts`（打包）· `manifest.ts`（校验）· `submit.ts` / `run.ts` / `dev.ts` / `programs.ts`（命令）· `pipe.ts`（本地注入）。服务端见 PTH `programs/store.ts` + `gateway/routes-programs.ts`。
 
 ## lab 遥测数据层
 
-`src/ptl/lab-data/` —— `pit lab` TUI 的数据底座。SQLite（WAL + busy_timeout）：共享 `runs` DB（跨模板 LLM 调用遥测）+ per-template arena/events/config。模块：`telemetry.ts` · `arena.ts` · `events.ts` · `open-db.ts` · `schema.ts`。
+`src/ptl/lab-data/` —— `pit tui lab` TUI 的数据底座。SQLite（WAL + busy_timeout）：共享 `runs` DB（跨模板 LLM 调用遥测）+ per-template arena/events/config。模块：`telemetry.ts` · `arena.ts` · `events.ts` · `open-db.ts` · `schema.ts`。
 
 ## TUI 模板规范
 
@@ -277,8 +278,8 @@ PTL 包含两个 Ink TUI：
 
 | TUI | 命令 | Tab 主题 |
 |-----|------|---------|
-| pit ui | `pit` / `pit ui` | Dashboard / Templates / Sessions / Extensions / Config |
-| lab ui | `pit lab` | Telemetry / Arena / Events / Compare / Config |
+| pit tui | `pit tui dashboard` | Dashboard / Templates / Sessions / Extensions / Config |
+| lab ui | `pit tui lab` | Telemetry / Arena / Events / Compare / Config |
 
 两者共用统一的 `Screen` 布局模板和 `tui-shared/` 组件库。规范详见 `src/ptl/tui-shared/README.md`。核心契约：
 
@@ -288,7 +289,7 @@ PTL 包含两个 Ink TUI：
 4. 弹层打开时传 `enabled={false}` 门控页面输入
 5. 终端切换走 `unmountInk()` → `stdin.pause()` → `spawnSync(stdio: "inherit")` → `process.exit(status)`
 
-共享组件：`Screen`（布局）、`DataTable`（表格）、`SelectList`（列表选择）、`ConfirmDialog`（确认框）、`SparkLine`/`BarChart`（图表）、`useTabs`/`useRefresh`/`useTerminalSize`（hooks）、`CommandBar`（层级渐进式命令补全——pit ui 和 lab ui 共享）。
+共享组件：`Screen`（布局）、`DataTable`（表格）、`SelectList`（列表选择）、`ConfirmDialog`（确认框）、`SparkLine`/`BarChart`（图表）、`useTabs`/`useRefresh`/`useTerminalSize`（hooks）、`CommandBar`（层级渐进式命令补全——pit tui 和 lab ui 共享）。
 
 ## 与 PTH 的关系
 
@@ -301,7 +302,7 @@ pi 进程 × tmux               AgentEngine × Redis
 pit CLI                      HTTP/SSE/WebSocket
 
         ───── 桥（已实现）─────
-   pit submit/run → PTH ProgramStore 运行
+   pit hub submit/run → PTH ProgramStore 运行
 ```
 
-PTL 生产的 agent 程序（`agent.json` + skills）可通过 `pit submit` 打包提交到 PTH，`pit run` 以联邦模式运行（SSE 流式回显）。PTH 提供集中治理、审计、弹性伸缩，PTL 提供本地开发/调试体验。桥的实现见上文「PTL→PTH 桥」节。
+PTL 生产的 agent 程序（`agent.json` + skills）可通过 `pit hub submit` 打包提交到 PTH，`pit hub run` 以联邦模式运行（SSE 流式回显）。PTH 提供集中治理、审计、弹性伸缩，PTL 提供本地开发/调试体验。桥的实现见上文「PTL→PTH 桥」节。

@@ -34,8 +34,8 @@ pit start --bg --name coding  # 后台启动
 pit pi                        # 原生前台（无 tmux）
 
 # 4. 控制面板
-pit                            # pit ui TUI
-pit lab                        # 模型调试 TUI
+pit tui dashboard              # 系统总控 TUI
+pit tui lab                    # 模型调试 TUI
 ```
 
 ### pit CLI 命令速查
@@ -46,9 +46,9 @@ pit lab                        # 模型调试 TUI
 | `pit pi` | 原生前台启动 pi（无 tmux，pi 原生体验） |
 | `pit attach/switch/detach` | 接入 / 瞬移切换 / 脱离会话 |
 | `pit ls / pit stop` | 列出 / 停止会话 |
-| `pit ui` / `pit lab` | 系统控制 / 模型调试 TUI |
+| `pit tui dashboard` / `pit tui lab` | 系统控制 / 模型调试 TUI |
 | `pit flow run/approve/reject/set/edit...` | pit-flow 波次工作流引擎 |
-| `pit submit/run/dev/programs` | PTL→PTH 桥（agent 程序提交/运行） |
+| `pit hub submit/run/dev/programs` | PTL→PTH 桥（agent 程序提交/运行） |
 | `pit template ls/new/rm/rename` | 模板管理 |
 | `pit config get/set/unset` | 配置读写 |
 | `pit update --all` | 更新 pi + 扩展 + 内置同步 |
@@ -80,12 +80,12 @@ docker-compose up -d
 
 ## Roadmap
 
-- [x] PTL：tmux 多会话管理 + pit ui/lab TUI
+- [x] PTL：tmux 多会话管理 + pit tui dashboard/lab TUI
 - [x] PTL：共享扩展层（symlink 注入，逐项更新）
 - [x] PTL：pit-providers 统一 provider 后端（声明式 JSON + 多 Key failover）
 - [x] PTL：pit-communicate 跨会话通信 + pit-control 会话内控制
 - [x] **PTL：pit-flow 波次工作流引擎**（并行执行 + reducer + human gate + 运行中热修改）
-- [x] **PTL→PTH 桥**：`pit submit/run` — agent 程序打包提交到 PTH 运行
+- [x] **PTL→PTH 桥**：`pit hub submit/run` — agent 程序打包提交到 PTH 运行
 - [ ] PTH：Windows 平台适配
 - [ ] PTH：Dapr/K8s Phase 2 迁移
 
