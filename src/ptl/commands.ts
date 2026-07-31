@@ -25,8 +25,9 @@ import {
   killPitSession,
   formatAge,
   startPitSession,
+  getPanePid,
 } from "./tmux.js";
-import { loadRegistry, markStopped } from "./session-registry.js";
+import { loadRegistry, markStarted, markStopped } from "./session-registry.js";
 import { classifySession, isPidAlive } from "./session-state.js";
 
 
@@ -346,6 +347,17 @@ export async function execStartBg(
 
   const result = startPitSession(launch, sessionName, true);
   if (result.status === 0) {
+    const pid = getPanePid(result.session);
+    markStarted({
+      name: sessionName,
+      templateId,
+      model: templateConfig.model,
+      provider: templateConfig.provider,
+      thinking: templateConfig.thinking,
+      extraArgs,
+      startedAt: Date.now(),
+      pid,
+    }, resolveDataDir(config));
     return {
       ok: true,
       message: `✅ 后台会话 "${sessionName}" 已启动\n接入: pit attach ${sessionName}`,
