@@ -54,6 +54,16 @@ const NOT_SUPPORTED = (workloop: string, op: string): CommandResult => ({
   },
 });
 
+type SessionOp = "fork" | "clone" | "transfer" | "branch";
+
+// 类型化分发表：仅 fork/clone/transfer/branch 走 operateSession，tree 由命令层直接处理。
+const SESSION_OPS: Record<SessionOp, (p: SessionProvider, r: SessionRecord, o: any) => CommandResult | undefined> = {
+  fork: (p, r, o) => p.fork?.(r, o as ForkOpts),
+  clone: (p, r, o) => p.clone?.(r, o as ForkOpts),
+  transfer: (p, r, o) => p.transfer?.(r, o as TransferOpts),
+  branch: (p, r, o) => p.branch?.(r, o as BranchOpts),
+};
+
 export function operateSession(
   op: string,
   id: string,
@@ -67,7 +77,9 @@ export function operateSession(
   if (!provider || !provider.capabilities.includes(op)) {
     return NOT_SUPPORTED(record.workloop, op);
   }
-  const fn = (provider as any)[op] as ((r: SessionRecord, o: any) => CommandResult) | undefined;
+  const fn = SESSION_OPS[op as SessionOp];
   if (!fn) return NOT_SUPPORTED(record.workloop, op);
-  return fn(record, opts);
+  const result = fn(provider, record, opts);
+  if (!result) return NOT_SUPPORTED(record.workloop, op);
+  return result;
 }
