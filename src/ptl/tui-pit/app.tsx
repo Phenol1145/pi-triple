@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from "react";
 import { Box, Text, useInput, useApp } from "ink";
-import { spawnSync } from "node:child_process";
 import { Screen, useTabs, useTerminalSize } from "../tui-shared/index.js";
 import { DashboardPage } from "./dashboard.js";
 import { TemplatesPage } from "./templates.js";
@@ -10,6 +9,7 @@ import { ConfigPage } from "./config-page.js";
 import { CommandBar } from "./command-bar.js";
 import { OutputPanel } from "./output-panel.js";
 import type { CommandResult } from "../commands.js";
+import { dispatchCommand } from "../commands/dispatch.js";
 import { loadConfig, listTemplates } from "../config.js";
 import { listPitSessions, startPitSession } from "../tmux.js";
 
@@ -111,107 +111,12 @@ export function PitApp() {
     await doExecuteCommand(cmd, args, cmdStr);
   }
 
-  async function doExecuteCommand(cmd: string, args: string[], cmdStr: string): Promise<void> {
+  async function doExecuteCommand(cmd: string, args: string[], _cmdStr: string): Promise<void> {
     let result: CommandResult;
 
     try {
-    // Route to commands.ts functions
-    const { execTemplateLs, execTemplateNew, execTemplateRm, execStatus, execLs, execStop, execSharedStatus, execStartBg } = await import("../commands.js");
-
-    switch (cmd) {
-      case "template":
-        if (args[0] === "ls" || args[0] === "list") result = await execTemplateLs();
-        else if (args[0] === "new") result = await execTemplateNew(args[1]);
-        else if (args[0] === "rm") result = await execTemplateRm(args[1]);
-        else if (args[0] === "rename") {
-          const { loadConfig: lc, resolveTemplateId: rt, renameTemplate: rn } = await import("../config.js");
-          const cfg = lc();
-          const resolved = rt(args[1] ?? "", cfg);
-          if (!resolved.ok) result = { ok: false, message: "", error: { code: "TENANT_NOT_FOUND", message: `模板 "${args[1]}" 不存在` } };
-          else if (!args[2]) result = { ok: false, message: "", error: { code: "INVALID_ARGS", message: "用法: template rename <旧别名> <新别名>" } };
-          else {
-            const ok = rn(resolved.id, args[2], cfg);
-            result = ok
-              ? { ok: true, message: `✅ 模板别名: ${args[1]} → ${args[2]}` }
-              : { ok: false, message: "", error: { code: "RENAME_FAILED", message: "重命名失败（别名重复或无效）" } };
-          }
-        }
-        else result = await execTemplateLs();
-        break;
-      case "pi":
-        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["pi", ...args] } };
-        break;
-      case "start":
-        result = await execStartBg(args[0] || "", args[1] || "");
-        break;
-      case "quit":
-      case "exit":
-        process.exit(0);
-        break;
-      case "help":
-        result = {
-          ok: true,
-          message: [
-            "Available commands:",
-            "  pi [args]                 原生前台启动 pi（无 tmux）",
-            "  start <bg-name> <template>   启动后台会话",
-            "  attach <name>             接入后台会话",
-            "  stop <name>               停止会话",
-            "  ls                        列出后台会话",
-            "  status                    健康检查",
-            "  template ls                 列出模板",
-            "  template new <alias>        新建模板",
-            "  template rm <alias>         删除模板",
-            "  shared status             共享层状态",
-            "  help                      此帮助",
-            "  quit                      退出 pit ui",
-            "  switch <name>             切换会话（tmux 内）",
-            "  detach                    脱离当前会话",
-          ].join("\n"),
-        };
-        break;
-      case "status":
-        result = await execStatus();
-        break;
-      case "ls":
-        result = await execLs();
-        break;
-      case "stop":
-        result = await execStop(args[0] || "");
-        break;
-      case "shared":
-        if (args[0] === "status") result = await execSharedStatus();
-        else result = { ok: false, message: "", error: { code: "UNKNOWN_COMMAND", message: `共享层命令: pit shared status` } };
-        break;
-      case "attach":
-        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["attach", ...args] } };
-        break;
-      case "switch":
-        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["switch", ...args] } };
-        break;
-      case "detach": {
-        const r2 = spawnSync("tmux", ["detach-client"], { encoding: "utf-8" });
-        result = r2.status === 0
-          ? { ok: true, message: "已脱离当前会话" }
-          : { ok: false, message: "", error: { code: "NOT_IN_TMUX", message: "不在 tmux 会话中" } };
-        break;
-      }
-      case "submit":
-        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["submit", ...args] } };
-        break;
-      case "programs":
-        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["programs"] } };
-        break;
-      case "run":
-        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["run", ...args] } };
-        break;
-      case "dev":
-        result = { ok: true, message: "", handoff: { cmd: "pit", args: ["dev", ...args] } };
-        break;
-      default:
-        result = { ok: false, message: "", error: { code: "UNKNOWN_COMMAND", message: `未知命令: ${cmd}。支持: start, status, ls, stop, template, shared, attach, help` } };
-    }
-
+      if (cmd === "quit" || cmd === "exit") process.exit(0);
+      result = await dispatchCommand(cmd, args);
     } catch (err: any) {
       setNotification(`\x1b[31m❌ 命令执行错误: ${err?.message ?? err}\x1b[0m`);
       return;
