@@ -1,5 +1,5 @@
 export { theme } from "./theme.js";
-export { useTabs, useRefresh, useTerminalSize } from "./hooks.js";
+export { useTabs, useRefresh, useTerminalSize, tableNextIndex, useTableSelection } from "./hooks.js";
 export { Screen } from "./layout.js";
 export { TopBar } from "./top-bar.js";
 export { TabBar } from "./tab-bar.js";
@@ -11,3 +11,7 @@ export { BarChart } from "./bar-chart.js";
 export { SelectList } from "./select-list.js";
 export type { SelectItem } from "./select-list.js";
 export { ConfirmDialog } from "./confirm-dialog.js";
+export { layoutChart } from "./chart.js";
+export { LineChart } from "./line-chart.js";
+export { createMenu, menuStep, menuBreadcrumb, filterMenuByCapabilities } from "./menu.js";
+export type { MenuNode, MenuState } from "./menu.js";

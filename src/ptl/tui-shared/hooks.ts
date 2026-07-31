@@ -32,6 +32,26 @@ export function useRefresh(intervalMs: number, callback: () => void) {
   }, [intervalMs, callback]);
 }
 
+/** 纯函数：表格选择移动（边界钳制），供 hook 与测试共用 */
+export function tableNextIndex(current: number, dir: 1 | -1, rowCount: number): number {
+  if (rowCount <= 0) return 0;
+  return Math.max(0, Math.min(rowCount - 1, current + dir));
+}
+
+/** 表格行选择 hook */
+export function useTableSelection(rowCount: number, enabled = true): { index: number; move: (dir: 1 | -1) => void; reset: () => void } {
+  const [index, setIndex] = useState(0);
+  const move = useCallback(
+    (dir: 1 | -1) => {
+      if (!enabled) return;
+      setIndex((i) => tableNextIndex(i, dir, rowCount));
+    },
+    [enabled, rowCount],
+  );
+  const reset = useCallback(() => setIndex(0), []);
+  return { index, move, reset };
+}
+
 export function useTerminalSize() {
   const { stdout } = useStdout();
   const [size, setSize] = useState(() => ({

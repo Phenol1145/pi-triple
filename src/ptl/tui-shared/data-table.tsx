@@ -9,11 +9,17 @@ export interface ColumnDef {
   align?: "left" | "right";
 }
 
-interface DataTableProps {
+export interface DataTableProps {
   columns: ColumnDef[];
   rows: Record<string, unknown>[];
   /** Optional color function per row key */
   rowColor?: (row: Record<string, unknown>) => string | undefined;
+  /** Enable row selection highlight */
+  selectable?: boolean;
+  /** Currently selected row index (controlled) */
+  selectedIndex?: number;
+  /** Called when the selected row changes */
+  onSelectionChange?: (i: number) => void;
 }
 
 function pad(str: string, width: number, align: "left" | "right"): string {
@@ -48,7 +54,7 @@ function truncate(str: string, width: number): string {
   return result;
 }
 
-export function DataTable({ columns, rows, rowColor }: DataTableProps) {
+export function DataTable({ columns, rows, rowColor, selectable, selectedIndex, onSelectionChange }: DataTableProps) {
   const widths = computeWidths(columns, rows);
 
   return (
@@ -70,13 +76,15 @@ export function DataTable({ columns, rows, rowColor }: DataTableProps) {
       {/* Data rows */}
       {rows.map((row, rowIdx) => {
         const color = rowColor?.(row);
+        const isSel = selectable && selectedIndex === rowIdx;
+        const cellColor = isSel ? "cyan" : color;
         return (
           <Box key={rowIdx} gap={1}>
             {columns.map((col, i) => {
               const val = String(row[col.key] ?? "");
               return (
                 <Box key={col.key} width={widths[i]}>
-                  <Text color={color}>
+                  <Text color={cellColor} bold={isSel}>
                     {truncate(pad(val, widths[i], col.align ?? "left"), widths[i])}
                   </Text>
                 </Box>
