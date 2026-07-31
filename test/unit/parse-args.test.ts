@@ -47,6 +47,32 @@ describe("parseArgs", () => {
     expect(r.command).toBe("attach");
     expect(r.passthrough).toEqual(["coding"]);
   });
+
+  it("pit tui dashboard → dashboard 是 subcommand", () => {
+    const r = parseArgs(["tui", "dashboard"]);
+    expect(r.command).toBe("tui");
+    expect(r.subcommand).toBe("dashboard");
+  });
+
+  it("pit tui（无子命令）→ subcommand 为空", () => {
+    const r = parseArgs(["tui"]);
+    expect(r.command).toBe("tui");
+    expect(r.subcommand).toBe("");
+  });
+
+  it("pit hub submit → submit 是 subcommand，目录进 passthrough", () => {
+    const r = parseArgs(["hub", "submit", "my-agent"]);
+    expect(r.command).toBe("hub");
+    expect(r.subcommand).toBe("submit");
+    expect(r.passthrough).toEqual(["my-agent"]);
+  });
+
+  it("pit tui lab --template dev → subcommand=lab，flags.template 不被吞", () => {
+    const r = parseArgs(["tui", "lab", "--template", "dev"]);
+    expect(r.command).toBe("tui");
+    expect(r.subcommand).toBe("lab");
+    expect(r.flags.template).toBe("dev");
+  });
 });
 
 describe("parseArgs config 子命令", () => {
