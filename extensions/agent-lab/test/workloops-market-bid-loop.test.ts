@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { marketBidLoop } from "../src/workloops/market-bid-loop.ts";
+import { createMarketBidLoop } from "../src/workloops/market-bid-loop.ts";
+import type { ArenaBidLoopConfig } from "../src/workloops/market-bid-loop.ts";
+import { MachineRuntime } from "../src/workloop/machine-runtime.ts";
 import type { WorkLoopSDK, WorkLoopInput } from "../src/workloop/contracts.ts";
 
 function fakeSdk(modelReply: string, opts?: { failModel?: boolean; checkpoints?: unknown[] }): WorkLoopSDK {
@@ -25,43 +27,61 @@ function fakeSdk(modelReply: string, opts?: { failModel?: boolean; checkpoints?:
   } as unknown as WorkLoopSDK;
 }
 
-function input(task: string, config: Record<string, unknown> = {}): WorkLoopInput {
+function input(task: string): WorkLoopInput {
   return {
     traceId: "t", executionId: "e", agentInstanceId: "agent-1", optimizationRoundId: "r",
-    task, config, state: {},
+    task, config: {}, state: {},
     context: { messages: [], metadata: { contextId: "c0", sourceRefs: [], artifactRefs: [] } },
   } as WorkLoopInput;
 }
 
+/** Machine 驱动 market-bid（Task 4 迁移：marketBidLoop 常量 → createMarketBidLoop 工厂）。 */
+async function runBid(task: string, config: ArenaBidLoopConfig, sdk: WorkLoopSDK) {
+  const impl = createMarketBidLoop(config);
+  const runtime = new MachineRuntime({
+    machine: impl.machine,
+    input: input(task),
+    sdk,
+  });
+  const { result } = await runtime.run();
+  return result;
+}
+
 test("market-bid-loop: parses stake from model reply", async () => {
   const sdk = fakeSdk("我出 42 credits");
-  const result = await marketBidLoop.run(input("任务X，余额 100，赔率 3.0", { model: "openai/gpt-4" }), sdk);
+  const result = await runBid("任务X，余额 100，赔率 3.0", { model: "openai/gpt-4" }, sdk);
   assert.equal(result.status, "completed");
   assert.equal((result.output?.custom as { stake: number }).stake, 42);
 });
 
 test("market-bid-loop: stake clamped to available balance", async () => {
   const sdk = fakeSdk("999");
-  const result = await marketBidLoop.run(input("余额 50", { model: "m", balance: 50 }), sdk);
+  const result = await runBid("余额 50", { model: "m", balance: 50 }, sdk);
   assert.equal((result.output?.custom as { stake: number }).stake, 50);
 });
 
-test("market-bid-loop: checkpoints the bid result (persistence)", async () => {
+test("market-bid-loop: runtime auto-checkpoints the bid result (persistence)", async () => {
   const checkpoints: unknown[] = [];
   const sdk = fakeSdk("30", { checkpoints });
-  await marketBidLoop.run(input("余额 100", { model: "m" }), sdk);
+  await runBid("余额 100", { model: "m" }, sdk);
+  // 手动 checkpoint 已移除（Task 4）——MachineRuntime 每次转移后自动 checkpoint
   assert.equal(checkpoints.length, 1);
-  assert.match(String((checkpoints[0] as { label?: string }).label ?? ""), /bid/);
+  assert.equal((checkpoints[0] as { label?: string }).label, "done#1");
 });
 
 test("market-bid-loop: model failure → failed status (fail-open upstream)", async () => {
   const sdk = fakeSdk("", { failModel: true });
-  const result = await marketBidLoop.run(input("余额 100", { model: "m" }), sdk);
+  const result = await runBid("余额 100", { model: "m" }, sdk);
   assert.equal(result.status, "failed");
 });
 
 test("market-bid-loop: definition shape", () => {
-  assert.equal(marketBidLoop.id, "market-bid-loop");
-  assert.equal(marketBidLoop.version, "1.0.0");
-  assert.deepEqual(marketBidLoop.cloneModes, ["fresh"]);
+  const impl = createMarketBidLoop({});
+  assert.equal(impl.id, "market-bid-loop");
+  assert.equal(impl.version, "1.0.0");
+  assert.deepEqual(impl.cloneModes, ["fresh"]);
+  assert.equal(impl.executorKind, "local-model");
+  assert.deepEqual(impl.machine.states.map((s) => s.id), ["idle", "done"]);
+  assert.equal(impl.machine.initial, "idle");
+  assert.equal(impl.run, undefined, "新实现不提供 run");
 });

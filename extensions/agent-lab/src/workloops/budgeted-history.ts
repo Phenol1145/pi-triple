@@ -24,14 +24,12 @@
 
 import { estimateTokens, contextTokenTotal } from "./context-metrics.ts";
 import { emitContextTransform } from "./context-events.ts";
-import { runManagedLoop } from "./managed-loop.ts";
-import type { StrategyHook } from "./managed-loop.ts";
+import { managedMachine } from "./managed-loop.ts";
+import type { ManagedLoopConfig, StrategyHook } from "./managed-loop.ts";
 import type {
   WorkLoopImplementation,
-  WorkLoopInput,
-  WorkLoopResult,
-  WorkLoopSDK,
   WorkContext,
+  WorkLoopSDK,
 } from "../workloop/contracts.ts";
 
 // ── Strategy hook ───────────────────────────────────────────────────
@@ -115,38 +113,47 @@ function createBudgetedHistoryStrategy(): StrategyHook {
 // ── Implementation ──────────────────────────────────────────────────
 
 /**
- * budgeted-history@1.0.0 WorkLoopImplementation.
+ * 创建 budgeted-history@1.0.0 WorkLoopImplementation（machine 驱动）。
  *
+ * - config：ManagedLoopConfig + 策略扩展配置（budgetTokens 等），工厂参数
+ *   传入（原 input.config 改为工厂参数）。
  * - initialContext: an empty context seeded with a system prompt from
  *   config if provided.
  * - initialState: empty object (stateless strategy).
- * - run: delegates to `runManagedLoop` with the budgeted-history strategy.
+ * - machine: managedMachine(config, budgeted-history strategy) 五状态机。
  * - cloneModes: `["fresh"]` — matches `BUDGETED_HISTORY_DEFINITION`.
  */
-export const budgetedHistory: WorkLoopImplementation = {
-  id: "budgeted-history",
-  version: "1.0.0",
-  cloneModes: ["fresh"],
+export function createBudgetedHistoryLoop(config: ManagedLoopConfig = { model: "default" }): WorkLoopImplementation {
+  return {
+    id: "budgeted-history",
+    version: "1.0.0",
+    cloneModes: ["fresh"],
+    executorKind: "local-model",
 
-  initialContext(config: unknown): WorkContext {
-    const cfg = config as Record<string, unknown> | undefined;
-    return {
-      systemPrompt: typeof cfg?.systemPrompt === "string" ? cfg.systemPrompt : undefined,
-      messages: [],
-      tools: undefined,
-      metadata: {
-        contextId: "ctx-initial",
-        sourceRefs: [],
-        artifactRefs: [],
-      },
-    };
-  },
+    initialContext(cfg: unknown): WorkContext {
+      const c = cfg as Record<string, unknown> | undefined;
+      return {
+        systemPrompt: typeof c?.systemPrompt === "string" ? c.systemPrompt : undefined,
+        messages: [],
+        tools: undefined,
+        metadata: {
+          contextId: "ctx-initial",
+          sourceRefs: [],
+          artifactRefs: [],
+        },
+      };
+    },
 
-  initialState(_config: unknown): unknown {
-    return {};
-  },
+    initialState(_config: unknown): unknown {
+      return {};
+    },
 
-  async run(input: WorkLoopInput, sdk: WorkLoopSDK): Promise<WorkLoopResult> {
-    return runManagedLoop(input, sdk, createBudgetedHistoryStrategy());
-  },
-};
+    machine: managedMachine(config, createBudgetedHistoryStrategy()),
+  };
+}
+
+/**
+ * 默认实例（兼容现有注册方/形状断言）；等价 createBudgetedHistoryLoop()。
+ * 已迁移为 machine 驱动，不再提供 run。
+ */
+export const budgetedHistory: WorkLoopImplementation = createBudgetedHistoryLoop();

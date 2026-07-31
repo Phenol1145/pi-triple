@@ -20,7 +20,9 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { DefinitionRegistry } from "../src/core/definitions/registry.ts";
 import { WorkLoopRegistry } from "../src/workloop/registry.ts";
-import { selectiveSummary } from "../src/workloops/selective-summary.ts";
+import { selectiveSummary, createSelectiveSummaryLoop } from "../src/workloops/selective-summary.ts";
+import type { ManagedLoopConfig } from "../src/workloops/managed-loop.ts";
+import { MachineRuntime } from "../src/workloop/machine-runtime.ts";
 import {
   SELECTIVE_SUMMARY_DEFINITION,
   registerWorkLoopDefinition,
@@ -250,6 +252,18 @@ function makeSdk(overrides: {
   };
 }
 
+// ── Machine 驱动 helper（Task 4 迁移：selectiveSummary.run → factory.machine + MachineRuntime） ──
+
+async function driveSelective(
+  config: Record<string, unknown>,
+  input: WorkLoopInput,
+  sdk: WorkLoopSDK,
+) {
+  const impl = createSelectiveSummaryLoop(config as ManagedLoopConfig);
+  const runtime = new MachineRuntime({ machine: impl.machine, input, sdk });
+  return runtime.run();
+}
+
 // ── Implementation shape ────────────────────────────────────────────
 
 test("selectiveSummary: id, version, cloneModes match SELECTIVE_SUMMARY_DEFINITION", () => {
@@ -268,7 +282,9 @@ test("selectiveSummary: id, version, cloneModes match SELECTIVE_SUMMARY_DEFINITI
 test("selectiveSummary: has required implementation fields", () => {
   assert.equal(typeof selectiveSummary.initialContext, "function");
   assert.equal(typeof selectiveSummary.initialState, "function");
-  assert.equal(typeof selectiveSummary.run, "function");
+  assert.equal(selectiveSummary.executorKind, "local-model");
+  assert.ok(selectiveSummary.machine, "machine 取代 run（Task 4）");
+  assert.equal(selectiveSummary.run, undefined, "新实现不提供 run");
 });
 
 // ── initialContext / initialState ────────────────────────────────────
@@ -311,7 +327,7 @@ test("under-budget: no transform, no events emitted", async () => {
     },
   });
 
-  const result = await selectiveSummary.run(input, sdk as WorkLoopSDK);
+  const { result } = await driveSelective(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   assert.equal(result.status, "completed");
 
@@ -408,7 +424,7 @@ test("over-budget: summarization replaces oldest segment with one summary messag
     },
   });
 
-  const result = await selectiveSummary.run(input, sdk as WorkLoopSDK);
+  const { result } = await driveSelective(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   assert.equal(result.status, "completed");
 
@@ -535,14 +551,14 @@ test("over-budget: system prompt and newest messages preserved", async () => {
     },
   });
 
-  await selectiveSummary.run(input, sdk as WorkLoopSDK);
+  await driveSelective(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   // The main model call should receive a context with preserved system prompt
+  // （MachineRuntime 会附加 DSP 派生段——原 systemPrompt 必须作为前缀保留）
   assert.ok(mainModelContext !== undefined, "main model should have been called");
-  assert.equal(
-    mainModelContext!.systemPrompt,
-    systemPrompt,
-    "system prompt must be preserved",
+  assert.ok(
+    mainModelContext!.systemPrompt?.startsWith(systemPrompt),
+    "system prompt must be preserved as prefix (DSP 派生段允许附加在后)",
   );
 
   // The newest messages should be in the main model context
@@ -630,7 +646,7 @@ test("event order: context.summary.created before context.transformed", async ()
     },
   });
 
-  await selectiveSummary.run(input, sdk as WorkLoopSDK);
+  await driveSelective(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   // Find the indices of the events in the telemetry stream
   const summaryCreatedIdx = telemetryCalls.findIndex(
@@ -756,7 +772,7 @@ test("maxSummaryCalls: second over-budget trigger falls back to truncation", asy
     },
   });
 
-  await selectiveSummary.run(input, sdk as WorkLoopSDK);
+  await driveSelective(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   // Should NOT have a summary.created event (maxSummaryCalls already at 1)
   const summaryEvents = telemetryCalls.filter(
@@ -844,7 +860,7 @@ test("fail-open: summarization model call failure falls back to truncation", asy
     },
   });
 
-  const result = await selectiveSummary.run(input, sdk as WorkLoopSDK);
+  const { result } = await driveSelective(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   // Should NOT crash — run completes normally
   assert.equal(result.status, "completed");
@@ -936,7 +952,7 @@ test("event fields: context.summary.created has correct usage fields", async () 
     },
   });
 
-  await selectiveSummary.run(input, sdk as WorkLoopSDK);
+  await driveSelective(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   const summaryEvents = telemetryCalls.filter(
     (c) => c.eventType === "context.summary.created",
@@ -1060,7 +1076,7 @@ test("budgetThreshold: defaults to config.budgetTokens (8192)", async () => {
     },
   });
 
-  await selectiveSummary.run(input, sdk as WorkLoopSDK);
+  await driveSelective(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   // Should have triggered summarization (context > 8192)
   const summaryEvents = telemetryCalls.filter(
@@ -1116,7 +1132,7 @@ test("summaryModel: config.summaryModel passed to summary call options", async (
     },
   });
 
-  await selectiveSummary.run(input, sdk as WorkLoopSDK);
+  await driveSelective(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   // Find the summary call's options
   const summaryCall = model.calls.find(
@@ -1179,7 +1195,7 @@ test("summaryWindow: config.summaryWindow controls which segment is summarized",
     },
   });
 
-  await selectiveSummary.run(input, sdk as WorkLoopSDK);
+  await driveSelective(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   // With 20 messages and summaryWindow=0.25: splitIdx = floor(20*0.25) = 5
   // So oldest 5 messages should be summarized

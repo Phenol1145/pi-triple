@@ -14,8 +14,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runManagedLoop } from "../src/workloops/managed-loop.ts";
+import { managedMachine } from "../src/workloops/managed-loop.ts";
 import type { ManagedLoopConfig, StrategyHook } from "../src/workloops/managed-loop.ts";
+import { MachineRuntime } from "../src/workloop/machine-runtime.ts";
 import { contextTokenTotal } from "../src/workloops/context-metrics.ts";
 import type {
   WorkLoopSDK,
@@ -174,6 +175,19 @@ function makeSdk(overrides: Partial<WorkLoopSDK> = {}): WorkLoopSDK & {
   };
 }
 
+// ── Machine 驱动 helper（runManagedLoop → managedMachine + MachineRuntime，Task 4 迁移） ──
+
+async function driveManaged(
+  config: Record<string, unknown>,
+  strategy: StrategyHook,
+  input: WorkLoopInput,
+  sdk: WorkLoopSDK,
+) {
+  const machine = managedMachine(config as ManagedLoopConfig, strategy);
+  const runtime = new MachineRuntime({ machine, input, sdk });
+  return runtime.run();
+}
+
 // ── Tests ───────────────────────────────────────────────────────────
 
 // ═══════════════════════════════════════════════════════════════════
@@ -196,7 +210,7 @@ test("under-budget: no transform, single model call, correct usage", async () =>
     },
   };
 
-  const result = await runManagedLoop(input, sdk as WorkLoopSDK, trackedStrategy);
+  const { result } = await driveManaged(input.config as Record<string, unknown>, trackedStrategy, input, sdk as WorkLoopSDK);
 
   assert.equal(result.status, "completed");
   assert.equal(transformCalled, false, "should not call transform when under budget");
@@ -256,7 +270,7 @@ test("over-budget: strategy transform invoked when token ceiling exceeded", asyn
     },
   };
 
-  const result = await runManagedLoop(input, sdk as WorkLoopSDK, strategy);
+  const { result } = await driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK);
 
   assert.equal(result.status, "completed");
   assert.ok(transformCalls >= 1, `expected transform to be called, got ${transformCalls}`);
@@ -288,7 +302,7 @@ test("over-budget: strategy returning transformed:false terminates loop", async 
     },
   };
 
-  const result = await runManagedLoop(input, sdk as WorkLoopSDK, strategy);
+  const { result } = await driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK);
 
   assert.equal(result.status, "completed");
   assert.equal(transformCalled, true);
@@ -323,7 +337,7 @@ test("maxModelCalls: loop respects the hard cap", async () => {
     transform: async (ctx) => ({ context: ctx, transformed: false }),
   };
 
-  const result = await runManagedLoop(input, sdk as WorkLoopSDK, strategy);
+  const { result } = await driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK);
 
   // With maxModelCalls=1 and the loop's built-in break-after-first-call,
   // we verify that the hard cap is 1 and the loop terminates.
@@ -347,7 +361,7 @@ test("usage aggregation: observed source is clean", async () => {
     transform: async (ctx) => ({ context: ctx, transformed: false }),
   };
 
-  const result = await runManagedLoop(input, sdk as WorkLoopSDK, strategy);
+  const { result } = await driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK);
   const usage = result.output!.standard!.usage!;
   assert.equal(usage.input, 10);
   assert.equal(usage.output, 5);
@@ -370,7 +384,7 @@ test("usage aggregation: derived source marks as mixed", async () => {
     transform: async (ctx) => ({ context: ctx, transformed: false }),
   };
 
-  const result = await runManagedLoop(input, sdk as WorkLoopSDK, strategy);
+  const { result } = await driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK);
   const usage = result.output!.standard!.usage!;
   const usageAny = usage as Record<string, unknown>;
   assert.equal(usageAny._source, "mixed", "derived usage detected → should mark as mixed");
@@ -390,7 +404,7 @@ test("context lineage: parentContextId chain is maintained via sdk.context.appen
     transform: async (ctx) => ({ context: ctx, transformed: false }),
   };
 
-  await runManagedLoop(input, sdk as WorkLoopSDK, strategy);
+  await driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK);
 
   assert.equal(sdk.contextSpy.appendCalls.length, 1);
   const call = sdk.contextSpy.appendCalls[0]!;
@@ -425,7 +439,7 @@ test("cancellation: throws when aborted before model call", async () => {
   };
 
   await assert.rejects(
-    () => runManagedLoop(input, sdk as WorkLoopSDK, strategy),
+    () => driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK),
     /aborted/,
   );
 });
@@ -473,7 +487,7 @@ test("budgetThreshold: 9k-token context with defaults triggers strategy even whe
     },
   };
 
-  const result = await runManagedLoop(input, sdk as WorkLoopSDK, strategy);
+  const { result } = await driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK);
 
   assert.equal(result.status, "completed");
   assert.equal(transformCalled, true,
@@ -513,7 +527,7 @@ test("budgetThreshold: strategy returning transformed:false under tokenCeiling c
     },
   };
 
-  const result = await runManagedLoop(input, sdk as WorkLoopSDK, strategy);
+  const { result } = await driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK);
 
   assert.equal(result.status, "completed");
   assert.equal(transformCalled, true);
@@ -551,7 +565,7 @@ test("budgetThreshold: no budgetThreshold declared falls back to tokenCeiling", 
     },
   };
 
-  const result = await runManagedLoop(input, sdk as WorkLoopSDK, strategy);
+  const { result } = await driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK);
 
   assert.equal(result.status, "completed");
   assert.equal(transformCalled, true,
@@ -570,6 +584,50 @@ test("output: last assistant message text is captured as standard output", async
     transform: async (ctx) => ({ context: ctx, transformed: false }),
   };
 
-  const result = await runManagedLoop(input, sdk as WorkLoopSDK, strategy);
+  const { result } = await driveManaged(input.config as Record<string, unknown>, strategy, input, sdk as WorkLoopSDK);
   assert.equal(result.output?.standard?.text, "final answer");
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Machine 级行为（Task 4 迁移）：五状态机 check→call→append→done
+// ═══════════════════════════════════════════════════════════════════
+
+test("managed-loop machine: 正常路径 check→call→append→done（单轮终止，turns=1）", async () => {
+  const sdk = makeSdk();
+  const input = makeInput({ config: { model: "test", maxModelCalls: 8, tokenCeiling: 32000 } });
+
+  const strategy: StrategyHook = {
+    transform: async (ctx) => ({ context: ctx, transformed: false }),
+  };
+
+  const machine = managedMachine(input.config as ManagedLoopConfig, strategy);
+  const runtime = new MachineRuntime({ machine, input, sdk });
+  const { result, transitions } = await runtime.run();
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.output?.standard?.usage?.turns, 1, "v1 单轮：恰好 1 次模型调用");
+  // start→check→call→append→done = 4 次转移（δ 在 max_calls 时返回 terminal）
+  assert.deepEqual(transitions.map((t) => t.toState), ["check", "call", "append", "done"]);
+  // 记忆域：calls/totals/hasDerived 进入 state
+  const state = result.state as { calls: number; totals: { input: number }; hasDerived: boolean };
+  assert.equal(state.calls, 1);
+  assert.equal(state.totals.input, 15);
+  assert.equal(state.hasDerived, false);
+});
+
+test("managed-loop machine: 终止转移（max_calls/untransformable → done）δ 直接返回 terminal", async () => {
+  const sdk = makeSdk();
+  const input = makeInput({ config: { model: "test", maxModelCalls: 1, tokenCeiling: 32000 } });
+
+  const strategy: StrategyHook = {
+    transform: async (ctx) => ({ context: ctx, transformed: false }),
+  };
+
+  const machine = managedMachine(input.config as ManagedLoopConfig, strategy);
+  const runtime = new MachineRuntime({ machine, input, sdk });
+  const { result, transitions } = await runtime.run();
+
+  assert.equal(result.status, "completed");
+  assert.equal(transitions.at(-1)?.toState, "done");
+  assert.ok(result.output?.standard?.usage, "terminal 含 usage 汇总");
 });

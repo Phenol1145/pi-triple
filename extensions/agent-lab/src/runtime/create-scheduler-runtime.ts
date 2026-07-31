@@ -12,7 +12,7 @@ import { PiSubagentsAdapter } from "./pi-subagents-adapter.ts";
 import type { DelegationEventBus } from "./pi-subagents-adapter.ts";
 import { createPiDefaultLoop } from "../workloops/pi-default-loop.ts";
 import { PI_DEFAULT_LOOP_DEFINITION } from "./create-runtime.ts";
-import { marketBidLoop } from "../workloops/market-bid-loop.ts";
+import { createMarketBidLoop } from "../workloops/market-bid-loop.ts";
 import type { WorkLoopDefinition } from "../core/contracts.ts";
 import type {
   ModelPort,
@@ -152,7 +152,9 @@ export function createSchedulerRuntime(
   const loop = createPiDefaultLoop(adapter);
   wlRegistry.register(loop);
   try {
-    wlRegistry.register(marketBidLoop);
+    // market-bid 已迁移为工厂（Task 4）；默认 config 注册，per-bid config
+    // （model/balance）由 Task 6 的 workLoopBidder 接线时经工厂传入。
+    wlRegistry.register(createMarketBidLoop());
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!msg.includes("already registered")) throw err;

@@ -232,6 +232,15 @@ export class WorkLoopRunner {
 
     let result: WorkLoopResult;
     try {
+      // run 已标 @deprecated（Task 4 契约）：machine 驱动的新实现不提供 run，
+      // runner 的 machine 路径（MachineRuntime + executor）在 Task 6 适配；
+      // 在此之前对无 run 实现给出明确的 typed 失败而非 TypeError。
+      if (!implementation.run) {
+        throw new Error(
+          `workloop ${workLoopId}@${workLoopVersion} 已迁移为 machine 驱动，` +
+          "runner machine 路径（Task 6）尚未接线",
+        );
+      }
       result = await implementation.run(input, sdk);
     } catch (err) {
       // Thrown error → workloop-error

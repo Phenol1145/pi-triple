@@ -16,7 +16,9 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { DefinitionRegistry } from "../src/core/definitions/registry.ts";
 import { WorkLoopRegistry } from "../src/workloop/registry.ts";
-import { budgetedHistory } from "../src/workloops/budgeted-history.ts";
+import { budgetedHistory, createBudgetedHistoryLoop } from "../src/workloops/budgeted-history.ts";
+import type { ManagedLoopConfig } from "../src/workloops/managed-loop.ts";
+import { MachineRuntime } from "../src/workloop/machine-runtime.ts";
 import { BUDGETED_HISTORY_DEFINITION, registerWorkLoopDefinition, createExperimentRuntime } from "../src/runtime/create-experiment-runtime.ts";
 import { contextTokenTotal, estimateTokens } from "../src/workloops/context-metrics.ts";
 import type {
@@ -173,6 +175,18 @@ function makeSdk(overrides: Partial<{
   };
 }
 
+// ── Machine 驱动 helper（Task 4 迁移：budgetedHistory.run → factory.machine + MachineRuntime） ──
+
+async function driveBudgeted(
+  config: Record<string, unknown>,
+  input: WorkLoopInput,
+  sdk: WorkLoopSDK,
+) {
+  const impl = createBudgetedHistoryLoop(config as ManagedLoopConfig);
+  const runtime = new MachineRuntime({ machine: impl.machine, input, sdk });
+  return runtime.run();
+}
+
 // ── Implementation shape ────────────────────────────────────────────
 
 test("budgetedHistory: id, version, cloneModes match BUDGETED_HISTORY_DEFINITION", () => {
@@ -185,7 +199,9 @@ test("budgetedHistory: id, version, cloneModes match BUDGETED_HISTORY_DEFINITION
 test("budgetedHistory: has required implementation fields", () => {
   assert.equal(typeof budgetedHistory.initialContext, "function");
   assert.equal(typeof budgetedHistory.initialState, "function");
-  assert.equal(typeof budgetedHistory.run, "function");
+  assert.equal(budgetedHistory.executorKind, "local-model");
+  assert.ok(budgetedHistory.machine, "machine 取代 run（Task 4）");
+  assert.equal(budgetedHistory.run, undefined, "新实现不提供 run");
 });
 
 // ── initialContext / initialState ────────────────────────────────────
@@ -223,7 +239,7 @@ test("under-budget: no transform emitted, model completes normally", async () =>
     config: { model: "test", budgetTokens: 8192, maxModelCalls: 8, tokenCeiling: 32000 },
   });
 
-  const result = await budgetedHistory.run(input, sdk as WorkLoopSDK);
+  const { result } = await driveBudgeted(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   assert.equal(result.status, "completed");
 
@@ -258,7 +274,7 @@ test("over-budget: truncation keeps system prompt and most recent messages", asy
     config: { model: "test", budgetTokens: 100, maxModelCalls: 8, tokenCeiling: 500 },
   });
 
-  const result = await budgetedHistory.run(input, sdk as WorkLoopSDK);
+  const { result } = await driveBudgeted(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   assert.equal(result.status, "completed");
 
@@ -304,7 +320,7 @@ test("over-budget: recency priority — oldest messages dropped first", async ()
     config: { model: "test", budgetTokens: tightBudget, maxModelCalls: 8, tokenCeiling: 500 },
   });
 
-  await budgetedHistory.run(input, sdk as WorkLoopSDK);
+  await driveBudgeted(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   const transformEvents = telemetryCalls.filter((c) => c.eventType === "context.transformed");
   assert.ok(transformEvents.length >= 1);
@@ -342,11 +358,15 @@ test("over-budget: system prompt is always preserved in transformed context", as
     config: { model: "test", budgetTokens: 100, maxModelCalls: 8, tokenCeiling: 500 },
   });
 
-  await budgetedHistory.run(input, sdk as WorkLoopSDK);
+  await driveBudgeted(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   // The system prompt passed to the model should still be there
+  // （MachineRuntime 会附加 DSP 派生段——原 systemPrompt 必须作为前缀保留）
   assert.ok(modelContext !== undefined, "model should have been called");
-  assert.equal(modelContext!.systemPrompt, systemPrompt, "system prompt must be preserved");
+  assert.ok(
+    modelContext!.systemPrompt?.startsWith(systemPrompt),
+    "system prompt must be preserved as prefix (DSP 派生段允许附加在后)",
+  );
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -367,7 +387,7 @@ test("event emission: context.transformed carries all required fields on truncat
     config: { model: "test", budgetTokens: 150, maxModelCalls: 8, tokenCeiling: 500 },
   });
 
-  await budgetedHistory.run(input, sdk as WorkLoopSDK);
+  await driveBudgeted(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   const transformEvents = telemetryCalls.filter((c) => c.eventType === "context.transformed");
   assert.ok(transformEvents.length >= 1, "should emit context.transformed");
@@ -464,7 +484,7 @@ test("over-budget: transform reduces context below token ceiling before model ca
     config: { model: "test", budgetTokens: 150, maxModelCalls: 8, tokenCeiling: 500 },
   });
 
-  await budgetedHistory.run(input, sdk as WorkLoopSDK);
+  await driveBudgeted(input.config as Record<string, unknown>, input, sdk as WorkLoopSDK);
 
   assert.equal(modelCalled, true, "model should be called after transform");
   const transformEvents = telemetryCalls.filter((c) => c.eventType === "context.transformed");
