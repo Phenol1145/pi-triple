@@ -80,6 +80,28 @@ test("scheduler status: ready — partial info (no definition)", () => {
   assert.ok(!out.includes("Round:"));
 });
 
+test("scheduler status: shows UUID when provided", () => {
+  const out = renderSchedulerStatus({
+    instanceId: "default-weighted-scorer",
+    instanceUuid: "550e8400-e29b-41d4-a716-446655440000",
+    enabled: true,
+    runtimeAvailable: true,
+  });
+  assert.ok(out.includes("ID: 550e8400-e29b-41d4-a716-446655440000"));
+  assert.ok(out.includes("Instance: default-weighted-scorer"));
+});
+
+test("scheduler status: no UUID line when uuid not provided", () => {
+  const out = renderSchedulerStatus({
+    instanceId: "default-weighted-scorer",
+    enabled: true,
+    runtimeAvailable: true,
+    agentCount: 5,
+  });
+  assert.ok(!out.includes("ID:"));
+  assert.ok(out.includes("Instance: default-weighted-scorer"));
+});
+
 // ── Select tests ────────────────────────────────────────────────────
 
 test("scheduler select: completed with model", () => {

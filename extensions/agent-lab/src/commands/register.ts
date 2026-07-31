@@ -22,6 +22,7 @@ interface Deps {
   getSchedulerEvents?: (limit: number) => LabEvent[];
   syncSchedulerAgents?: () => number;
   getEffectiveRouting?: () => string;
+  getSchedulerUuid?: () => string | undefined;
   arenaSmoke?: (role: string, cmdCtx: ExtensionContext, engine?: "model-caller" | "workloop") => Promise<string>;
   bench?: (cmdCtx: ExtensionContext, n?: number) => Promise<string>;
   captureCommandContext?: (ctx: ExtensionContext) => void;
@@ -168,6 +169,8 @@ export interface ExperimentCompareResult {
 
 export interface SchedulerStatusInput {
   instanceId: string;
+  /** UUID identity (stable across renames; ADR-0002). */
+  instanceUuid?: string;
   definitionId?: string;
   definitionVersion?: string;
   roundId?: string;
@@ -181,6 +184,10 @@ export function renderSchedulerStatus(input: SchedulerStatusInput): string {
   const lines: string[] = [];
   lines.push("Scheduler Status");
   lines.push(`  Enabled: ${input.enabled ? "yes" : "no"}`);
+
+  if (input.instanceUuid) {
+    lines.push(`  ID: ${input.instanceUuid}`);
+  }
 
   if (input.effectiveRouting) {
     lines.push(`  Routing: ${input.effectiveRouting}`);
@@ -563,7 +570,7 @@ export function renderExperimentCompare(result: ExperimentCompareResult): string
 // ── Command registration ────────────────────────────────────────────
 
 export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
-  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, arenaSmoke, bench, captureCommandContext, executeDispatch, optimizerFacade, experimentFacade, runMigration } = deps;
+  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, getSchedulerUuid, arenaSmoke, bench, captureCommandContext, executeDispatch, optimizerFacade, experimentFacade, runMigration } = deps;
 
   const aggsFor = (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a]));
 
@@ -740,18 +747,19 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
         const sub = argv[1];
         if (sub === "status") {
           const instanceId = cfg.scheduler?.instanceId ?? DEFAULT_WEIGHTED_SCORER_NAME;
+          const instanceUuid = getSchedulerUuid?.();
           const enabled = cfg.scheduler?.enabled === true;
           const effectiveRouting = getEffectiveRouting?.();
           const rt = schedulerRuntime?.();
           if (!rt) {
             ctx.ui.notify(renderSchedulerStatus({
-              instanceId, enabled, runtimeAvailable: false, effectiveRouting,
+              instanceId, instanceUuid, enabled, runtimeAvailable: false, effectiveRouting,
             }), "info");
           } else {
             // Runtime available: we have the dispatch interface but not direct
             // repository access. Show what we know from config + runtime presence.
             ctx.ui.notify(renderSchedulerStatus({
-              instanceId, enabled, runtimeAvailable: true, effectiveRouting,
+              instanceId, instanceUuid, enabled, runtimeAvailable: true, effectiveRouting,
             }), "info");
           }
         } else if (sub === "select") {

@@ -876,6 +876,16 @@ export default async function (pi: ExtensionAPI) {
       }
       return "catch-all → default-market (classic — no binding)";
     },
+    getSchedulerUuid: () => {
+      if (!schedulerCore) return undefined;
+      const name = cfg.scheduler?.instanceId;
+      if (!name || name === DEFAULT_WEIGHTED_SCORER_NAME) return getWsId();
+      if (name === DEFAULT_MARKET_NAME) return getArenaId();
+      const ws = schedulerCore.repository.findInstanceByName(WEIGHTED_SCORER_DEFINITION_ID, name);
+      if (ws) return ws.id;
+      const arena = schedulerCore.repository.findInstanceByName(MARKET_SCHEDULER_DEFINITION_ID, name);
+      return arena?.id;
+    },
     arenaSmoke,
     bench,
     captureCommandContext: (ctx) => {
