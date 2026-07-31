@@ -53,6 +53,19 @@ export class PthClient {
     return h;
   }
 
+  /** 统一请求：网络层错误翻译为可操作提示（连接拒绝/DNS/超时等） */
+  private async request(path: string, init: RequestInit): Promise<Response> {
+    try {
+      return await fetch(`${this.url}${path}`, init);
+    } catch (err: any) {
+      const reason = err?.cause?.code ?? err?.cause?.message ?? err?.message ?? String(err);
+      throw new Error(
+        `无法连接 PTH 服务器 (${this.url}${path})：${reason}。` +
+        `请确认 pth 已启动（node dist/pth/main.js），或检查 pit config get pth.url`
+      );
+    }
+  }
+
   /** 提交程序 */
   async submit(manifest: ProgramManifest, archive: Buffer): Promise<SubmitResponse> {
     const body = JSON.stringify({
@@ -61,7 +74,7 @@ export class PthClient {
       archive: archive.toString("base64"),
     });
 
-    const res = await fetch(`${this.url}/api/v1/programs`, {
+    const res = await this.request("/api/v1/programs", {
       method: "POST",
       headers: this.headers(),
       body,
@@ -76,7 +89,7 @@ export class PthClient {
 
   /** 列出程序 */
   async list(): Promise<ProgramEntry[]> {
-    const res = await fetch(`${this.url}/api/v1/programs`, {
+    const res = await this.request("/api/v1/programs", {
       headers: this.headers(),
     });
 
@@ -89,7 +102,7 @@ export class PthClient {
 
   /** 获取程序详情 */
   async get(name: string): Promise<unknown> {
-    const res = await fetch(`${this.url}/api/v1/programs/${encodeURIComponent(name)}`, {
+    const res = await this.request(`/api/v1/programs/${encodeURIComponent(name)}`, {
       headers: this.headers(),
     });
 
@@ -102,7 +115,7 @@ export class PthClient {
 
   /** 删除程序 */
   async delete(name: string): Promise<void> {
-    const res = await fetch(`${this.url}/api/v1/programs/${encodeURIComponent(name)}`, {
+    const res = await this.request(`/api/v1/programs/${encodeURIComponent(name)}`, {
       method: "DELETE",
       headers: this.headers(),
     });
@@ -119,7 +132,7 @@ export class PthClient {
       ...(version !== undefined ? { version } : {}),
     });
 
-    const res = await fetch(`${this.url}/api/v1/programs/${encodeURIComponent(name)}/run`, {
+    const res = await this.request(`/api/v1/programs/${encodeURIComponent(name)}/run`, {
       method: "POST",
       headers: this.headers(),
       body,

@@ -10,6 +10,7 @@ import {
 import { FlowStore } from "../flow/store.js";
 import { printBanner } from "./main.js";
 import { cmdAgentRun, cmdAgentClean } from "./agent.js";
+import { PthClient } from "../bridge/client.js";
 
 type PitMode = "print" | "json" | "fatal";
 
@@ -46,6 +47,15 @@ const JSON_ROUTERS: Record<string, (sub: string | undefined, passthrough: string
     if (sub === "run") { await cmdAgentRun({}, passthrough); return { ok: true }; }
     if (sub === "clean") { cmdAgentClean({}, passthrough); return { ok: true }; }
     return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "agent 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
+  },
+  hub: async (sub) => {
+    if (sub === "programs") {
+      const client = PthClient.fromConfig();
+      if (!client) return { ok: false, error: { code: "NOT_CONFIGURED", message: "未配置 PTH 连接（pit config set pth.url/pth.token）" } };
+      const programs = await client.list();
+      return { ok: true, data: { programs } };
+    }
+    return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "hub 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
   },
 };
 
