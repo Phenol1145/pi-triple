@@ -56,7 +56,7 @@ const COMMAND_TREE: CmdNode[] = [
   },
   { name: "help", desc: "帮助" },
   {
-    name: "bridge", desc: "PTH 程序 ▸",
+    name: "hub", desc: "PTH 程序 ▸",
     children: [
       { name: "submit", desc: "提交程序 <目录>" },
       { name: "programs", desc: "列出 PTH 程序" },
@@ -64,8 +64,15 @@ const COMMAND_TREE: CmdNode[] = [
       { name: "dev", desc: "本地调试 <目录>" },
     ],
   },
-  { name: "quit", desc: "退出 pit ui" },
-  { name: "exit", desc: "退出 pit ui（同 quit）" },
+  {
+    name: "tui", desc: "TUI 面板 ▸",
+    children: [
+      { name: "dashboard", desc: "系统总控面板" },
+      { name: "lab", desc: "开发面板" },
+    ],
+  },
+  { name: "quit", desc: "退出 pit tui" },
+  { name: "exit", desc: "退出 pit tui（同 quit）" },
   {
     name: "flow", desc: "工作流管理 ▸",
     children: [
