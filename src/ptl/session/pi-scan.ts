@@ -2,7 +2,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { SessionRecord } from "./session-provider.js";
-import { listPitSessions, listPitPanes, hasTmux, formatAge, type PitSession } from "../tmux.js";
+import { listPitSessions, listPitPanesDetailed, hasTmux, formatAge, type PitSession, type PitPaneInfo } from "../tmux.js";
+import { classifySession } from "../session-state.js";
 import { pitHome } from "../config.js";
 
 export interface PiSessionFile {
@@ -56,7 +57,7 @@ export function scanSessionFiles(dataDirOrConfig: string | { dataDir: string }):
 /** 合并 tmux 运行态 → SessionRecord 列表 */
 export function toSessionRecords(files: PiSessionFile[]): SessionRecord[] {
   const running = hasTmux() ? new Map(listPitSessions().map((s) => [`pit-${s.name}`, s])) : new Map<string, PitSession>();
-  const panes = hasTmux() ? listPitPanes() : {};
+  const panes = hasTmux() ? listPitPanesDetailed() : new Map<string, PitPaneInfo>();
   const aliases: Record<string, string> = {};
   try {
     const cfg = JSON.parse(fs.readFileSync(path.join(pitHome(), "pi-triple.json"), "utf-8"));
@@ -64,10 +65,15 @@ export function toSessionRecords(files: PiSessionFile[]): SessionRecord[] {
   } catch { /* 无配置时用 templateId 兜底 */ }
 
   return files.map((f) => {
-    const tmuxName = Object.keys(panes).find((n) => n === `pit-${f.id.slice(0, 8)}` || panes[n]?.includes(f.id));
+    const tmuxName = [...panes.keys()].find((n) => n === `pit-${f.id.slice(0, 8)}` || panes.get(n)?.currentCommand?.includes(f.id));
     const sess = tmuxName ? running.get(tmuxName) : undefined;
-    const paneCmd = tmuxName ? panes[tmuxName] : undefined;
-    const status = sess ? "running" : "stopped";
+    const pane = tmuxName ? panes.get(tmuxName) : undefined;
+    // 纸带视图无注册表参与：running 仅当 tmux 在且 pane pid 存活（空壳 → 停止）
+    const live = sess
+      ? { exists: true, pid: pane?.pid ?? undefined, currentCommand: pane?.currentCommand }
+      : { exists: false };
+    const cls = classifySession(live, null);
+    const status: "running" | "stopped" = cls === "running" ? "running" : "stopped";
     const detail: Record<string, string> = {
       "模板": aliases[f.templateId] ?? f.templateId,
       "创建": f.timestamp,
@@ -78,7 +84,7 @@ export function toSessionRecords(files: PiSessionFile[]): SessionRecord[] {
     if (sess) {
       detail["前端占用"] = String(sess.attached ?? 0);
       detail["空闲"] = sess.activityAgeMs != null ? formatAge(sess.activityAgeMs) : "n/a";
-      detail["运行命令"] = (paneCmd ?? "").slice(0, 120) || "n/a";
+      detail["运行命令"] = (pane?.currentCommand ?? "").slice(0, 120) || "n/a";
     }
     const summary = `${status === "running" ? "● 运行中" : "○ 停止"} · ${f.lineCount - 1} 事件${sess?.attached ? ` · 前端${sess.attached}` : ""}`;
     return {
