@@ -73,11 +73,16 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
     if (input === "r" && !key.ctrl) refresh();
   });
 
-  // 每表可视行数（按可用高度）；超限时窗口滚动到选中行
-  const cap = Math.max(1, Math.floor((height - 14) / 3));
-  const tplW = tableWindow(templates, tplSel.index, cap);
-  const sessW = tableWindow(sessions, sessSel.index, cap);
-  const traceW = tableWindow(traces, traceSel.index, cap);
+  // 每表可视行数：焦点表拿主要高度（固定开销约 12 行），非焦点表压缩为 1 数据行；超限窗口滚动
+  const focusCap = Math.max(2, height - 12);
+  const miniCap = 1;
+  const tplW = tableWindow(templates, tplSel.index, focus === 0 ? focusCap : miniCap);
+  const sessW = tableWindow(sessions, sessSel.index, focus === 1 ? focusCap : miniCap);
+  const traceW = tableWindow(traces, traceSel.index, focus === 2 ? focusCap : miniCap);
+
+  // 滚动指示：列表超窗时显示可见范围（如 "▾ 1-5/12"）
+  const scrollHint = (w: { rows: unknown[]; offset: number }, total: number): string =>
+    total > w.rows.length ? `  ▾ ${w.offset + 1}-${w.offset + w.rows.length}/${total}` : "";
 
   // 窗口相对 ↔ 绝对（Task 7 review 修复）：DataTable 只拿到窗口切片 rows，
   // selectedIndex / onSelectionChange 均为窗口相对索引；回执须加回 offset 还原为绝对索引。
@@ -207,6 +212,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
       <Box flexDirection="column">
         <Text bold underline color={focus === 0 ? focusColor : undefined}>
           Templates ({templates.length}){focusMark(0)}
+          <Text dimColor>{scrollHint(tplW, templates.length)}</Text>
         </Text>
         {templates.length === 0 ? (
           <Text dimColor>  无模板 — 创建: pit template new &lt;alias&gt;</Text>
@@ -225,6 +231,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
       <Box flexDirection="column">
         <Text bold underline color={focus === 1 ? focusColor : undefined}>
           Sessions ({sessions.length}){focusMark(1)}
+          <Text dimColor>{scrollHint(sessW, sessions.length)}</Text>
         </Text>
         {sessions.length === 0 ? (
           <Text dimColor>  无会话 — 启动: pit start --bg --name &lt;name&gt;</Text>
@@ -244,6 +251,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
       <Box flexDirection="column">
         <Text bold underline color={focus === 2 ? focusColor : undefined}>
           Trace ({traces.length}){focusMark(2)}
+          <Text dimColor>{scrollHint(traceW, traces.length)}</Text>
         </Text>
         {traces.length === 0 ? (
           <Text dimColor>  无追踪 — 运行竞价任务（pit hub submit / flow run 等）后显示</Text>
