@@ -2,7 +2,7 @@
  * pit/mode — mode resolution + JSON routing + print dispatch
  */
 
-import { emitJson, emitJsonError, ERR } from "../output.js";
+import { emitJson, emitJsonError } from "../output.js";
 import {
   execTemplateLs, execTemplateNew, execTemplateRm,
   execStatus, execLs, execStop, execSharedStatus,
@@ -11,22 +11,16 @@ import { FlowStore } from "../flow/store.js";
 import { printBanner } from "./main.js";
 import { cmdAgentRun, cmdAgentClean } from "./agent.js";
 
-type PitMode = "interactive" | "interactive-lab" | "print" | "json" | "fatal";
+type PitMode = "print" | "json" | "fatal";
 
 export function resolveMode(command: string, flags: Record<string, string>): PitMode {
-  if (flags.json === "true" && ["", "ui", "lab"].includes(command)) {
-    emitJsonError(ERR.TUI_NO_JSON, "TUI 命令不支持 --json");
-    return "fatal";
-  }
   if (flags.json === "true") return "json";
-  if ((command === "" || command === "ui") && process.stdout.isTTY && process.stdin.isTTY) return "interactive";
-  if (command === "lab" && process.stdout.isTTY && process.stdin.isTTY) return "interactive-lab";
   return "print";
 }
 
 /** 表驱动 JSON 路由 */
 const JSON_ROUTERS: Record<string, (sub: string | undefined, passthrough: string[]) => Promise<{ ok: boolean; data?: any; error?: { code: string; message: string } }>> = {
-  tenant: async (sub, passthrough) => {
+  template: async (sub, passthrough) => {
     if (sub === "ls" || sub === "list") return await execTemplateLs();
     if (sub === "new") return await execTemplateNew(passthrough[0]);
     if (sub === "rm") return await execTemplateRm(passthrough[0] || "");

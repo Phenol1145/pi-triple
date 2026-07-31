@@ -13,6 +13,7 @@ import { cmdSubmit } from "../bridge/submit.js";
 import { cmdRun } from "../bridge/run.js";
 import { cmdPrograms } from "../bridge/programs.js";
 import { cmdDev } from "../bridge/dev.js";
+import { printNamespaceHelp } from "./main.js";
 
 // ─── TUI ───────────────────────────────────────────────────
 
@@ -142,6 +143,6 @@ export async function cmdHub(
       await handlers.dev(passthrough[0] ?? "", passthrough.slice(1), flags);
       break;
     default:
-      console.log("  用法: pit hub <submit|run|programs|dev> …（详见 pit help hub）");
+      printNamespaceHelp("hub");
   }
 }

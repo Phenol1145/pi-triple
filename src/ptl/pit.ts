@@ -7,16 +7,13 @@
  */
 
 import { parseArgs } from "./pit/args.js";
-import { printHelp, printBanner } from "./pit/main.js";
+import { printHelp, printBanner, printGettingStarted, printNamespaceHelp, printCommandHelp } from "./pit/main.js";
 import { cmdOnboard } from "./pit/onboard.js";
 import { cmdPi, cmdStart, cmdAttach, cmdSwitch, cmdDetach } from "./pit/sessions.js";
 import { cmdConfig } from "./pit/config-cmd.js";
 import { resolveMode, routeJsonCommand, doPrintCommand } from "./pit/mode.js";
 import { cmdMigrate, handleTemplateRename, handleUpdate, handleInstallRemove, handleShared } from "./pit/admin.js";
-import { cmdSubmit } from "./bridge/submit.js";
-import { cmdRun } from "./bridge/run.js";
-import { cmdPrograms } from "./bridge/programs.js";
-import { cmdDev } from "./bridge/dev.js";
+import { cmdTui, cmdHub, getDeprecatedMigration } from "./pit/route.js";
 import {
   cmdFlowRun, cmdFlowStatus, cmdFlowShow, cmdFlowLs,
   cmdFlowApprove, cmdFlowReject, cmdFlowResume,
@@ -25,10 +22,6 @@ import {
 } from "./flow/commands.js";
 import { cmdAgentRun, cmdAgentClean } from "./pit/agent.js";
 import { emitJsonError } from "./output.js";
-import path from "node:path";
-import {
-  loadConfig, resolveTemplateId, getTemplateAlias, getDefaultTemplateId, pitHome,
-} from "./config.js";
 import {
   execTemplateLs, execTemplateNew, execTemplateRm,
   execStatus, execLs, execStop,
@@ -129,6 +122,13 @@ async function main() {
     process.exit(1);
   }
 
+  // --help 全局处理：pit --help → 全量；pit <cmd> --help → 单命令
+  if (flags.help === "true") {
+    if (command) printCommandHelp(command);
+    else printHelp();
+    return;
+  }
+
   const mode = resolveMode(command, flags);
   if (mode === "fatal") { process.exit(1); return; }
 
@@ -210,18 +210,19 @@ async function main() {
     case "config":
       cmdConfig(subcommand, passthrough);
       break;
+    case "hub":
+      await cmdHub(subcommand, passthrough, flags);
+      break;
+    case "ui":
+    case "lab":
     case "submit":
-      await cmdSubmit(passthrough, flags);
-      break;
     case "run":
-      await cmdRun(subcommand || passthrough[0] || "", passthrough.slice(1), flags);
-      break;
     case "programs":
-      await cmdPrograms(flags);
-      break;
-    case "dev":
-      await cmdDev(passthrough[0] || "", passthrough.slice(1), flags);
-      break;
+    case "dev": {
+      const msg = getDeprecatedMigration(command);
+      console.log(`  \x1b[33m⚠️  pit ${command} ${msg}\x1b[0m`);
+      process.exit(1);
+    }
     case "flow":
       await routeFlowCommand(subcommand, passthrough, flags);
       break;
@@ -231,55 +232,15 @@ async function main() {
       else { console.log("  用法: pit agent run|clean ..."); console.log("  pit agent run <template> <task> [--workspace temp|main]"); console.log("  pit agent clean <agentId>"); }
       break;
     case "help":
-    case "--help":
     case "-h":
-      printHelp();
+      if (passthrough[0]) printCommandHelp(passthrough[0]);
+      else printHelp();
       break;
     case "":
-    case "ui":
-      if (process.stdout.isTTY && process.stdin.isTTY) {
-        const { render } = await import("ink");
-        const React = (await import("react")).default;
-        const { PitApp } = await import("./tui-pit/app.js");
-        render(React.createElement(PitApp), { exitOnCtrlC: false });
-      } else {
-        printHelp();
-      }
+      printGettingStarted();
       break;
-    case "lab":
-      if (process.stdout.isTTY && process.stdin.isTTY) {
-        const { render } = await import("ink");
-        const React = (await import("react")).default;
-        const { LabApp } = await import("./tui-lab/app.js");
-        const cfg = loadConfig();
-        const labResolved = flags.template ? resolveTemplateId(flags.template, cfg) : null;
-        if (flags.template && (!labResolved || !labResolved.ok)) {
-          const reason = labResolved && !labResolved.ok ? labResolved.reason : "not_found";
-          if (reason === "ambiguous" && labResolved && !labResolved.ok && "candidates" in labResolved) {
-            const candidates = labResolved.candidates.map((c) => `${getTemplateAlias(c, cfg)} (${c.slice(0, 8)}…)`).join(", ");
-            console.log(`\x1b[31m❌ "${flags.template}" 匹配多个模板: ${candidates}\x1b[0m`);
-          } else {
-            console.log(`\x1b[31m❌ 未知模板: "${flags.template}"\x1b[0m`);
-          }
-          console.log("  运行 \x1b[36mpit template ls\x1b[0m 查看可用模板\n");
-          process.exit(1);
-        }
-        const labTemplateId = labResolved?.ok ? labResolved.id : getDefaultTemplateId(cfg);
-        const labAlias = getTemplateAlias(labTemplateId, cfg);
-        const labGlobal = flags.global === "true";
-        // 注入 per-tenant AGENT_LAB_* env，确保 lab-data 解析到该模板数据（与 buildPiLaunch 一致）
-        const labHome = pitHome();
-        if (labGlobal) {
-          // --global：只用共享遥测 DB
-          process.env.AGENT_LAB_DB_PATH = path.join(labHome, "data", "shared", "agent-lab", "agent-lab.db");
-        } else {
-          process.env.AGENT_LAB_CONFIG_DIR = path.join(labHome, "data", "pi-config", labTemplateId, "agent-lab");
-          process.env.AGENT_LAB_DB_PATH = path.join(labHome, "data", "shared", "agent-lab", "agent-lab.db");
-        }
-        render(React.createElement(LabApp, { templateId: labTemplateId, templateAlias: labAlias, globalTelemetry: labGlobal }), { exitOnCtrlC: false });
-      } else {
-        console.log("  lab TUI 需要交互式终端");
-      }
+    case "tui":
+      await cmdTui(subcommand, flags);
       break;
     case "version":
     case "--version":
