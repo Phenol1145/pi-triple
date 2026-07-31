@@ -1,7 +1,11 @@
 import type { MarketConfig, LabConfig, OptimizerConfig } from "../src/types.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DEFAULT_CONFIG, mergeConfig, DEFAULT_MARKET_CONFIG, DEFAULT_OPTIMIZER_CONFIG } from "../src/config.ts";
+import { loadConfig } from "../src/config-io.ts";
 
 test("mergeConfig returns defaults when no partial", () => {
   const cfg = mergeConfig(undefined);
@@ -130,4 +134,48 @@ test("optimizer merge does not break existing config sections", () => {
   assert.equal(cfg.market.endowment.K, 100);
   assert.equal(cfg.optimizer!.shadow?.enabled, true);
   assert.equal(cfg.optimizer!.canaryPercent, 10);
+});
+
+// ── loadConfig compat ──
+
+test("loadConfig migrates scheduler.instanceId default-arena → default-market", () => {
+  const prev = process.env.AGENT_LAB_CONFIG_DIR;
+  const dir = mkdtempSync(join(tmpdir(), "agent-lab-config-test-"));
+  process.env.AGENT_LAB_CONFIG_DIR = dir;
+  try {
+    writeFileSync(join(dir, "config.json"), JSON.stringify({ scheduler: { instanceId: "default-arena" } }));
+    const cfg = loadConfig();
+    assert.equal(cfg.scheduler?.instanceId, "default-market");
+  } finally {
+    process.env.AGENT_LAB_CONFIG_DIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadConfig leaves other scheduler.instanceId unchanged", () => {
+  const prev = process.env.AGENT_LAB_CONFIG_DIR;
+  const dir = mkdtempSync(join(tmpdir(), "agent-lab-config-test-"));
+  process.env.AGENT_LAB_CONFIG_DIR = dir;
+  try {
+    writeFileSync(join(dir, "config.json"), JSON.stringify({ scheduler: { instanceId: "default-weighted-scorer" } }));
+    const cfg = loadConfig();
+    assert.equal(cfg.scheduler?.instanceId, "default-weighted-scorer");
+  } finally {
+    process.env.AGENT_LAB_CONFIG_DIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadConfig leaves scheduler with custom instanceId unchanged", () => {
+  const prev = process.env.AGENT_LAB_CONFIG_DIR;
+  const dir = mkdtempSync(join(tmpdir(), "agent-lab-config-test-"));
+  process.env.AGENT_LAB_CONFIG_DIR = dir;
+  try {
+    writeFileSync(join(dir, "config.json"), JSON.stringify({ scheduler: { instanceId: "my-custom-scheduler" } }));
+    const cfg = loadConfig();
+    assert.equal(cfg.scheduler?.instanceId, "my-custom-scheduler");
+  } finally {
+    process.env.AGENT_LAB_CONFIG_DIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

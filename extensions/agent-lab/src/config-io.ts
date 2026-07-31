@@ -41,6 +41,10 @@ export function loadConfig(): LabConfig {
       parsed.market = parsed.arena;
       delete parsed.arena;
     }
+    // Compat: scheduler.instanceId dispatch target renamed default-arena → default-market
+    if (parsed.scheduler && parsed.scheduler.instanceId === "default-arena") {
+      parsed.scheduler.instanceId = "default-market";
+    }
     return mergeConfig(parsed);
   } catch {
     return mergeConfig(undefined);
