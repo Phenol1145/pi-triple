@@ -12,7 +12,7 @@ import { cmdOnboard } from "./pit/onboard.js";
 import { cmdPi, cmdStart, cmdAttach, cmdSwitch, cmdDetach } from "./pit/sessions.js";
 import { cmdConfig } from "./pit/config-cmd.js";
 import { resolveMode, routeJsonCommand, doPrintCommand } from "./pit/mode.js";
-import { cmdMigrate, handleTemplateRename, handleUpdate, handleInstallRemove, handleShared } from "./pit/admin.js";
+import { cmdMigrate, handleUpdate, handleInstallRemove, handleShared } from "./pit/admin.js";
 import { cmdTui, cmdHub, getDeprecatedMigration } from "./pit/route.js";
 import {
   cmdFlowRun, cmdFlowStatus, cmdFlowShow, cmdFlowLs,
@@ -22,10 +22,7 @@ import {
 } from "./flow/commands.js";
 import { cmdAgentRun, cmdAgentClean } from "./pit/agent.js";
 import { emitJsonError } from "./output.js";
-import {
-  execTemplateLs, execTemplateNew, execTemplateRm,
-  execStatus, execLs, execStop,
-} from "./commands.js";
+import { dispatchCommand } from "./commands/dispatch.js";
 
 // Re-export for test compatibility
 export { parseArgs };
@@ -159,21 +156,21 @@ async function main() {
       cmdDetach();
       break;
     case "ls": {
-      const lr = await execLs();
+      const lr = await dispatchCommand("ls", []);
       printBanner();
       console.log(lr.message);
       console.log("");
       break;
     }
     case "stop": {
-      const sr = await execStop(subcommand || passthrough[0] || "");
+      const sr = await dispatchCommand("stop", [subcommand || passthrough[0] || ""]);
       if (sr.ok) console.log(sr.message);
       else console.log(`  \x1b[31m❌ ${sr.error?.message}\x1b[0m`);
       if (!sr.ok) process.exit(1);
       break;
     }
     case "status": {
-      const sr = await execStatus();
+      const sr = await dispatchCommand("status", []);
       printBanner();
       console.log(sr.message);
       console.log("");
@@ -184,12 +181,7 @@ async function main() {
       await (await import("./doctor.js")).runDoctor("full");
       break;
     case "template": {
-      let tr;
-      if (subcommand === "ls" || subcommand === "list") tr = await execTemplateLs();
-      else if (subcommand === "new") tr = await execTemplateNew(passthrough[0]);
-      else if (subcommand === "rm") tr = await execTemplateRm(passthrough[0] || "");
-      else if (subcommand === "rename") { handleTemplateRename(passthrough); break; }
-      else tr = await execTemplateLs();
+      const tr = await dispatchCommand("template", subcommand ? [subcommand, ...passthrough] : passthrough);
       doPrintCommand(tr);
       break;
     }
@@ -202,7 +194,15 @@ async function main() {
       handleInstallRemove(command, flags, subcommand, passthrough);
       break;
     case "shared":
-      await handleShared(subcommand);
+      if (subcommand === "status") {
+        const sr = await dispatchCommand("shared", ["status"]);
+        printBanner();
+        console.log(sr.message);
+        console.log("");
+        if (!sr.ok) process.exit(1);
+      } else {
+        await handleShared(subcommand);
+      }
       break;
     case "migrate":
       await cmdMigrate(flags);

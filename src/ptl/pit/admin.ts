@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
-  loadConfig, resolveDataDir, resolveTemplateId, renameTemplate,
+  loadConfig, resolveDataDir,
   getTemplateAlias, getDefaultTemplateId,
 } from "../config.js";
 import { migrate } from "../migrate.js";
@@ -20,22 +20,6 @@ export async function cmdMigrate(flags: Record<string, string>): Promise<void> {
   const templateId = resolveOrFail(flags.template, config);
   if (!templateId) { process.exit(1); }
   await migrate({ templateId, dryRun: flags["dry-run"] === "true" });
-}
-
-/** Tenant rename as standalone command handler */
-export function handleTemplateRename(passthrough: string[]): void {
-  const oldName = passthrough[0] ?? "";
-  const newName = passthrough[1] ?? "";
-  if (!oldName || !newName) {
-    console.log("  用法: pit template rename <旧别名> <新别名>");
-    process.exit(1);
-  }
-  const cfg = loadConfig();
-  const resolved = resolveTemplateId(oldName, cfg);
-  if (!resolved.ok) { console.log(`  \x1b[31m❌ 模板 "${oldName}" 不存在\x1b[0m`); process.exit(1); }
-  const ok = renameTemplate(resolved.id, newName, cfg);
-  if (ok) console.log(`  ✅ 模板别名: ${oldName} → ${newName}`);
-  else console.log(`  \x1b[31m❌ 重命名失败（别名重复或无效）\x1b[0m`);
 }
 
 export async function handleUpdate(flags: Record<string, string>): Promise<void> {
