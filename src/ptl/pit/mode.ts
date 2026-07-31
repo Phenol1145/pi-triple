@@ -52,8 +52,12 @@ const JSON_ROUTERS: Record<string, (sub: string | undefined, passthrough: string
     if (sub === "programs") {
       const client = PthClient.fromConfig();
       if (!client) return { ok: false, error: { code: "NOT_CONFIGURED", message: "未配置 PTH 连接（pit config set pth.url/pth.token）" } };
-      const programs = await client.list();
-      return { ok: true, data: { programs } };
+      try {
+        const programs = await client.list();
+        return { ok: true, data: { programs } };
+      } catch (err: any) {
+        return { ok: false, error: { code: "PTH_UNREACHABLE", message: err?.message ?? String(err) } };
+      }
     }
     return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "hub 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
   },
