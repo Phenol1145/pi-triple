@@ -1,5 +1,5 @@
 /**
- * /lab arena smoke --engine flag — command layer test.
+ * /lab market smoke --engine flag — command layer test.
  *
  * Pattern mirrors test/commands-experiment.test.ts: mockPi + registerCommands + invoke handler.
  */

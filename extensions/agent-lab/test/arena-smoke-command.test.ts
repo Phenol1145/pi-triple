@@ -157,10 +157,10 @@ function fakeSmokeOutput(role: string): string {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  Tests: /lab arena smoke
+//  Tests: /lab market smoke
 // ════════════════════════════════════════════════════════════════════
 
-test("/lab arena smoke <role> — happy path with staged evidence", async () => {
+test("/lab market smoke <role> — happy path with staged evidence", async () => {
   const { pi, handler, ctx, notifies } = mockPi();
   const cfg = defaultCfg();
   let smokeRole: string | undefined;
@@ -193,11 +193,16 @@ test("/lab arena smoke <role> — happy path with staged evidence", async () => 
   assert.ok(output.includes("Pre-Dispatch Balances"));
   assert.ok(output.includes("Dispatch Result"));
   assert.ok(output.includes("status: completed"));
+  // winner must be the highest-stake bidder: deepseek (42) > openai (15)
+  assert.ok(output.includes("model: deepseek/deepseek-chat"));
+  assert.ok(output.includes("reason: stake 42"));
+  assert.ok(output.includes("agent=deepseek/deepseek-chat stake=42"));
+  assert.ok(output.includes("agent=openai/gpt-4o stake=15"));
   assert.ok(output.includes("Synthetic Settle"));
   assert.ok(output.includes("Event Trace"));
 });
 
-test("/lab arena smoke — missing role shows usage", async () => {
+test("/lab market smoke — missing role shows usage", async () => {
   const { pi, handler, ctx, notifies } = mockPi();
   const deps = placeholderDeps({
     arenaSmoke: async () => "should not be called",
@@ -210,7 +215,7 @@ test("/lab arena smoke — missing role shows usage", async () => {
   assert.ok(!notifies.some((n) => n.level === "info" && n.message.includes("Market Smoke")));
 });
 
-test("/lab arena smoke — arenaSmoke dep not available", async () => {
+test("/lab market smoke — arenaSmoke dep not available", async () => {
   const { pi, handler, ctx, notifies } = mockPi();
   const deps = placeholderDeps({
     // arenaSmoke intentionally undefined
@@ -223,7 +228,7 @@ test("/lab arena smoke — arenaSmoke dep not available", async () => {
   assert.ok(findNotify(notifies, "not bootstrapped"));
 });
 
-test("/lab arena smoke — smoke throws, error handled", async () => {
+test("/lab market smoke — smoke throws, error handled", async () => {
   const { pi, handler, ctx, notifies } = mockPi();
   const deps = placeholderDeps({
     arenaSmoke: async () => {
@@ -413,7 +418,7 @@ test("arenaSmoke — two sequential smokes both succeed", async () => {
   assert.ok(out1.message.includes("Market Smoke: coder"));
   assert.ok(out1.message.includes("traceId: smoke-seq-1"));
 
-  // Second smoke with fresh mocks (simulates new /lab arena smoke invocation)
+  // Second smoke with fresh mocks (simulates new /lab market smoke invocation)
   const { pi: pi2, handler: handler2, ctx: ctx2, notifies: notifies2 } = mockPi();
   const deps2 = placeholderDeps({
     arenaSmoke: async (role: string, _cmdCtx: unknown) => {

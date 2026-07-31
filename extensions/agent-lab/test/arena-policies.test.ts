@@ -50,6 +50,23 @@ test("parseBidResponse caps and rejects", () => {
   assert.equal(parseBidResponse("-50", 1000), 0);
 });
 
+test("parseBidResponse boundary: empty, unparseable, zero, negative, clamp-to-balance", () => {
+  // empty string → no number → 0
+  assert.equal(parseBidResponse("", 1000), 0);
+  // unparseable (no number) → 0
+  assert.equal(parseBidResponse("I cannot bid", 1000), 0);
+  // explicit zero → 0
+  assert.equal(parseBidResponse("0", 1000), 0);
+  // negative → 0
+  assert.equal(parseBidResponse("-3.14", 1000), 0);
+  // clamp to availableBalance (number exceeds balance)
+  assert.equal(parseBidResponse("5000", 1000), 1000);
+  // availableBalance=0 → clamp to 0
+  assert.equal(parseBidResponse("50", 0), 0);
+  // decimal parsing
+  assert.equal(parseBidResponse("stake 42.5 credits", 1000), 42.5);
+});
+
 test("renderBidPrompt fills vars", () => {
   const s = renderBidPrompt(DEFAULT_BID_PROMPT, { prompt: "P", role: "R", difficulty: "easy", odds: 1.5, balance: 100 });
   assert.ok(s.includes("P") && s.includes("R") && s.includes("1.5") && s.includes("100"));
