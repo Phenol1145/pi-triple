@@ -21,8 +21,9 @@ export interface ArenaBidLoopConfig {
 
 function buildBidContext(input: WorkLoopInput, config: ArenaBidLoopConfig): WorkContext {
   const contextId = `ctx-bid-${crypto.randomUUID()}`;
+  const defaultPrompt = "你是一个竞价 agent。根据任务、赔率与你的余额，决定出多少 credits。只回一个数字（你的出价）。";
   return {
-    systemPrompt: "你是一个竞价 agent。根据任务、赔率与你的余额，决定出多少 credits。只回一个数字（你的出价）。",
+    systemPrompt: config.promptTemplate ?? defaultPrompt,
     messages: [{ role: "user", content: input.task }],
     metadata: { contextId, sourceRefs: [], artifactRefs: [] },
   };

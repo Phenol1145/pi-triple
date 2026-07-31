@@ -167,6 +167,8 @@ export default async function (pi: ExtensionAPI) {
   let arenaModelCaller: ModelCaller | undefined;
   // Lazy model registry: populated from ctx on first tool_call.
   let capturedModelRegistry: ModelRegistryLike | undefined;
+  // Memoized multi-model port: created once when capturedModelRegistry is first available.
+  let cachedMultiModelPort: ReturnType<typeof createMultiModelPort> | undefined;
   // Lazy workloop runner: captured from scheduler runtime when created.
   let capturedWlRunner: WorkLoopRunner | undefined;
   // Delegation event bus: pi.events is the single shared bus all extensions
@@ -197,7 +199,10 @@ export default async function (pi: ExtensionAPI) {
           model: {
             async complete(ctx, opts) {
               if (!capturedModelRegistry) throw new Error("model registry not yet captured");
-              return createMultiModelPort({ modelRegistry: capturedModelRegistry }).complete(ctx, opts);
+              if (!cachedMultiModelPort) {
+                cachedMultiModelPort = createMultiModelPort({ modelRegistry: capturedModelRegistry });
+              }
+              return cachedMultiModelPort.complete(ctx, opts);
             },
           },
           tools: { async execute() { throw new Error("stub: tools not available in managed loop v1"); } },

@@ -210,15 +210,20 @@ export function runUuidIdentityMigration(
       }
 
       // Replace old scheduler ids in target_schedulers_json
-      let targets: string[];
+      let targets: unknown;
       try {
-        targets = JSON.parse(row.target_schedulers_json) as string[];
+        targets = JSON.parse(row.target_schedulers_json);
       } catch {
         targets = [];
       }
 
+      // Defensive: skip rewrite if parsed value is not an array
+      if (!Array.isArray(targets)) {
+        continue;
+      }
+
       let jsonChanged = false;
-      const newTargets = targets.map((t) => {
+      const newTargets = (targets as string[]).map((t) => {
         if (schedulerMap[t]) {
           jsonChanged = true;
           return schedulerMap[t];
