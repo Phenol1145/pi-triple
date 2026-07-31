@@ -14,6 +14,12 @@ export interface PitSession {
   name: string;
   windows: number;
   created: Date;
+  attached?: number;        // 前端占用数（新）
+  activityAgeMs?: number;   // 最后活动距今 ms（新）
+}
+
+export interface PitPanes {
+  [sessionName: string]: string; // pane_start_command
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -55,21 +61,36 @@ export function listPitSessions(): PitSession[] {
   if (!hasTmux()) return [];
   const result = spawnSync(
     "tmux",
-    ["list-sessions", "-F", "#{session_name}:#{session_windows}:#{session_created}"],
+    ["list-sessions", "-F", "#{session_name}:#{session_windows}:#{session_created}:#{session_attached}:#{session_activity}"],
     { encoding: "utf-8" },
   );
+  const now = Date.now();
   return (result.stdout ?? "")
     .trim()
     .split("\n")
     .filter((l) => l.startsWith("pit-"))
     .map((l) => {
-      const [full, win, created] = l.split(":");
+      const [full, win, created, attached, activity] = l.split(":");
       return {
         name: full.replace(/^pit-/, ""),
         windows: parseInt(win ?? "1", 10),
         created: new Date(parseInt(created ?? "0", 10) * 1000),
+        attached: parseInt(attached ?? "0", 10),
+        activityAgeMs: activity ? Math.max(0, now - parseInt(activity, 10) * 1000) : undefined,
       };
     });
+}
+
+/** 一次调用拿所有 pit-* 会话 pane 启动命令（仅列 pit- 前缀） */
+export function listPitPanes(): PitPanes {
+  if (!hasTmux()) return {};
+  const r = spawnSync("tmux", ["list-panes", "-a", "-F", "#{session_name}|#{pane_start_command}"], { encoding: "utf-8" });
+  const panes: PitPanes = {};
+  for (const line of (r.stdout ?? "").trim().split("\n")) {
+    const [session, cmd] = line.split("|");
+    if (session && session.startsWith("pit-") && cmd) panes[session] = cmd;
+  }
+  return panes;
 }
 
 /** 按模板别名获取运行中会话列表（B3 修复：前缀匹配而非精确匹配） */
