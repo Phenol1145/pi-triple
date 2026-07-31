@@ -123,6 +123,23 @@ LLM = **无状态概率读写头**：读纸带（确定），写纸带（概率�
 - **skills**：外部指令源（文件系统），模型经 `read` 工具按需取用，结果 append 进纸带——工具可及的静态指令；该"按需检索 → 注入"路径是未来记忆系统检索的雏形（复用模式）
 - **AGENTS.md**：已拼入 SSP，workloop 不感知（黑盒字符串）；未来可作记忆系统的种子来源（可扩展点，本次不做）
 
+### 2.7 纸带消息类型（Observation 的地位）
+
+纸带消息段的消息类型集与**多方写入者**：
+
+| 消息类型（role） | 写入者 | 对应 ReAct 环节 |
+|------------------|--------|----------------|
+| `user` | 用户 / 任务种子 | Input |
+| `assistant`（含 toolCall 内容） | 模型（δ 追加） | Thought + Action |
+| `toolResult`（**observation**） | 工具 / δ 执行结果 | **Observation** |
+
+**Observation = 纸带成员**（toolResult role），关键性质：
+
+- **感知输入**：模型下一步推理的强制输入（非"按需"）——区别于记忆（数据域，不透明、按需投影）；也区别于 SSP/DSP（指令层模型不可写）——observation 是模型行为的**结果**
+- **ReAct 轨迹**：Thought / Action / Observation 三者同处纸带，构成完整推理链；纸带是多方写入的累积轨迹
+- **与 Trace 的分工**：动作（工具调用、参数、耗时）→ Trace（转移副作用，审计/恢复索引）；结果（observation 内容）→ 纸带（模型输入）。冗余但目的不同：Trace 回答"状态机干了什么"，纸带回答"模型看到了什么"
+- **大 observation**：纸带放摘要或 artifact 引用（`toolResult` 内容 = 摘要 + artifactRef，复用 ArtifactPort），原文进 artifact——纸带管理策略（context 预算）的职责，不改变其纸带地位
+
 ---
 
 ## 3. 状态机契约（接口重构）

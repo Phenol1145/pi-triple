@@ -18,6 +18,7 @@
 - LabEvent 向后兼容：identity 新增可选 `transitionSeq`，旧事件无此字段不受影响
 - 测试命令：`node --experimental-strip-types --test test/<file>.test.ts`（node:test，非 vitest）；全量：`cd extensions/agent-lab && npm test`
 - 术语纪律（CONTEXT.md）：WorkLoop=δ、Context=纸带、State=记忆/数据域、控制状态=转移表域；SSP 不变量 / DSP 派生不落盘
+- 纸带消息类型（spec §2.7）：messages 的 role 集 = user / assistant（含 toolCall）/ toolResult（observation）；observation 由 δ/工具写入纸带（工具执行结果），动作记录进 Trace（machine.transition 副作用）；大 observation 走 artifact 引用（toolResult 内容 = 摘要 + artifactRef）
 - 每个任务结束时：目标测试绿 + 全量测试绿 + 提交
 - 概念修正（相对 spec §5.3）：本地式**不创建** LocalModelExecutor 类——δ 直接调用 sdk.model（经 MachineRuntime 的 DSP 包装），避免"executor 事件流单向、无法回写工具执行信号"的死结；`executorKind: "local-model"` = 无需 executor 实例。委托式 PiDelegateExecutor 按 spec 实现
 
