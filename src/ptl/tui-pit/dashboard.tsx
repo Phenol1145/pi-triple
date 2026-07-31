@@ -79,6 +79,9 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
   const sessW = tableWindow(sessions, sessSel.index, cap);
   const traceW = tableWindow(traces, traceSel.index, cap);
 
+  // 窗口相对 ↔ 绝对（Task 7 review 修复）：DataTable 只拿到窗口切片 rows，
+  // selectedIndex / onSelectionChange 均为窗口相对索引；回执须加回 offset 还原为绝对索引。
+
   const tplCols: ColumnDef[] = [
     { key: "alias", label: "TENANT", width: 14 },
     { key: "model", label: "MODEL", width: 18 },
@@ -213,7 +216,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
             rows={tplRows}
             selectable
             selectedIndex={tplSel.index - tplW.offset}
-            onSelectionChange={tplSel.setIndex}
+            onSelectionChange={(rel) => tplSel.setIndex(tplW.offset + rel)}
           />
         )}
       </Box>
@@ -231,7 +234,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
             rows={sessRows}
             selectable
             selectedIndex={sessSel.index - sessW.offset}
-            onSelectionChange={sessSel.setIndex}
+            onSelectionChange={(rel) => sessSel.setIndex(sessW.offset + rel)}
             rowColor={(r) => (r.status === "●" ? "green" : undefined)}
           />
         )}
@@ -250,7 +253,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
             rows={traceRows}
             selectable
             selectedIndex={traceSel.index - traceW.offset}
-            onSelectionChange={traceSel.setIndex}
+            onSelectionChange={(rel) => traceSel.setIndex(traceW.offset + rel)}
           />
         )}
       </Box>
