@@ -12,11 +12,21 @@ _Avoid_: runner, executor, engine, loop
 
 **Context**:
 纸带。WorkLoop 读取、追加、变换的累积消息历史与元数据；经 checkpoint 跨转移持久化。
-_Avoid_: conversation, history, session
+_Avoid_: conversation, history, session（session 专指纸带的落盘实例，见下）
+
+**Session**:
+纸带的持久化实例。WorkLoop 推理消息历史的落盘形态（pi 交互会话为规范实现，jsonl 格式契约）。纸带是数据——可复制（fork/clone）、分叉（branch）、转移所有权（transfer）。任何 WorkLoop 只要按纸带契约持久化推理历史（含竞价中的模型询问），即产出 Session。
+_Avoid_: conversation, chat；不要用 session 指代运行中的纸带（那是 Context）
 
 **State**:
 有限控制状态。跨转移携带、经 checkpoint 持久化的、各 WorkLoop 自有的不透明数据。与 Context（消息纸带）相区别。
-_Avoid_: context, memory
+Agent 的持久化状态（如 credit 余额）即其「记忆」的一种——与纸带（Session/Context）并列但性质不同：状态 vs 上下文。
+_Avoid_: context, memory（避免与纸带/Context 混淆）
+
+**Trace**:
+状态追踪。为调试 agent 或 agent 集群而记录的状态变化与执行轨迹（credit 变化、结算、调度决策、遥测）。与 Session 区分：Session 是纸带（推理消息历史），Trace 是状态追踪（状态变化/执行轨迹）。
+与全局架构设计一致：Trace 含**执行级**（一次执行的 envelope：traceId + StandardTrace）与**状态级**（credit 变化、结算）两个粒度；LabEvent 的 `traceId` 为串起两者的关联键，`sessionId` 为可选的会话（纸带）关联。
+_Avoid_: session, log（log 太泛）
 
 **Agent**:
 状态存储实体。一个持久、带身份的实体，绑定一个默认 WorkLoop，其 context 与 state 跨运行持久化。Agent 被 WorkLoop 驱动；它本身不是 WorkLoop。
