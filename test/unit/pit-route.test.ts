@@ -48,4 +48,9 @@ describe("getDeprecatedMigration", () => {
   it("DEPRECATED_COMMANDS 恰好 6 条", () => {
     expect(Object.keys(DEPRECATED_COMMANDS).sort()).toEqual(["dev","lab","programs","run","submit","ui"]);
   });
+  it("原型链键（toString/constructor/__proto__）→ null", () => {
+    expect(getDeprecatedMigration("toString")).toBeNull();
+    expect(getDeprecatedMigration("constructor")).toBeNull();
+    expect(getDeprecatedMigration("__proto__")).toBeNull();
+  });
 });

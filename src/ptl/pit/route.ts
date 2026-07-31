@@ -35,6 +35,6 @@ export const DEPRECATED_COMMANDS: Record<string, string> = {
 
 /** 旧命令 → 迁移提示文案；未废弃返回 null。 */
 export function getDeprecatedMigration(command: string): string | null {
-  const target = DEPRECATED_COMMANDS[command];
-  return target ? `已迁移：请使用 ${target}` : null;
+  if (!Object.hasOwn(DEPRECATED_COMMANDS, command)) return null;
+  return `已迁移：请使用 ${DEPRECATED_COMMANDS[command]}`;
 }
