@@ -64,6 +64,17 @@ interface ProposalRow {
 export function runUuidIdentityMigration(
   db: DatabaseSync,
 ): { migrated: boolean; mapping: Record<string, string> } {
+  // ── 0. Ensure name column exists on instance tables (idempotent) ──
+  // Must precede _applyCoreMigrations' UNIQUE index creation so legacy
+  // DBs with duplicate '' names get distinct names set before the index.
+  const tablesNeedingName = ["lab_scheduler_instances", "lab_optimizer_instances", "lab_routing_bindings"];
+  for (const table of tablesNeedingName) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === "name")) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN name TEXT NOT NULL DEFAULT ''`);
+    }
+  }
+
   // ── 1. Detect: if ALL schedulers already UUID → skip ──────────────
   const schedulerRows = db
     .prepare(

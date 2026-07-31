@@ -41,6 +41,7 @@ import { createAutoFlow } from "./src/optimizer/auto-flow.ts";
 import { evaluateShadow } from "./src/optimizer/shadow.ts";
 import { evaluateCanary, decideCanaryAction } from "./src/optimizer/canary-eval.ts";
 import { DEFAULT_MARKET_NAME, DEFAULT_WEIGHTED_SCORER_NAME, MARKET_DEFAULT_BINDING_NAME, MARKET_SCHEDULER_DEFINITION_ID, WEIGHTED_SCORER_DEFINITION_ID, MARKET_DEFAULT_BINDING_ID, WEIGHTED_TUNER_OPTIMIZER_ID, DEFAULT_WEIGHTED_TUNER_INSTANCE_ID } from "./src/schedulers/names.ts";
+import { runUuidIdentityMigration } from "./src/migrate-uuid-identity.ts";
 
 const DIRECT_PREFIXES = ["deepseek", "moonshotai", "z-ai", "qwen"];
 
@@ -50,6 +51,16 @@ export default async function (pi: ExtensionAPI) {
 
   // Dual store: shared telemetry (runs) + per-template config/pin/arena/workloop
   const sharedStore = new SqliteStore(sharedDbPath());
+
+  // UUID identity migration: must run BEFORE CoreRepository._applyCoreMigrations
+  // creates the UNIQUE index on (definition_id, name), so legacy DBs with
+  // duplicate empty names don't violate the constraint.
+  try {
+    runUuidIdentityMigration(sharedStore.raw);
+  } catch (err) {
+    console.error("[agent-lab] UUID identity migration failed (fail-open):", err);
+  }
+
   const localDir = localConfigDir();
   mkdirSync(localDir, { recursive: true });
   const localStore = new SqliteStore(join(localDir, "agent-lab.db"));

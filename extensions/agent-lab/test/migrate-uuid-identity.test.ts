@@ -230,6 +230,172 @@ test("idempotent: second run returns migrated=false and changes nothing", async 
   db.close();
 });
 
+test("self-sufficient: adds name column on legacy DB (no name col) + sets distinct names, then UNIQUE index succeeds", async () => {
+  // Simulate a LEGACY DB: lab_scheduler_instances WITHOUT name column
+  // and WITHOUT the UNIQUE index (old schema). Insert TWO rows with the
+  // SAME definition_id — both will get name='' from ALTER DEFAULT.
+  // The migration should add the name column, set distinct names, and
+  // then a subsequent CREATE UNIQUE INDEX should succeed.
+  const db = new DatabaseSync(":memory:");
+
+  // Legacy schema: NO name column, NO UNIQUE constraint on (definition_id, name)
+  db.exec(`
+    CREATE TABLE lab_scheduler_instances (
+      id TEXT PRIMARY KEY,
+      definition_id TEXT NOT NULL,
+      definition_version TEXT NOT NULL,
+      parameter_model_version TEXT NOT NULL,
+      agent_schema_version TEXT NOT NULL,
+      status TEXT NOT NULL,
+      current_round_id TEXT NOT NULL,
+      canary_round_id TEXT,
+      canary_percent REAL,
+      fallback_chain_json TEXT NOT NULL,
+      metadata_json TEXT NOT NULL,
+      created_ts INTEGER NOT NULL
+    );
+    CREATE TABLE lab_optimizer_instances (
+      id TEXT PRIMARY KEY,
+      definition_id TEXT NOT NULL,
+      definition_version TEXT NOT NULL,
+      config_json TEXT NOT NULL,
+      target_schedulers_json TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE lab_routing_bindings (
+      id TEXT PRIMARY KEY,
+      scheduler_instance_id TEXT NOT NULL,
+      priority INTEGER NOT NULL,
+      match_json TEXT NOT NULL,
+      created_ts INTEGER NOT NULL
+    );
+    CREATE TABLE lab_optimization_rounds (
+      id TEXT PRIMARY KEY,
+      scheduler_instance_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      parent_round_id TEXT,
+      parameters_json TEXT NOT NULL,
+      optimizer_json TEXT,
+      proposal_id TEXT,
+      status TEXT NOT NULL,
+      created_ts INTEGER NOT NULL
+    );
+    CREATE TABLE lab_agent_instances (
+      id TEXT PRIMARY KEY,
+      scheduler_instance_id TEXT NOT NULL,
+      definition_json TEXT NOT NULL,
+      model TEXT,
+      source_template_id TEXT,
+      source_agent_id TEXT,
+      clone_operation_id TEXT,
+      created_round_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_ts INTEGER NOT NULL
+    );
+    CREATE TABLE lab_proposals (
+      id TEXT PRIMARY KEY,
+      optimizer_instance_id TEXT NOT NULL,
+      scheduler_instance_id TEXT NOT NULL,
+      base_round_id TEXT NOT NULL,
+      parameters_json TEXT NOT NULL,
+      evaluation_json TEXT,
+      status TEXT NOT NULL,
+      candidate_round_id TEXT,
+      promoted_round_id TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE lab_namespace_kv (
+      namespace TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value_json TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      updated_ts INTEGER NOT NULL,
+      PRIMARY KEY(namespace, key)
+    );
+  `);
+
+  const now = Date.now();
+
+  // Insert TWO scheduler rows with the SAME definition_id (simulates legacy duplicate-
+  // empty-name scenario: both would get name='' from ALTER DEFAULT, which would violate
+  // a UNIQUE(definition_id, name) index if the index were created BEFORE the migration).
+  db.exec(`
+    INSERT INTO lab_scheduler_instances
+      (id, definition_id, definition_version, parameter_model_version,
+       agent_schema_version, status, current_round_id, canary_round_id,
+       canary_percent, fallback_chain_json, metadata_json, created_ts)
+    VALUES
+      ('default-arena', 'market', '1.0.0', '1.0.0', '1.0.0',
+       'active', '', NULL, NULL, '[]', '{}', ${now}),
+      ('default-weighted-scorer', 'weighted-scorer', '1.0.0', '1.0.0', '1.0.0',
+       'active', '', NULL, NULL, '[]', '{}', ${now}),
+      ('extra-market-instance', 'market', '1.0.0', '1.0.0', '1.0.0',
+       'active', '', NULL, NULL, '[]', '{}', ${now + 1})
+  `);
+
+  // Insert routing binding referencing default-arena
+  db.exec(`
+    INSERT INTO lab_routing_bindings
+      (id, scheduler_instance_id, priority, match_json, created_ts)
+    VALUES
+      ('arena-default', 'default-arena', 10, '{}', ${now})
+  `);
+
+  // Insert optimizer with old target
+  db.exec(`
+    INSERT INTO lab_optimizer_instances
+      (id, definition_id, definition_version, config_json,
+       target_schedulers_json, status, created_at)
+    VALUES
+      ('default-weighted-tuner', 'weighted-tuner', '1.0.0', '{}',
+       '["default-arena"]', 'active', ${now})
+  `);
+
+  const { runUuidIdentityMigration } = await loadMigration();
+
+  // Run migration
+  const result = runUuidIdentityMigration(db);
+  assert.equal(result.migrated, true);
+
+  // ── Assert: name column now exists on all three tables ──
+  for (const table of ["lab_scheduler_instances", "lab_optimizer_instances", "lab_routing_bindings"]) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    assert.ok(cols.some((c) => c.name === "name"), `${table} should have name column after migration`);
+  }
+
+  // ── Assert: ids are UUID ──
+  const schedulers = db
+    .prepare("SELECT id, name, definition_id FROM lab_scheduler_instances ORDER BY created_ts")
+    .all() as Array<{ id: string; name: string; definition_id: string }>;
+  for (const s of schedulers) {
+    assert.ok(isUuid(s.id), `scheduler id ${s.id} should be UUID`);
+  }
+
+  // ── Assert: names are distinct (the two market schedulers got different names) ──
+  // First market scheduler (default-arena) → name "default-arena"
+  // Third market scheduler (extra-market-instance) → name "extra-market-instance"
+  const marketSchedulers = schedulers.filter((s) => s.definition_id === "market");
+  assert.equal(marketSchedulers.length, 2);
+  const names = marketSchedulers.map((s) => s.name);
+  assert.notEqual(names[0], names[1], "market schedulers should have distinct names");
+
+  // ── Assert: CREATE UNIQUE INDEX on (definition_id, name) succeeds ──
+  assert.doesNotThrow(() => {
+    db.exec("CREATE UNIQUE INDEX idx_test_si_def_name ON lab_scheduler_instances(definition_id, name)");
+  }, "UNIQUE index should succeed after migration sets distinct names");
+
+  // ── Also verify optimizer_instances + routing_bindings UNIQUE indexes succeed ──
+  assert.doesNotThrow(() => {
+    db.exec("CREATE UNIQUE INDEX idx_test_oi_def_name ON lab_optimizer_instances(definition_id, name)");
+  });
+  assert.doesNotThrow(() => {
+    db.exec("CREATE UNIQUE INDEX idx_test_rb_si_name ON lab_routing_bindings(scheduler_instance_id, name)");
+  });
+
+  db.close();
+});
+
 test("no-op when all schedulers are already UUIDs", async () => {
   const db = new DatabaseSync(":memory:");
   db.exec(CORE_SCHEMA);
