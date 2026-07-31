@@ -69,13 +69,13 @@ LLM = **无状态概率读写头**：读纸带（确定），写纸带（概率�
 **State（总状态）= 控制状态 + 记忆/数据域**：
 
 - **控制状态**：有限、可枚举、转移表定义域；描述执行位置；本身不携带信息（非记忆）
-- **记忆/数据域**：credit 等跨转移存活的不透明持久化数据；四个作用——跨转移存活（checkpoint 落盘）、**派生**（阈值分类 → 控制状态，如 `credit < 0 → BANKRUPT`）、δ 的决策输入与副作用（读作出价、结算写回）、按需**注入纸带**（投影）
+- **记忆/数据域**：credit 等跨转移存活的不透明持久化数据；四个作用——跨转移存活（checkpoint 落盘）、**派生**（阈值分类 → 控制状态，如 `credit < 0 → BANKRUPT`）、δ 的决策输入与副作用（读作出价、结算写回）、按需**投影到模型可见层**（DSP，§2.6）
 - 连续值（credit）不进转移表定义域；经派生分类后的有限语义（破产/正常）才进入转移表
 - 与纸带区分：状态 vs 上下文（CONTEXT.md 术语纪律：memory 专指状态型记忆，纸带用 Context/Session 表述）
 
 ### 2.4 记忆系统预留（未来）
 
-传统语义记忆系统（事实/经验/偏好，跨任务存活、可检索、会演化）= **数据域扩展**（第三类记忆）。与 credit 同性质：不透明于 LLM、按需注入纸带、跨运行持久化；多出检索与演化语义。追踪方式：记忆变更走 tx 审计（复用 credit_tx 模式），见 §7.3。
+传统语义记忆系统（事实/经验/偏好，跨任务存活、可检索、会演化）= **数据域扩展**（第三类记忆）。与 credit 同性质：不透明于 LLM、按需投影到模型可见层（DSP / 检索注入）、跨运行持久化；多出检索与演化语义。追踪方式：记忆变更走 tx 审计（复用 credit_tx 模式），见 §7.3。
 
 ### 2.5 状态认知（agent 如何知道自己处于什么状态）
 
@@ -84,15 +84,44 @@ LLM = **无状态概率读写头**：读纸带（确定），写纸带（概率�
 | 主体 | 方式 | 精度 |
 |------|------|------|
 | 状态机引擎 | 寄存器持有当前状态 | 精确（私有） |
-| LLM（行为体） | **状态投影**（控制状态 + 记忆摘要注入纸带） | 近似（语义化） |
+| LLM（行为体） | **状态投影**（控制状态 + 记忆摘要 → 注入 DSP / 任务文本） | 近似（语义化） |
 | 外部观察者 | Trace 转移序列 | 精确（事后） |
 
 **双约束**：
 
 - **硬约束**（引擎侧）：转移表/δ 校验——BANKRUPT 状态无"竞价"边，即使模型发了竞价工具调用，δ 拒绝执行（余额校验失败）。模型"不知道"也能被约束
-- **软约束**（行为侧）：状态投影——转移后引擎自动把状态摘要注入纸带，模型"知道"后自觉按状态行事
+- **软约束**（行为侧）：状态投影——转移后引擎自动把状态摘要投影，模型"知道"后自觉按状态行事
 
-投影机制：每个状态在 MachineDefinition 声明 `projection?: (ctx, memory) => string`；引擎在每次转移后自动注入（注入动作记入 Trace 副作用）。投影 = 记忆 → 纸带的官方接口。
+投影机制：每个状态在 MachineDefinition 声明 `projection?: (ctx, memory) => string`；引擎在每次转移后自动投影（本地式 → DSP，§2.6；委托式 → 任务文本，§5.2）。投影 = 记忆 → 模型可见层的官方接口。
+
+### 2.6 上下文构件地位（SSP / DSP）
+
+现有上下文构件（systemPrompt、AGENTS.md、SYSTEM.md、skills 描述、工具描述、task）按性质分为三层：
+
+| 构件 | 归属 | 性质 |
+|------|------|------|
+| AGENTS.md / CLAUDE.md、SYSTEM.md / APPEND_SYSTEM.md、skills 描述、工具描述、pi 文档 | **SSP** | 不变量：跨转移、跨运行不变 |
+| 状态投影、预算剩余、环境元数据（时间/cwd）、动态工具集 | **DSP** | 派生物：每轮由引擎从（控制状态 + 记忆 + 元数据）重新派生 |
+| messages、task 种子 | **纸带消息段** | 追加式、可 fork/clone/branch、checkpoint 持久化 |
+
+**SSP（Static System Prompt）**：配置层，pi 侧拼好后以 `WorkContext.systemPrompt` 传入；状态机不管理、不修改；checkpoint 原样随存。
+
+**DSP（Dynamic System Prompt）**：系统级派生层：
+
+- **引擎统一组装**：从（控制状态投影 + 预算剩余 + 环境元数据 + workloop 声明的投影）派生；δ 不直接写 DSP（只声明投影）
+- **每轮重建**：非追加式（区别于消息段）；LLM 调用边界合成 `system = SSP + DSP`
+- **不持久化**：派生源（控制状态 + 记忆 + 元数据）都在 checkpoint 内，恢复时重建即可；Trace 记录 DSP 变化（delta），审计不丢
+- **不参与分支**：fork/clone/branch 只作用于消息段；SSP 原样继承、DSP 重建
+
+**分界线规则**：是否随转移变化——不变进 SSP，随转移/预算/环境变化进 DSP，对话内容进消息段。
+
+**投影语义**：状态投影注入 DSP（本地式）——它本质是系统对模型的约束指令（"你处于 BANKRUPT 状态"），比消息注入更强制（模型更遵从 system），且不污染纸带审计。
+
+**特殊构件**：
+
+- **task**：初始事件（`start` 事件的 payload）→ δ 写入纸带成为首条 user 消息（种子消息，属消息段）
+- **skills**：外部指令源（文件系统），模型经 `read` 工具按需取用，结果 append 进纸带——工具可及的静态指令；该"按需检索 → 注入"路径是未来记忆系统检索的雏形（复用模式）
+- **AGENTS.md**：已拼入 SSP，workloop 不感知（黑盒字符串）；未来可作记忆系统的种子来源（可扩展点，本次不做）
 
 ---
 
@@ -151,6 +180,12 @@ interface WorkLoopImplementation {
 
 `run()` 删除；runner 直接驱动 `machine`（§4）。所有调用方经 runner 使用，无直接 `run()` 依赖（§8 迁移面确认）。
 
+### 3.3 上下文契约（SSP / DSP）
+
+- `WorkContext.systemPrompt` 保留 = **SSP**（不变量，checkpoint 原样随存）；MachineRuntime 不管理、不修改
+- **DSP** 为 MachineRuntime 内部派生串（投影 + 预算剩余 + 环境元数据），不落 WorkContext；本地式 LLM 调用边界合成 `system = SSP + DSP`（§5.3）；委托式投影并入任务文本（§5.2）
+- `WorkContext.messages` = 消息段（状态机管理、checkpoint 持久化、分支语义的唯一作用域）
+
 ---
 
 ## 4. MachineRuntime（runner 内核心）
@@ -169,7 +204,7 @@ run(machine, input, executor, sdk):
     result ← machine.step(ctx, memory, event, sdk) // δ
     ctx, memory ← result.context, result.state
     state ← next
-    自动投影（state.projection → 注入纸带，记 Trace 副作用）
+    自动投影（state.projection → DSP 派生项 / 委托式任务文本；记 Trace 副作用 dspChanged）
     自动 checkpoint（§4.2）
     转移级 Trace（§7.2）
     if result.terminal → 返回 terminal（runner 按 status 提交 CAS）
@@ -178,7 +213,7 @@ run(machine, input, executor, sdk):
 
 ### 4.2 自动 checkpoint 与恢复
 
-- **转移级自动 checkpoint**：每次转移后 `sdk.checkpoint.save(ctx, memory, { label: `${next}#${seq}`, controlState: next })`——纸带 + 记忆 + 控制状态 + 事件队列全部落盘（复用现有 CheckpointStore）
+- **转移级自动 checkpoint**：每次转移后 `sdk.checkpoint.save(ctx, memory, { label: `${next}#${seq}`, controlState: next })`——纸带（SSP + 消息段）+ 记忆 + 控制状态 + 事件队列全部落盘（复用现有 CheckpointStore）；**DSP 不落盘**（派生源在 checkpoint 内，恢复时重建，§2.6）
 - **恢复**：`resume(checkpointId)` → 从 checkpoint 重建（纸带 + 记忆 + 当前控制状态 + 待处理事件），继续循环；中断（pi 进程死亡 / abort）后从最近 checkpoint 重放
 - checkpoint 记录关联 Trace：`(traceId, transitionSeq, checkpointId)` 互相索引（恢复位置 = Trace 中该转移的记录）
 
@@ -269,7 +304,7 @@ identity: {
 转移记录的副作用摘要与状态级事件**注册制**，非硬编码：新存储域 = 新副作用类型 / 新状态级事件类型（`credit_tx` / `market_tasks` / 未来 `memory_tx`…），由各 provider（TUI 阶段确立的 Provider 注册制）声明结构。Trace 核心不感知具体类型。记忆系统的追踪 = 把记忆当作"有检索能力的 credit"：
 
 - 变更类（write / update / forget）= 状态级 tx 事件（含 before/after/version，CAS 语义同 state-store）
-- 读取类（retrieve）= 审计事件（记录哪次转移检索了什么、注入纸带的哪段——行为归因）
+- 读取类（retrieve）= 审计事件（记录哪次转移检索了什么、投影到模型可见层的哪段——行为归因）
 - 溯源链：记忆条目携带来源（sourceTraceId, sourceTransitionSeq）
 
 本次**不实现**记忆系统，仅保证契约可扩展（副作用摘要字段 + 事件类型注册制）。
@@ -343,6 +378,8 @@ identity: {
 5. **对外行为不变**：同一 workloop 的 terminal 结果（status / output / context / state）与迁移前一致
 6. **CAS 提交语义不变**：仅 completed 提交，failed / paused 不提交（沿用现有）
 7. **事件兼容**：LabEvent identity 新增可选 transitionSeq，旧事件无此字段不受影响
+8. **SSP 不变量 / DSP 可重建**：`WorkContext.systemPrompt`（SSP）跨转移不变；DSP 由引擎从（控制状态 + 记忆 + 元数据）每轮派生，不落盘、不参与分支，恢复时重建
+9. **投影不污染消息段**：本地式投影入 DSP、委托式入任务文本，不写入 messages
 
 ---
 
