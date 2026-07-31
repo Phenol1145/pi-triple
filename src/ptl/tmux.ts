@@ -22,6 +22,11 @@ export interface PitPanes {
   [sessionName: string]: string; // pane_start_command
 }
 
+export interface PitPaneInfo {
+  pid?: number;
+  currentCommand?: string;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────
 
 /** 检查 tmux 是否已安装 */
@@ -44,6 +49,13 @@ export function configureTmuxServer(): void {
 /** 用户命名 → tmux 会话名（唯一前缀源） */
 export function tmuxSessionName(name: string): string {
   return `pit-${name}`;
+}
+
+/** 会话名消毒：合法 [A-Za-z0-9._-]；非法返回错误消息，合法返回 null */
+export function validateSessionName(name: string): string | null {
+  if (!name) return "会话名不能为空";
+  if (/[^A-Za-z0-9._-]/.test(name)) return `会话名含非法字符（仅允许字母/数字/._-）: "${name}"`;
+  return null;
 }
 
 /** 年龄格式化（对应 sessions list/output） */
@@ -93,6 +105,19 @@ export function listPitPanes(): PitPanes {
   return panes;
 }
 
+/** 一次调用拿所有 pit-* 会话 pane 的 pid + 当前命令（additive：不动 listPitPanes） */
+export function listPitPanesDetailed(): Map<string, PitPaneInfo> {
+  const out = new Map<string, PitPaneInfo>();
+  if (!hasTmux()) return out;
+  const r = spawnSync("tmux", ["list-panes", "-a", "-F", "#{session_name}|#{pane_pid}|#{pane_current_command}"], { encoding: "utf-8" });
+  for (const line of (r.stdout ?? "").trim().split("\n")) {
+    const [session, pid, cmd] = line.split("|");
+    if (!session || !session.startsWith("pit-")) continue;
+    out.set(session, { pid: pid ? parseInt(pid, 10) || undefined : undefined, currentCommand: cmd || undefined });
+  }
+  return out;
+}
+
 /** 按模板别名获取运行中会话列表（B3 修复：前缀匹配而非精确匹配） */
 export function sessionsForTenant(templateAlias: string): string[] {
   if (!hasTmux()) return [];
@@ -120,6 +145,14 @@ export function killPitSession(name: string): boolean {
   if (!hasTmux()) return false;
   const r = spawnSync("tmux", ["kill-session", "-t", `=${tmuxSessionName(name)}`], { encoding: "utf-8" });
   return r.status === 0;
+}
+
+/** 指定会话 pane 的主进程 pid（创建后调用） */
+export function getPanePid(sessionName: string): number | null {
+  if (!hasTmux()) return null;
+  const r = spawnSync("tmux", ["display-message", "-p", "-t", `=${sessionName}`, "#{pane_pid}"], { encoding: "utf-8" });
+  const pid = parseInt((r.stdout ?? "").trim(), 10);
+  return Number.isFinite(pid) && pid > 0 ? pid : null;
 }
 
 // ─── Session Launch ──────────────────────────────────────────
