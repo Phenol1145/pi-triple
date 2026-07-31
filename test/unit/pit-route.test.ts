@@ -3,6 +3,7 @@ import {
   resolveTuiPanel, TUI_PANELS, HUB_COMMANDS,
   DEPRECATED_COMMANDS, getDeprecatedMigration,
 } from "../../src/ptl/pit/route.js";
+import { cmdTui, type TuiLaunchOpts } from "../../src/ptl/pit/route.js";
 
 describe("resolveTuiPanel", () => {
   it("无子命令 → dashboard", () => {
@@ -52,5 +53,37 @@ describe("getDeprecatedMigration", () => {
     expect(getDeprecatedMigration("toString")).toBeNull();
     expect(getDeprecatedMigration("constructor")).toBeNull();
     expect(getDeprecatedMigration("__proto__")).toBeNull();
+  });
+});
+
+describe("cmdTui", () => {
+  const collect = () => {
+    const calls: TuiLaunchOpts[] = [];
+    const fake = async (o: TuiLaunchOpts) => { calls.push(o); };
+    return { calls, fake };
+  };
+
+  it("pit tui（无子命令）→ 默认 dashboard", async () => {
+    const { calls, fake } = collect();
+    await cmdTui("", {}, fake);
+    expect(calls).toEqual([{ panel: "dashboard", flags: {} }]);
+  });
+
+  it("pit tui dashboard → dashboard", async () => {
+    const { calls, fake } = collect();
+    await cmdTui("dashboard", {}, fake);
+    expect(calls[0].panel).toBe("dashboard");
+  });
+
+  it("pit tui lab --template dev → lab + flags 透传", async () => {
+    const { calls, fake } = collect();
+    await cmdTui("lab", { template: "dev", global: "true" }, fake);
+    expect(calls[0]).toEqual({ panel: "lab", flags: { template: "dev", global: "true" } });
+  });
+
+  it("未知面板 → 抛错（不调用 launcher）", async () => {
+    const { calls, fake } = collect();
+    await expect(cmdTui("foo", {}, fake)).rejects.toThrow(/未知 TUI 面板/);
+    expect(calls).toHaveLength(0);
   });
 });
