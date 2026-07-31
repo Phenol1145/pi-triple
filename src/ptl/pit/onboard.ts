@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
+import * as readline from "node:readline";
 import {
   loadConfig, saveConfig, resolveDataDir, type PiTripleConfig,
   resolveTemplateId, getTemplateAlias, getDefaultTemplateId, migrateDirectoryNames,
@@ -33,64 +34,119 @@ export function resolveOrFail(input: string | undefined, config: PiTripleConfig)
   return null;
 }
 
-export async function cmdOnboard(flags: Record<string, string>): Promise<void> {
+// ── DI 接口 ──
+
+export interface OnboardPrompter {
+  confirm(question: string): Promise<boolean>;
+  text(question: string, def?: string): Promise<string>;
+}
+
+export interface OnboardDeps {
+  doctor: (mode: "full" | "quick") => Promise<void>;
+  saveConfig: (cfg: PiTripleConfig) => void;
+  ensureTemplate: (templateId: string) => Promise<{ created: boolean; alias: string }>;
+  initShared: (sharedDir: string) => string[];
+  linkShared: (templateDir: string, sharedDir: string) => void;
+  migrateDirs: (cfg: PiTripleConfig) => string[];
+  launchTui: () => Promise<void>;
+}
+
+// ── 默认实现 ──
+
+/** readline 交互 prompter（复用 doctor.ts 模式）。 */
+function createReadlinePrompter(): OnboardPrompter {
+  const ask = (question: string): Promise<string> => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    return new Promise((resolve) => {
+      rl.question(question, (answer) => { rl.close(); resolve(answer); });
+    });
+  };
+  return {
+    confirm: async (q) => {
+      const a = await ask(`  \x1b[36m▸ ${q} (Y/n) \x1b[0m`);
+      return a.trim().toLowerCase() !== "n";
+    },
+    text: async (q, def) => {
+      const a = await ask(`  \x1b[36m▸ ${q}${def ? ` [${def}]` : ""}: \x1b[0m`);
+      return a.trim() || def || "";
+    },
+  };
+}
+
+function defaultDeps(): OnboardDeps {
+  return {
+    doctor: async (mode) => { await runDoctor(mode); },
+    saveConfig: (cfg) => saveConfig(cfg),
+    ensureTemplate: async (templateId) => {
+      const config = loadConfig();
+      const dataDir = resolveDataDir(config);
+      const templateDir = path.join(dataDir, "pi-config", templateId);
+      const alias = getTemplateAlias(templateId, config);
+      const exists = fs.existsSync(templateDir) && fs.existsSync(path.join(templateDir, "settings.json"));
+      if (!exists) await migrate({ templateId });
+      return { created: !exists, alias };
+    },
+    initShared: (sharedDir) => {
+      initSharedLayer(sharedDir);
+      return installBundledExtensions(sharedDir);
+    },
+    linkShared: (templateDir, sharedDir) => linkTemplateToShared(templateDir, sharedDir),
+    migrateDirs: (cfg) => migrateDirectoryNames(cfg),
+    launchTui: async () => {
+      const { render } = await import("ink");
+      const React = (await import("react")).default;
+      const { PitApp } = await import("../tui-pit/app.js");
+      render(React.createElement(PitApp), { exitOnCtrlC: false });
+    },
+  };
+}
+
+// ── 导引主流程 ──
+
+export async function cmdOnboard(
+  flags: Record<string, string>,
+  prompter?: OnboardPrompter,
+  deps: OnboardDeps = defaultDeps(),
+): Promise<void> {
+  const interactive = !!prompter || (process.stdout.isTTY && process.stdin.isTTY);
+  const p = prompter ?? (interactive ? createReadlinePrompter() : undefined);
+
   printBanner();
-  console.log("  \x1b[1m欢迎使用 Pi-Triple！\x1b[0m 开始首次导引…");
-  console.log("");
+  console.log("  \x1b[1m欢迎使用 Pi-Triple！\x1b[0m 开始首次导引…\n");
 
-  console.log("  \x1b[1mStep 1/4\x1b[0m — 环境检查");
-  console.log("  " + "─".repeat(40));
-  await runDoctor("full");
+  console.log("  \x1b[1mStep 1/4\x1b[0m — 环境检查\n  " + "─".repeat(40));
+  await deps.doctor("full");
 
-  console.log("  \x1b[1mStep 2/4\x1b[0m — 初始化配置");
-  console.log("  " + "─".repeat(40));
-  const configPath2 = path.resolve("pi-triple.json");
+  console.log("  \x1b[1mStep 2/4\x1b[0m — 初始化配置\n  " + "─".repeat(40));
   const config = loadConfig();
-  if (!fs.existsSync(configPath2)) {
-    saveConfig(config);
+  if (!fs.existsSync(path.resolve("pi-triple.json"))) {
+    deps.saveConfig(config);
   }
-  console.log("  ✅ pi-triple.json 已就绪 (v2, UUID+alias)");
+  console.log("  ✅ pi-triple.json 已就绪 (v2, UUID+alias)\n");
 
-  console.log("");
-  console.log("  \x1b[1mStep 3/4\x1b[0m — 模板环境");
-  console.log("  " + "─".repeat(40));
+  console.log("  \x1b[1mStep 3/4\x1b[0m — 模板环境\n  " + "─".repeat(40));
   const dataDir = resolveDataDir(config);
   const defaultId = getDefaultTemplateId(config);
-  const templateDir = path.join(dataDir, "pi-config", defaultId);
+  const t = await deps.ensureTemplate(defaultId);
+  console.log(t.created ? `  创建模板 "${t.alias}"` : `  ✅ 模板 "${t.alias}" 已存在`);
+  const sharedDir = path.join(dataDir, "shared");
+  const bundled = deps.initShared(sharedDir);
+  if (bundled.length > 0) console.log(`  ✅ 内置扩展: ${bundled.join(", ")}`);
+  deps.linkShared(path.join(dataDir, "pi-config", defaultId), sharedDir);
+  const renamed = deps.migrateDirs(config);
+  if (renamed.length > 0) console.log(`  📁 目录迁移: ${renamed.join(", ")}`);
 
-  if (fs.existsSync(templateDir) && fs.existsSync(path.join(templateDir, "settings.json"))) {
-    const alias = getTemplateAlias(defaultId, config);
-    console.log(`  ✅ 模板 "${alias}" (${defaultId.slice(0, 8)}…) 已存在`);
-  } else {
-    const alias = getTemplateAlias(defaultId, config);
-    console.log(`  创建模板 "${alias}" (${defaultId.slice(0, 8)}…)…`);
-    await migrate({ templateId: defaultId });
+  console.log("  \x1b[1mStep 4/4\x1b[0m — 验证\n  " + "─".repeat(40));
+  await deps.doctor("quick");
+
+  console.log("\n  \x1b[32m\x1b[1m🎉 Pi-Triple 准备就绪！\x1b[0m\n");
+  console.log("  启动: pit start\n  可视化: pit tui dashboard\n  帮助: pit help\n");
+
+  // 交互向导：询问是否立即启动总控 TUI
+  if (p) {
+    const go = await p.confirm("立即打开系统总控面板 (pit tui dashboard)？");
+    if (go) await deps.launchTui();
   }
-
-  const sharedDirOnboard = path.resolve(path.join(dataDir, "shared"));
-  initSharedLayer(sharedDirOnboard);
-  const bundledOnboard = installBundledExtensions(sharedDirOnboard);
-  if (bundledOnboard.length > 0) {
-    console.log(`  ✅ 内置扩展: ${bundledOnboard.join(", ")}`);
-  }
-  linkTemplateToShared(templateDir, sharedDirOnboard);
-
-  const renamed = migrateDirectoryNames(config);
-  if (renamed.length > 0) {
-    console.log(`  📁 目录迁移: ${renamed.join(", ")}`);
-  }
-
-  console.log("  \x1b[1mStep 4/4\x1b[0m — 验证");
-  console.log("  " + "─".repeat(40));
-  await runDoctor("quick");
-
-  console.log("");
-  console.log("  \x1b[32m\x1b[1m🎉 Pi-Triple 准备就绪！\x1b[0m");
-  console.log("");
-  console.log("  启动: pit start");
-  console.log("  模板: pit template ls");
-  console.log("  帮助: pit help");
-  console.log("");
 }
 
 /** 解析模板（含位置参数）+ 首次启动自动迁移 */
