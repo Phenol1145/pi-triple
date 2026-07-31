@@ -12,7 +12,7 @@ import { PiSubagentsAdapter } from "./pi-subagents-adapter.ts";
 import type { DelegationEventBus } from "./pi-subagents-adapter.ts";
 import { createPiDefaultLoop } from "../workloops/pi-default-loop.ts";
 import { PI_DEFAULT_LOOP_DEFINITION } from "./create-runtime.ts";
-import { arenaBidLoop } from "../workloops/arena-bid-loop.ts";
+import { marketBidLoop } from "../workloops/market-bid-loop.ts";
 import type { WorkLoopDefinition } from "../core/contracts.ts";
 import type {
   ModelPort,
@@ -20,11 +20,11 @@ import type {
   ArtifactPort,
 } from "../workloop/contracts.ts";
 
-// ── arena-bid-loop@1.0.0 definition ────────────────────────────────
+// ── market-bid-loop@1.0.0 definition ────────────────────────────────
 
-export const ARENA_BID_LOOP_DEFINITION: WorkLoopDefinition = {
+export const MARKET_BID_LOOP_DEFINITION: WorkLoopDefinition = {
   kind: "workloop",
-  id: "arena-bid-loop",
+  id: "market-bid-loop",
   version: "1.0.0",
   sdkVersionRange: "^1.0.0",
   configSchema: {
@@ -99,7 +99,7 @@ export function createSchedulerRuntime(
     if (!msg.includes("already registered")) throw err;
   }
   try {
-    core.definitions.register(ARENA_BID_LOOP_DEFINITION);
+    core.definitions.register(MARKET_BID_LOOP_DEFINITION);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!msg.includes("already registered")) throw err;
@@ -152,7 +152,7 @@ export function createSchedulerRuntime(
   const loop = createPiDefaultLoop(adapter);
   wlRegistry.register(loop);
   try {
-    wlRegistry.register(arenaBidLoop);
+    wlRegistry.register(marketBidLoop);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!msg.includes("already registered")) throw err;

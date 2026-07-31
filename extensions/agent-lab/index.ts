@@ -178,7 +178,7 @@ export default async function (pi: ExtensionAPI) {
         const rt = createSchedulerRuntime(sharedStore.raw, delegationBus ? {
           eventBus: delegationBus,
           // pi-default-loop delegates via eventBus, doesn't use model port.
-          // arena-bid-loop uses the model port for multi-model bidding.
+          // market-bid-loop uses the model port for multi-model bidding.
           // Defensive closure: resolves capturedModelRegistry PER CALL so that
           // a late-captured registry (after first tool_call) still works.
           // Without this, if the factory runs before any tool_call, the stub
@@ -275,7 +275,7 @@ export default async function (pi: ExtensionAPI) {
                   executionId: `${opts.traceId}:bid:${model.id}:${crypto.randomUUID().slice(0, 8)}`,
                   agentInstanceId: opts.agentId,
                   optimizationRoundId: opts.roundId,
-                  workLoopId: "arena-bid-loop",
+                  workLoopId: "market-bid-loop",
                   workLoopVersion: "1.0.0",
                   config: { model: model.id, balance: opts.balance },
                   task: bidPrompt,
@@ -458,7 +458,7 @@ export default async function (pi: ExtensionAPI) {
     }
 
     const header = [
-      `Arena Smoke: ${role}`,
+      `Market Smoke: ${role}`,
       `traceId: ${traceId}`,
       `注: 真实执行与遥测结算不在本命令范围内`,
     ];

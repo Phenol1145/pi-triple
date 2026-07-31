@@ -1,7 +1,7 @@
 /**
- * arena-bid-persistence.test.ts — 持久化行为集成测试
+ * market-bid-persistence.test.ts — 持久化行为集成测试
  *
- * 验证 WorkLoopRunner（真实）+ CheckpointStore（内存 SQLite）+ arenaBidLoop
+ * 验证 WorkLoopRunner（真实）+ CheckpointStore（内存 SQLite）+ marketBidLoop
  * 的持久化行为：
  *   1. per-candidate single-flight（同 agent 串行，checkpoint 链）
  *   2. checkpoint 持久化 bid result（state.stake 正确）
@@ -24,8 +24,8 @@ import { AgentRuntimeStateStore } from "../src/workloop/state-store.ts";
 import { CheckpointStore } from "../src/workloop/checkpoints.ts";
 import { WorkLoopRunner } from "../src/workloop/runner.ts";
 import type { WorkLoopRunRequest } from "../src/workloop/runner.ts";
-import { ARENA_BID_LOOP_DEFINITION } from "../src/runtime/create-scheduler-runtime.ts";
-import { arenaBidLoop } from "../src/workloops/arena-bid-loop.ts";
+import { MARKET_BID_LOOP_DEFINITION } from "../src/runtime/create-scheduler-runtime.ts";
+import { marketBidLoop } from "../src/workloops/market-bid-loop.ts";
 import type { ModelPort, WorkContext } from "../src/workloop/contracts.ts";
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ function emptyContext(): WorkContext {
 }
 
 /**
- * Build a full WorkLoopRunner wired to arena-bid-loop and real
+ * Build a full WorkLoopRunner wired to market-bid-loop and real
  * CheckpointStore (backed by an in-memory SQLite NamespacedStore).
  */
 function buildArenaRunner() {
@@ -72,9 +72,9 @@ function buildArenaRunner() {
   const stateStore = new AgentRuntimeStateStore(store);
   const checkpointStore = new CheckpointStore(store);
   const definitions = new DefinitionRegistry();
-  definitions.register(ARENA_BID_LOOP_DEFINITION);
+  definitions.register(MARKET_BID_LOOP_DEFINITION);
   const registry = new WorkLoopRegistry(definitions);
-  registry.register(arenaBidLoop);
+  registry.register(marketBidLoop);
 
   const runner = new WorkLoopRunner(
     registry,
@@ -96,7 +96,7 @@ function bidRequest(overrides: Partial<WorkLoopRunRequest> = {}): WorkLoopRunReq
     executionId: "exec-1",
     agentInstanceId: "agent-1",
     optimizationRoundId: "round-1",
-    workLoopId: "arena-bid-loop",
+    workLoopId: "market-bid-loop",
     workLoopVersion: "1.0.0",
     config: { model: "test/model", balance: 100 },
     task: "bid task",
@@ -123,7 +123,7 @@ test("1. per-candidate single-flight: same agent bids serialized, 2 checkpoints"
   // Initialize agent snapshot — required for runner to start
   stateStore.initialize("agent-1", emptyContext(), {});
 
-  // Dispatch TWO concurrent arena-bid-loop runs for the SAME agentInstanceId
+  // Dispatch TWO concurrent market-bid-loop runs for the SAME agentInstanceId
   const p1 = runner.run(bidRequest({ traceId: "trace-a", executionId: "exec-a" }));
   const p2 = runner.run(bidRequest({ traceId: "trace-b", executionId: "exec-b" }));
 
@@ -171,7 +171,7 @@ test("2. checkpoint persisted with bid result (state.stake)", async () => {
 
   stateStore.initialize("agent-2", emptyContext(), {});
 
-  // Run arena-bid-loop once for an agent
+  // Run market-bid-loop once for an agent
   const result = await runner.run(bidRequest({
     traceId: "trace-c",
     executionId: "exec-c",
@@ -195,7 +195,7 @@ test("2. checkpoint persisted with bid result (state.stake)", async () => {
   assert.equal(rec.label, "bid-result");
   assert.equal((rec.state as { stake: number }).stake, 37);
   assert.equal((rec.state as { reasoning: string }).reasoning, "37");
-  assert.equal(rec.workLoopId, "arena-bid-loop");
+  assert.equal(rec.workLoopId, "market-bid-loop");
   assert.equal(rec.workLoopVersion, "1.0.0");
   assert.equal(rec.agentInstanceId, "agent-2");
 
@@ -204,7 +204,7 @@ test("2. checkpoint persisted with bid result (state.stake)", async () => {
 
   // Verify checkpoint.created event has correct identity
   assert.equal(cpEvents[0].identity.agentInstanceId, "agent-2");
-  assert.equal(cpEvents[0].identity.workLoopId, "arena-bid-loop");
+  assert.equal(cpEvents[0].identity.workLoopId, "market-bid-loop");
 });
 
 test("3. different agents run concurrently (single-flight is per-agent)", async () => {

@@ -100,7 +100,7 @@ function findNotify(notifies: NotifyCall[], substr: string, level?: string): Not
 
 function fakeSmokeOutput(role: string): string {
   return [
-    `Arena Smoke: ${role}`,
+    `Market Smoke: ${role}`,
     `traceId: smoke-1234567890`,
     `注: 真实执行与遥测结算不在本命令范围内`,
     ``,
@@ -183,7 +183,7 @@ test("/lab arena smoke <role> — happy path with staged evidence", async () => 
   const infoNotifies = notifies.filter((n) => n.level === "info");
   assert.ok(infoNotifies.length >= 1, "should have at least one info notify");
   const output = infoNotifies[0].message;
-  assert.ok(output.includes("Arena Smoke: coder"));
+  assert.ok(output.includes("Market Smoke: coder"));
   assert.ok(output.includes("traceId: smoke-"));
   assert.ok(output.includes("真实执行与遥测结算不在本命令范围内"));
   assert.ok(output.includes("Guard Rails"));
@@ -207,7 +207,7 @@ test("/lab arena smoke — missing role shows usage", async () => {
   await handler()("market smoke", ctx());
 
   assert.ok(findNotify(notifies, "用法: /lab market smoke <role>", "error"));
-  assert.ok(!notifies.some((n) => n.level === "info" && n.message.includes("Arena Smoke")));
+  assert.ok(!notifies.some((n) => n.level === "info" && n.message.includes("Market Smoke")));
 });
 
 test("/lab arena smoke — arenaSmoke dep not available", async () => {
@@ -322,7 +322,7 @@ test("arenaSmoke — settle failure degradation (fail-open with partial evidence
     arenaSmoke: async () => {
       // Simulates partial evidence with a settle failure
       return [
-        "Arena Smoke: reviewer",
+        "Market Smoke: reviewer",
         "traceId: smoke-degrade",
         "注: 真实执行与遥测结算不在本命令范围内",
         "",
@@ -355,7 +355,7 @@ test("arenaSmoke — guard-rail values actually passed", async () => {
   const deps = placeholderDeps({
     arenaSmoke: async () => {
       return [
-        "Arena Smoke: coder",
+        "Market Smoke: coder",
         "traceId: smoke-guard",
         "注: 真实执行与遥测结算不在本命令范围内",
         "",
@@ -386,7 +386,7 @@ test("arenaSmoke — two sequential smokes both succeed", async () => {
     arenaSmoke: async (role: string, _cmdCtx: unknown) => {
       callCount++;
       return [
-        `Arena Smoke: ${role}`,
+        `Market Smoke: ${role}`,
         `traceId: smoke-seq-${callCount}`,
         `注: 真实执行与遥测结算不在本命令范围内`,
         "",
@@ -410,7 +410,7 @@ test("arenaSmoke — two sequential smokes both succeed", async () => {
   assert.equal(callCount, 1);
   const out1 = notifies1.find((n) => n.level === "info");
   assert.ok(out1);
-  assert.ok(out1.message.includes("Arena Smoke: coder"));
+  assert.ok(out1.message.includes("Market Smoke: coder"));
   assert.ok(out1.message.includes("traceId: smoke-seq-1"));
 
   // Second smoke with fresh mocks (simulates new /lab arena smoke invocation)
@@ -419,7 +419,7 @@ test("arenaSmoke — two sequential smokes both succeed", async () => {
     arenaSmoke: async (role: string, _cmdCtx: unknown) => {
       callCount++;
       return [
-        `Arena Smoke: ${role}`,
+        `Market Smoke: ${role}`,
         `traceId: smoke-seq-${callCount}`,
         `注: 真实执行与遥测结算不在本命令范围内`,
         "",
@@ -438,6 +438,6 @@ test("arenaSmoke — two sequential smokes both succeed", async () => {
   assert.equal(callCount, 2);
   const out2 = notifies2.find((n) => n.level === "info");
   assert.ok(out2);
-  assert.ok(out2.message.includes("Arena Smoke: coder"));
+  assert.ok(out2.message.includes("Market Smoke: coder"));
   assert.ok(out2.message.includes("traceId: smoke-seq-2"));
 });

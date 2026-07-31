@@ -1,5 +1,5 @@
 /**
- * arena-bid-loop@1.0.0 — 单一职责竞价 WorkLoop（状态转移函数 δ）。
+ * market-bid-loop@1.0.0 — 单一职责竞价 WorkLoop（状态转移函数 δ）。
  *
  * 经框架 ModelPort 调用候选模型询问出价，从响应解析 stake，checkpoint
  * 结果（持久化），返回 output.custom = { stake, reasoning }。不依赖
@@ -28,8 +28,8 @@ function buildBidContext(input: WorkLoopInput, config: ArenaBidLoopConfig): Work
   };
 }
 
-export const arenaBidLoop: WorkLoopImplementation = {
-  id: "arena-bid-loop",
+export const marketBidLoop: WorkLoopImplementation = {
+  id: "market-bid-loop",
   version: "1.0.0",
   cloneModes: ["fresh"],
 

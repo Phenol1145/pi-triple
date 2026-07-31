@@ -34,7 +34,7 @@ export interface ArenaSchedulerPorts {
   resolveAgent: (model: ModelInfo) => string;
   /** Resolve agent UUID → templateId (from lab_agent_instances.source_template_id). */
   resolveTemplate?: (agentId: string) => string | undefined;
-  /** WorkLoop 竞价（框架原生）：经 ModelPort 跑 arena-bid-loop 取 stake。缺失时 workloop 引擎回退 model-caller。 */
+  /** WorkLoop 竞价（框架原生）：经 ModelPort 跑 market-bid-loop 取 stake。缺失时 workloop 引擎回退 model-caller。 */
   workLoopBidder?: (
     model: ModelInfo,
     bidPrompt: string,
