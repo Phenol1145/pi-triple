@@ -3,7 +3,7 @@ import {
   resolveTuiPanel, TUI_PANELS, HUB_COMMANDS,
   DEPRECATED_COMMANDS, getDeprecatedMigration,
 } from "../../src/ptl/pit/route.js";
-import { cmdTui, type TuiLaunchOpts } from "../../src/ptl/pit/route.js";
+import { cmdTui, type TuiLaunchOpts, cmdHub, type HubHandlers } from "../../src/ptl/pit/route.js";
 
 describe("resolveTuiPanel", () => {
   it("无子命令 → dashboard", () => {
@@ -84,6 +84,55 @@ describe("cmdTui", () => {
   it("未知面板 → 抛错（不调用 launcher）", async () => {
     const { calls, fake } = collect();
     await expect(cmdTui("foo", {}, fake)).rejects.toThrow(/未知 TUI 面板/);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("cmdHub", () => {
+  function fakeHandlers() {
+    const calls: Array<[string, unknown[]]> = [];
+    const h: HubHandlers = {
+      submit: async (...a: unknown[]) => { calls.push(["submit", a]); },
+      run: async (...a: unknown[]) => { calls.push(["run", a]); },
+      programs: async (...a: unknown[]) => { calls.push(["programs", a]); },
+      dev: async (...a: unknown[]) => { calls.push(["dev", a]); },
+    };
+    return { calls, h };
+  }
+
+  it("hub submit my-agent → handlers.submit([my-agent], flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("submit", ["my-agent"], { dry: "true" }, h);
+    expect(calls[0][0]).toBe("submit");
+    expect(calls[0][1][0]).toEqual(["my-agent"]);
+    expect(calls[0][1][1]).toEqual({ dry: "true" });
+  });
+
+  it("hub run reviewer repo=./x → handlers.run(name, restArgs, flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("run", ["reviewer", "repo=./x", "pr=42"], {}, h);
+    expect(calls[0][0]).toBe("run");
+    expect(calls[0][1][0]).toBe("reviewer");
+    expect(calls[0][1][1]).toEqual(["repo=./x", "pr=42"]);
+  });
+
+  it("hub programs → handlers.programs(flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("programs", [], { json: "true" }, h);
+    expect(calls[0][0]).toBe("programs");
+    expect(calls[0][1][0]).toEqual({ json: "true" });
+  });
+
+  it("hub dev my-agent → handlers.dev(dir, rest, flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("dev", ["my-agent"], {}, h);
+    expect(calls[0][0]).toBe("dev");
+    expect(calls[0][1][0]).toBe("my-agent");
+  });
+
+  it("hub（无子命令）→ 打印帮助，不调用任何 handler", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("", [], {}, h);
     expect(calls).toHaveLength(0);
   });
 });

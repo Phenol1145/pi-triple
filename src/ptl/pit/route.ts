@@ -9,6 +9,10 @@ import path from "node:path";
 import {
   loadConfig, resolveTemplateId, getTemplateAlias, getDefaultTemplateId, pitHome,
 } from "../config.js";
+import { cmdSubmit } from "../bridge/submit.js";
+import { cmdRun } from "../bridge/run.js";
+import { cmdPrograms } from "../bridge/programs.js";
+import { cmdDev } from "../bridge/dev.js";
 
 // ─── TUI ───────────────────────────────────────────────────
 
@@ -99,4 +103,45 @@ export async function cmdTui(
 ): Promise<void> {
   const panel = resolveTuiPanel(subcommand);
   await launch({ panel, flags });
+}
+
+// ─── cmdHub 实现 ───────────────────────────────────────────
+
+export type HubHandlers = {
+  submit: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  run: (name: string, args: string[], flags: Record<string, string>) => Promise<void>;
+  programs: (flags: Record<string, string>) => Promise<void>;
+  dev: (dir: string, passthrough: string[], flags: Record<string, string>) => Promise<void>;
+};
+
+export const defaultHubHandlers: HubHandlers = {
+  submit: cmdSubmit,
+  run: cmdRun,
+  programs: cmdPrograms,
+  dev: cmdDev,
+};
+
+/** pit hub <submit|run|programs|dev> — 分发到 bridge 命令；无/未知子命令打印命名空间帮助。 */
+export async function cmdHub(
+  subcommand: string | undefined,
+  passthrough: string[],
+  flags: Record<string, string>,
+  handlers: HubHandlers = defaultHubHandlers,
+): Promise<void> {
+  switch (subcommand) {
+    case "submit":
+      await handlers.submit(passthrough, flags);
+      break;
+    case "run":
+      await handlers.run(passthrough[0] ?? "", passthrough.slice(1), flags);
+      break;
+    case "programs":
+      await handlers.programs(flags);
+      break;
+    case "dev":
+      await handlers.dev(passthrough[0] ?? "", passthrough.slice(1), flags);
+      break;
+    default:
+      console.log("  用法: pit hub <submit|run|programs|dev> …（详见 pit help hub）");
+  }
 }
