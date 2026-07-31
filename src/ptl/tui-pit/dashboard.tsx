@@ -1,7 +1,9 @@
 // src/ptl/tui-pit/dashboard.tsx — 总览面板（master-detail）
 //
 // Health 紧凑行 + 三个表（Templates / Sessions / Trace，Tab 切换焦点）+
-// 详情区（聚焦表选中项）+ 会话操作模态菜单（Enter 打开，Esc 关闭）。
+// 水平聚焦栏 + 详情区（聚焦表选中项）+ 会话操作模态菜单（Enter 打开，Esc 关闭）。
+// 仅焦点表渲染 DataTable（非焦点表只显示标题行）；固定开销 10 行预留
+// Health 1 + 三标题 3 + 焦点表头 1 + 聚焦栏 1 + Detail 3 + 提示 1。
 // 数据源：listAllSessions/listAllTraces（TUI 启动时 providers 已注册）。
 import React, { useState, useEffect, useCallback } from "react";
 import { Box, Text, useInput } from "ink";
@@ -73,14 +75,13 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
     if (input === "r" && !key.ctrl) refresh();
   });
 
-  // 每表可视行数：焦点表拿主要高度（固定开销约 12 行），非焦点表压缩为 1 数据行；超限窗口滚动
-  const focusCap = Math.max(2, height - 12);
-  const miniCap = 1;
-  const tplW = tableWindow(templates, tplSel.index, focus === 0 ? focusCap : miniCap);
-  const sessW = tableWindow(sessions, sessSel.index, focus === 1 ? focusCap : miniCap);
-  const traceW = tableWindow(traces, traceSel.index, focus === 2 ? focusCap : miniCap);
+  // 仅焦点表渲染列表；固定开销 10 行（Health 1 + 三标题 3 + 焦点表头 1 + 聚焦栏 1 + Detail 3 + 提示 1）
+  const cap = Math.max(2, height - 10);
+  const tplW = tableWindow(templates, tplSel.index, cap);
+  const sessW = tableWindow(sessions, sessSel.index, cap);
+  const traceW = tableWindow(traces, traceSel.index, cap);
 
-  // 滚动指示：列表超窗时显示可见范围（如 "▾ 1-5/12"）
+  // 滚动指示：仅焦点表显示
   const scrollHint = (w: { rows: unknown[]; offset: number }, total: number): string =>
     total > w.rows.length ? `  ▾ ${w.offset + 1}-${w.offset + w.rows.length}/${total}` : "";
 
@@ -123,6 +124,21 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
     id: t.id.length > 12 ? t.id.slice(0, 12) + "…" : t.id,
     summary: t.summary,
   }));
+
+  // ── 水平聚焦栏（固定 1 行，显示当前聚焦对象）─────────────
+  let focusBar: string;
+  if (focus === 0 && templates[tplSel.index]) {
+    const t = templates[tplSel.index]!;
+    focusBar = `模板 ${t.alias}${t.isDefault ? " ★默认" : ""} · workloop: ${t.config.workLoop?.id ?? "(default)"} · model: ${t.config.model ?? "(default)"}`;
+  } else if (focus === 1 && sessions[sessSel.index]) {
+    const s = sessions[sessSel.index]!;
+    focusBar = `会话 ${s.status === "running" ? "●" : "○"} [${s.workloop}] ${s.id} · ${s.templateAlias} · ${s.summary}`;
+  } else if (focus === 2 && traces[traceSel.index]) {
+    const t = traces[traceSel.index]!;
+    focusBar = `追踪 ${t.id} · ${t.summary}`;
+  } else {
+    focusBar = `（${["模板", "会话", "追踪"][focus] ?? ""} 无可选条目）`;
+  }
 
   // ── 详情区（聚焦表选中项）──────────────────────────────
   const focusName = ["模板", "会话", "追踪"][focus] ?? "";
@@ -212,11 +228,11 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
       <Box flexDirection="column">
         <Text bold underline color={focus === 0 ? focusColor : undefined}>
           Templates ({templates.length}){focusMark(0)}
-          <Text dimColor>{scrollHint(tplW, templates.length)}</Text>
+          {focus === 0 ? <Text dimColor>{scrollHint(tplW, templates.length)}</Text> : null}
         </Text>
-        {templates.length === 0 ? (
+        {focus === 0 && (templates.length === 0 ? (
           <Text dimColor>  无模板 — 创建: pit template new &lt;alias&gt;</Text>
-        ) : (
+        ) : templates.length > 0 ? (
           <DataTable
             columns={tplCols}
             rows={tplRows}
@@ -224,18 +240,18 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
             selectedIndex={tplSel.index - tplW.offset}
             onSelectionChange={(rel) => tplSel.setIndex(tplW.offset + rel)}
           />
-        )}
+        ) : null)}
       </Box>
 
       {/* Sessions */}
       <Box flexDirection="column">
         <Text bold underline color={focus === 1 ? focusColor : undefined}>
           Sessions ({sessions.length}){focusMark(1)}
-          <Text dimColor>{scrollHint(sessW, sessions.length)}</Text>
+          {focus === 1 ? <Text dimColor>{scrollHint(sessW, sessions.length)}</Text> : null}
         </Text>
-        {sessions.length === 0 ? (
+        {focus === 1 && (sessions.length === 0 ? (
           <Text dimColor>  无会话 — 启动: pit start --bg --name &lt;name&gt;</Text>
-        ) : (
+        ) : sessions.length > 0 ? (
           <DataTable
             columns={sessCols}
             rows={sessRows}
@@ -244,18 +260,18 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
             onSelectionChange={(rel) => sessSel.setIndex(sessW.offset + rel)}
             rowColor={(r) => (r.status === "●" ? "green" : undefined)}
           />
-        )}
+        ) : null)}
       </Box>
 
       {/* Trace */}
       <Box flexDirection="column">
         <Text bold underline color={focus === 2 ? focusColor : undefined}>
           Trace ({traces.length}){focusMark(2)}
-          <Text dimColor>{scrollHint(traceW, traces.length)}</Text>
+          {focus === 2 ? <Text dimColor>{scrollHint(traceW, traces.length)}</Text> : null}
         </Text>
-        {traces.length === 0 ? (
+        {focus === 2 && (traces.length === 0 ? (
           <Text dimColor>  无追踪 — 运行竞价任务（pit hub submit / flow run 等）后显示</Text>
-        ) : (
+        ) : traces.length > 0 ? (
           <DataTable
             columns={traceCols}
             rows={traceRows}
@@ -263,7 +279,13 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
             selectedIndex={traceSel.index - traceW.offset}
             onSelectionChange={(rel) => traceSel.setIndex(traceW.offset + rel)}
           />
-        )}
+        ) : null)}
+      </Box>
+
+      {/* 水平聚焦栏（固定 1 行，显示当前聚焦对象） */}
+      <Box flexDirection="row" gap={1} minHeight={1}>
+        <Text bold color={focusColor}>❯ {["模板", "会话", "追踪"][focus] ?? ""}</Text>
+        <Text dimColor wrap="truncate">{focusBar}</Text>
       </Box>
 
       {/* 详情区 */}
