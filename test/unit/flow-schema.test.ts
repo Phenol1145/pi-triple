@@ -454,3 +454,47 @@ describe("flow-schema validate v2", () => {
     expect(r.ok).toBe(true);
   });
 });
+
+describe("code nodes", () => {
+  const codeFlow = (over: Record<string, unknown>): unknown => ({
+    name: "t", entry: "c", nodes: [{ id: "c", type: "code", fn: "market.score", ...over }], edges: [],
+  });
+
+  // brief 原版按 string[] 使用 validateFlow；实际签名为 {ok,def,warnings}|{ok,errors}（supervisor 批准适配，错误文案逐字保留）
+  const flowErrors = (flow: unknown): string[] => {
+    const r = validateFlow(flow);
+    return r.ok ? [] : r.errors;
+  };
+
+  it("accepts valid code node", () => {
+    expect(flowErrors(codeFlow({ args: ["bids"], writes: { winner: "{{output}}" } }))).toEqual([]);
+  });
+
+  it("rejects code node without fn", () => {
+    const errs = flowErrors(codeFlow({ fn: undefined }));
+    expect(errs).toContain('nodes[0] (code "c"): fn is required');
+  });
+
+  it("rejects code node with non-string fn", () => {
+    expect(flowErrors(codeFlow({ fn: 42 }))).toContain('nodes[0] (code "c"): fn must be a string');
+  });
+
+  it("rejects code node with non-string-array args", () => {
+    expect(flowErrors(codeFlow({ args: "bids" }))).toContain('nodes[0] (code "c"): args must be a string array');
+  });
+
+  it("rejects invalid metrics structure", () => {
+    expect(flowErrors(codeFlow({ metrics: "bad" }))).toContain('nodes[0] ("c"): metrics must be an object of string-string maps');
+    expect(flowErrors(codeFlow({ metrics: { credit: "bad" } }))).toContain('nodes[0] ("c"): metrics.credit must be an object');
+    expect(flowErrors(codeFlow({ metrics: { credit: { amount: 42 } } }))).toContain('nodes[0] ("c"): metrics.credit.amount must be a string');
+  });
+
+  it("accepts metrics on agent nodes", () => {
+    const flow: unknown = {
+      name: "t", entry: "a",
+      nodes: [{ id: "a", type: "agent", prompt: "hi", metrics: { credit: { amount: "{{result.x}}" } } }],
+      edges: [],
+    };
+    expect(flowErrors(flow)).toEqual([]);
+  });
+});

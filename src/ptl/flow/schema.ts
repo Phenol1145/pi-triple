@@ -19,11 +19,14 @@ export interface FlowDef {
 
 export interface NodeDef {
   id: string;
-  type: "agent" | "human";
+  type: "agent" | "human" | "code";
   model?: string;
   template?: string;
   prompt?: string;
   message?: string;
+  fn?: string;
+  args?: string[];
+  metrics?: Record<string, Record<string, string>>;
   tools?: string[];
   cwd?: string;
   timeoutSec?: number;
@@ -114,11 +117,11 @@ export function validateFlow(
       }
       if (id) nodeIds.add(id);
 
-      if (type && type !== "agent" && type !== "human") {
-        errors.push(`nodes[${i}]: type must be "agent" or "human", got "${type}"`);
+      if (type && type !== "agent" && type !== "human" && type !== "code") {
+        errors.push(`nodes[${i}]: type must be "agent", "human" or "code", got "${type}"`);
       }
 
-      const node: NodeDef = { id: id ?? `_invalid_${i}`, type: (type as "agent" | "human") ?? "agent" };
+      const node: NodeDef = { id: id ?? `_invalid_${i}`, type: (type as "agent" | "human" | "code") ?? "agent" };
 
       if (type === "agent") {
         if (!nObj.prompt) {
@@ -167,6 +170,24 @@ export function validateFlow(
         }
       }
 
+      if (type === "code") {
+        if (nObj.fn === undefined || nObj.fn === null) {
+          errors.push(`nodes[${i}] (code "${id || "?"}"): fn is required`);
+        } else if (typeof nObj.fn !== "string") {
+          errors.push(`nodes[${i}] (code "${id || "?"}"): fn must be a string`);
+        } else {
+          node.fn = nObj.fn as string;
+        }
+
+        if (nObj.args !== undefined) {
+          if (!Array.isArray(nObj.args) || !nObj.args.every((a: unknown) => typeof a === "string")) {
+            errors.push(`nodes[${i}] (code "${id}"): args must be a string array`);
+          } else {
+            node.args = nObj.args as string[];
+          }
+        }
+      }
+
       // cwd validation
       if (nObj.cwd !== undefined) {
         if (typeof nObj.cwd !== "string") {
@@ -196,6 +217,32 @@ export function validateFlow(
           errors.push(`nodes[${i}] ("${id}"): needs must be a string array`);
         } else {
           node.needs = nObj.needs as string[];
+        }
+      }
+
+      // metrics validation (all node types)
+      if (nObj.metrics !== undefined) {
+        if (typeof nObj.metrics !== "object" || nObj.metrics === null || Array.isArray(nObj.metrics)) {
+          errors.push(`nodes[${i}] ("${id}"): metrics must be an object of string-string maps`);
+        } else {
+          const metrics = nObj.metrics as Record<string, unknown>;
+          const parsedMetrics: Record<string, Record<string, string>> = {};
+          for (const [domain, map] of Object.entries(metrics)) {
+            if (typeof map !== "object" || map === null || Array.isArray(map)) {
+              errors.push(`nodes[${i}] ("${id}"): metrics.${domain} must be an object`);
+              continue;
+            }
+            const out: Record<string, string> = {};
+            for (const [k, v] of Object.entries(map as Record<string, unknown>)) {
+              if (typeof v !== "string") {
+                errors.push(`nodes[${i}] ("${id}"): metrics.${domain}.${k} must be a string`);
+              } else {
+                out[k] = v;
+              }
+            }
+            parsedMetrics[domain] = out;
+          }
+          node.metrics = parsedMetrics;
         }
       }
 
