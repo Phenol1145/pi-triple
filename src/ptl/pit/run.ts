@@ -4,7 +4,7 @@
  */
 
 import { parseArgs } from "./args.js";
-import { printHelp, printBanner, printGettingStarted, printCommandHelp, printNamespaceHelp } from "./main.js";
+import { printHelp, printBanner, getVersion, printGettingStarted, printCommandHelp, printNamespaceHelp } from "./main.js";
 import { cmdOnboard } from "./onboard.js";
 import { cmdPi, cmdStart, cmdAttach, cmdSwitch, cmdDetach, cmdRestore } from "./sessions.js";
 import { cmdConfig } from "./config-cmd.js";
@@ -165,6 +165,12 @@ export async function main() {
     return;
   }
 
+  // --version 全局处理：parseArgs 将 --version 解析为 flag（command 为空），在此提前输出版本号
+  if (flags.version === "true") {
+    console.log(`pit v${getVersion()}`);
+    return;
+  }
+
   const mode = resolveMode(command, flags);
 
   if (mode === "json") {
@@ -295,7 +301,7 @@ export async function main() {
     case "version":
     case "--version":
     case "-v":
-      console.log(`pit v0.1.0`);
+      console.log(`pit v${getVersion()}`);
       break;
     default:
       console.log(`  未知命令: ${command}`);
