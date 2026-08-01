@@ -340,7 +340,7 @@ export function createArenaSchedulerImplementation(
           if (runResult.status === "completed") {
             return {
               status: "completed",
-              model: winner.agent,
+              model: winnerModel,
               selectedAgentId: winner.agent,
               settlementRef: input.settlementRef,
               reason: `stake ${winner.stake} round ${round} (executed)`,
@@ -370,7 +370,8 @@ export function createArenaSchedulerImplementation(
       // Select mode: return model selection only
       return {
         status: "completed",
-        model: winner.agent,
+        model: winnerModel,
+        selectedAgentId: winner.agent,
         settlementRef: input.settlementRef,
         reason: `stake ${winner.stake} round ${round}`,
       };

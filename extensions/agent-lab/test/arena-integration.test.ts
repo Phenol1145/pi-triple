@@ -239,15 +239,16 @@ test("Scenario 1: end-to-end select flow — dispatch → arena bids+freezes →
   if (result.status !== "completed") throw new Error("expected completed");
   assert.equal(result.settlementRef, "settle-ref-e2e");
   assert.ok(result.model, "should have a model");
+  assert.ok(result.selectedAgentId, "should have a selected agent");
 
   // Verify task created in ledger
   const task = rt.ledger.getTask("settle-ref-e2e");
   assert.ok(task, "task should exist in ledger");
   assert.equal(task!.status, "pending");
-  assert.equal(task!.winner, result.model);
+  assert.equal(task!.winner, result.selectedAgentId);
 
   // Verify balance decreased
-  const winner = result.model!;
+  const winner = result.selectedAgentId!;
   const balanceAfterFreeze = rt.ledger.balance(winner);
   assert.ok(balanceAfterFreeze < 1000, `balance should be below 1000 after freeze, got ${balanceAfterFreeze}`);
 

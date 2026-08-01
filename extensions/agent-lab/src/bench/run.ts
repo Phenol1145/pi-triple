@@ -81,6 +81,9 @@ export async function runBench(
     }
 
     const model = dispatch.model ?? dispatch.selectedAgentId ?? "?";
+    // agent id（ledger 余额键）；model 与 agent 分离：model 供 executeModel/展示，
+    // agent 供余额/结算查询（ADR：model=ModelInfo.id，agent=实例 id）
+    const agent = dispatch.selectedAgentId ?? model;
     const stake = ports.getTask(settlementRef)?.stake ?? 0;
 
     // ── 2. execute model (code generation) ──
@@ -129,6 +132,7 @@ export async function runBench(
     results.push({
       task_id: task.task_id,
       model,
+      agent,
       stake,
       passed: judged.passed,
       settled,

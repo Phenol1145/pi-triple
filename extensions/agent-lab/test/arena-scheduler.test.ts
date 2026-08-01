@@ -188,7 +188,7 @@ test("full select flow succeeds: bidding, freeze, createTask, completed with set
   const task = ledger.getTask("settle-ref-1");
   assert.ok(task, "task should exist");
   assert.equal(task!.status, "pending");
-  assert.equal(task!.winner, result.model);
+  assert.equal(task!.winner, result.selectedAgentId);
 
   // Verify bid_call metrics were emitted
   const bidCalls = events.filter((e) => e.eventType === "scheduler.market.bid_call");
@@ -201,11 +201,33 @@ test("full select flow succeeds: bidding, freeze, createTask, completed with set
   assert.ok(findEvent(events, "scheduler.market.balance_after"));
 
   // Verify winner balance decreased by stake
-  const winnerBalance = ledger.balance(result.model!);
+  const winnerBalance = ledger.balance(result.selectedAgentId!);
   assert.ok(
     winnerBalance < 1000,
     `winner balance should be less than initial 1000, got ${winnerBalance}`,
   );
+});
+
+test("select mode returns winning ModelInfo.id as model (resolvable, not agent id)", async () => {
+  const { events, scheduler, candidates } = setup();
+  const input = makeInput();
+  const sdk = buildSDK(events);
+
+  const result = await scheduler.schedule(input, ARENA_DEFAULT_PARAMETERS, sdk);
+
+  assert.equal(result.status, "completed");
+  if (result.status !== "completed") throw new Error("expected completed");
+
+  // model 必须是 pi 可解析的候选模型 id（provider/model 格式），
+  // 而不是 agent 实例 id（resolveAgent 产物 / UUID）——否则 interceptor
+  // 改写 input.model 后子进程无法解析（Model "<uuid>" not found）
+  const candidateIds = candidates.map((m) => m.id);
+  assert.ok(
+    candidateIds.includes(result.model!),
+    `model should be a candidate ModelInfo.id, got ${result.model}`,
+  );
+  assert.ok(result.selectedAgentId, "selectedAgentId should be set");
+  assert.notEqual(result.model, result.selectedAgentId);
 });
 
 test("settlementRef missing → failed with no-stable-task-ref", async () => {
@@ -249,7 +271,7 @@ test("eligibility filtering excludes non-matching models", async () => {
 
   assert.equal(result.status, "completed");
   if (result.status !== "completed") throw new Error("expected completed");
-  // Winner must be anthropic (now result.model = agent UUID like "agent-anthropic-claude-3")
+  // Winner must be anthropic（model = ModelInfo.id，如 anthropic/claude-3）
   assert.ok(result.model!.includes("anthropic"), `expected anthropic model, got ${result.model}`);
 });
 
@@ -502,7 +524,7 @@ test("settle: full settlement flow — unfreeze, credit, task status settled", a
   );
 
   assert.equal(result.status, "completed");
-  const winner = (result as { model: string }).model;
+  const winner = result.selectedAgentId!;
   const balanceBeforeSettle = ledger.balance(winner);
 
   // Now settle
@@ -907,12 +929,14 @@ test("winner selection: highest stake wins, tie-break by balance then agent", as
   if (result.status !== "completed") throw new Error("expected completed");
 
   // Winner should be the one with higher stake (m2 or m3), not m1
-  assert.notEqual(result.model, a1, "m1 should not win with lowest stake");
+  assert.notEqual(result.model, m1, "m1 should not win with lowest stake");
 
   // With same stake (50), the one with higher balance (m3) wins
   // sort: stake desc, balance desc, agent asc
   // m3 has 1500 balance, m2 has 1000, both bid 50 → m3 wins
-  assert.equal(result.model, a3, `expected m3 to win with higher balance, got ${result.model}`);
+  assert.equal(result.model, m3, `expected m3 to win with higher balance, got ${result.model}`);
+  // selectedAgentId 保留 agent id 语义（resolveAgent 产物）
+  assert.equal(result.selectedAgentId, a3);
 });
 
 // ── Tests: edge cases ─────────────────────────────────────────────────

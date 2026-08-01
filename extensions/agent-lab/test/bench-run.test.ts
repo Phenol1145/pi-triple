@@ -78,7 +78,7 @@ test("闭环：pass 题走 arena 真实竞价，胜者余额净增（+2×stake�
   assert.ok(caller.bidCalls > 0, "必须发生真实出价调用（BLOCKER-1 退化则 bidCalls=0）");
 
   // 找到胜者并用 ledger 查余额变化
-  const winner = r.model!;
+  const winner = r.agent ?? r.model!;
   const delta = ledger.balance(winner) - 1000;
   assert.ok(delta > 0, `pass 题胜者余额应净增，实际 delta=${delta}`);
 });
@@ -91,7 +91,7 @@ test("闭环：fail 题胜者余额净减", async () => {
   assert.equal(r.passed, false);
   assert.equal(r.settled, true);
 
-  const winner = r.model!;
+  const winner = r.agent ?? r.model!;
   const delta = ledger.balance(winner) - 1000;
   assert.ok(delta < 0, `fail 题胜者余额应净减，实际 delta=${delta}`);
 });
@@ -181,6 +181,6 @@ test("I-3: executeModel 失败路径 — genError → settle(completion=0) → �
   assert.equal(r.passed, false);
   assert.equal(r.settled, true);
   assert.ok(r.error, "应有 gen error");
-  const delta = ledger.balance(r.model!) - 1000;
+  const delta = ledger.balance(r.agent ?? r.model!) - 1000;
   assert.ok(delta < 0, `executeModel 失败应 settle(completion=0)，胜者余额净减，实际 delta=${delta}`);
 });
