@@ -666,8 +666,7 @@ export default function pitControl(api: any) {
         }
         lines.push("\nSwitch: /control switch <name>  ·  Stop: /control stop <name>");
         ctx.ui.notify(lines.join("\n"));
-        ctx.ui.setWidget("pit-sessions", lines, { placement: "aboveEditor" });
-        return;
+        return; // 注：用户修复（900e332）移除 setWidget 常驻渲染——列表命令仅 notify 一次性输出
       }
 ```
 

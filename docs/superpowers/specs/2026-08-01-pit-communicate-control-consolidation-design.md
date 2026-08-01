@@ -75,6 +75,8 @@ sessionId 由 pi 启动时才生成，无法启动前传入，因此：
 - **presence 更新方式**：`_shared/presence.ts` 增加静态方法 `Presence.updateName(statePath, name)`（读-改-写原子，tmp+rename）——control 不实例化 Presence（避免第二个心跳循环双写 state.json），只做一次性静态写入；心跳仍由 communicate 的实例独占
 - communicate 启动时 name 初始化顺序：`PI_SESSION_NAME env > registry 已有条目（同名 sessionId） > session-<id6>`——重启后从 registry 恢复旧名，向后兼容（无 env 无旧条目时行为同现状）
 
+> **已知限制（updateName 与心跳竞态）**：`/control name` 通过静态 `updateName` 写 state.json 的 name 字段，但 communicate 的进程内心跳（10s）会用其内存中的 sessionName 快照重写该字段——若两者不一致，state.json 的 name 会在 10s 内被心跳覆盖回旧值。**权威源是 registry**（/control name 原子写 registry 条目，control 的 ls/status 显示也读 registry），state.json 的 name 仅作展示快照；重启会话后 communicate 从 registry 恢复名字而收敛。已知限制，接受。
+
 ## 命令面变化
 
 ### pit-communicate（删减）
