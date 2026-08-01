@@ -31,23 +31,32 @@ export function buildAssetUrl(tag: string, version: string): string {
   return `https://github.com/${PIT_REPO}/releases/download/${tag}/pi-triple-${version}.tgz`;
 }
 
-export function parseLatestRelease(json: unknown): { tag: string; version: string; assetName: string; digest?: string } | undefined {
-  const data = json as { tag_name?: string; assets?: Array<{ name?: string; digest?: string }> };
+export function parseLatestRelease(json: unknown): { tag: string; version: string; assetName: string; digestAssetName?: string } | undefined {
+  const data = json as { tag_name?: string; assets?: Array<{ name?: string }> };
   if (typeof data.tag_name !== "string") return undefined;
   const tag = data.tag_name;
   const version = tag.replace(/^v/, "");
-  const asset = (data.assets ?? []).find((a) => a.name === `pi-triple-${version}.tgz`);
+  const assets = data.assets ?? [];
+  const asset = assets.find((a) => a.name === `pi-triple-${version}.tgz`);
   if (!asset?.name) return undefined;
+  const digestAsset = assets.find((a) => a.name === `pi-triple-${version}.sha256`);
   return {
     tag,
     version,
     assetName: asset.name,
-    digest: typeof asset.digest === "string" && asset.digest.startsWith("sha256:") ? asset.digest.slice(7) : undefined,
+    digestAssetName: digestAsset?.name,
   };
 }
 
 export function verifySha256(actualHex: string, expectedHex: string): boolean {
   return actualHex.toLowerCase() === expectedHex.toLowerCase();
+}
+
+// shasum 输出格式（`<hex>  <文件名>`）或裸 hex：取第一个空白分隔 token，须为 64 位 hex
+export function parseSha256File(content: string): string | undefined {
+  const first = content.trim().split(/\s+/)[0];
+  if (!first || !/^[0-9a-fA-F]{64}$/.test(first)) return undefined;
+  return first.toLowerCase();
 }
 
 async function updatePitSelf(): Promise<boolean> {
@@ -68,7 +77,11 @@ async function updatePitSelf(): Promise<boolean> {
     }
     const pkg = JSON.parse(fs.readFileSync(new URL("../../../package.json", import.meta.url), "utf-8")) as { version: string };
     const cmp = compareVersions(release.version, pkg.version);
-    if (cmp !== undefined && cmp <= 0) {
+    if (cmp === undefined) {
+      console.log(`  \x1b[31m❌ 无法比较版本（远端 ${release.version} vs 本地 ${pkg.version}），已中止（不安装）\x1b[0m`);
+      return false;
+    }
+    if (cmp <= 0) {
       console.log(`  \x1b[32m✅ Pi-Triple 已是最新版 (v${pkg.version})\x1b[0m`);
       return true;
     }
@@ -81,24 +94,41 @@ async function updatePitSelf(): Promise<boolean> {
       return false;
     }
     const buf = Buffer.from(await dl.arrayBuffer());
-    if (release.digest) {
-      const actual = crypto.createHash("sha256").update(buf).digest("hex");
-      if (!verifySha256(actual, release.digest)) {
-        console.log("  \x1b[31m❌ sha256 校验失败，已中止（不安装）\x1b[0m");
-        return false;
-      }
-    }
     const tmpFile = path.join(os.tmpdir(), `pi-triple-${release.version}.tgz`);
-    fs.writeFileSync(tmpFile, buf);
-    console.log(`  \x1b[36m安装 pi-triple@${release.version}（npm install -g，约需 10-30s）…\x1b[0m`);
-    const r = spawnSync("npm", ["install", "-g", tmpFile], { stdio: "inherit" });
-    fs.rmSync(tmpFile, { force: true });
-    if (r.status === 0) {
-      console.log(`  \x1b[32m✅ Pi-Triple 已升级到 v${release.version}，重启 pit 会话生效\x1b[0m`);
-      return true;
+    try {
+      fs.writeFileSync(tmpFile, buf);
+      if (release.digestAssetName) {
+        const digestUrl = `https://github.com/${PIT_REPO}/releases/download/${release.tag}/${release.digestAssetName}`;
+        const digestRes = await fetch(digestUrl, { signal: AbortSignal.timeout(60_000) });
+        if (!digestRes.ok) {
+          console.log(`  \x1b[31m❌ sha256 校验文件下载失败（HTTP ${digestRes.status}），已中止（不安装）\x1b[0m`);
+          return false;
+        }
+        const expected = parseSha256File(await digestRes.text());
+        if (!expected) {
+          console.log("  \x1b[31m❌ sha256 校验文件格式无效，已中止（不安装）\x1b[0m");
+          return false;
+        }
+        const actual = crypto.createHash("sha256").update(buf).digest("hex");
+        if (!verifySha256(actual, expected)) {
+          console.log("  \x1b[31m❌ sha256 校验失败，已中止（不安装）\x1b[0m");
+          return false;
+        }
+        console.log("  \x1b[32m✅ sha256 校验通过\x1b[0m");
+      } else {
+        console.log("  \x1b[33m⚠ 未找到 sha256 校验文件，跳过校验（信任 HTTPS）\x1b[0m");
+      }
+      console.log(`  \x1b[36m安装 pi-triple@${release.version}（npm install -g，约需 10-30s）…\x1b[0m`);
+      const r = spawnSync("npm", ["install", "-g", tmpFile], { stdio: "inherit" });
+      if (r.status === 0) {
+        console.log(`  \x1b[32m✅ Pi-Triple 已升级到 v${release.version}，重启 pit 会话生效\x1b[0m`);
+        return true;
+      }
+      console.log("  \x1b[31m❌ npm install -g 失败（可尝试 sudo 或检查 npm 权限）\x1b[0m");
+      return false;
+    } finally {
+      fs.rmSync(tmpFile, { force: true });
     }
-    console.log("  \x1b[31m❌ npm install -g 失败（可尝试 sudo 或检查 npm 权限）\x1b[0m");
-    return false;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.log(`  \x1b[31m❌ 本体更新失败: ${msg}\x1b[0m`);
