@@ -177,7 +177,6 @@ export default function pitControl(api: any) {
         }
         lines.push("\nSwitch: /control switch <name>  ·  Stop: /control stop <name>");
         ctx.ui.notify(lines.join("\n"));
-        ctx.ui.setWidget("pit-sessions", lines, { placement: "aboveEditor" });
         return;
       }
 

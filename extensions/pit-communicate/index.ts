@@ -361,7 +361,6 @@ export default function pitMail(api: any /* ExtensionAPI */) {
         lines.push(...formatPendingMessages(msgs));
         ctx.ui.notify(lines.join("\n"));
         if (msgs.length > 0) {
-          ctx.ui.setWidget("pit-inbox", lines, { placement: "aboveEditor" });
         }
         return;
       }
@@ -424,7 +423,6 @@ export default function pitMail(api: any /* ExtensionAPI */) {
         const lines = [`\x1b[1mSessions (tenant: ${tenantId})\x1b[0m`];
         lines.push(...formatSessionList(entries, mailboxRoot, tenantId));
         ctx.ui.notify(lines.join("\n"));
-        ctx.ui.setWidget("pit-ps", lines, { placement: "aboveEditor" });
         return;
       }
 
@@ -467,7 +465,6 @@ export default function pitMail(api: any /* ExtensionAPI */) {
           `  mailbox: ${mailboxRoot}`,
           `  pending: ${mailbox.readPending().length} message(s)`];
         ctx.ui.notify(lines.join("\n"));
-        ctx.ui.setWidget("pit-status", lines, { placement: "aboveEditor" });
         return;
       }
 
