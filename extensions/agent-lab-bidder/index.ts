@@ -10,6 +10,7 @@
  * scheduler 共享同一实例。token 由 scheduler 生成并随竞价提示下发，一次性。
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import { getBidBoard } from "../agent-lab/src/arena/bid-board.ts";
 
 export default function agentLabBidder(pi: ExtensionAPI): void {
@@ -25,12 +26,11 @@ export default function agentLabBidder(pi: ExtensionAPI): void {
       "stake is a non-negative number of credits; reasoning is a short justification.",
       "Do not execute the task itself during bidding — only decide and place your stake.",
     ],
-    parameters: {
-      token: { type: "string", description: "竞价令牌（竞价提示中给出，原样传回）" },
-      stake: { type: "number", description: "出价 credits（非负数）" },
-      reasoning: { type: "string", description: "出价理由（简短）" },
-      required: ["token", "stake", "reasoning"],
-    },
+    parameters: Type.Object({
+      token: Type.String({ description: "竞价令牌（竞价提示中给出，原样传回）" }),
+      stake: Type.Number({ description: "出价 credits（非负数）" }),
+      reasoning: Type.String({ description: "出价理由（简短）" }),
+    }),
     async execute(_toolCallId: string, params: Record<string, unknown>) {
       const token = String(params.token ?? "");
       const stake = Number(params.stake);

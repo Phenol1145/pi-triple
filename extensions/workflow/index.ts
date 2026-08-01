@@ -11,6 +11,7 @@ import { spawn as spawnAsync } from "node:child_process";
 import { syncRun, asyncRun, hasPitCli } from "./runner.js";
 import { GateWatcher } from "./gate-watch.js";
 import type { FlowMeta } from "./gate-watch.js";
+import { Type } from "typebox";
 
 // ── 声明 pi 类型 ─────────────────────────────────────────────
 
@@ -224,11 +225,10 @@ export default function (pi: any) {
     description: "启动一个 pit-flow 工作流。返回 runId，后续用 flow_status 查状态。",
     promptSnippet: "Start a workflow from a flow.json file (e.g. examples/pr-review/flow.json) with optional key=value input",
     promptGuidelines: ["Use flow_run when the user asks to run a multi-step agent workflow. After launching, check back with flow_status periodically."],
-    parameters: {
-      file: { type: "string", description: "flow.json 文件路径" },
-      input: { type: "object", description: "输入参数（optional，如 {pr: 'title'}）" },
-      required: ["file"],
-    },
+    parameters: Type.Object({
+      file: Type.String({ description: "flow.json 文件路径" }),
+      input: Type.Optional(Type.Record(Type.String(), Type.Any(), { description: "输入参数（optional，如 {pr: 'title'}）" })),
+    }),
     async execute(_toolCallId: string, params: any, _signal: AbortSignal, _onUpdate: any, _ctx: any) {
       const file = params.file as string;
       const input = params.input as Record<string, unknown> | undefined;
@@ -266,10 +266,9 @@ export default function (pi: any) {
     description: "查询工作流运行状态。返回 status（running/waiting_human/done/failed）、当前节点、步骤数、最新输出。",
     promptSnippet: "Check the status and latest output of a running workflow by runId",
     promptGuidelines: ["Use flow_status to check on a workflow you launched. Read lastOutput to understand what the workflow is doing. If status is waiting_human, inform the user that human approval is needed via /flow approve <id>."],
-    parameters: {
-      runId: { type: "string", description: "工作流 runId（前缀即可）" },
-      required: ["runId"],
-    },
+    parameters: Type.Object({
+      runId: Type.String({ description: "工作流 runId（前缀即可）" }),
+    }),
     async execute(_toolCallId: string, params: any) {
       const inputId = params.runId as string;
       // 前缀匹配
@@ -320,7 +319,7 @@ export default function (pi: any) {
     description: "列出所有工作流运行记录（running/waiting/done/failed）",
     promptSnippet: "List all pit-flow workflow runs",
     promptGuidelines: ["Use flow_ls to show the user a summary of all workflow runs. For a specific run's details, use flow_status."],
-    parameters: {},
+    parameters: Type.Object({}),
     async execute() {
       const dir = flowsRoot();
       if (!fs.existsSync(dir)) {
