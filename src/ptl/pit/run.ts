@@ -21,7 +21,7 @@ import { cmdAgentRun, cmdAgentClean } from "./agent.js";
 import { emitJsonError } from "../output.js";
 import { dispatchCommand } from "../commands/dispatch.js";
 import { registerPiSessionProvider } from "../session/pi-provider.js";
-import { registerBiddingTraceProvider } from "../session/trace-provider.js";
+import { registerBiddingTraceProvider, registerMachineTraceProvider } from "../session/trace-provider.js";
 
 // Re-export for test compatibility
 export { parseArgs };
@@ -134,6 +134,7 @@ export async function main() {
   // 注册纸带/追踪 providers（CLI 启动；TUI 各自初始化时同样注册）
   registerPiSessionProvider();
   registerBiddingTraceProvider();
+  registerMachineTraceProvider();
 
   const args = process.argv.slice(2);
   let command: string;

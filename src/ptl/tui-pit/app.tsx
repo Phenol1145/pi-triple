@@ -13,11 +13,12 @@ import { dispatchCommand } from "../commands/dispatch.js";
 import { loadConfig, listTemplates } from "../config.js";
 import { listPitSessions } from "../tmux.js";
 import { registerPiSessionProvider } from "../session/pi-provider.js";
-import { registerBiddingTraceProvider } from "../session/trace-provider.js";
+import { registerBiddingTraceProvider, registerMachineTraceProvider } from "../session/trace-provider.js";
 
 // TUI 启动即注册纸带/追踪 providers（session-store 按 workloop 幂等，CLI 已注册时无副作用）
 registerPiSessionProvider();
 registerBiddingTraceProvider();
+registerMachineTraceProvider();
 
 const TABS = ["Dashboard", "Templates", "Sessions", "Extensions", "Config"];
 

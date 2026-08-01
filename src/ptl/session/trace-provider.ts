@@ -94,3 +94,77 @@ export function createBiddingTraceProvider(dbOverride?: DatabaseSync): TraceProv
 export function registerBiddingTraceProvider(): void {
   registerTraceProvider(createBiddingTraceProvider());
 }
+
+/**
+ * machine 转移序列 trace provider — 读 agent-lab lab_events 的 machine.transition 事件。
+ * identity_json 含 traceId/agentInstanceId/transitionSeq/checkpointId（spec §7.2 / 健康审计 F1）；
+ * payload_json 含 fromState/toState/eventType/checkpointId。
+ */
+export function createMachineTraceProvider(dbOverride?: DatabaseSync): TraceProvider {
+  const openDb = (): DatabaseSync | null => dbOverride ?? openReadOnlyOrNull(sharedDbPath());
+
+  function transitionRecords(db: DatabaseSync, extraWhere: string, params: any[]): TraceRecord[] {
+    try {
+      const rows = db.prepare(
+        `SELECT event_id, ts, trace_id, identity_json, payload_json FROM lab_events
+         WHERE event_type = 'machine.transition' ${extraWhere}
+         ORDER BY ts DESC LIMIT 200`,
+      ).all(...params) as any[];
+      return rows.flatMap((r) => {
+        try {
+          const identity = JSON.parse(r.identity_json);
+          const payload = JSON.parse(r.payload_json);
+          // 容错：字段缺失（transitionSeq/fromState/toState/eventType）→ 跳过该行
+          if (identity.transitionSeq == null || payload.fromState == null || payload.toState == null || payload.eventType == null) return [];
+          const traceId = identity.traceId ?? r.trace_id;
+          return [{
+            id: `${traceId}:${identity.transitionSeq}`,
+            kind: "trace" as const,
+            workloop: "machine",
+            templateId: "",
+            timestamp: new Date(r.ts).toISOString(),
+            summary: `转移 #${identity.transitionSeq}: ${payload.fromState}→${payload.toState} · ${payload.eventType}`,
+            detail: {
+              fromState: payload.fromState,
+              toState: payload.toState,
+              eventType: payload.eventType,
+              checkpointId: payload.checkpointId ?? "",
+              traceId,
+              agent: identity.agentInstanceId ?? "",
+            },
+          }];
+        } catch { return []; }
+      });
+    } catch { return []; }
+  }
+
+  return {
+    workloop: "machine",
+    list(): TraceRecord[] {
+      const db = openDb();
+      if (!db) return [];
+      try {
+        return transitionRecords(db, "", []);
+      } finally {
+        if (!dbOverride) db.close();
+      }
+    },
+    show(r: TraceRecord): string {
+      return [`Trace ${r.id}`, `WorkLoop: ${r.workloop}`, `时间: ${r.timestamp}`, ...Object.entries(r.detail).map(([k, v]) => `${k}: ${v}`)].join("\n");
+    },
+    timeline(agentId: string): TraceRecord[] {
+      const db = openDb();
+      if (!db) return [];
+      try {
+        // identity_json 是 JSON 字符串，LIKE 匹配 agentInstanceId 可行（P5 量级扫描可接受）
+        return transitionRecords(db, `AND identity_json LIKE ?`, [`%"agentInstanceId":"${agentId}"%`]);
+      } finally {
+        if (!dbOverride) db.close();
+      }
+    },
+  };
+}
+
+export function registerMachineTraceProvider(): void {
+  registerTraceProvider(createMachineTraceProvider());
+}
