@@ -461,3 +461,18 @@ function interpolateValue(raw: string, input: Record<string, string>): string {
     return input[key.trim()] ?? "";
   });
 }
+
+// ── Metrics 事件（只声明 + 记录，运行时零经济依赖）────────────────────
+
+/** 追加一条 metrics 事件到 runDir/metrics.jsonl（每行一个 JSON） */
+export function appendMetrics(store: FlowStore, runId: string, entry: Record<string, unknown>): void {
+  const p = path.join(store.runDir(runId), "metrics.jsonl");
+  fs.appendFileSync(p, JSON.stringify(entry) + "\n");
+}
+
+/** 读取全部 metrics 事件（空文件/无文件 → []） */
+export function readMetrics(store: FlowStore, runId: string): Array<Record<string, unknown>> {
+  const p = path.join(store.runDir(runId), "metrics.jsonl");
+  if (!fs.existsSync(p)) return [];
+  return fs.readFileSync(p, "utf8").split("\n").filter((l) => l.trim() !== "").map((l) => JSON.parse(l) as Record<string, unknown>);
+}

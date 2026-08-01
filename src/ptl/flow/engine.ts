@@ -11,6 +11,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
 import type { FlowStore, ExecLock, Checkpoint, PendingPayload, WaveCheckpoint } from "./store.js";
+import { appendMetrics } from "./store.js";
 import type { FlowDef, NodeDef, EdgeDef } from "./schema.js";
 import { interpolate } from "./template.js";
 import { evalExpr } from "./expr.js";
@@ -699,6 +700,26 @@ async function executeWaveLoop(
         stateAfter: { ...finalState },
       };
       store.writeCheckpoint(runId, cp);
+
+      // metrics 事件记录：只声明 + 记录（零经济依赖），seq = 该节点 checkpoint 的 seq
+      if (r.ok) {
+        const nodeDef = graph.nodes.find((n) => n.id === nodeId);
+        if (nodeDef?.metrics) {
+          const result: unknown = (() => {
+            if (nodeDef.type === "code") {
+              try { return JSON.parse(r.output) as unknown; } catch { return r.output; }
+            }
+            return r.output;
+          })();
+          appendMetrics(store, runId, {
+            seq: seqCounter,
+            nodeId,
+            graphVersion: meta.graphVersion,
+            metrics: renderMetrics(nodeDef.metrics, { state: finalState, input: meta.input, result }),
+            timestamp: Date.now(),
+          });
+        }
+      }
     }
 
     // Write wave checkpoint (always, including drain waves)
@@ -997,4 +1018,41 @@ function applyWrites(
     // 字面量
     state[key] = raw;
   }
+}
+
+// ── Metrics 模板求值 ───────────────────────────────────────────
+
+// metrics 模板求值：state / input / result 三作用域，缺失 → 空字符串（与 interpolate 同语义）
+export function renderMetrics(
+  metrics: Record<string, Record<string, string>>,
+  ctx: { state: Record<string, unknown>; input: Record<string, unknown>; result: unknown },
+): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
+  for (const [domain, fields] of Object.entries(metrics)) {
+    out[domain] = {};
+    for (const [k, v] of Object.entries(fields)) {
+      out[domain][k] = v.replace(/\{\{([^}]+)\}\}/g, (_m, expr: string) => {
+        const t = expr.trim();
+        if (t.startsWith("input.")) return String((ctx.input as Record<string, unknown>)[t.slice(6)] ?? "");
+        if (t.startsWith("state.")) {
+          let val: unknown = ctx.state;
+          for (const seg of t.slice(6).split(".")) {
+            if (val === null || val === undefined || typeof val !== "object") return "";
+            val = (val as Record<string, unknown>)[seg];
+          }
+          return val === null || val === undefined ? "" : String(val);
+        }
+        if (t.startsWith("result.")) {
+          let val: unknown = ctx.result;
+          for (const seg of t.slice(7).split(".")) {
+            if (val === null || val === undefined || typeof val !== "object") return "";
+            val = (val as Record<string, unknown>)[seg];
+          }
+          return val === null || val === undefined ? "" : String(val);
+        }
+        return `{{${t}}}`;
+      });
+    }
+  }
+  return out;
 }
