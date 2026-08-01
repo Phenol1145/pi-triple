@@ -72,12 +72,13 @@ pi-platform/
 │       ├── self-modify/           #   热加载（L1）+ A/B 重建（L3）
 │       └── observability/         #   Prometheus 指标 + 审计日志
 │
-├── extensions/                    # bundled 扩展（5 个，共享层 symlink 注入）
+├── extensions/                    # bundled 扩展（6 个，共享层 symlink 注入）
 │   ├── pit-providers/             #   统一 provider 后端（声明式 JSON + 多 Key failover）
 │   ├── pit-communicate/           #   跨会话通信（文件邮箱 + 审核模式）
 │   ├── pit-control/               #   会话内控制（/control start/stop/switch...）
 │   ├── workflow/                  #   ★ pi 内流程编排（/flow 命令 + flow_run 工具）
-│   └── agent-lab/                 #   模型遥测（token/cost/latency → SQLite）
+│   ├── agent-lab/                 #   ★ agent 经济引擎（状态机 WorkLoop/市场/调度/优化/实验，见 §扩展生态）
+│   └── agent-lab-bidder/          #   市场竞价工具（place_bid → agent-lab 竞价）
 │
 ├── examples/                      # 示例
 │   ├── echo-agent/                #   桥测试用最小 agent 程序
@@ -85,7 +86,7 @@ pi-platform/
 │   ├── arena-review/              #   pit-flow 并行 fan-out + reducer 示例
 │   └── custom-{route,tool,store}/ #   PTH 扩展点示例
 │
-├── test/                          # 447 个测试（vitest）
+├── test/                          # 614 个测试（vitest）+ agent-lab 子套件 1288（node:test）
 ├── docs/{ptl,pth}/                # 分产品详细架构文档
 ├── Dockerfile · docker-compose.yaml
 └── tsconfig.json · vitest.config.ts
@@ -163,7 +164,7 @@ Gateway（Fastify + auth + SSE）
 
 ---
 
-## 扩展生态（5 个 bundled）
+## 扩展生态（6 个 bundled）
 
 | 扩展 | 能力 |
 |------|------|
@@ -171,7 +172,8 @@ Gateway（Fastify + auth + SSE）
 | **pit-communicate** | 跨 pi 会话消息（文件邮箱）；`/pit send/ask/inbox/share`；manual/auto/hybrid 审核；不可变审计日志 |
 | **pit-control** | pi 内管理 tmux 会话；`/control start/stop/ls/switch/detach/ui/name/status` |
 | **workflow** | pi 内编排 pit-flow；`/flow` 命令 + `flow_run/flow_status/flow_ls` 工具 + gate 通知（shell 调 `pit flow` CLI） |
-| **agent-lab** | 记录每次 LLM 调用 token/cost/latency；共享 SQLite DB；`/lab stats` |
+| **agent-lab** | ★ **agent 经济引擎**：WorkLoop 状态机引擎（图灵机模型：有限控制/记忆域/纸带，MachineRuntime 驱动 + 转移级 checkpoint/Trace）+ 市场竞拍（arena）→ 调度器（定义/实例/fallback 路由 + 参数模型）→ 优化器（提案/canary/发布闭环）+ 实验运行时；共享 SQLite（lab_events/runs/credit_tx/checkpoints）；`/lab` 全套子命令；pit 侧 TraceProvider 注册制消费（TUI Dashboard/`pit trace ls`）。架构见 [`extensions/agent-lab/docs/ARCHITECTURE.md`](./extensions/agent-lab/docs/ARCHITECTURE.md) |
+| **agent-lab-bidder** | 市场竞价工具（`place_bid` 工具 → agent-lab 竞价）；⚠️ ADR-0001 后核心竞价经 market-bid-loop 原生运行，place_bid 已标 deprecated-for-bidding（保留兼容） |
 
 共享层机制：bundled 扩展安装到 `~/.pi-triple/data/shared/extensions/`，逐项 symlink 注入各模板目录（一处更新全局可见）；`.bundled-manifest` 标记平台托管，`pit update --all` 覆盖式同步。
 
@@ -255,7 +257,7 @@ PTH 完整硬约束 C1–C10 见 [`docs/pth/architecture.md`](./docs/pth/archite
 
 ## 技术栈
 
-Node.js ≥22 · TypeScript 5.7 · pi SDK 0.82 · React+Ink（PTL TUI）· tmux（PTL）· Fastify 5 + ioredis 5 + bullmq 5 + pino 9 + prom-client 15（PTH）· SQLite WAL（lab-data）· vitest 3（447 tests）。
+Node.js ≥22 · TypeScript 5.7 · pi SDK 0.82 · React+Ink（PTL TUI）· tmux（PTL）· Fastify 5 + ioredis 5 + bullmq 5 + pino 9 + prom-client 15（PTH）· SQLite WAL（lab-data）· vitest 3（614 root tests）· node:test（agent-lab 子套件 1288 tests）。
 
 ## 开发
 
@@ -263,7 +265,7 @@ Node.js ≥22 · TypeScript 5.7 · pi SDK 0.82 · React+Ink（PTL TUI）· tmux�
 npm run build          # tsc → dist/（pit/pth bin 跑编译产物，改 src 后必须重建）
 npm run pit:dev        # tsx 直跑 PTL（开发）
 npm run pth:dev        # tsx watch 直跑 PTH（开发）
-npm test               # vitest run（447）
+npm test               # vitest run（614 + agent-lab 子套件 1288）
 npm run lint           # tsc --noEmit
 ```
 
