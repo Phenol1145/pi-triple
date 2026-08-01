@@ -1,10 +1,8 @@
-import { test, before, after } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import {
   SUBAGENT_DELEGATION_V2_PROTOCOL_VERSION,
-  SUBAGENT_DELEGATION_REQUEST_EVENT,
-  SUBAGENT_DELEGATION_UPDATE_EVENT,
   SUBAGENT_DELEGATION_RESPONSE_EVENT,
   type SubagentDelegationV2Request,
   type SubagentDelegationV2Update,
@@ -12,13 +10,14 @@ import {
   type SubagentDelegationV2Usage,
 } from "../src/runtime/delegation-v2.ts";
 import { PiSubagentsAdapter } from "../src/runtime/pi-subagents-adapter.ts";
-import type { DelegationEventBus } from "../src/runtime/pi-subagents-adapter.ts";
 import { createPiDefaultLoop } from "../src/workloops/pi-default-loop.ts";
 import type { PiDefaultLoopConfig } from "../src/workloops/pi-default-loop.ts";
 import { createWorkLoopRuntime } from "../src/runtime/create-runtime.ts";
+import { MachineRuntime } from "../src/workloop/machine-runtime.ts";
 import type {
   WorkLoopImplementation,
   WorkLoopInput,
+  WorkLoopResult,
   WorkLoopSDK,
   WorkContext,
   ModelPort,
@@ -181,38 +180,80 @@ function v2Response(
   } as SubagentDelegationV2TerminalResponse;
 }
 
+// ── Fake adapter（PiDelegateExecutor 桥接：onUpdate 队列 → terminal；同 pi-delegate-executor.test.ts 模式） ──
+
+class FakeAdapter {
+  requests: SubagentDelegationV2Request[] = [];
+  private updates: SubagentDelegationV2Update[] = [];
+  private terminal: SubagentDelegationV2TerminalResponse | null = null;
+
+  pushUpdate(u: SubagentDelegationV2Update) { this.updates.push(u); }
+  finish(t: SubagentDelegationV2TerminalResponse) { this.terminal = t; }
+
+  delegate(
+    request: SubagentDelegationV2Request,
+    options: { onUpdate?: (u: SubagentDelegationV2Update) => void } = {},
+  ): Promise<SubagentDelegationV2TerminalResponse> {
+    this.requests.push(request);
+    return new Promise<SubagentDelegationV2TerminalResponse>((resolve) => {
+      const timer = setInterval(() => {
+        if (this.updates.length > 0) {
+          options.onUpdate?.(this.updates.shift()!);
+        } else if (this.terminal) {
+          clearInterval(timer);
+          resolve(this.terminal);
+        }
+      }, 5);
+    });
+  }
+}
+
+// ── Machine 驱动辅助（MachineRuntime + 工厂挂载的 executor；等价旧 run() 入口） ──
+
+function runMachine(
+  loop: WorkLoopImplementation,
+  input: WorkLoopInput,
+  sdk: WorkLoopSDK,
+): Promise<WorkLoopResult> {
+  const runtime = new MachineRuntime({
+    machine: loop.machine,
+    input,
+    sdk,
+    executor: loop.executor,
+    budgets: { maxTurns: 100 },
+  });
+  return runtime.run().then(({ result }) => result);
+}
+
 // ── Test 1: Completed text response maps output + usage, appends assistant message ──
 
 test("1a. Completed text response maps result text and usage to StandardAgentOutput", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
   const input = defaultInput();
   const sdk = defaultSDK();
 
-  const runPromise = loop.run(input, sdk);
+  const runPromise = runMachine(loop, input, sdk);
 
   // Respond with completed text result
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({
-      status: "completed",
-      requestId: "exec-1",
-      ownerRunId: "trace-1",
-      nodeId: "agent-1",
-      result: { kind: "text", text: "all done!" },
-      usage: {
-        input: 100,
-        output: 50,
-        cacheRead: 10,
-        cacheWrite: 5,
-        cost: 0.003,
-        turns: 3,
-        toolCalls: 2,
-        durationMs: 1500,
-      },
-    })),
-  );
+  fake.finish(v2Response({
+    status: "completed",
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    result: { kind: "text", text: "all done!" },
+    usage: {
+      input: 100,
+      output: 50,
+      cacheRead: 10,
+      cacheWrite: 5,
+      cost: 0.003,
+      turns: 3,
+      toolCalls: 2,
+      durationMs: 1500,
+    },
+  }));
 
   const result = await runPromise;
 
@@ -239,24 +280,21 @@ test("1a. Completed text response maps result text and usage to StandardAgentOut
 });
 
 test("1b. Completed text response appends one assistant message to WorkContext", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
   const input = defaultInput();
   const sdk = defaultSDK();
 
-  const runPromise = loop.run(input, sdk);
+  const runPromise = runMachine(loop, input, sdk);
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({
-      status: "completed",
-      requestId: "exec-1",
-      ownerRunId: "trace-1",
-      nodeId: "agent-1",
-      result: { kind: "text", text: "I did it" },
-    })),
-  );
+  fake.finish(v2Response({
+    status: "completed",
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    result: { kind: "text", text: "I did it" },
+  }));
 
   const result = await runPromise;
 
@@ -275,25 +313,22 @@ test("1b. Completed text response appends one assistant message to WorkContext",
 });
 
 test("1c. Completed text with no usage sets usage to undefined", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
   const input = defaultInput();
   const sdk = defaultSDK();
 
-  const runPromise = loop.run(input, sdk);
+  const runPromise = runMachine(loop, input, sdk);
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({
-      status: "completed",
-      requestId: "exec-1",
-      ownerRunId: "trace-1",
-      nodeId: "agent-1",
-      result: { kind: "text", text: "done" },
-      // no usage field
-    })),
-  );
+  fake.finish(v2Response({
+    status: "completed",
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    result: { kind: "text", text: "done" },
+    // no usage field
+  }));
 
   const result = await runPromise;
 
@@ -304,28 +339,25 @@ test("1c. Completed text with no usage sets usage to undefined", async () => {
 // ── Test 2: Structured result maps into custom output without stringifying ──
 
 test("2a. Structured result maps to custom output, context unchanged", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
   const input = defaultInput({
     config: Object.freeze({ ...defaultConfig(), result: { kind: "structured", schema: { type: "object" } } }),
   });
   const sdk = defaultSDK();
 
-  const runPromise = loop.run(input, sdk);
+  const runPromise = runMachine(loop, input, sdk);
 
   const structuredValue = { score: 95, items: ["a", "b", "c"] };
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({
-      status: "completed",
-      requestId: "exec-1",
-      ownerRunId: "trace-1",
-      nodeId: "agent-1",
-      result: { kind: "structured", value: structuredValue },
-    })),
-  );
+  fake.finish(v2Response({
+    status: "completed",
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    result: { kind: "structured", value: structuredValue },
+  }));
 
   const result = await runPromise;
 
@@ -344,16 +376,15 @@ test("2a. Structured result maps to custom output, context unchanged", async () 
 });
 
 test("2b. Structured result with usage maps usage to standard output", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
   const input = defaultInput({
     config: Object.freeze({ ...defaultConfig(), result: { kind: "structured", schema: { type: "object" } } }),
   });
   const sdk = defaultSDK();
 
-  const runPromise = loop.run(input, sdk);
+  const runPromise = runMachine(loop, input, sdk);
 
   const usage: SubagentDelegationV2Usage = {
     input: 200,
@@ -366,16 +397,14 @@ test("2b. Structured result with usage maps usage to standard output", async () 
     durationMs: 800,
   };
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({
-      status: "completed",
-      requestId: "exec-1",
-      ownerRunId: "trace-1",
-      nodeId: "agent-1",
-      result: { kind: "structured", value: { ok: true } },
-      usage,
-    })),
-  );
+  fake.finish(v2Response({
+    status: "completed",
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    result: { kind: "structured", value: { ok: true } },
+    usage,
+  }));
 
   const result = await runPromise;
 
@@ -386,21 +415,18 @@ test("2b. Structured result with usage maps usage to standard output", async () 
 // ── Test 3: Failed statuses map to failed with correct error codes and retryability ──
 
 test("3a. 'failed' maps to failed, not retryable", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
-  const runPromise = loop.run(defaultInput(), defaultSDK());
+  const runPromise = runMachine(loop, defaultInput(), defaultSDK());
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({
-      status: "failed",
-      requestId: "exec-1",
-      ownerRunId: "trace-1",
-      nodeId: "agent-1",
-      error: "something broke",
-    })),
-  );
+  fake.finish(v2Response({
+    status: "failed",
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    error: "something broke",
+  }));
 
   const result = await runPromise;
 
@@ -411,21 +437,18 @@ test("3a. 'failed' maps to failed, not retryable", async () => {
 });
 
 test("3b. 'timed_out' maps to failed, retryable", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
-  const runPromise = loop.run(defaultInput(), defaultSDK());
+  const runPromise = runMachine(loop, defaultInput(), defaultSDK());
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({
-      status: "timed_out",
-      requestId: "exec-1",
-      ownerRunId: "trace-1",
-      nodeId: "agent-1",
-      error: "timeout exceeded",
-    })),
-  );
+  fake.finish(v2Response({
+    status: "timed_out",
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    error: "timeout exceeded",
+  }));
 
   const result = await runPromise;
 
@@ -435,15 +458,12 @@ test("3b. 'timed_out' maps to failed, retryable", async () => {
 });
 
 test("3c. 'turn_budget_exhausted' maps to failed, not retryable", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
-  const runPromise = loop.run(defaultInput(), defaultSDK());
+  const runPromise = runMachine(loop, defaultInput(), defaultSDK());
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "turn_budget_exhausted", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" })),
-  );
+  fake.finish(v2Response({ status: "turn_budget_exhausted", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" }));
 
   const result = await runPromise;
 
@@ -453,15 +473,12 @@ test("3c. 'turn_budget_exhausted' maps to failed, not retryable", async () => {
 });
 
 test("3d. 'tool_budget_exhausted' maps to failed, not retryable", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
-  const runPromise = loop.run(defaultInput(), defaultSDK());
+  const runPromise = runMachine(loop, defaultInput(), defaultSDK());
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "tool_budget_exhausted", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" })),
-  );
+  fake.finish(v2Response({ status: "tool_budget_exhausted", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" }));
 
   const result = await runPromise;
 
@@ -471,15 +488,12 @@ test("3d. 'tool_budget_exhausted' maps to failed, not retryable", async () => {
 });
 
 test("3e. 'structured_output_failed' maps to failed, not retryable", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
-  const runPromise = loop.run(defaultInput(), defaultSDK());
+  const runPromise = runMachine(loop, defaultInput(), defaultSDK());
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "structured_output_failed", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" })),
-  );
+  fake.finish(v2Response({ status: "structured_output_failed", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" }));
 
   const result = await runPromise;
 
@@ -488,38 +502,31 @@ test("3e. 'structured_output_failed' maps to failed, not retryable", async () =>
   assert.equal(result.error?.standard?.retryable, false);
 });
 
-test("3f. 'invalid_request' maps to failed, not retryable (adapter normalizes → status 'failed')", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+test("3f. 'invalid_request' maps to failed, not retryable (loop 直接映射，不依赖 adapter 归一化)", async () => {
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
-  const runPromise = loop.run(defaultInput(), defaultSDK());
+  const runPromise = runMachine(loop, defaultInput(), defaultSDK());
 
-  // The adapter normalizes invalid_request → status "failed" with error preserved.
-  // The loop sees "failed" and maps to non-retryable failed.
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "invalid_request", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1", error: "bad request" })),
-  );
+  // FakeAdapter 不归一化 status：loop 层直接处理 invalid_request
+  // （FAILED_NON_RETRYABLE 家族 → failed, code = status, non-retryable）
+  fake.finish(v2Response({ status: "invalid_request", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1", error: "bad request" }));
 
   const result = await runPromise;
 
   assert.equal(result.status, "failed");
-  // After adapter normalization, the terminal status is "failed"
-  assert.equal(result.error?.standard?.code, "failed");
+  assert.equal(result.error?.standard?.code, "invalid_request");
   assert.equal(result.error?.standard?.retryable, false);
   assert.ok(result.error?.standard?.message.includes("bad request"));
 });
 
 test("3g. 'unavailable_context' maps to failed, retryable", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
-  const runPromise = loop.run(defaultInput(), defaultSDK());
+  const runPromise = runMachine(loop, defaultInput(), defaultSDK());
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "unavailable_context", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" })),
-  );
+  fake.finish(v2Response({ status: "unavailable_context", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" }));
 
   const result = await runPromise;
 
@@ -529,15 +536,12 @@ test("3g. 'unavailable_context' maps to failed, retryable", async () => {
 });
 
 test("3h. 'duplicate_node' maps to failed, retryable", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
-  const runPromise = loop.run(defaultInput(), defaultSDK());
+  const runPromise = runMachine(loop, defaultInput(), defaultSDK());
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "duplicate_node", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" })),
-  );
+  fake.finish(v2Response({ status: "duplicate_node", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" }));
 
   const result = await runPromise;
 
@@ -549,15 +553,12 @@ test("3h. 'duplicate_node' maps to failed, retryable", async () => {
 // ── Test 4: Cancelled and interrupted map to cancelled ──────────────
 
 test("4a. 'cancelled' maps to cancelled", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
-  const runPromise = loop.run(defaultInput(), defaultSDK());
+  const runPromise = runMachine(loop, defaultInput(), defaultSDK());
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "cancelled", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" })),
-  );
+  fake.finish(v2Response({ status: "cancelled", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" }));
 
   const result = await runPromise;
 
@@ -565,15 +566,12 @@ test("4a. 'cancelled' maps to cancelled", async () => {
 });
 
 test("4b. 'interrupted' maps to cancelled", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
-  const runPromise = loop.run(defaultInput(), defaultSDK());
+  const runPromise = runMachine(loop, defaultInput(), defaultSDK());
 
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "interrupted", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" })),
-  );
+  fake.finish(v2Response({ status: "interrupted", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1" }));
 
   const result = await runPromise;
 
@@ -582,9 +580,9 @@ test("4b. 'interrupted' maps to cancelled", async () => {
 
 // ── Test 5: Updates emit runtime.pi_subagents.update telemetry ───────
 
-test("5. Matching delegation updates emit runtime.pi_subagents.update telemetry metrics", async () => {
-  const { bus, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
+test("5. Matching delegation updates emit pi.progress telemetry metrics", async () => {
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
   const telemetryEvents: Array<{ eventType: string; payload: unknown; metrics?: Record<string, string | number | boolean | null> }> = [];
   const sdk = defaultSDK({
@@ -595,72 +593,66 @@ test("5. Matching delegation updates emit runtime.pi_subagents.update telemetry 
     },
   });
 
-  const loop = createPiDefaultLoop(adapter);
-  const runPromise = loop.run(defaultInput(), sdk);
+  const runPromise = runMachine(loop, defaultInput(), sdk);
 
   // Emit two updates
-  handlers.get(SUBAGENT_DELEGATION_UPDATE_EVENT)?.forEach((h) =>
-    h({
-      version: 2,
-      requestId: "exec-1",
-      ownerRunId: "trace-1",
-      nodeId: "agent-1",
-      currentTool: "bash",
-      toolCount: 1,
-      durationMs: 500,
-      tokens: 42,
-    } satisfies SubagentDelegationV2Update),
-  );
+  fake.pushUpdate({
+    version: 2,
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    currentTool: "bash",
+    toolCount: 1,
+    durationMs: 500,
+    tokens: 42,
+  } satisfies SubagentDelegationV2Update);
 
-  handlers.get(SUBAGENT_DELEGATION_UPDATE_EVENT)?.forEach((h) =>
-    h({
-      version: 2,
-      requestId: "exec-1",
-      ownerRunId: "trace-1",
-      nodeId: "agent-1",
-      currentTool: "read",
-      toolCount: 2,
-      durationMs: 1200,
-      tokens: 80,
-    } satisfies SubagentDelegationV2Update),
-  );
+  fake.pushUpdate({
+    version: 2,
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    currentTool: "read",
+    toolCount: 2,
+    durationMs: 1200,
+    tokens: 80,
+  } satisfies SubagentDelegationV2Update);
 
   // Then complete
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "completed", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1", result: { kind: "text", text: "ok" } })),
-  );
+  fake.finish(v2Response({ status: "completed", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1", result: { kind: "text", text: "ok" } }));
 
   await runPromise;
 
-  // Two telemetry events emitted
-  assert.equal(telemetryEvents.length, 2);
-  assert.equal(telemetryEvents[0].eventType, "runtime.pi_subagents.update");
-  assert.equal(telemetryEvents[1].eventType, "runtime.pi_subagents.update");
+  // 只统计 pi.progress（MachineRuntime 还会发 machine.transition 事件）
+  const progressEvents = telemetryEvents.filter((e) => e.eventType === "pi.progress");
+  assert.equal(progressEvents.length, 2);
+  assert.equal(progressEvents[0].eventType, "pi.progress");
+  assert.equal(progressEvents[1].eventType, "pi.progress");
 
   // First update payload matches
-  const payload0 = telemetryEvents[0].payload as Record<string, unknown>;
+  const payload0 = progressEvents[0].payload as Record<string, unknown>;
   assert.equal(payload0.currentTool, "bash");
   assert.equal(payload0.toolCount, 1);
 
   // Metrics present
-  assert.ok(telemetryEvents[0].metrics, "metrics should be present");
-  assert.equal(telemetryEvents[0].metrics!.durationMs, 500);
-  assert.equal(telemetryEvents[0].metrics!.tokens, 42);
+  assert.ok(progressEvents[0].metrics, "metrics should be present");
+  assert.equal(progressEvents[0].metrics!.durationMs, 500);
+  assert.equal(progressEvents[0].metrics!.tokens, 42);
+  assert.equal(progressEvents[0].metrics!.toolCount, 1);
 
   // Second update
-  const payload1 = telemetryEvents[1].payload as Record<string, unknown>;
+  const payload1 = progressEvents[1].payload as Record<string, unknown>;
   assert.equal(payload1.currentTool, "read");
   assert.equal(payload1.toolCount, 2);
-  assert.equal(telemetryEvents[1].metrics!.durationMs, 1200);
-  assert.equal(telemetryEvents[1].metrics!.tokens, 80);
+  assert.equal(progressEvents[1].metrics!.durationMs, 1200);
+  assert.equal(progressEvents[1].metrics!.tokens, 80);
 });
 
 // ── Test 6: Identity mapping ───────────────────────────────────────
 
 test("6a. Maps executionId→requestId, traceId→ownerRunId, agentInstanceId→nodeId", async () => {
-  const { bus, emitted, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
   const input = defaultInput({
     traceId: "my-trace",
@@ -668,34 +660,30 @@ test("6a. Maps executionId→requestId, traceId→ownerRunId, agentInstanceId→
     agentInstanceId: "my-agent",
   });
 
-  const runPromise = loop.run(input, defaultSDK());
+  const runPromise = runMachine(loop, input, defaultSDK());
 
   // Complete immediately
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({
-      status: "completed",
-      requestId: "my-exec",
-      ownerRunId: "my-trace",
-      nodeId: "my-agent",
-      result: { kind: "text", text: "ok" },
-    })),
-  );
+  fake.finish(v2Response({
+    status: "completed",
+    requestId: "my-exec",
+    ownerRunId: "my-trace",
+    nodeId: "my-agent",
+    result: { kind: "text", text: "ok" },
+  }));
 
   await runPromise;
 
   // Verify the emitted V2 request has correct identity mapping
-  const reqs = emitted.filter((e) => e.event === SUBAGENT_DELEGATION_REQUEST_EVENT);
-  assert.equal(reqs.length, 1);
-  const req = reqs[0].payload as SubagentDelegationV2Request;
+  assert.equal(fake.requests.length, 1);
+  const req = fake.requests[0];
   assert.equal(req.requestId, "my-exec");
   assert.equal(req.ownerRunId, "my-trace");
   assert.equal(req.nodeId, "my-agent");
 });
 
 test("6b. Config fields mapped to V2 request fields", async () => {
-  const { bus, emitted, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
   const config: PiDefaultLoopConfig = {
     agent: "my-special-agent",
@@ -709,14 +697,12 @@ test("6b. Config fields mapped to V2 request fields", async () => {
 
   const input = defaultInput({ config: Object.freeze(config) });
 
-  const runPromise = loop.run(input, defaultSDK());
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "completed", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1", result: { kind: "text", text: "ok" } })),
-  );
+  const runPromise = runMachine(loop, input, defaultSDK());
+  fake.finish(v2Response({ status: "completed", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1", result: { kind: "text", text: "ok" } }));
   await runPromise;
 
-  const reqs = emitted.filter((e) => e.event === SUBAGENT_DELEGATION_REQUEST_EVENT);
-  const req = reqs[0].payload as SubagentDelegationV2Request;
+  assert.equal(fake.requests.length, 1);
+  const req = fake.requests[0];
 
   assert.equal(req.agent, "my-special-agent");
   assert.equal(req.cwd, "/home/user/project");
@@ -724,26 +710,24 @@ test("6b. Config fields mapped to V2 request fields", async () => {
   assert.equal(req.model, "claude-3-opus");
   assert.equal(req.thinking, "high");
   assert.equal(req.timeoutMs, 60_000);
-  assert.equal(req.task, "do the thing");
+  // task = DSP 派生前缀 + 原 task（委托式投影入任务文本，spec §2.6）
+  assert.ok(req.task.endsWith("do the thing"), "原 task 保留在末尾");
+  assert.ok(req.task.includes("任务已委托给 pi"), "task 前缀含状态投影");
 });
 
 test("6c. Does not pass WorkContext messages to V2 request", async () => {
-  const { bus, emitted, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
   const input = defaultInput({
     context: { ...testContext("ctx-1"), messages: [{ role: "user", content: "should not be in V2 request" }] },
   });
 
-  const runPromise = loop.run(input, defaultSDK());
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "completed", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1", result: { kind: "text", text: "ok" } })),
-  );
+  const runPromise = runMachine(loop, input, defaultSDK());
+  fake.finish(v2Response({ status: "completed", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1", result: { kind: "text", text: "ok" } }));
   await runPromise;
 
-  const reqs = emitted.filter((e) => e.event === SUBAGENT_DELEGATION_REQUEST_EVENT);
-  const req = reqs[0].payload as Record<string, unknown>;
+  const req = fake.requests[0] as Record<string, unknown>;
 
   // V2 request should not have any "messages" field
   assert.equal("messages" in req, false);
@@ -752,9 +736,8 @@ test("6c. Does not pass WorkContext messages to V2 request", async () => {
 // ── Test 7: Default config values ───────────────────────────────────
 
 test("7. Default config values: contextMode defaults to fresh, result defaults to text", async () => {
-  const { bus, emitted, handlers } = fakeEventBus();
-  const adapter = new PiSubagentsAdapter(bus);
-  const loop = createPiDefaultLoop(adapter);
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
 
   const config: PiDefaultLoopConfig = {
     agent: "minimal-agent",
@@ -764,14 +747,11 @@ test("7. Default config values: contextMode defaults to fresh, result defaults t
 
   const input = defaultInput({ config: Object.freeze(config) });
 
-  const runPromise = loop.run(input, defaultSDK());
-  handlers.get(SUBAGENT_DELEGATION_RESPONSE_EVENT)?.forEach((h) =>
-    h(v2Response({ status: "completed", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1", result: { kind: "text", text: "ok" } })),
-  );
+  const runPromise = runMachine(loop, input, defaultSDK());
+  fake.finish(v2Response({ status: "completed", requestId: "exec-1", ownerRunId: "trace-1", nodeId: "agent-1", result: { kind: "text", text: "ok" } }));
   await runPromise;
 
-  const reqs = emitted.filter((e) => e.event === SUBAGENT_DELEGATION_REQUEST_EVENT);
-  const req = reqs[0].payload as SubagentDelegationV2Request;
+  const req = fake.requests[0];
 
   assert.equal(req.agent, "minimal-agent");
   assert.equal(req.context, "fresh");
@@ -813,6 +793,8 @@ test("8a. createWorkLoopRuntime registers metadata pi-default-loop@1.0.0 and exe
   db.close();
 });
 
+// 已知红（Task 6 runner 适配后恢复）：runner 仍走旧 run() 路径，
+// 对已迁移 machine 的 pi-default-loop 给出明确 typed 失败。
 test("8b. createWorkLoopRuntime can execute one initialized Agent against fake event bus", async () => {
   const db = new DatabaseSync(":memory:");
   const { bus, handlers } = fakeEventBus();
@@ -895,14 +877,14 @@ test("8c. createWorkLoopRuntime dispose disposes the adapter", async () => {
 
   runtime.dispose();
 
-  // Subsequent delegate attempts should reject ("disposed")
+  // Subsequent delegate attempts should reject ("disposed") — machine 路径：
+  // executor 首次拉取事件时 adapter.delegate 拒绝 → runtime.run() 拒绝
   const impl = runtime.registry.require("pi-default-loop", "1.0.0");
-  // Trying to run the loop after dispose — the adapter is disposed, delegate will reject
   const input = defaultInput();
   const sdk = defaultSDK();
 
   await assert.rejects(
-    () => impl.run(input, sdk),
+    () => runMachine(impl, input, sdk),
     { message: /disposed/ },
   );
 
@@ -976,22 +958,6 @@ test("10. 'acceptance_failed' status is NOT in the explicit mapping — verifies
 
 // ── Phase 3b Task 2 helpers ──────────────────────────────────────────
 
-function stubAdapter(captured: { req?: SubagentDelegationV2Request }): PiSubagentsAdapter {
-  return {
-    async delegate(req: SubagentDelegationV2Request): Promise<SubagentDelegationV2TerminalResponse> {
-      captured.req = req;
-      return {
-        version: req.version,
-        requestId: req.requestId,
-        ownerRunId: req.ownerRunId,
-        nodeId: req.nodeId,
-        status: "completed",
-        result: { kind: "text", text: "ok" },
-      } as SubagentDelegationV2TerminalResponse;
-    },
-  } as PiSubagentsAdapter;
-}
-
 function bidInput(config: PiDefaultLoopConfig) {
   return {
     executionId: "exec-1",
@@ -1006,15 +972,17 @@ function bidInput(config: PiDefaultLoopConfig) {
 
 const bidSdk = {
   telemetry: { emit() {} },
-  control: { signal: new AbortController().signal },
+  control: { signal: new AbortController().signal, throwIfCancelled() {} },
+  checkpoint: { save: async () => ({ checkpointId: "cp" }) },
 } as never;
 
 // ── Phase 3b Task 2: skill/turnBudget/toolBudget pass-through ────────
 
 test("Phase 3b: buildV2Request passes skill/turnBudget/toolBudget through", async () => {
-  const captured: { req?: SubagentDelegationV2Request } = {};
-  const loop = createPiDefaultLoop(stubAdapter(captured));
-  await loop.run(
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
+  const runPromise = runMachine(
+    loop,
     bidInput({
       agent: "agent-x",
       cwd: "/tmp",
@@ -1027,20 +995,93 @@ test("Phase 3b: buildV2Request passes skill/turnBudget/toolBudget through", asyn
     }),
     bidSdk,
   );
-  assert.equal(captured.req?.skill, "agent-lab-bidding");
-  assert.deepEqual(captured.req?.turnBudget, { maxTurns: 3 });
-  assert.deepEqual(captured.req?.toolBudget, { hard: 5 });
-  assert.equal(captured.req?.model, "minimax/minimax-m3");
+  // 委托是异步事件源：立即注入 terminal 让 executor 事件流闭合（否则挂起）
+  fake.finish(v2Response({
+    status: "completed",
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    result: { kind: "text", text: "ok" },
+  }));
+  await runPromise;
+  const req = fake.requests[0];
+  assert.equal(req?.skill, "agent-lab-bidding");
+  assert.deepEqual(req?.turnBudget, { maxTurns: 3 });
+  assert.deepEqual(req?.toolBudget, { hard: 5 });
+  assert.equal(req?.model, "minimax/minimax-m3");
 });
 
 test("Phase 3b: buildV2Request omits skill/turnBudget when unset", async () => {
-  const captured: { req?: SubagentDelegationV2Request } = {};
-  const loop = createPiDefaultLoop(stubAdapter(captured));
-  await loop.run(
+  const fake = new FakeAdapter();
+  const loop = createPiDefaultLoop(fake as never);
+  const runPromise = runMachine(
+    loop,
     bidInput({ agent: "a", cwd: "/tmp", contextMode: "fresh" }),
     bidSdk,
   );
-  assert.equal(captured.req?.skill, undefined);
-  assert.equal(captured.req?.turnBudget, undefined);
-  assert.equal(captured.req?.toolBudget, undefined);
+  fake.finish(v2Response({
+    status: "completed",
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    result: { kind: "text", text: "ok" },
+  }));
+  await runPromise;
+  const req = fake.requests[0];
+  assert.equal(req?.skill, undefined);
+  assert.equal(req?.turnBudget, undefined);
+  assert.equal(req?.toolBudget, undefined);
+});
+
+// ── Task 5 machine 级测试 ──────────────────────────────────────────────
+
+test("pi-default machine: 事件流驱动四状态（idle→delegating→…→terminal）", async () => {
+  const impl = createPiDefaultLoop(new FakeAdapter() as never);
+  assert.equal(impl.executorKind, "pi-delegate");
+  assert.deepEqual(impl.machine.states.map((s) => s.id), ["idle", "delegating", "terminal"]);
+  assert.equal(impl.machine.initial, "idle");
+
+  // 转移表：start / pi_update / pi_terminal 三条边
+  assert.equal(impl.machine.transitions("idle", { type: "start" }), "delegating");
+  assert.equal(impl.machine.transitions("delegating", { type: "pi_update" }), "delegating");
+  assert.equal(impl.machine.transitions("delegating", { type: "pi_terminal" }), "terminal");
+  assert.equal(impl.machine.transitions("idle", { type: "pi_update" }), undefined);
+  assert.equal(impl.machine.states[2].terminal, true);
+
+  // 工厂创建并挂载 executor（runner 只读，Task 6 接线）
+  assert.ok(impl.executor, "executor 由工厂创建并挂 implementation.executor");
+});
+
+test("pi-default machine: PiDelegateExecutor 桥接冒烟（委托发起 + 投影前缀 + terminal 映射）", async () => {
+  const fake = new FakeAdapter();
+  const impl = createPiDefaultLoop(fake as never);
+
+  const runPromise = runMachine(impl, defaultInput(), defaultSDK());
+  fake.pushUpdate({
+    version: SUBAGENT_DELEGATION_V2_PROTOCOL_VERSION,
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    currentTool: "read",
+    toolCount: 1,
+    durationMs: 100,
+    tokens: 10,
+  });
+  fake.finish(v2Response({
+    status: "completed",
+    requestId: "exec-1",
+    ownerRunId: "trace-1",
+    nodeId: "agent-1",
+    result: { kind: "text", text: "bridge ok" },
+  }));
+
+  const result = await runPromise;
+  assert.equal(result.status, "completed");
+  assert.equal(result.output?.standard?.text, "bridge ok");
+
+  // 委托请求已发起：task = DSP 投影前缀 + 原 task（委托式投影入任务文本，spec §2.6）
+  assert.equal(fake.requests.length, 1);
+  const req = fake.requests[0];
+  assert.ok(req.task.includes("任务已委托给 pi"), "task 前缀含状态投影");
+  assert.ok(req.task.endsWith("do the thing"), "原 task 保留在末尾");
 });
