@@ -1,6 +1,10 @@
 /**
- * Managed loop machine — shared iteration core for managed work-loop
- * implementations (budgeted-history, selective-summary, etc.).
+ * Managed loop machine — internal shared machine core for managed work-loops
+ * (no standalone implementation / no registered WorkLoopDefinition).
+ *
+ * 消费方：budgeted-history / selective-summary（各自注册 Definition，经
+ * managedMachine + StrategyHook 复用本核心）。不提供独立 `managed-loop`
+ * implementation（createManagedLoop 工厂已删除，健康审计 F3）。
  *
  * ## Design
  *
@@ -8,8 +12,7 @@
  * have no tool access (v1), run a model-complete → append loop, and
  * delegate context-size management to a pluggable strategy hook.
  *
- * Task 4 迁移：`runManagedLoop(input, sdk, strategyHook)` 重构为五状态机
- * `managedMachine(config, strategyHook): MachineDefinition`——
+ * 五状态机 `managedMachine(config, strategyHook): MachineDefinition`：
  *
  *   check →（ctx_ok）→ call →（assistant_turn）→ append →（more）→ check …
  *   check →（over_budget）→ manage →（transformed）→ call
@@ -48,7 +51,6 @@ import type {
   WorkLoopSDK,
   WorkLoopResult,
   WorkContext,
-  WorkLoopImplementation,
   StandardAgentOutput,
 } from "../workloop/contracts.ts";
 
@@ -312,39 +314,5 @@ export function managedMachine(
           return { context: ctx, state: memory };
       }
     },
-  };
-}
-
-// ── Implementation factory ──────────────────────────────────────────
-
-/**
- * 创建 managed-loop WorkLoopImplementation（通用骨架，config 用默认值）。
- *
- * budgeted-history / selective-summary 不直接使用本工厂——它们各自构建
- * config 并调用 managedMachine（见各自文件）。本工厂供通用 managed 场景
- * 使用（id "managed-loop" 无注册定义，仅 API 完整性）。
- */
-export function createManagedLoop(strategyHook: StrategyHook): WorkLoopImplementation {
-  const config: ManagedLoopConfig = { model: "default" };
-  return {
-    id: "managed-loop",
-    version: "1.0.0",
-    cloneModes: ["fresh"],
-    executorKind: "local-model",
-
-    initialContext(cfg: unknown): WorkContext {
-      const c = cfg as Record<string, unknown> | undefined;
-      return {
-        systemPrompt: typeof c?.systemPrompt === "string" ? c.systemPrompt : undefined,
-        messages: [],
-        metadata: { contextId: "ctx-initial", sourceRefs: [], artifactRefs: [] },
-      };
-    },
-
-    initialState(_config: unknown): unknown {
-      return {};
-    },
-
-    machine: managedMachine(config, strategyHook),
   };
 }

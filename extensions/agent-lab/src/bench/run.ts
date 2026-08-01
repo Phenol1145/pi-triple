@@ -6,7 +6,6 @@ import { extractCode } from "./extract.ts";
 import { judgePython } from "./judge.ts";
 import type { HumanEvalTask } from "./humaneval.ts";
 import {
-  renderBenchReport,
   type BenchReport,
   type BenchTaskResult,
   type ModelStat,
@@ -184,5 +183,3 @@ export async function runBench(
 
   return { runId, results, modelStats, balanceDeltas };
 }
-
-export { renderBenchReport };

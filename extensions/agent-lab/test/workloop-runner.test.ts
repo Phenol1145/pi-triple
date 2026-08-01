@@ -239,6 +239,11 @@ test("1. Completed run: loads snapshot, drives machine via MachineRuntime, commi
   assert.equal((transition.payload as { toState?: string }).toState, "done");
   assert.equal((transition.payload as { seq?: number }).seq, 1);
 
+  // machine.transition identity 携带 transitionSeq/checkpointId（spec §7.2 / 健康审计 F1）
+  assert.equal(transition.identity.transitionSeq, 1);
+  assert.equal(typeof transition.identity.checkpointId, "string");
+  assert.ok(transition.identity.checkpointId!.length > 0);
+
   // Verify identity fields on first event
   const id = events[0].identity;
   assert.equal(id.traceId, "trace-1");

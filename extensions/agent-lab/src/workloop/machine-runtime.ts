@@ -206,7 +206,14 @@ export class MachineRuntime {
       record.checkpointId = checkpointId;
 
       // ── 转移级 Trace ──
-      this.sdk.telemetry.emit("machine.transition", record, { seq });
+      // identity 补充 transitionSeq/checkpointId（spec §7.2）：状态级事件按
+      // (traceId, transitionSeq) 关联来源转移，identity 可直接索引。
+      this.sdk.telemetry.emit(
+        "machine.transition",
+        record,
+        { seq },
+        { transitionSeq: seq, checkpointId: record.checkpointId },
+      );
       transitions.push(record);
 
       // ── 终止判定 ──

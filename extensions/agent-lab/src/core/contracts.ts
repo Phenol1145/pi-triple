@@ -175,6 +175,8 @@ export interface LabEvent<TPayload = unknown> {
     agentInstanceId?: string;
     workLoopId?: string;
     workLoopVersion?: string;
+    /** 状态机转移序号（spec §7.2：状态级事件以 (traceId, transitionSeq) 关联来源转移）。 */
+    transitionSeq?: number;
     checkpointId?: string;
     optimizerInstanceId?: string;
     proposalId?: string;

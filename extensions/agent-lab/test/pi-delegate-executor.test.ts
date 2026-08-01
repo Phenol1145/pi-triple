@@ -6,31 +6,7 @@ import type { WorkLoopInput, WorkLoopSDK } from "../src/workloop/contracts.ts";
 import type {
   SubagentDelegationV2Request, SubagentDelegationV2Update, SubagentDelegationV2TerminalResponse,
 } from "../src/runtime/delegation-v2.ts";
-
-// ── 假 adapter：回调式 onUpdate → 队列 → terminal ──
-
-class FakeAdapter {
-  requests: SubagentDelegationV2Request[] = [];
-  private updates: SubagentDelegationV2Update[] = [];
-  private terminal: SubagentDelegationV2TerminalResponse | null = null;
-
-  pushUpdate(u: SubagentDelegationV2Update) { this.updates.push(u); }
-  finish(t: SubagentDelegationV2TerminalResponse) { this.terminal = t; }
-
-  delegate(request: SubagentDelegationV2Request, options: { onUpdate?: (u: SubagentDelegationV2Update) => void } = {}) {
-    this.requests.push(request);
-    return new Promise<SubagentDelegationV2TerminalResponse>((resolve) => {
-      const timer = setInterval(() => {
-        if (this.updates.length > 0) {
-          options.onUpdate?.(this.updates.shift()!);
-        } else if (this.terminal) {
-          clearInterval(timer);
-          resolve(this.terminal);
-        }
-      }, 5);
-    });
-  }
-}
+import { FakeAdapter } from "./test-utils/fake-pi-subagents-adapter.ts";
 
 test("updateToEvent: 映射为 pi_update 事件（保留全量 payload）", () => {
   const update: SubagentDelegationV2Update = { currentTool: "read", toolCount: 2, tokens: 100 };

@@ -78,9 +78,15 @@ test("runtime: 单转移完成 + 自动 checkpoint + 转移 Trace", async () => 
       },
     },
   });
-  const transitions: string[] = [];
-  sdk.telemetry.emit = (t, payload) => {
-    if (t === "machine.transition") transitions.push((payload as { toState: string }).toState);
+  const transitions: Array<{ toState: string; transitionSeq?: number; checkpointId?: string }> = [];
+  sdk.telemetry.emit = (t, payload, _metrics, identity) => {
+    if (t === "machine.transition") {
+      transitions.push({
+        toState: (payload as { toState: string }).toState,
+        transitionSeq: identity?.transitionSeq,
+        checkpointId: identity?.checkpointId,
+      });
+    }
   };
   const runtime = new MachineRuntime({ machine: singleMachine, input: makeInput(), sdk });
   const { result, finalSeq } = await runtime.run();
@@ -88,7 +94,8 @@ test("runtime: 单转移完成 + 自动 checkpoint + 转移 Trace", async () => 
   assert.equal(finalSeq, 1);
   // 每次转移后 checkpoint，label = `${next}#${seq}`，并写入 controlState/seq（Task 6）
   assert.deepEqual(checkpoints, [{ label: "done#1", controlState: "done", seq: 1 }]);
-  assert.deepEqual(transitions, ["done"]);
+  // 转移 Trace 的 emit identity 携带 transitionSeq + checkpointId（spec §7.2 / 健康审计 F1）
+  assert.deepEqual(transitions, [{ toState: "done", transitionSeq: 1, checkpointId: "cp1" }]);
 });
 
 // ── 场景 2：δ 自驱动多事件循环（本地式形态） ──

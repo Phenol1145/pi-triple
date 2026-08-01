@@ -465,8 +465,9 @@ export class WorkLoopRunner {
           eventType: string,
           payload: unknown,
           metrics?: Record<string, string | number | boolean | null>,
+          identity?: { transitionSeq?: number; checkpointId?: string },
         ) => {
-          this.emitEvent(nextEventId(eventType), eventType, payload, metrics, request);
+          this.emitEvent(nextEventId(eventType), eventType, payload, metrics, request, identity);
         },
       },
 
@@ -497,6 +498,7 @@ export class WorkLoopRunner {
     payload: unknown,
     metrics: Record<string, string | number | boolean | null> | undefined,
     request: WorkLoopRunRequest | undefined,
+    identity?: { transitionSeq?: number; checkpointId?: string },
   ): void {
     const event: LabEvent = {
       eventId,
@@ -512,6 +514,8 @@ export class WorkLoopRunner {
         workLoopVersion: request?.workLoopVersion ?? "",
         ...(request?.schedulerInstanceId ? { schedulerInstanceId: request.schedulerInstanceId } : {}),
         ...(request?.dispatchId ? { dispatchId: request.dispatchId } : {}),
+        ...(identity?.transitionSeq !== undefined ? { transitionSeq: identity.transitionSeq } : {}),
+        ...(identity?.checkpointId ? { checkpointId: identity.checkpointId } : {}),
       },
       payload: payload ?? {},
       metrics,

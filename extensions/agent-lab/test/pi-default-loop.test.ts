@@ -14,6 +14,7 @@ import { createPiDefaultLoop } from "../src/workloops/pi-default-loop.ts";
 import type { PiDefaultLoopConfig } from "../src/workloops/pi-default-loop.ts";
 import { createWorkLoopRuntime } from "../src/runtime/create-runtime.ts";
 import { MachineRuntime } from "../src/workloop/machine-runtime.ts";
+import { FakeAdapter } from "./test-utils/fake-pi-subagents-adapter.ts";
 import type {
   WorkLoopImplementation,
   WorkLoopInput,
@@ -178,34 +179,6 @@ function v2Response(
     status: "completed",
     ...overrides,
   } as SubagentDelegationV2TerminalResponse;
-}
-
-// ── Fake adapter（PiDelegateExecutor 桥接：onUpdate 队列 → terminal；同 pi-delegate-executor.test.ts 模式） ──
-
-class FakeAdapter {
-  requests: SubagentDelegationV2Request[] = [];
-  private updates: SubagentDelegationV2Update[] = [];
-  private terminal: SubagentDelegationV2TerminalResponse | null = null;
-
-  pushUpdate(u: SubagentDelegationV2Update) { this.updates.push(u); }
-  finish(t: SubagentDelegationV2TerminalResponse) { this.terminal = t; }
-
-  delegate(
-    request: SubagentDelegationV2Request,
-    options: { onUpdate?: (u: SubagentDelegationV2Update) => void } = {},
-  ): Promise<SubagentDelegationV2TerminalResponse> {
-    this.requests.push(request);
-    return new Promise<SubagentDelegationV2TerminalResponse>((resolve) => {
-      const timer = setInterval(() => {
-        if (this.updates.length > 0) {
-          options.onUpdate?.(this.updates.shift()!);
-        } else if (this.terminal) {
-          clearInterval(timer);
-          resolve(this.terminal);
-        }
-      }, 5);
-    });
-  }
 }
 
 // ── Machine 驱动辅助（MachineRuntime + 工厂挂载的 executor；等价旧 run() 入口） ──

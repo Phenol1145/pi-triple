@@ -71,7 +71,13 @@ export interface ArtifactPort {
 }
 
 export interface WorkLoopTelemetry {
-  emit(eventType: string, payload: unknown, metrics?: Record<string, string | number | boolean | null>): void;
+  emit(
+    eventType: string,
+    payload: unknown,
+    metrics?: Record<string, string | number | boolean | null>,
+    /** 事件身份补充字段（spec §7.2）：状态级事件以 (traceId, transitionSeq) 关联来源转移。 */
+    identity?: { transitionSeq?: number; checkpointId?: string },
+  ): void;
 }
 
 export interface WorkLoopControl {
