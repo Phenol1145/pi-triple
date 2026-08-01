@@ -15,6 +15,7 @@ import type { FlowDef, NodeDef, EdgeDef } from "./schema.js";
 import { interpolate } from "./template.js";
 import { evalExpr } from "./expr.js";
 import { parseStateField, applyReducer, type StateFieldDef } from "./reducers.js";
+import { resolveCodeFn } from "./code-registry.js";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -264,6 +265,10 @@ async function executeLoop(
       // 释放锁，退出进程
       _lock.release();
       return { status: "waiting_human" };
+    } else {
+      // code 节点仅 v2 引擎支持（spec: 兼容性约束）
+      await failRun(store, runId, `node "${currentNodeId}": code nodes require v2 engine`);
+      return { status: "failed", error: `node "${currentNodeId}": code nodes require v2 engine` };
     }
   }
 }
@@ -511,6 +516,26 @@ async function executeWaveLoop(
           store.updateMeta(runId, { status: "waiting_human" });
           lock.release();
           nodeResults.set(nodeId, { ok: true, output: "", exitCode: 0, signal: null });
+          return;
+        }
+
+        // Code node: same-process deterministic execution（纯函数 + 只读 state）
+        if (nodeSnapshot.type === "code") {
+          const fn = resolveCodeFn(nodeSnapshot.fn ?? "");
+          if (!fn) {
+            nodeResults.set(nodeId, { ok: false, output: `code fn not registered: ${nodeSnapshot.fn}`, exitCode: -1, signal: "code fn not registered" });
+            return;
+          }
+          const argNames = nodeSnapshot.args ?? Object.keys(preWaveState);
+          const args: Record<string, unknown> = {};
+          for (const k of argNames) args[k] = preWaveState[k];
+          try {
+            const result = await fn(args, { state: preWaveState, runId, nodeId, log: () => {} });
+            const output = JSON.stringify(result ?? null);
+            nodeResults.set(nodeId, { ok: true, output, exitCode: 0, signal: null });
+          } catch (err: any) {
+            nodeResults.set(nodeId, { ok: false, output: err?.message ?? String(err), exitCode: -1, signal: "code fn threw" });
+          }
           return;
         }
 
@@ -864,6 +889,20 @@ function applyPendingEdit(store: FlowStore, runId: string, edit: { path: string;
 /** Resolve a write value: plain value, {{output}} substitution, {{increment:x}} */
 function resolveWriteValue(key: string, raw: string, output: string): unknown {
   if (raw === "{{output}}") return output;
+  const outPathMatch = raw.match(/^\{\{output\.(.+)\}\}$/);
+  if (outPathMatch) {
+    try {
+      const parsed = JSON.parse(output) as Record<string, unknown>;
+      let val: unknown = parsed;
+      for (const seg of outPathMatch[1]!.split(".")) {
+        if (val === null || val === undefined || typeof val !== "object") return undefined;
+        val = (val as Record<string, unknown>)[seg];
+      }
+      return val;
+    } catch {
+      return undefined; // 非 JSON 输出（agent 节点）或路径不存在 → 跳过写入
+    }
+  }
   const incrMatch = raw.match(/^\{\{increment:state\.(.+)\}\}$/);
   if (incrMatch) {
     // Increment is handled separately in applyWrites, return undefined here
