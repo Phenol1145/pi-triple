@@ -13,7 +13,7 @@ export interface TmuxResult {
 }
 
 export interface TmuxRunner {
-  (args: string[], opts?: { encoding?: string }): TmuxResult;
+  (args: string[], opts?: { encoding?: BufferEncoding }): TmuxResult;
 }
 
 export function createDefaultRunner(): TmuxRunner {
