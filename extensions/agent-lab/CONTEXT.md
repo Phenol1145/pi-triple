@@ -9,6 +9,7 @@ Agent Lab 是一个遥测驱动的模型选择与 agent 编排框架：调度哪
 **WorkLoop**:
 状态转移函数（δ）。给定 context、state 与 task，产出新的 context、state 与 output。每个 WorkLoop 实现是同一基底上的不同转移函数。
 _Avoid_: runner, executor, engine, loop
+（实现痕迹：`runner`（WorkLoopRunner/SchedulerRunner）为实现级容器名（hosts MachineRuntime），非域概念，不计入本 Avoid 术语。）
 
 **Context**:
 纸带。WorkLoop 读取、追加、变换的累积消息历史与元数据；经 checkpoint 跨转移持久化。
@@ -43,6 +44,7 @@ _Avoid_: contestant, option
 **Scheduler**:
 选择由哪个 Agent 处理任务、并驱动相应 WorkLoop 的编排者。**Market** 按出价选择；Weighted Scorer 按评分选择。
 _Avoid_: Arena（旧代号，已弃用，统一为 Market）
+（实现痕迹：`src/arena/` 目录与 `arena-*` 文件保留共享库前缀（有意，Phase 7 legacy retirement 决策），外部概念统一称 Market。）
 
 **Market**:
 基于出价的调度器代号（agents 以 credits 竞标，最高价中标，对照结果结算）。是 "market" 这一调度器类型的规范名称。

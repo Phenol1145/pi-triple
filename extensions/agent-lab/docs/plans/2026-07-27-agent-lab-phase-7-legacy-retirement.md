@@ -1,6 +1,6 @@
 # Agent Lab Phase 7 实施计划 — 兼容入口收敛与旧路径退役
 
-**日期**：2026-07-27　**状态**：已纳入对抗性复核全部发现（GO-WITH-FIXES）
+**日期**：2026-07-27　**状态**：✅ 已完成（2026-08-01 复核：`market.ts`/`bidding.ts` 已删除、`applyArenaConfig` 已删除、`interceptor/register.ts` 已重写为 bridge-only；`arena/` 共享文件保留符合 §0.1）
 **前置**：main `9c5a288`，1149/1149　**基线**：见 §3 测试基线规则（本阶段含删除，测试数预期下降）
 **简报**：`docs/plans/2026-07-27-agent-lab-phase-7-planning-brief.md`（复核裁决见 §0）
 

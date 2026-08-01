@@ -1,7 +1,7 @@
 # Agent Lab 全局概要设计
 
 - **日期**：2026-07-26
-- **状态**：设计已确认，待实现规划
+- **状态**：已实现；§5 执行模型与 §11 Trace 定义已被《WorkLoop 状态机化设计》(2026-08-01-workloop-state-machine-design.md) 取代（见节首标注），其余章节作为历史记录保留
 - **范围**：Agent Lab 全局架构，以及现有 Weighted Scorer、Arena 与 pi-subagents 的重新定位
 - **核心定位**：Agent Lab 是通用的 Agent 调度优化实验平台；Arena 是其中一种可插拔的调度器实现
 - **文档优先级**：本设计取代旧文档中的 `classic/market` 顶层架构；旧 Core/Arena 文档继续作为迁移前实现的行为基线和历史决策记录
@@ -278,6 +278,8 @@ Scheduler 可以把 `populationSize`、`clonePolicy`、`workLoopVariants` 等暴
 ---
 
 ## 5. WorkLoop 与 WorkLoop SDK
+
+> ⚠️ **SUPERSEDED (2026-08-01)**: 执行模型已被《WorkLoop 状态机化设计》(2026-08-01-workloop-state-machine-design.md) 取代——WorkLoop 为状态机（machine 契约），Trace 为转移轨迹（transitionSeq）。本节约保持历史记录。
 
 ### 5.1 WorkLoop 是 Agent 的核心
 
@@ -708,6 +710,8 @@ Agent Lab 不无必要地复制或重写 pi-subagents 的完整运行时，但�
 ---
 
 ## 11. 遥测与优化数据
+
+> ⚠️ **SUPERSEDED (2026-08-01)**: 执行模型已被《WorkLoop 状态机化设计》(2026-08-01-workloop-state-machine-design.md) 取代——WorkLoop 为状态机（machine 契约），Trace 为转移轨迹（transitionSeq）。本节约保持历史记录。
 
 ### 11.1 存储模型
 
