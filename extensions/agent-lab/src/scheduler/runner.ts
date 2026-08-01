@@ -1,94 +1,25 @@
 import type { LabCore } from "../core/create-core.ts";
-import type {
-  FallbackTarget,
-  AgentCreateSpec,
-  LabEvent,
-} from "../core/contracts.ts";
-import type {
-  StandardAgentError,
-  StandardAgentOutput,
-} from "../workloop/contracts.ts";
-import { WorkLoopRunner, type WorkLoopRunRequest } from "../workloop/runner.ts";
+import type { FallbackTarget } from "../core/contracts.ts";
+import type { StandardAgentError } from "../workloop/contracts.ts";
+import { WorkLoopRunner } from "../workloop/runner.ts";
 import { SchedulerRegistry } from "./registry.ts";
 import { MARKET_SCHEDULER_DEFINITION_ID, WEIGHTED_SCORER_DEFINITION_ID } from "../schedulers/names.ts";
-import type {
-  SchedulingMode,
-  SchedulingResult,
-  SchedulerSDK,
-  AgentSnapshot,
-  AgentRunRequest,
-  AgentRunResult,
-  SettleOutcome,
-} from "./contracts.ts";
+import type { SchedulingResult, SettleOutcome } from "./contracts.ts";
+import {
+  type DispatchAttempt,
+  type DispatchRequest,
+  type DispatchResult,
+  resolveRoute,
+} from "./runner-types.ts";
+import { emitRunnerEvent, buildSchedulerSDK } from "./runner-sdk.ts";
 
-// ── Public types ──────────────────────────────────────────────────────
-
-export interface DispatchAttempt {
-  schedulerInstanceId: string;
-  roundId?: string;
-  status: "completed" | "abstained" | "failed";
-  error?: StandardAgentError;
-}
-
-export type DispatchResult =
-  | {
-      status: "completed";
-      schedulerInstanceId: string;
-      roundId: string;
-      selectedAgentId?: string;
-      model?: string;
-      output?: StandardAgentOutput;
-      reason?: string;
-      settlementRef?: string;
-      attempts: DispatchAttempt[];
-    }
-  | {
-      status: "abstained";
-      schedulerInstanceId: string;
-      roundId: string;
-      reason: string;
-      attempts: DispatchAttempt[];
-    }
-  | {
-      status: "fallback";
-      target: FallbackTarget;
-      attempts: DispatchAttempt[];
-    }
-  | {
-      status: "failed";
-      error: StandardAgentError;
-      attempts: DispatchAttempt[];
-    };
-
-export interface DispatchRequest {
-  traceId: string;
-  dispatchId?: string;
-  schedulerInstanceId?: string;
-  role: string;
-  task: string;
-  taskCategory?: string;
-  labels?: Record<string, string>;
-  caller?: string;
-  mode?: SchedulingMode;
-  signal?: AbortSignal;
-  settlementRef?: string;
-}
-
-// ── Routing match types ───────────────────────────────────────────────
-
-interface RoutingMatch {
-  role?: string;
-  taskCategory?: string;
-  labels?: Record<string, string>;
-  caller?: string;
-}
-
-interface RoutingBinding {
-  id: string;
-  schedulerInstanceId: string;
-  priority: number;
-  match: RoutingMatch;
-}
+// Re-export dispatch types — public API preserved (consumers like
+// bench/run.ts and scheduler-bridge-contract.test.ts import from runner.ts).
+export type {
+  DispatchAttempt,
+  DispatchRequest,
+  DispatchResult,
+} from "./runner-types.ts";
 
 // ── SchedulerRunner ───────────────────────────────────────────────────
 
@@ -306,7 +237,7 @@ export class SchedulerRunner {
     } else {
       // Static routing
       const bindings = this.core.repository.listRoutingBindings();
-      const match = this.resolveRoute(bindings, { role, taskCategory, labels, caller });
+      const match = resolveRoute(bindings, { role, taskCategory, labels, caller });
       if (!match) {
         this.emitEvent(
           nextEventId("routing.failed"),
@@ -460,7 +391,8 @@ export class SchedulerRunner {
     );
 
     // Build SDK for this dispatch
-    const sdk = this.buildSDK(
+    const sdk = buildSchedulerSDK(
+      { core: this.core, wlRunner: this.wlRunner, emit: this.emitEvent.bind(this) },
       instanceId,
       effectiveRoundId,
       traceId,
@@ -817,182 +749,10 @@ export class SchedulerRunner {
     };
   }
 
-  // ── Routing resolution ─────────────────────────────────────────────
+  // ── SDK builder / event emission (extracted to runner-sdk.ts) ──────
 
-  private resolveRoute(
-    bindings: RoutingBinding[],
-    request: { role: string; taskCategory?: string; labels?: Record<string, string>; caller?: string },
-  ): { binding: RoutingBinding } | undefined {
-    // bindings are already sorted by priority DESC, id ASC from repository
-
-    // Exact role match beats catch-all
-    let best: RoutingBinding | undefined;
-    let bestIsExact = false;
-
-    for (const binding of bindings) {
-      const hasRole = binding.match.role !== undefined;
-      const isExact = hasRole && binding.match.role === request.role;
-      const isCatchAll = !hasRole;
-
-      if (isExact) {
-        if (!bestIsExact) {
-          // First exact match (highest priority due to sort)
-          best = binding;
-          bestIsExact = true;
-        }
-        // Higher priority exact matches already came first, so skip lower ones
-        continue;
-      }
-
-      if (isCatchAll && !bestIsExact && !best) {
-        // First catch-all (highest priority)
-        best = binding;
-      }
-    }
-
-    return best ? { binding: best } : undefined;
-  }
-
-  // ── SDK builder ─────────────────────────────────────────────────────
-
-  private buildSDK(
-    schedulerInstanceId: string,
-    roundId: string,
-    traceId: string,
-    dispatchId: string,
-    nextEventId: (eventType: string) => string,
-    signal?: AbortSignal,
-  ): SchedulerSDK {
-    const core = this.core;
-    const wlRunner = this.wlRunner;
-
-    const storageNs = `scheduler:${schedulerInstanceId}`;
-
-    return {
-      agents: {
-        list: async (): Promise<AgentSnapshot[]> => {
-          const records = core.repository.listAgents(schedulerInstanceId);
-          return records.map((r) => ({
-            id: r.id,
-            definition: r.definition,
-            status: r.status,
-          }));
-        },
-
-        create: async (spec: AgentCreateSpec): Promise<{ id: string }> => {
-          core.repository.insertAgent({
-            id: spec.id,
-            schedulerInstanceId,
-            definition: spec.definition,
-            sourceAgentId: spec.sourceAgentId,
-            cloneOperationId: spec.cloneOperationId,
-            createdAtRoundId: roundId,
-            status: "ready",
-            createdAt: Date.now(),
-          });
-
-          // Emit scheduler.agent.created
-          this.emitEvent(
-            nextEventId("scheduler.agent.created"),
-            "scheduler.agent.created",
-            { agentInstanceId: spec.id },
-            undefined,
-            traceId,
-            dispatchId,
-            schedulerInstanceId,
-            undefined,
-            undefined,
-            roundId,
-            spec.id,
-          );
-
-          return { id: spec.id };
-        },
-
-        run: async (agentId: string, runReq: AgentRunRequest): Promise<AgentRunResult> => {
-          if (!wlRunner) {
-            throw new Error(
-              "agents.run unavailable: workloop runner not available (execute mode requires a runtime)",
-            );
-          }
-
-          // Find the agent
-          const agents = core.repository.listAgents(schedulerInstanceId);
-          const agent = agents.find((a) => a.id === agentId);
-          if (!agent) {
-            throw new Error(`agent not found: ${agentId}`);
-          }
-
-          // Merge config
-          const mergedConfig = {
-            ...(agent.definition.workLoop.config as Record<string, unknown>),
-            ...(runReq.configOverrides ?? {}),
-          };
-
-          // Build WorkLoopRunRequest
-          const wlRequest: WorkLoopRunRequest = {
-            traceId,
-            executionId: `${dispatchId}:agent:${agentId}:${crypto.randomUUID().slice(0, 8)}`,
-            agentInstanceId: agentId,
-            optimizationRoundId: roundId,
-            workLoopId: agent.definition.workLoop.id,
-            workLoopVersion: agent.definition.workLoop.version,
-            config: mergedConfig,
-            task: runReq.task,
-            signal,
-            schedulerInstanceId,
-            dispatchId,
-          };
-
-          const result = await wlRunner.run(wlRequest);
-
-          // Normalize to AgentRunResult
-          return {
-            status: result.status,
-            output: result.output?.standard,
-            error: result.error?.standard,
-          };
-        },
-      },
-
-      storage: {
-        get<T>(key: string) {
-          return core.storage.get<T>(storageNs, key);
-        },
-        put<T>(key: string, value: T, expectedVersion: number) {
-          return core.storage.put<T>(storageNs, key, value, expectedVersion);
-        },
-      },
-
-      telemetry: {
-        emit: (
-          eventType: string,
-          payload: unknown,
-          metrics?: Record<string, string | number | boolean | null>,
-        ) => {
-          this.emitEvent(
-            nextEventId(eventType),
-            eventType,
-            payload,
-            metrics,
-            traceId,
-            dispatchId,
-            schedulerInstanceId,
-            undefined,
-            undefined,
-            roundId,
-          );
-        },
-      },
-
-      control: {
-        signal: signal ?? new AbortController().signal,
-      },
-    };
-  }
-
-  // ── Event emission ──────────────────────────────────────────────────
-
+  // Thin wrapper preserving the private-method call sites; the logic lives
+  // in emitRunnerEvent (runner-sdk.ts) parameterized over nowFn/append.
   private emitEvent(
     eventId: string,
     eventType: string,
@@ -1006,23 +766,19 @@ export class SchedulerRunner {
     optimizationRoundId?: string,
     agentInstanceId?: string,
   ): void {
-    const event: LabEvent = {
+    emitRunnerEvent(
+      { nowFn: this.nowFn, append: (e) => this.core.events.append(e) },
       eventId,
       eventType,
-      schemaVersion: "1.0",
-      timestamp: this.nowFn(),
-      identity: {
-        traceId,
-        dispatchId,
-        schedulerInstanceId,
-        schedulerDefinitionId,
-        schedulerDefinitionVersion,
-        optimizationRoundId,
-        agentInstanceId,
-      },
-      payload: payload ?? {},
+      payload,
       metrics,
-    };
-    this.core.events.append(event);
+      traceId,
+      dispatchId,
+      schedulerInstanceId,
+      schedulerDefinitionId,
+      schedulerDefinitionVersion,
+      optimizationRoundId,
+      agentInstanceId,
+    );
   }
 }

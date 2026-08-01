@@ -11,6 +11,75 @@ import type { LabEvent } from "../core/contracts.ts";
 import type { MigrationReport } from "../migrate.ts";
 import { renderMigrationReport } from "../migrate.ts";
 import { DEFAULT_WEIGHTED_SCORER_NAME } from "../schedulers/names.ts";
+import type { OptimizerFacade } from "./render-optimizer.ts";
+import type { ExperimentFacade } from "./render-experiment.ts";
+import {
+  renderSchedulerStatus,
+  renderSchedulerSelect,
+  renderSchedulerSync,
+  renderSchedulerEvents,
+  type SchedulerStatusInput,
+  type SchedulerSelectResultLike,
+} from "./render-scheduler.ts";
+import {
+  renderOptimizerList,
+  renderOptimizerRun,
+  renderOptimizerProposals,
+  renderOptimizerDiff,
+  renderOptimizerPromote,
+  renderOptimizerRollback,
+  renderOptimizerValidate,
+  renderOptimizerCanaryStart,
+  renderOptimizerCanaryStop,
+  renderOptimizerCanaryStatus,
+  renderOptimizerAutoStatus,
+  type OptimizerListInput,
+} from "./render-optimizer.ts";
+import {
+  renderExperimentCreate,
+  renderExperimentRun,
+  renderExperimentStatus,
+  renderExperimentCompare,
+  type ExperimentRunResult,
+  type ExperimentStatusResult,
+  type ExperimentCompareResult,
+} from "./render-experiment.ts";
+
+// Re-export render helpers + facade types. Consumers (tests,
+// optimizer/facade.ts, index.ts) import these from register.ts.
+export {
+  renderSchedulerStatus,
+  renderSchedulerSelect,
+  renderSchedulerSync,
+  renderSchedulerEvents,
+  type SchedulerStatusInput,
+  type SchedulerSelectResultLike,
+};
+export {
+  renderOptimizerList,
+  renderOptimizerRun,
+  renderOptimizerProposals,
+  renderOptimizerDiff,
+  renderOptimizerPromote,
+  renderOptimizerRollback,
+  renderOptimizerValidate,
+  renderOptimizerCanaryStart,
+  renderOptimizerCanaryStop,
+  renderOptimizerCanaryStatus,
+  renderOptimizerAutoStatus,
+  type OptimizerFacade,
+  type OptimizerListInput,
+};
+export {
+  renderExperimentCreate,
+  renderExperimentRun,
+  renderExperimentStatus,
+  renderExperimentCompare,
+  type ExperimentFacade,
+  type ExperimentRunResult,
+  type ExperimentStatusResult,
+  type ExperimentCompareResult,
+};
 
 interface Deps {
   store: Store;
@@ -30,541 +99,6 @@ interface Deps {
   optimizerFacade?: OptimizerFacade;
   experimentFacade?: ExperimentFacade;
   runMigration?: (dryRun: boolean) => MigrationReport;
-}
-
-// ── Optimizer facade (injected by index.ts bootstrap) ──────────────
-
-export interface OptimizerFacade {
-  list(): Array<{
-    instanceId: string;
-    definitionId: string;
-    definitionVersion: string;
-    status: string;
-    targetSchedulers: string[];
-  }>;
-  run(instanceId: string): Promise<{
-    kind: "proposal" | "skip" | "fail";
-    eventId?: string;
-    proposalId?: string;
-    reason?: string;
-    evaluation?: { summary: string; metrics: Record<string, number>; dataWindow: { since: number; until: number } };
-    error?: string;
-  }>;
-  proposals(schedulerInstanceId?: string): Array<{
-    proposalId: string;
-    optimizerInstanceId: string;
-    schedulerInstanceId: string;
-    status: string;
-    evaluation?: { summary: string };
-    candidateRoundId?: string;
-    createdAt: number;
-  }>;
-  diff(proposalId: string): {
-    baseRoundId: string;
-    candidateRoundId?: string;
-    changedPaths: Array<{ path: string; tunable: boolean }>;
-  };
-  promote(roundId: string): {
-    newRoundId: string;
-    previousRoundId: string;
-  };
-  rollback(schedulerInstanceId: string, targetRoundId: string): {
-    newRoundId: string;
-    previousRoundId: string;
-  };
-  /** Manual shadow validation of a proposal. */
-  validate(proposalId: string): Promise<{
-    status: string;
-    selectionChanged: boolean;
-    currentTop: string[];
-    candidateTop: string[];
-    expectedCompletionDelta: number;
-    expectedCostDelta: number;
-    samples: number;
-    error?: string;
-  }>;
-  /** Start canary on a validated round. */
-  canaryStart(roundId: string, percent?: number): {
-    ok: boolean;
-    schedulerInstanceId?: string;
-    reason?: string;
-  };
-  /** Stop (abort) active canary. */
-  canaryStop(schedulerInstanceId: string): {
-    ok: boolean;
-    reason?: string;
-  };
-  /** Show current canary status across instances. */
-  canaryStatus(): {
-    hasCanary: boolean;
-    canaryRoundId?: string;
-    canaryPercent?: number;
-    schedulerInstanceId?: string;
-  };
-  /** Show merged optimizer config + auto-trigger throttle status. */
-  autoStatus(): {
-    config: Record<string, unknown>;
-    triggerStatus?: { runsSinceLast: number; lastFiredAt: number | null; fires: number };
-  };
-}
-
-// ── Experiment facade (injected by index.ts bootstrap) ─────────────
-
-export interface ExperimentFacade {
-  create(assignments: Array<{ model: string; strategy: string; strategyConfig?: unknown }>): Promise<{
-    instanceId: string;
-    roundId: string;
-    agentIds: string[];
-  }>;
-  run(
-    instanceId: string,
-    task: string,
-    cmdCtx: { modelRegistry: unknown },
-    labels?: { strategy?: string; assignmentIndex?: number },
-  ): Promise<ExperimentRunResult>;
-  status(instanceId: string): ExperimentStatusResult;
-  compare(instanceId: string, opts?: { roundId?: string; byRound?: boolean }): ExperimentCompareResult;
-}
-
-export interface ExperimentRunResult {
-  status: "completed" | "abstained" | "failed";
-  model?: string;
-  strategy?: string;
-  agentId?: string;
-  output?: string;
-  usage?: {
-    input: number;
-    output: number;
-    cacheRead: number;
-    cacheWrite: number;
-    cost: number;
-    turns: number;
-    durationMs: number;
-    source: "observed" | "derived";
-  };
-  error?: string;
-}
-
-export interface ExperimentStatusResult {
-  instanceId: string;
-  status: string;
-  definitionId: string;
-  definitionVersion: string;
-  roundId: string;
-  agents: Array<{
-    id: string;
-    model: string;
-    strategy: string;
-    status: string;
-  }>;
-}
-
-export interface ExperimentCompareResult {
-  available: boolean;
-  data?: unknown;
-  reason?: string;
-}
-
-// ── Scheduler render helpers (exported for testing) ──────────────────
-
-export interface SchedulerStatusInput {
-  instanceId: string;
-  /** UUID identity (stable across renames; ADR-0002). */
-  instanceUuid?: string;
-  definitionId?: string;
-  definitionVersion?: string;
-  roundId?: string;
-  agentCount?: number;
-  enabled: boolean;
-  runtimeAvailable: boolean;
-  effectiveRouting?: string;
-}
-
-export function renderSchedulerStatus(input: SchedulerStatusInput): string {
-  const lines: string[] = [];
-  lines.push("Scheduler Status");
-  lines.push(`  Enabled: ${input.enabled ? "yes" : "no"}`);
-
-  if (input.instanceUuid) {
-    lines.push(`  ID: ${input.instanceUuid}`);
-  }
-
-  if (input.effectiveRouting) {
-    lines.push(`  Routing: ${input.effectiveRouting}`);
-  } else {
-    lines.push(`  Instance: ${input.instanceId}`);
-  }
-
-  if (!input.runtimeAvailable) {
-    lines.push("  Runtime: unavailable — scheduler bridge not initialized");
-    lines.push("  (check config: /lab config scheduler.enabled true)");
-    return lines.join("\n");
-  }
-
-  if (input.definitionId && input.definitionVersion) {
-    lines.push(`  Definition: ${input.definitionId}@${input.definitionVersion}`);
-  }
-  if (input.roundId) {
-    lines.push(`  Round: ${input.roundId}`);
-  }
-  if (input.agentCount !== undefined) {
-    lines.push(`  Agents: ${input.agentCount}`);
-  }
-  return lines.join("\n");
-}
-
-export interface SchedulerSelectResultLike {
-  status: "completed" | "abstained" | "failed" | "fallback";
-  model?: string;
-  score?: number;
-  reason?: string;
-  errorMessage?: string;
-}
-
-export function renderSchedulerSelect(
-  result: SchedulerSelectResultLike,
-  legacyRecs: Array<{ model: { id: string }; score: number; reason: string }>,
-  role: string,
-): string {
-  const lines: string[] = [];
-  lines.push(`Scheduler selection for ${role}:`);
-
-  if (result.status === "completed" && result.model) {
-    lines.push(`  Selected: ${result.model}${result.score !== undefined ? ` (score=${result.score.toFixed(3)})` : ""}`);
-    if (result.reason) lines.push(`  Reason: ${result.reason}`);
-  } else if (result.status === "abstained") {
-    lines.push(`  Scheduler abstained${result.reason ? `: ${result.reason}` : ""}`);
-  } else if (result.status === "failed") {
-    lines.push(`  Scheduler failed${result.errorMessage ? `: ${result.errorMessage}` : ""}`);
-  } else if (result.status === "fallback") {
-    lines.push(`  Scheduler fell back to original request`);
-  } else {
-    lines.push(`  No model selected`);
-  }
-
-  lines.push("");
-  lines.push(`Legacy recommendation for ${role}:`);
-  if (legacyRecs.length === 0) {
-    lines.push("  (no candidates)");
-  } else {
-    for (let i = 0; i < legacyRecs.length; i++) {
-      const r = legacyRecs[i];
-      lines.push(`  ${i + 1}. ${r.model.id}  score=${r.score.toFixed(3)}  ${r.reason}`);
-    }
-  }
-
-  if (result.status === "completed" && result.model && legacyRecs.length > 0) {
-    const match = legacyRecs[0]?.model.id === result.model ? "MATCH" : "MISMATCH";
-    lines.push("");
-    lines.push(`Dual-run: ${match}`);
-  }
-
-  return lines.join("\n");
-}
-
-export function renderSchedulerSync(addedCount: number): string {
-  if (addedCount === 0) {
-    return "Scheduler sync: agent population is up to date (0 new agents).";
-  }
-  return `Scheduler sync: added ${addedCount} new agent(s) to the population.`;
-}
-
-export function renderSchedulerEvents(events: LabEvent[], limit: number): string {
-  if (events.length === 0) {
-    return `No scheduler events found (limit=${limit}).`;
-  }
-
-  const lines: string[] = [];
-  lines.push(`Last ${Math.min(events.length, limit)} scheduler events:`);
-
-  const truncated = events.slice(-Math.min(events.length, limit));
-
-  for (const e of truncated) {
-    const ts = new Date(e.timestamp).toISOString();
-    const identity = [
-      e.identity.traceId ? `trace=${e.identity.traceId.slice(0, 12)}` : "",
-      e.identity.schedulerInstanceId ? `instance=${e.identity.schedulerInstanceId}` : "",
-      e.identity.dispatchId ? `dispatch=${e.identity.dispatchId.slice(0, 12)}` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-    const payload = e.payload && typeof e.payload === "object" && Object.keys(e.payload as Record<string, unknown>).length > 0
-      ? ` ${JSON.stringify(e.payload)}`
-      : "";
-    lines.push(`  ${ts} ${e.eventType}${identity ? ` [${identity}]` : ""}${payload}`);
-  }
-
-  return lines.join("\n");
-}
-
-// ── Optimizer render helpers ────────────────────────────────────────
-
-export interface OptimizerListInput {
-  instanceId: string;
-  definitionId: string;
-  definitionVersion: string;
-  status: string;
-  targetSchedulers: string[];
-}
-
-export function renderOptimizerList(instances: OptimizerListInput[]): string {
-  if (instances.length === 0) {
-    return "No optimizer instances found.";
-  }
-  const lines: string[] = ["Optimizer Instances:"];
-  for (const inst of instances) {
-    lines.push(`  ${inst.instanceId} (${inst.definitionId}@${inst.definitionVersion})  status=${inst.status}`);
-    lines.push(`    targets: ${inst.targetSchedulers.join(", ")}`);
-  }
-  return lines.join("\n");
-}
-
-export function renderOptimizerRun(result: {
-  kind: "proposal" | "skip" | "fail";
-  eventId?: string;
-  proposalId?: string;
-  reason?: string;
-  evaluation?: { summary: string; metrics: Record<string, number>; dataWindow: { since: number; until: number } };
-  error?: string;
-}): string {
-  const lines: string[] = [];
-  lines.push(`Optimizer run: ${result.kind}`);
-  if (result.eventId) lines.push(`  event: ${result.eventId}`);
-  if (result.kind === "proposal" && result.proposalId) {
-    lines.push(`  proposal: ${result.proposalId}`);
-    if (result.evaluation) {
-      lines.push(`  evaluation: ${result.evaluation.summary}`);
-      const metricLines = Object.entries(result.evaluation.metrics).map(([k, v]) => `${k}=${typeof v === "number" ? v.toFixed(3) : v}`);
-      lines.push(`    metrics: ${metricLines.join(", ")}`);
-      lines.push(`    window: ${new Date(result.evaluation.dataWindow.since).toISOString()} → ${new Date(result.evaluation.dataWindow.until).toISOString()}`);
-    }
-  } else if (result.kind === "skip" && result.reason) {
-    lines.push(`  reason: ${result.reason}`);
-  } else if (result.kind === "fail" && result.error) {
-    lines.push(`  error: ${result.error}`);
-  }
-  return lines.join("\n");
-}
-
-export function renderOptimizerProposals(
-  proposals: Array<{
-    proposalId: string;
-    optimizerInstanceId: string;
-    schedulerInstanceId: string;
-    status: string;
-    evaluation?: { summary: string };
-    candidateRoundId?: string;
-    createdAt: number;
-  }>,
-): string {
-  if (proposals.length === 0) {
-    return "No proposals found.";
-  }
-  const lines: string[] = [`Proposals (${proposals.length}):`];
-  for (const p of proposals) {
-    const ts = new Date(p.createdAt).toISOString();
-    const evalPart = p.evaluation ? ` — ${p.evaluation.summary}` : "";
-    lines.push(`  ${p.proposalId}  status=${p.status}  optimizer=${p.optimizerInstanceId}  scheduler=${p.schedulerInstanceId}`);
-    lines.push(`    created: ${ts}${evalPart}`);
-    if (p.candidateRoundId) lines.push(`    candidate: ${p.candidateRoundId}`);
-  }
-  return lines.join("\n");
-}
-
-export function renderOptimizerDiff(diff: {
-  baseRoundId: string;
-  candidateRoundId?: string;
-  changedPaths: Array<{ path: string; tunable: boolean }>;
-}): string {
-  const lines: string[] = [];
-  lines.push(`Diff: base=${diff.baseRoundId}`);
-  if (diff.candidateRoundId) lines.push(`      candidate=${diff.candidateRoundId}`);
-  if (diff.changedPaths.length === 0) {
-    lines.push("  (no leaf-path changes)");
-  } else {
-    for (const cp of diff.changedPaths) {
-      const mark = cp.tunable ? "✓" : "✗";
-      lines.push(`  ${mark} ${cp.path}`);
-    }
-  }
-  return lines.join("\n");
-}
-
-export function renderOptimizerPromote(result: { newRoundId: string; previousRoundId: string }): string {
-  return [
-    `Round promoted: ${result.previousRoundId} → ${result.newRoundId}`,
-    `  previous: ${result.previousRoundId}`,
-    `  new:      ${result.newRoundId}`,
-  ].join("\n");
-}
-
-export function renderOptimizerRollback(result: { newRoundId: string; previousRoundId: string }): string {
-  return [
-    `Round rolled back: ${result.previousRoundId} → ${result.newRoundId}`,
-    `  previous: ${result.previousRoundId}`,
-    `  new:      ${result.newRoundId}`,
-  ].join("\n");
-}
-
-export function renderOptimizerValidate(result: {
-  status: string;
-  selectionChanged: boolean;
-  currentTop: string[];
-  candidateTop: string[];
-  expectedCompletionDelta: number;
-  expectedCostDelta: number;
-  samples: number;
-  error?: string;
-}): string {
-  const lines: string[] = [];
-  lines.push(`Shadow validation: status=${result.status}`);
-  lines.push(`  selectionChanged: ${result.selectionChanged}`);
-  lines.push(`  samples: ${result.samples}`);
-  lines.push(`  expectedCompletionDelta: ${result.expectedCompletionDelta.toFixed(4)}`);
-  lines.push(`  expectedCostDelta: ${result.expectedCostDelta.toFixed(6)}`);
-  if (result.currentTop.length > 0) {
-    lines.push(`  current top: ${result.currentTop.join(", ")}`);
-  }
-  if (result.candidateTop.length > 0) {
-    lines.push(`  candidate top: ${result.candidateTop.join(", ")}`);
-  }
-  if (result.error) lines.push(`  error: ${result.error}`);
-  return lines.join("\n");
-}
-
-export function renderOptimizerCanaryStart(result: {
-  ok: boolean;
-  schedulerInstanceId?: string;
-  reason?: string;
-  percent?: number;
-}): string {
-  if (result.ok) {
-    return [
-      `Canary started`,
-      `  instance: ${result.schedulerInstanceId ?? "?"}`,
-      `  percent: ${result.percent ?? "?"}%`,
-    ].join("\n");
-  }
-  return `Canary start failed: ${result.reason ?? "unknown error"}`;
-}
-
-export function renderOptimizerCanaryStop(result: {
-  ok: boolean;
-  reason?: string;
-}): string {
-  if (result.ok) return "Canary stopped (aborted).";
-  return `Canary stop failed: ${result.reason ?? "unknown error"}`;
-}
-
-export function renderOptimizerCanaryStatus(status: {
-  hasCanary: boolean;
-  canaryRoundId?: string;
-  canaryPercent?: number;
-  schedulerInstanceId?: string;
-}): string {
-  if (!status.hasCanary) return "No active canary found.";
-  return [
-    `Active canary:`,
-    `  instance: ${status.schedulerInstanceId ?? "?"}`,
-    `  round: ${status.canaryRoundId ?? "?"}`,
-    `  percent: ${status.canaryPercent ?? "?"}%`,
-  ].join("\n");
-}
-
-export function renderOptimizerAutoStatus(result: {
-  config: Record<string, unknown>;
-  triggerStatus?: { runsSinceLast: number; lastFiredAt: number | null; fires: number };
-}): string {
-  const lines: string[] = [];
-  lines.push("Optimizer auto config:");
-  lines.push(`  ${JSON.stringify(result.config, null, 2).split("\n").join("\n  ")}`);
-  if (result.triggerStatus) {
-    const ts = result.triggerStatus;
-    lines.push("Auto-trigger throttle:");
-    lines.push(`  runsSinceLast: ${ts.runsSinceLast}`);
-    lines.push(`  lastFiredAt: ${ts.lastFiredAt !== null ? new Date(ts.lastFiredAt).toISOString() : "never"}`);
-    lines.push(`  fires: ${ts.fires}`);
-  }
-  return lines.join("\n");
-}
-
-// ── Experiment render helpers ───────────────────────────────────────
-
-export function renderExperimentCreate(result: {
-  instanceId: string;
-  roundId: string;
-  agentIds: string[];
-}): string {
-  const lines: string[] = [];
-  lines.push(`Experiment instance created: ${result.instanceId}`);
-  lines.push(`  round: ${result.roundId}`);
-  lines.push(`  agents (${result.agentIds.length}):`);
-  for (const id of result.agentIds) {
-    lines.push(`    ${id}`);
-  }
-  return lines.join("\n");
-}
-
-export function renderExperimentRun(result: ExperimentRunResult): string {
-  const lines: string[] = [];
-  lines.push(`Experiment run: ${result.status}`);
-  if (result.status === "completed") {
-    lines.push(`  model: ${result.model ?? "?"}`);
-    lines.push(`  strategy: ${result.strategy ?? "?"}`);
-    if (result.agentId) lines.push(`  agent: ${result.agentId}`);
-    if (result.output) {
-      const preview = result.output.length > 200 ? result.output.slice(0, 200) + "..." : result.output;
-      lines.push(`  output: ${preview}`);
-    }
-    if (result.usage) {
-      lines.push(`  usage: input=${result.usage.input} output=${result.usage.output} cost=${result.usage.cost.toFixed(6)} source=${result.usage.source}`);
-      lines.push(`    (cacheRead=${result.usage.cacheRead} cacheWrite=${result.usage.cacheWrite} turns=${result.usage.turns} durationMs=${result.usage.durationMs})`);
-    }
-  } else if (result.status === "abstained") {
-    lines.push(`  reason: ${result.error ?? "no assignments"}`);
-  } else if (result.status === "failed") {
-    lines.push(`  error: ${result.error ?? "unknown error"}`);
-  }
-  return lines.join("\n");
-}
-
-export function renderExperimentStatus(result: ExperimentStatusResult): string {
-  if (result.status === "not-found") {
-    return `Experiment instance not found: ${result.instanceId}`;
-  }
-  const lines: string[] = [];
-  lines.push(`Experiment: ${result.instanceId}`);
-  lines.push(`  status: ${result.status}`);
-  lines.push(`  definition: ${result.definitionId}@${result.definitionVersion}`);
-  lines.push(`  round: ${result.roundId}`);
-  lines.push(`  agents (${result.agents.length}):`);
-  for (const a of result.agents) {
-    lines.push(`    ${a.id}  model=${a.model}  strategy=${a.strategy}  status=${a.status}`);
-  }
-  return lines.join("\n");
-}
-
-export function renderExperimentCompare(result: ExperimentCompareResult): string {
-  if (!result.available) {
-    return `Experiment comparison unavailable: ${result.reason ?? "unknown"}`;
-  }
-  const data = result.data as Record<string, unknown> | undefined;
-  if (data && data.mode === "byRound") {
-    const rounds = data.rounds as Record<string, unknown>;
-    const roundIds = Object.keys(rounds).sort();
-    if (roundIds.length === 0) {
-      return "Experiment comparison by round: (no rounds found)";
-    }
-    const lines: string[] = [`Experiment comparison by round (${roundIds.length} rounds):`];
-    for (const roundId of roundIds) {
-      lines.push(`\n## Round: ${roundId}`);
-      lines.push(JSON.stringify(rounds[roundId], null, 2));
-    }
-    return lines.join("\n");
-  }
-  // Single-round view (with or without roundId filter)
-  const projection = data && data.mode === "single" ? data.projection : data;
-  return `Experiment comparison:\n${JSON.stringify(projection, null, 2)}`;
 }
 
 // ── Command registration ────────────────────────────────────────────

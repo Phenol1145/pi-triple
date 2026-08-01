@@ -12,6 +12,9 @@ import type {
 } from "../contracts.ts";
 import { matchesVersionRange } from "../version-range.ts";
 import { diffLeafPaths, assertPathsTunable } from "../parameter-diff.ts";
+import { rejectProposal as rejectProposalImpl } from "./proposals.ts";
+
+export type { ParameterProposal } from "./proposals.ts";
 
 export interface ActivationResult {
   schedulerInstanceId: string;
@@ -48,13 +51,6 @@ export class ProposalRejectedError extends Error {
     this.reason = reason;
     this.proposalId = proposalId;
   }
-}
-
-export interface ParameterProposal {
-  baseRoundId: string;
-  parameters: unknown;
-  evaluation?: { summary: string; metrics: Record<string, number>; dataWindow: { since: number; until: number } };
-  metadata?: Record<string, string>;
 }
 
 export class ControlPlane {
@@ -945,31 +941,17 @@ export class ControlPlane {
     baseRoundId?: string,
     parameters?: unknown,
   ): void {
-    this.repository.transaction(() => {
-      this.repository.insertProposal({
-        id: proposalId,
-        optimizerInstanceId,
-        schedulerInstanceId,
-        baseRoundId: baseRoundId ?? "",
-        parameters: parameters ?? null,
-        status: "rejected",
-        createdAt: now,
-      });
-
-      this.events.append({
-        eventId: `optimizer.proposal.rejected:${proposalId}`,
-        eventType: "optimizer.proposal.rejected",
-        schemaVersion: "1",
-        timestamp: now,
-        identity: {
-          traceId: `control:${schedulerInstanceId}`,
-          schedulerInstanceId,
-          optimizerInstanceId,
-          proposalId,
-        },
-        payload: { reason, baseRoundId, parameters },
-      });
-    });
+    // Thin wrapper — logic lives in rejectProposal (proposals.ts).
+    rejectProposalImpl(
+      { repository: this.repository, events: this.events },
+      proposalId,
+      optimizerInstanceId,
+      schedulerInstanceId,
+      now,
+      reason,
+      baseRoundId,
+      parameters,
+    );
   }
 
   private detectFallbackCycle(draftId: string, draftChain: FallbackTarget[]): boolean {
