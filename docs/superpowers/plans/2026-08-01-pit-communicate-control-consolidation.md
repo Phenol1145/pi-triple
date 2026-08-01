@@ -29,7 +29,7 @@
 - Create: `extensions/_shared/registry.ts`（内容 = 现 `extensions/pit-communicate/registry.ts` 原样，仅改头部注释）
 - Create: `extensions/_shared/presence.ts`（内容 = 现 `extensions/pit-communicate/presence.ts` + 新增静态方法 `updateName`）
 - Delete: `extensions/pit-communicate/registry.ts`、`extensions/pit-communicate/presence.ts`
-- Modify: `extensions/pit-communicate/index.ts`（import 路径改 `../../_shared/...`）
+- Modify: `extensions/pit-communicate/index.ts`（import 路径改 `../_shared/...`）
 - Test: `test/unit/intercom.test.ts`（import 路径改 `../../extensions/_shared/...` + 新增 updateName 测试）
 
 **Interfaces:**
@@ -111,15 +111,15 @@ import { Registry } from "./registry.js";
 改为：
 
 ```ts
-import { Presence } from "../../_shared/presence.js";
-import type { SessionState } from "../../_shared/presence.js";
-import { Registry } from "../../_shared/registry.js";
+import { Presence } from "../_shared/presence.js";
+import type { SessionState } from "../_shared/presence.js";
+import { Registry } from "../_shared/registry.js";
 ```
 
 `index.ts` 中的本地函数 `resolveMailboxRoot` / `resolveTenantId`（约 30 行）删除，替换为：
 
 ```ts
-import { resolveMailboxRoot, resolveTenantId } from "../../_shared/paths.js";
+import { resolveMailboxRoot, resolveTenantId } from "../_shared/paths.js";
 ```
 
 - [ ] **Step 4: 更新测试 import 路径 + 新增 updateName 测试**
@@ -577,10 +577,10 @@ git commit -m "refactor(pit-communicate): 删除 tmux 三命令（移交 pit-con
 ```ts
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { TmuxSession } from "../../_shared/tmux-session.js";
-import { Registry } from "../../_shared/registry.js";
-import { Presence } from "../../_shared/presence.js";
-import { resolveMailboxRoot, resolveTenantId } from "../../_shared/paths.js";
+import { TmuxSession } from "../_shared/tmux-session.js";
+import { Registry } from "../_shared/registry.js";
+import { Presence } from "../_shared/presence.js";
+import { resolveMailboxRoot, resolveTenantId } from "../_shared/paths.js";
 
 export default function pitControl(api: any) {
   const templateId: string = process.env.PI_TEMPLATE ?? "unknown";

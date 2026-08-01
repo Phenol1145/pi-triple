@@ -12,10 +12,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Mailbox } from "./mailbox.js";
-import { Presence } from "../../_shared/presence.js";
-import type { SessionState } from "../../_shared/presence.js";
-import { Registry } from "../../_shared/registry.js";
-import type { RegistryEntry } from "../../_shared/registry.js";
+import { Presence } from "../_shared/presence.js";
+import type { SessionState } from "../_shared/presence.js";
+import { Registry } from "../_shared/registry.js";
+import type { RegistryEntry } from "../_shared/registry.js";
 import { Delivery } from "./delivery.js";
 import type { IntercomConfig, ReviewMode } from "./delivery.js";
 import { Watcher } from "./watcher.js";
@@ -23,7 +23,7 @@ import type { WatcherSideEffects } from "./watcher.js";
 import { Audit } from "./audit.js";
 import { createMessage } from "./protocol.js";
 import type { PitMessage } from "./protocol.js";
-import { resolveMailboxRoot, resolveTenantId } from "../../_shared/paths.js";
+import { resolveMailboxRoot, resolveTenantId } from "../_shared/paths.js";
 
 // ── Helpers ──────────────────────────────────────────────────
 
