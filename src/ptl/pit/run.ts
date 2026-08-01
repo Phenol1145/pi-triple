@@ -153,6 +153,11 @@ export async function main() {
     process.exit(1);
   }
 
+  // 启动更新提示（只读缓存，零网络；仅交互启动类命令）
+  if (command === "start" || command === "pi") {
+    try { (await import("../version.js")).maybePrintUpdateHint(); } catch { /* 静默 */ }
+  }
+
   // --help 全局处理：pit --help → 全量；pit <cmd> --help → 单命令
   if (flags.help === "true") {
     if (command) printCommandHelp(command);

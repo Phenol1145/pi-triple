@@ -2,15 +2,15 @@
  * pit/main — banner / 分组帮助 / 上手指引 / 单命令详情 渲染
  */
 
-const VERSION = "0.1.0";
+import { getPitVersion } from "../version.js";
 
 export function printBanner(): void {
   console.log("");
-  console.log("  \x1b[36m\x1b[1mPi-Triple\x1b[0m \x1b[2mv" + VERSION + "\x1b[0m");
+  console.log("  \x1b[36m\x1b[1mPi-Triple\x1b[0m \x1b[2mv" + getVersion() + "\x1b[0m");
   console.log("");
 }
 
-export function getVersion(): string { return VERSION; }
+export function getVersion(): string { return getPitVersion(); }
 
 // ─── 分组帮助 ───────────────────────────────────────────────
 
