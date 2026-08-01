@@ -148,12 +148,12 @@ describe("fetchLatestPitVersion", () => {
 
 describe("fetchLatestPiSdkVersion", () => {
   it("npm view 成功返回版本", async () => {
-    const shell = vi.fn(async () => ({ status: 0, stdout: "0.84.0\n" }));
+    const shell = vi.fn(() => ({ status: 0, stdout: "0.84.0\n" }));
     expect(await fetchLatestPiSdkVersion(shell as never)).toBe("0.84.0");
     expect(shell).toHaveBeenCalledWith("npm", ["view", "@earendil-works/pi-coding-agent", "version"]);
   });
   it("失败返回 undefined", async () => {
-    expect(await fetchLatestPiSdkVersion((async () => ({ status: 1, stdout: "" })) as never)).toBeUndefined();
+    expect(await fetchLatestPiSdkVersion((() => ({ status: 1, stdout: "" })) as never)).toBeUndefined();
   });
 });
 
@@ -182,7 +182,7 @@ describe("checkForUpdates", () => {
   it("无缓存/过期时并行查询并写缓存", async () => {
     fs.rmSync(cachePath(), { force: true });
     const fetchImpl = (async () => ({ ok: true, json: async () => ({ tag_name: "v0.3.0" }) })) as unknown as typeof fetch;
-    const shell = (async () => ({ status: 0, stdout: "0.85.0" })) as never;
+    const shell = (() => ({ status: 0, stdout: "0.85.0" })) as never;
     const r = await checkForUpdates({ fetchImpl, shell });
     expect(r).toEqual({ pit: "0.3.0", piSdk: "0.85.0" });
     expect(readCache()).toMatchObject({ pit: "0.3.0", piSdk: "0.85.0" });
@@ -542,17 +542,17 @@ describe("resolveInstalledPitVersion", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pit-ver-"));
     fs.mkdirSync(path.join(tmp, "pi-triple"), { recursive: true });
     fs.writeFileSync(path.join(tmp, "pi-triple", "package.json"), JSON.stringify({ version: "0.7.7" }));
-    const shell = vi.fn(async () => ({ status: 0, stdout: tmp + "\n" }));
+    const shell = vi.fn(() => ({ status: 0, stdout: tmp + "\n" }));
     expect(resolveInstalledPitVersion(shell as never)).toBe("0.7.7");
     expect(shell).toHaveBeenCalledWith("npm", ["root", "-g"]);
     fs.rmSync(tmp, { recursive: true, force: true });
   });
   it("npm root 失败 → undefined", () => {
-    expect(resolveInstalledPitVersion((async () => ({ status: 1, stdout: "" })) as never)).toBeUndefined();
+    expect(resolveInstalledPitVersion((() => ({ status: 1, stdout: "" })) as never)).toBeUndefined();
   });
   it("未安装 pi-triple → undefined", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pit-ver2-"));
-    const shell = vi.fn(async () => ({ status: 0, stdout: tmp + "\n" }));
+    const shell = vi.fn(() => ({ status: 0, stdout: tmp + "\n" }));
     expect(resolveInstalledPitVersion(shell as never)).toBeUndefined();
     fs.rmSync(tmp, { recursive: true, force: true });
   });
@@ -574,7 +574,7 @@ describe("checkForUpdates", () => {
     fs.mkdirSync(path.join(tmp, "pi-triple"), { recursive: true });
     fs.writeFileSync(path.join(tmp, "pi-triple", "package.json"), JSON.stringify({ version: "0.1.0" }));
     const fetchImpl = (async () => ({ ok: true, json: async () => ({ tag_name: "v0.2.0" }) })) as unknown as typeof fetch;
-    const shell = (async (cmd: string, args: string[]) =>
+    const shell = ((cmd: string, args: string[]) =>
       cmd === "npm" && args[0] === "root" ? { status: 0, stdout: tmp + "\n" }
       : cmd === "npm" ? { status: 0, stdout: "0.84.0\n" }
       : { status: 0, stdout: "0.83.0\n" }) as never;
@@ -973,7 +973,7 @@ async function updatePitSelf(): Promise<boolean> {
       console.log("  \x1b[31m❌ 无法解析 GitHub Release（未找到 pi-triple tarball asset）\x1b[0m");
       return false;
     }
-    const pkg = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf-8")) as { version: string };
+    const pkg = JSON.parse(fs.readFileSync(new URL("../../../package.json", import.meta.url), "utf-8")) as { version: string };
     const cmp = compareVersions(release.version, pkg.version);
     if (cmp !== undefined && cmp <= 0) {
       console.log(`  \x1b[32m✅ Pi-Triple 已是最新版 (v${pkg.version})\x1b[0m`);
@@ -1014,7 +1014,7 @@ async function updatePitSelf(): Promise<boolean> {
 }
 ```
 
-> `new URL("../../package.json", import.meta.url)` 相对 `dist/ptl/pit/admin.js` 上溯两级 = 包根（与 `src/ptl/pit/admin.ts` → 包根 一致）。
+> `new URL("../../../package.json", import.meta.url)` 相对 `src/ptl/pit/admin.ts` 上溯三级 = 包根（dist/ptl/pit/admin.js 同样三级）。
 
 - [ ] **Step 4: 改造 `handleUpdate`（阶段语义 + 接入阶段②）**
 
@@ -1023,12 +1023,14 @@ async function updatePitSelf(): Promise<boolean> {
 ```ts
 export async function handleUpdate(flags: Record<string, string>): Promise<void> {
   const dryRun = flags["dry-run"] === "true";
-  const updateAll = flags.all === "true" || flags["pi-only"] !== "true";
+  // 语义：默认/--all = 全量（含②）；--extensions = ①+③；--pi-only = 仅①
+  const updateAll = flags.all === "true" || (flags.extensions !== "true" && flags["pi-only"] !== "true");
   const updateExt = flags.extensions === "true" || updateAll;
-  const updateSelf = !dryRun && (updateAll || flags.all === "true");
+  const updateSelf = updateAll; // 仅默认/--all 时含阶段②（--extensions 不含）
+
 ```
 
-（原 pi SDK 检查段保持；pi SDK 检查在 dryRun 时打印"最新/有更新"而不安装——在原升级分支外包一层 `if (!dryRun)`。）
+（阶段②块：`if (updateSelf && !dryRun) { await updatePitSelf(); } else if (updateAll && dryRun) { console.log("  [dry-run] 将检查 Pi-Triple 本体（GitHub Release）"); }`）
 
 在原 `if (updateExt) {` 块之前插入阶段②：
 
@@ -1059,13 +1061,7 @@ pi SDK 段改造（dry-run 只报告）：
   }
 ```
 
-> `updateAll` 判定 `flags.all === "true" || flags["pi-only"] !== "true"`：`--pi-only` 时 updateAll=false（只跑阶段①）；其余（默认/`--all`/`--extensions`）updateAll=true。`updateSelf` 用于阶段②；`--extensions` 时 updateAll=true 但 updateSelf……按 spec 语义 `--extensions` = ①+③（不含②）——修正：`updateSelf = !dryRun && flags.all === "true"`（仅显式 `--all` 或默认无 flag 时？）。**明确语义**：默认（无 flag）→ 全量（含②）；`--all` → 全量（含②）；`--extensions` → ①+③（不含②）。实现：
-
-```ts
-  const updateSelf = flags.all === "true" || (flags.extensions !== "true" && flags["pi-only"] !== "true");
-```
-
-（无 flag 或 `--all` → true；`--extensions`/`--pi-only` → false）
+> `updateAll`/`updateSelf` 语义：默认（无 flag）→ 全量（含②）；`--all` → 全量（含②）；`--extensions` → ①+③（不含②）；`--pi-only` → 仅①。
 
 - [ ] **Step 5: 运行测试 + build**
 
