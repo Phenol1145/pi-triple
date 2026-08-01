@@ -19,13 +19,15 @@ _Avoid_: conversation, history, session（session 专指纸带的落盘实例，
 _Avoid_: conversation, chat；不要用 session 指代运行中的纸带（那是 Context）
 
 **State**:
-有限控制状态。跨转移携带、经 checkpoint 持久化的、各 WorkLoop 自有的不透明数据。与 Context（消息纸带）相区别。
-Agent 的持久化状态（如 credit 余额）即其「记忆」的一种——与纸带（Session/Context）并列但性质不同：状态 vs 上下文。
+总状态 = 控制状态 + 记忆/数据域。
+**控制状态**：有限、可枚举、转移表定义域——描述执行位置，本身不携带信息（非记忆）。
+**记忆/数据域**：credit 等跨转移存活的不透明持久化数据（无限取值，不进转移表定义域）——四个作用：跨转移存活（checkpoint 落盘）、派生（阈值分类 → 控制状态）、δ 的决策输入与副作用、按需投影到模型可见层（DSP）。
 _Avoid_: context, memory（避免与纸带/Context 混淆）
 
 **Trace**:
-状态追踪。为调试 agent 或 agent 集群而记录的状态变化与执行轨迹（credit 变化、结算、调度决策、遥测）。与 Session 区分：Session 是纸带（推理消息历史），Trace 是状态追踪（状态变化/执行轨迹）。
-与全局架构设计一致：Trace 含**执行级**（一次执行的 envelope：traceId + StandardTrace）与**状态级**（credit 变化、结算）两个粒度；LabEvent 的 `traceId` 为串起两者的关联键，`sessionId` 为可选的会话（纸带）关联。
+状态机转移轨迹。记录状态机从初始到终止的每一次转移：转移前控制状态、触发事件、转移后控制状态、δ 副作用摘要（纸带写入 / 记忆变化 / 工具调用）、关联 checkpointId。
+粒度（两级）：执行级（转移级）= 一次运行 = `traceId` + 转移序列（`transitionSeq`），转移记录以 `(traceId, transitionSeq)` 唯一定位；状态级 = 记忆域变化（credit 变化、结算）作为转移的副作用事件，以 `(traceId, transitionSeq)` 关联来源转移。
+新语义：Trace = 恢复的索引——`resume(checkpointId)` 从 Trace 中该转移的记录重建（纸带 + 记忆 + 控制状态 + 事件队列）。
 _Avoid_: session, log（log 太泛）
 
 **Agent**:

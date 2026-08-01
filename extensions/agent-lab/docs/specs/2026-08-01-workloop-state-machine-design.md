@@ -1,7 +1,7 @@
 # WorkLoop 状态机化设计（图灵机模型落地）
 
 - **日期**：2026-08-01
-- **状态**：设计已确认，待实现规划
+- **状态**：设计已实现（2026-08-01）
 - **范围**：workloop 基底（contracts / runner / 全部 workloop 实现）重构为显式状态机运行时；契约重构（`machine` 取代 `run`）；执行器双轨；转移级自动 checkpoint；Trace 重定义
 - **核心定位**：把 WorkLoop 从「runner/executor/loop 式命令式代码」统一为 CONTEXT.md 认知模型中的图灵机形态——显式状态机（有限控制 + 数据域 + 纸带），确定性骨架约束无状态概率 LLM
 - **文档优先级**：本设计是对 `2026-07-26-agent-lab-global-architecture-design.md` 第 5 节（WorkLoop 与 WorkLoop SDK）的执行层细化；认知模型术语以 `CONTEXT.md` 为准（本设计修订其 State/Trace 条目，修订内容见 §3、§7）

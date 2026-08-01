@@ -149,13 +149,14 @@ test("1. per-candidate single-flight: same agent bids serialized, 2 checkpoints"
   assert.ok(recA);
   assert.ok(recB);
   // Task 4 迁移后：手动 checkpoint 移除，MachineRuntime 转移级自动 checkpoint
-  // （label `${next}#${seq}`）；bid result 在 terminal output.custom，不在 checkpoint state。
+  // （label `${next}#${seq}`）；Task 7：bid result 写入记忆/数据域 → checkpoint state
+  // 含 { stake, reasoning }（ADR-0001 不可变出价轨迹恢复）。
   assert.equal(recA.label, "done#1");
   assert.equal(recB.label, "done#1");
   assert.equal(recA.controlState, "done");
   assert.equal(recA.seq, 1);
-  assert.deepStrictEqual(recA.state, {});
-  assert.deepStrictEqual(recB.state, {});
+  assert.deepStrictEqual(recA.state, { stake: 37, reasoning: "37" });
+  assert.deepStrictEqual(recB.state, { stake: 37, reasoning: "37" });
 
   // Checkpoint chain: B's parentCheckpointId should point to A's checkpoint
   // because they're serialized and CheckpointStore.save chains via "latest" pointer
@@ -195,11 +196,12 @@ test("2. checkpoint persisted with bid result (state.stake)", async () => {
   const cpId = (cpEvents[0].payload as { checkpointId: string }).checkpointId;
   const rec = checkpointStore.get("agent-2", cpId);
   assert.ok(rec);
-  // 自动 checkpoint（label `${next}#${seq}`）；bid result 在 result.output.custom
+  // 自动 checkpoint（label `${next}#${seq}`）；Task 7：bid result 写入记忆 →
+  // checkpoint state 含 { stake, reasoning }（ADR-0001 不可变出价轨迹恢复）。
   assert.equal(rec.label, "done#1");
   assert.equal(rec.controlState, "done");
   assert.equal(rec.seq, 1);
-  assert.deepStrictEqual(rec.state, {});
+  assert.deepStrictEqual(rec.state, { stake: 37, reasoning: "37" });
   assert.equal(rec.workLoopId, "market-bid-loop");
   assert.equal(rec.workLoopVersion, "1.0.0");
   assert.equal(rec.agentInstanceId, "agent-2");

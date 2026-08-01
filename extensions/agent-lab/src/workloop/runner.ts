@@ -39,6 +39,8 @@ export interface WorkLoopRunRequest {
   dispatchId?: string;
   /** 从指定 checkpoint 恢复续跑（MachineRuntime.resumeStateOf 重建控制状态/序号） */
   resumeFromCheckpointId?: string;
+  /** 转移预算上限（可选，默认 100；透传 MachineRuntime budgets.maxTurns） */
+  maxTurns?: number;
 }
 
 // ── Runner ───────────────────────────────────────────────────────────
@@ -255,7 +257,7 @@ export class WorkLoopRunner {
         input,
         sdk,
         executor: implementation.executor,
-        budgets: { maxTurns: 100 },
+        budgets: { maxTurns: request.maxTurns ?? 100 },
         resumeFrom,
       });
       const runResult = await runtime.run();

@@ -1208,3 +1208,90 @@ test("runner: resumeFromCheckpointId 从 checkpoint 恢复续跑", async () => {
   assert.equal((rsTransitions[0].payload as { fromState?: string }).fromState, "s1");
   assert.equal((rsTransitions[0].payload as { toState?: string }).toState, "s2");
 });
+
+// ── Test 10: maxTurns 透传（Task 7：WorkLoopRunRequest.maxTurns → MachineRuntime 预算） ──
+
+test("runner: maxTurns 透传 → 预算强制终止（budget-exhausted）", async () => {
+  const db = memoryDB();
+  const store = new NamespacedStore(db);
+  const eventLog = new EventLog(db);
+  const stateStore = new AgentRuntimeStateStore(store);
+  const checkpointStore = new CheckpointStore(store);
+  const definitions = new DefinitionRegistry();
+  definitions.register(workloopDef());
+  const registry = new WorkLoopRegistry(definitions);
+
+  // 自驱动机器：idle→working 后 δ 持续自驱动 tick（永不 terminal）→ 靠 maxTurns 兜底
+  const loopImpl: WorkLoopImplementation = {
+    id: "test-loop",
+    version: "1.0.0",
+    cloneModes: ["fresh"],
+    executorKind: "local-model",
+    initialContext: () => testContext("init"),
+    initialState: () => ({ n: 0 }),
+    machine: {
+      states: [{ id: "idle" }, { id: "working" }],
+      initial: "idle",
+      transitions: (s, e) => {
+        if (s === "idle" && e.type === "start") return "working";
+        if (s === "working" && e.type === "tick") return "working";
+        return undefined;
+      },
+      step: async (ctx, state, event) => {
+        if (event.type === "start") return { context: ctx, state, event: { type: "tick" } };
+        return { context: ctx, state, event: { type: "tick" } };
+      },
+    },
+  };
+  registry.register(loopImpl);
+
+  const runner = new WorkLoopRunner(
+    registry,
+    stateStore,
+    checkpointStore,
+    eventLog,
+    store,
+    noopModel(),
+    noopTools(),
+    noopArtifacts(),
+  );
+
+  stateStore.initialize("agent-mt", testContext("init"), { n: 0 });
+
+  // maxTurns: 2 → 转移 2 次后预算耗尽（idle→working, working→working）
+  const result = await runner.run(defaultRequest({
+    agentInstanceId: "agent-mt",
+    executionId: "exec-mt",
+    maxTurns: 2,
+  }));
+  assert.equal(result.status, "failed");
+  assert.equal(result.error?.standard.code, "budget-exhausted");
+  assert.equal(result.error?.standard.retryable, true);
+
+  // 无 maxTurns → 默认 100（此处不跑 100 次；仅验证默认分支不炸：用单转移机器）
+  const okImpl: WorkLoopImplementation = {
+    id: "ok-loop",
+    version: "1.0.0",
+    cloneModes: ["fresh"],
+    executorKind: "local-model",
+    initialContext: () => testContext("init"),
+    initialState: () => ({ n: 0 }),
+    machine: {
+      states: [{ id: "idle" }, { id: "done", terminal: true }],
+      initial: "idle",
+      transitions: (s, e) => (s === "idle" && e.type === "start" ? "done" : undefined),
+      step: async (ctx, state) => ({
+        context: ctx, state,
+        terminal: { status: "completed", context: ctx, state },
+      }),
+    },
+  };
+  definitions.register(workloopDef({ id: "ok-loop" }));
+  registry.register(okImpl);
+  const okResult = await runner.run(defaultRequest({
+    agentInstanceId: "agent-mt",
+    executionId: "exec-mt-ok",
+    workLoopId: "ok-loop",
+  }));
+  assert.equal(okResult.status, "completed");
+});

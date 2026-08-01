@@ -86,13 +86,17 @@ export function createMarketBidLoop(config: ArenaBidLoopConfig = {}): WorkLoopIm
           reply = typeof res.message.content === "string" ? res.message.content : JSON.stringify(res.message.content);
           sdk.telemetry.emit("arena_bid.model_completed", { agent: agentInstanceId, model: config.model });
           const { stake, reasoning } = parseBidReply(reply, balance);
+          // ADR-0001 语义恢复（Task 7）：出价结果（stake + reasoning）写入记忆/数据域，
+          // 经 MachineRuntime 自动 checkpoint 落盘（不可变出价轨迹在 checkpoint state 中），
+          // 不再仅存于瞬时 run 返回值 output.custom。
+          const bidMemory = { stake, reasoning };
           const result: WorkLoopResult = {
             status: "completed",
             output: { standard: { text: reply, usage: res.usage }, custom: { stake, reasoning } },
             context: bidContext,
-            state,
+            state: bidMemory,
           };
-          return { context: bidContext, state, terminal: result };
+          return { context: bidContext, state: bidMemory, terminal: result };
         } catch (err) {
           sdk.telemetry.emit("arena_bid.model_failed", { agent: agentInstanceId, model: config.model });
           return {

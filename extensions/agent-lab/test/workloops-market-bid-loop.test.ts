@@ -67,6 +67,11 @@ test("market-bid-loop: runtime auto-checkpoints the bid result (persistence)", a
   // 手动 checkpoint 已移除（Task 4）——MachineRuntime 每次转移后自动 checkpoint
   assert.equal(checkpoints.length, 1);
   assert.equal((checkpoints[0] as { label?: string }).label, "done#1");
+  // Task 7（ADR-0001 恢复）：出价结果写入记忆/数据域 → checkpoint state 含 stake+reasoning
+  assert.deepStrictEqual(
+    (checkpoints[0] as { state?: unknown }).state,
+    { stake: 30, reasoning: "30" },
+  );
 });
 
 test("market-bid-loop: model failure → failed status (fail-open upstream)", async () => {
