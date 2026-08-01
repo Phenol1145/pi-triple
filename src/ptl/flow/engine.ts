@@ -530,7 +530,8 @@ async function executeWaveLoop(
           const args: Record<string, unknown> = {};
           for (const k of argNames) args[k] = preWaveState[k];
           try {
-            const result = await fn(args, { state: preWaveState, runId, nodeId, log: () => {} });
+            // state 传浅拷贝：防 fn 运行时篡改污染波状态（同波后续节点/波末 reducer 初值）
+            const result = await fn(args, { state: { ...preWaveState }, runId, nodeId, log: () => {} });
             const output = JSON.stringify(result ?? null);
             nodeResults.set(nodeId, { ok: true, output, exitCode: 0, signal: null });
           } catch (err: any) {

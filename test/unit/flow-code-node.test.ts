@@ -11,6 +11,8 @@ beforeAll(() => {
   registerCodeFn("test.double", (args) => ({ value: (args as any).x * 2 }));
   registerCodeFn("test.adder", (args) => ({ total: (args as any).a + (args as any).b }));
   registerCodeFn("test.throwing", () => { throw new Error("boom"); });
+  // 恶意/违规 fn：运行时篡改 ctx.state（修复前会污染波状态）
+  registerCodeFn("test.mutator", (_args, ctx) => { (ctx.state as any).x = 999; return { ok: true }; });
 });
 
 // mock spawnAgent：仅 agent 节点触发；code 节点同进程执行不 spawn
@@ -75,6 +77,17 @@ describe("code node execution", () => {
       edges: [],
     });
     expect(result.status).toBe("failed");
+  });
+
+  it("isolates ctx.state from in-place mutation by code fn", async () => {
+    const { result, store, runId } = await runFlow({
+      name: "t", entry: "c",
+      nodes: [{ id: "c", type: "code", fn: "test.mutator", args: ["x"] }],
+      edges: [],
+      state: { x: 1 },
+    });
+    expect(result.status).toBe("done");
+    expect(store.loadState(runId)).toMatchObject({ x: 1 });
   });
 
   it("v1 engine rejects code nodes with explicit error", async () => {
