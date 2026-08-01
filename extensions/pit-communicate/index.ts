@@ -185,6 +185,9 @@ export default function pitMail(api: any /* ExtensionAPI */) {
   api.on("session_start", (_event: any, ctx: any) => {
     cachedCtx = ctx;
 
+    // 会话内更新提示（fire-and-forget，缓存兜底，异常静默）
+    void import("./update-hint.js").then(({ maybeShowUpdateHint }) => maybeShowUpdateHint(ctx));
+
     delivery.setActions({
       notify: (text: string) => {
         try { ctx.ui.notify(text); } catch { /* ok */ }
