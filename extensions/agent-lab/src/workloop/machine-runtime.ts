@@ -111,7 +111,15 @@ export class MachineRuntime {
     let ctx: WorkContext = resume?.context ?? this.input.context;
     let memory: unknown = resume?.memory ?? this.input.state;
     let seq = resume?.seq ?? 0;
-    let event: MachineEvent = { type: "start", payload: { task: this.input.task } };
+    let event: MachineEvent = {
+      type: "start",
+      payload: {
+        task: this.input.task,
+        // 初始事件 payload 携带 agentInstanceId（Task 6）：δ 侧 telemetry 可
+        // 补充 agent 字段（arena_bid.model_completed/failed 下游兼容）。
+        agentInstanceId: this.input.agentInstanceId,
+      },
+    };
     const transitions: MachineTransitionRecord[] = [];
     const startedAt = Date.now();
 
@@ -185,11 +193,14 @@ export class MachineRuntime {
       };
 
       // ── 自动 checkpoint ──
-      // 注：CheckpointPort.save 现签名为 (context, state, label?)——label 为字符串。
-      // Task 6 扩展为 controlState/seq 时仅需改此调用点（label 语义保持不变）。
+      // 写入 controlState/seq（Task 6）：resume 时经 resumeStateOf 重建控制状态与序号。
       let checkpointId: string | undefined;
       if (seq % this.checkpointEvery === 0) {
-        const cp = await this.sdk.checkpoint.save(ctx, memory, `${next}#${seq}`);
+        const cp = await this.sdk.checkpoint.save(ctx, memory, {
+          label: `${next}#${seq}`,
+          controlState: next,
+          seq,
+        });
         checkpointId = cp.checkpointId;
       }
       record.checkpointId = checkpointId;

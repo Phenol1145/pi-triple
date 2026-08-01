@@ -44,6 +44,10 @@ export interface CheckpointRecord {
   optimizationRoundId: string;
   parentCheckpointId?: string;
   label?: string;
+  /** 控制状态（MachineRuntime 自动 checkpoint 写入；resume 经 resumeStateOf 重建） */
+  controlState?: string;
+  /** 转移序号（MachineRuntime 自动 checkpoint 写入；resume 经 resumeStateOf 重建） */
+  seq?: number;
   context: WorkContext;
   state: unknown;
   createdAt: number;

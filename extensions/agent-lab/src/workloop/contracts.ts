@@ -80,7 +80,11 @@ export interface WorkLoopControl {
 }
 
 export interface CheckpointPort {
-  save(context: WorkContext, state: unknown, label?: string): Promise<{ checkpointId: string }>;
+  save(
+    context: WorkContext,
+    state: unknown,
+    opts?: { label?: string; controlState?: string; seq?: number },
+  ): Promise<{ checkpointId: string }>;
 }
 
 export interface AgentStoragePort {
@@ -117,11 +121,6 @@ export interface WorkLoopImplementation {
   forkState?(state: unknown): unknown;
   /** 状态机定义——取代 run()（Task 4+ 新实现只提供 machine） */
   machine: MachineDefinition;
-  /** 委托式执行器（工厂创建后挂载；local-model 不提供；runner 只读此字段，Task 6 接线） */
+  /** 委托式执行器（工厂创建后挂载；local-model 不提供；runner 只读此字段） */
   executor?: Executor;
-  /**
-   * @deprecated 过渡期保留（Task 6 删除）；新实现不提供。
-   * 旧命令式 run 路径，仅 pi-default-loop 在 Task 5 迁移前使用。
-   */
-  run?(input: WorkLoopInput, sdk: WorkLoopSDK): Promise<WorkLoopResult>;
 }

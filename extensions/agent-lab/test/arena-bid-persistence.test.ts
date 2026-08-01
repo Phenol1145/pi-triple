@@ -1,10 +1,11 @@
 /**
  * market-bid-persistence.test.ts — 持久化行为集成测试
  *
- * 验证 WorkLoopRunner（真实）+ CheckpointStore（内存 SQLite）+ marketBidLoop
- * 的持久化行为：
+ * 验证 WorkLoopRunner（真实）+ CheckpointStore（内存 SQLite）+ market-bid-loop
+ * （createMarketBidLoop 工厂）的持久化行为：
  *   1. per-candidate single-flight（同 agent 串行，checkpoint 链）
- *   2. checkpoint 持久化 bid result（state.stake 正确）
+ *   2. checkpoint 持久化（MachineRuntime 转移级自动 checkpoint；bid result
+ *      在 terminal output.custom）
  *   3. 不同 agent 并发（per-agent 单飞）
  *
  * 使用 node:test + node:assert/strict；fake ModelPort 返回 "37"
@@ -25,7 +26,7 @@ import { CheckpointStore } from "../src/workloop/checkpoints.ts";
 import { WorkLoopRunner } from "../src/workloop/runner.ts";
 import type { WorkLoopRunRequest } from "../src/workloop/runner.ts";
 import { MARKET_BID_LOOP_DEFINITION } from "../src/runtime/create-scheduler-runtime.ts";
-import { marketBidLoop } from "../src/workloops/market-bid-loop.ts";
+import { createMarketBidLoop } from "../src/workloops/market-bid-loop.ts";
 import type { ModelPort, WorkContext } from "../src/workloop/contracts.ts";
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ function buildArenaRunner() {
   const definitions = new DefinitionRegistry();
   definitions.register(MARKET_BID_LOOP_DEFINITION);
   const registry = new WorkLoopRegistry(definitions);
-  registry.register(marketBidLoop);
+  registry.register(createMarketBidLoop());
 
   const runner = new WorkLoopRunner(
     registry,
@@ -147,12 +148,14 @@ test("1. per-candidate single-flight: same agent bids serialized, 2 checkpoints"
   const recB = checkpointStore.get("agent-1", cpIdB);
   assert.ok(recA);
   assert.ok(recB);
-  assert.equal(recA.label, "bid-result");
-  assert.equal(recB.label, "bid-result");
-
-  // Verify state.stake = 37 (parseBidResponse("37", 100) → 37)
-  assert.equal((recA.state as { stake: number }).stake, 37);
-  assert.equal((recB.state as { stake: number }).stake, 37);
+  // Task 4 迁移后：手动 checkpoint 移除，MachineRuntime 转移级自动 checkpoint
+  // （label `${next}#${seq}`）；bid result 在 terminal output.custom，不在 checkpoint state。
+  assert.equal(recA.label, "done#1");
+  assert.equal(recB.label, "done#1");
+  assert.equal(recA.controlState, "done");
+  assert.equal(recA.seq, 1);
+  assert.deepStrictEqual(recA.state, {});
+  assert.deepStrictEqual(recB.state, {});
 
   // Checkpoint chain: B's parentCheckpointId should point to A's checkpoint
   // because they're serialized and CheckpointStore.save chains via "latest" pointer
@@ -186,15 +189,17 @@ test("2. checkpoint persisted with bid result (state.stake)", async () => {
   assert.equal(custom!.stake, 37);
   assert.equal(custom!.reasoning, "37");
 
-  // Verify checkpoint created with correct state
+  // Verify checkpoint created with correct record metadata
   const cpEvents = eventLog.query({ traceId: "trace-c", eventType: "checkpoint.created" });
   assert.equal(cpEvents.length, 1);
   const cpId = (cpEvents[0].payload as { checkpointId: string }).checkpointId;
   const rec = checkpointStore.get("agent-2", cpId);
   assert.ok(rec);
-  assert.equal(rec.label, "bid-result");
-  assert.equal((rec.state as { stake: number }).stake, 37);
-  assert.equal((rec.state as { reasoning: string }).reasoning, "37");
+  // 自动 checkpoint（label `${next}#${seq}`）；bid result 在 result.output.custom
+  assert.equal(rec.label, "done#1");
+  assert.equal(rec.controlState, "done");
+  assert.equal(rec.seq, 1);
+  assert.deepStrictEqual(rec.state, {});
   assert.equal(rec.workLoopId, "market-bid-loop");
   assert.equal(rec.workLoopVersion, "1.0.0");
   assert.equal(rec.agentInstanceId, "agent-2");

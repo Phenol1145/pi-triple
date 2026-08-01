@@ -10,9 +10,9 @@ import { CheckpointStore } from "../src/workloop/checkpoints.ts";
 import { WorkLoopRunner } from "../src/workloop/runner.ts";
 import type { WorkLoopRunRequest } from "../src/workloop/runner.ts";
 import type { WorkLoopDefinition } from "../src/core/contracts.ts";
+import { createMarketBidLoop } from "../src/workloops/market-bid-loop.ts";
 import type {
   WorkLoopImplementation,
-  WorkLoopInput,
   WorkLoopResult,
   WorkLoopSDK,
   WorkContext,
@@ -20,6 +20,7 @@ import type {
   ToolPort,
   ArtifactPort,
 } from "../src/workloop/contracts.ts";
+import type { MachineEvent, StepResult } from "../src/workloop/machine.ts";
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -87,6 +88,52 @@ function defaultRequest(overrides: Partial<WorkLoopRunRequest> = {}): WorkLoopRu
 }
 
 /**
+ * 单转移 machine impl 工厂（Task 6 适配：runner 只支持 machine 驱动）。
+ * 默认 step：idle→done，terminal completed（context "completed" / state {counter:1}）。
+ */
+function machineImpl(opts?: {
+  step?: (
+    ctx: WorkContext,
+    state: unknown,
+    event: MachineEvent,
+    sdk: WorkLoopSDK,
+  ) => Promise<StepResult>;
+  id?: string;
+  version?: string;
+  cloneModes?: string[];
+  initialContext?: (config: unknown) => WorkContext;
+  initialState?: (config: unknown) => unknown;
+}): WorkLoopImplementation {
+  return {
+    id: opts?.id ?? "test-loop",
+    version: opts?.version ?? "1.0.0",
+    cloneModes: opts?.cloneModes ?? ["fresh"],
+    executorKind: "local-model",
+    initialContext: opts?.initialContext ?? ((_config: unknown) => testContext("init")),
+    initialState: opts?.initialState ?? ((_config: unknown) => ({ counter: 0 })),
+    machine: {
+      states: [{ id: "idle" }, { id: "done", terminal: true }],
+      initial: "idle",
+      transitions: (state, event) =>
+        state === "idle" && event.type === "start" ? "done" : undefined,
+      step: async (ctx, state, event, sdk) => {
+        if (opts?.step) return opts.step(ctx, state, event, sdk);
+        return {
+          context: testContext("completed"),
+          state: { counter: 1 },
+          terminal: {
+            status: "completed",
+            output: { standard: { text: "done" } },
+            context: testContext("completed"),
+            state: { counter: 1 },
+          },
+        };
+      },
+    },
+  };
+}
+
+/**
  * Build a complete runner with all real P1 components wired to :memory: DBs.
  */
 function buildRunner(opts?: {
@@ -113,20 +160,7 @@ function buildRunner(opts?: {
   definitions.register(workloopDef());
   const registry = new WorkLoopRegistry(definitions);
 
-  const impl = opts?.impl ??
-    ({
-      id: "test-loop",
-      version: "1.0.0",
-      cloneModes: ["fresh"],
-      initialContext: (_config: unknown) => testContext("init"),
-      initialState: (_config: unknown) => ({ counter: 0 }),
-      run: async (_input: WorkLoopInput, _sdk: WorkLoopSDK): Promise<WorkLoopResult> => ({
-        status: "completed",
-        output: { standard: { text: "done" } },
-        context: testContext("completed"),
-        state: { counter: 1 },
-      }),
-    } satisfies WorkLoopImplementation);
+  const impl = opts?.impl ?? machineImpl();
 
   registry.register(impl);
 
@@ -144,11 +178,20 @@ function buildRunner(opts?: {
   return { runner, db, store, eventLog, stateStore, checkpointStore, registry, definitions };
 }
 
+/** 按 eventId 内嵌序号排序（:eventType:seq 末尾） */
+function sortBySeq(events: Array<{ eventId: string }>): void {
+  events.sort((a, b) => {
+    const seqA = parseInt(a.eventId.split(":").pop()!, 10);
+    const seqB = parseInt(b.eventId.split(":").pop()!, 10);
+    return seqA - seqB;
+  });
+}
+
 // ── Tests ────────────────────────────────────────────────────────────
 
 // ── Test 1: Completed run ──────────────────────────────────────────
 
-test("1. Completed run: loads snapshot, invokes impl, commits at expected version, emits lifecycle events", async () => {
+test("1. Completed run: loads snapshot, drives machine via MachineRuntime, commits at expected version, emits lifecycle events", async () => {
   const { runner, stateStore, eventLog } = buildRunner();
 
   // Initialize agent snapshot
@@ -169,18 +212,15 @@ test("1. Completed run: loads snapshot, invokes impl, commits at expected versio
   assert.equal(snap!.value.context.metadata.contextId, "completed");
   assert.equal((snap!.value.state as { counter: number }).counter, 1);
 
-  // Lifecycle events: sort by sequence for deterministic order
+  // Lifecycle events: machine 驱动 → machine.transition + 自动 checkpoint
   const events = eventLog.query({ traceId: "trace-1" });
-  // Sort by the sequence number embedded in eventId: ...:eventType:N
-  events.sort((a, b) => {
-    const seqA = parseInt(a.eventId.split(":").pop()!, 10);
-    const seqB = parseInt(b.eventId.split(":").pop()!, 10);
-    return seqA - seqB;
-  });
+  sortBySeq(events);
   const types = events.map((e) => e.eventType);
   assert.deepStrictEqual(types, [
     "agent.started",
     "workloop.started",
+    "checkpoint.created",
+    "machine.transition",
     "workloop.completed",
     "agent.completed",
   ]);
@@ -188,8 +228,16 @@ test("1. Completed run: loads snapshot, invokes impl, commits at expected versio
   // Verify event IDs are deterministic: ${executionId}:${eventType}:${seq}
   assert.equal(events[0].eventId, "exec-1:agent.started:0");
   assert.equal(events[1].eventId, "exec-1:workloop.started:1");
-  assert.equal(events[2].eventId, "exec-1:workloop.completed:2");
-  assert.equal(events[3].eventId, "exec-1:agent.completed:3");
+  assert.equal(events[2].eventId, "exec-1:checkpoint.created:2");
+  assert.equal(events[3].eventId, "exec-1:machine.transition:3");
+  assert.equal(events[4].eventId, "exec-1:workloop.completed:4");
+  assert.equal(events[5].eventId, "exec-1:agent.completed:5");
+
+  // machine.transition 记录携带控制状态转移
+  const transition = events[3];
+  assert.equal((transition.payload as { fromState?: string }).fromState, "idle");
+  assert.equal((transition.payload as { toState?: string }).toState, "done");
+  assert.equal((transition.payload as { seq?: number }).seq, 1);
 
   // Verify identity fields on first event
   const id = events[0].identity;
@@ -206,19 +254,29 @@ test("1. Completed run: loads snapshot, invokes impl, commits at expected versio
 test("2. Failed WorkLoop: returns failure, emits failure events, does not commit", async () => {
   const { runner, stateStore, eventLog, registry } = buildRunner();
 
-  // Override with a failing implementation
+  // Override with a failing machine implementation
   const failingImpl: WorkLoopImplementation = {
     id: "test-loop",
     version: "1.0.0",
     cloneModes: ["fresh"],
+    executorKind: "local-model",
     initialContext: () => testContext("init"),
     initialState: () => ({ counter: 0 }),
-    run: async (): Promise<WorkLoopResult> => ({
-      status: "failed",
-      error: { standard: { code: "TEST_FAIL", message: "it broke", retryable: false } },
-      context: testContext("failed-ctx"),
-      state: { counter: 99 },
-    }),
+    machine: {
+      states: [{ id: "idle" }, { id: "done", terminal: true }],
+      initial: "idle",
+      transitions: (s, e) => (s === "idle" && e.type === "start" ? "done" : undefined),
+      step: async () => ({
+        context: testContext("failed-ctx"),
+        state: { counter: 99 },
+        terminal: {
+          status: "failed",
+          error: { standard: { code: "TEST_FAIL", message: "it broke", retryable: false } },
+          context: testContext("failed-ctx"),
+          state: { counter: 99 },
+        },
+      }),
+    },
   };
 
   // Register the failing impl (replace)
@@ -261,18 +319,15 @@ test("2. Failed WorkLoop: returns failure, emits failure events, does not commit
   assert.equal(snap!.value.context.metadata.contextId, "initial-ctx");
   assert.equal((snap!.value.state as { counter: number }).counter, 0);
 
-  // Failure events emitted
+  // Failure events emitted (machine.transition + auto checkpoint still recorded)
   const events = eventLog2.query({ traceId: "trace-1" });
-  // Sort by sequence number embedded in eventId
-  events.sort((a, b) => {
-    const seqA = parseInt(a.eventId.split(":").pop()!, 10);
-    const seqB = parseInt(b.eventId.split(":").pop()!, 10);
-    return seqA - seqB;
-  });
+  sortBySeq(events);
   const types = events.map((e) => e.eventType);
   assert.deepStrictEqual(types, [
     "agent.started",
     "workloop.started",
+    "checkpoint.created",
+    "machine.transition",
     "workloop.failed",
     "agent.failed",
   ]);
@@ -283,17 +338,16 @@ test("2. Failed WorkLoop: returns failure, emits failure events, does not commit
 test("3a. Abort before start: returns cancelled without invoking implementation", async () => {
   let invoked = false;
 
-  const impl: WorkLoopImplementation = {
-    id: "test-loop",
-    version: "1.0.0",
-    cloneModes: ["fresh"],
-    initialContext: () => testContext("init"),
-    initialState: () => ({}),
-    run: async () => {
+  const impl = machineImpl({
+    step: async () => {
       invoked = true;
-      return { status: "completed", context: testContext(), state: {} };
+      return {
+        context: testContext(),
+        state: {},
+        terminal: { status: "completed", context: testContext(), state: {} },
+      };
     },
-  };
+  });
 
   const definitions = new DefinitionRegistry();
   definitions.register(workloopDef());
@@ -336,13 +390,8 @@ test("3a. Abort before start: returns cancelled without invoking implementation"
 test("3b. Abort during run: visible through sdk.control.signal, does not commit", async () => {
   let capturedSignal: AbortSignal | undefined;
 
-  const impl: WorkLoopImplementation = {
-    id: "test-loop",
-    version: "1.0.0",
-    cloneModes: ["fresh"],
-    initialContext: () => testContext("init"),
-    initialState: () => ({ counter: 0 }),
-    run: async (_input: WorkLoopInput, sdk: WorkLoopSDK): Promise<WorkLoopResult> => {
+  const impl = machineImpl({
+    step: async (_ctx, _state, _event, sdk) => {
       capturedSignal = sdk.control.signal;
 
       // Wait for abort
@@ -355,12 +404,16 @@ test("3b. Abort during run: visible through sdk.control.signal, does not commit"
       });
 
       return {
-        status: "cancelled",
         context: testContext("aborted-ctx"),
         state: { counter: 5 },
+        terminal: {
+          status: "cancelled",
+          context: testContext("aborted-ctx"),
+          state: { counter: 5 },
+        },
       };
     },
-  };
+  });
 
   const definitions = new DefinitionRegistry();
   definitions.register(workloopDef());
@@ -412,13 +465,8 @@ test("3b. Abort during run: visible through sdk.control.signal, does not commit"
 test("3c. throwIfCancelled throws AbortError", async () => {
   let threwAbort = false;
 
-  const impl: WorkLoopImplementation = {
-    id: "test-loop",
-    version: "1.0.0",
-    cloneModes: ["fresh"],
-    initialContext: () => testContext("init"),
-    initialState: () => ({}),
-    run: async (_input: WorkLoopInput, sdk: WorkLoopSDK): Promise<WorkLoopResult> => {
+  const impl = machineImpl({
+    step: async (_ctx, _state, _event, sdk) => {
       try {
         sdk.control.throwIfCancelled();
       } catch (e) {
@@ -427,9 +475,13 @@ test("3c. throwIfCancelled throws AbortError", async () => {
           throw e; // rethrow
         }
       }
-      return { status: "completed", context: testContext(), state: {} };
+      return {
+        context: testContext(),
+        state: {},
+        terminal: { status: "completed", context: testContext(), state: {} },
+      };
     },
-  };
+  });
 
   const definitions = new DefinitionRegistry();
   definitions.register(workloopDef());
@@ -471,23 +523,18 @@ test("3c. throwIfCancelled throws AbortError", async () => {
 test("4a. Two concurrent runs for same agent execute FIFO (serial)", async () => {
   const executionOrder: string[] = [];
 
-  const impl: WorkLoopImplementation = {
-    id: "test-loop",
-    version: "1.0.0",
-    cloneModes: ["fresh"],
-    initialContext: () => testContext("init"),
-    initialState: () => ({}),
-    run: async (input: WorkLoopInput): Promise<WorkLoopResult> => {
-      executionOrder.push(input.executionId);
+  const impl = machineImpl({
+    step: async (_ctx, _state, event) => {
+      executionOrder.push(((event.payload as { task?: string })?.task) ?? "");
       // Small delay to make concurrency observable
       await new Promise((r) => setTimeout(r, 20));
       return {
-        status: "completed",
-        context: testContext(input.executionId),
+        context: testContext("done"),
         state: {},
+        terminal: { status: "completed", context: testContext("done"), state: {} },
       };
     },
-  };
+  });
 
   const definitions = new DefinitionRegistry();
   definitions.register(workloopDef());
@@ -514,8 +561,8 @@ test("4a. Two concurrent runs for same agent execute FIFO (serial)", async () =>
   stateStore.initialize("agent-1", testContext("init"), {});
 
   // Launch two runs concurrently for the same agent
-  const p1 = runner.run(defaultRequest({ executionId: "exec-first" }));
-  const p2 = runner.run(defaultRequest({ executionId: "exec-second" }));
+  const p1 = runner.run(defaultRequest({ executionId: "exec-first", task: "exec-first" }));
+  const p2 = runner.run(defaultRequest({ executionId: "exec-second", task: "exec-second" }));
 
   const [r1, r2] = await Promise.all([p1, p2]);
 
@@ -523,6 +570,7 @@ test("4a. Two concurrent runs for same agent execute FIFO (serial)", async () =>
   assert.equal(r2.status, "completed");
 
   // FIFO order: first started first, second after first completes
+  // （δ 经 start 事件 payload 读取 task —— 单飞序列化保证顺序）
   assert.deepStrictEqual(executionOrder, ["exec-first", "exec-second"]);
 });
 
@@ -530,24 +578,19 @@ test("4b. Different agents may run concurrently", async () => {
   const executionOrder: string[] = [];
   const startTimes: number[] = [];
 
-  const impl: WorkLoopImplementation = {
-    id: "test-loop",
-    version: "1.0.0",
-    cloneModes: ["fresh"],
-    initialContext: () => testContext("init"),
-    initialState: () => ({}),
-    run: async (input: WorkLoopInput): Promise<WorkLoopResult> => {
+  const impl = machineImpl({
+    step: async (_ctx, _state, event) => {
       startTimes.push(Date.now());
-      executionOrder.push(input.agentInstanceId);
+      executionOrder.push(((event.payload as { agentInstanceId?: string })?.agentInstanceId) ?? "");
       // Delay long enough to observe overlap
       await new Promise((r) => setTimeout(r, 100));
       return {
-        status: "completed",
-        context: testContext(input.agentInstanceId),
+        context: testContext("done"),
         state: {},
+        terminal: { status: "completed", context: testContext("done"), state: {} },
       };
     },
-  };
+  });
 
   const definitions = new DefinitionRegistry();
   definitions.register(workloopDef());
@@ -594,61 +637,13 @@ test("4b. Different agents may run concurrently", async () => {
 
 // ── Test 5: Checkpoint ─────────────────────────────────────────────
 
-test("5. Checkpoint: sdk.checkpoint.save stores checkpoint and emits checkpoint.created", async () => {
-  let savedCtx: WorkContext | undefined;
-  let savedState: unknown;
-
-  const impl: WorkLoopImplementation = {
-    id: "test-loop",
-    version: "1.0.0",
-    cloneModes: ["fresh"],
-    initialContext: () => testContext("init"),
-    initialState: () => ({ step: 0 }),
-    run: async (_input: WorkLoopInput, sdk: WorkLoopSDK): Promise<WorkLoopResult> => {
-      const midCtx = testContext("mid-flight");
-      const midState = { step: 1, data: "checkpointed" };
-
-      const { checkpointId } = await sdk.checkpoint.save(midCtx, midState, "mid-run");
-      savedCtx = midCtx;
-      savedState = midState;
-
-      return {
-        status: "completed",
-        output: { standard: { text: "done" } },
-        context: testContext("final"),
-        state: { step: 2, checkpointId },
-      };
-    },
-  };
-
-  const definitions = new DefinitionRegistry();
-  definitions.register(workloopDef());
-  const registry = new WorkLoopRegistry(definitions);
-  registry.register(impl);
-
-  const db = memoryDB();
-  const store = new NamespacedStore(db);
-  const eventLog = new EventLog(db);
-  const stateStore = new AgentRuntimeStateStore(store);
-  const checkpointStore = new CheckpointStore(store);
-
-  const runner = new WorkLoopRunner(
-    registry,
-    stateStore,
-    checkpointStore,
-    eventLog,
-    store,
-    noopModel(),
-    noopTools(),
-    noopArtifacts(),
-  );
-
-  stateStore.initialize("agent-1", testContext("init"), { step: 0 });
+test("5. Checkpoint: MachineRuntime 自动 checkpoint 落盘并携带 controlState/seq", async () => {
+  const { runner, eventLog, checkpointStore } = buildRunner();
 
   const result = await runner.run(defaultRequest());
   assert.equal(result.status, "completed");
 
-  // checkpoint.created event emitted
+  // checkpoint.created event emitted (自动 checkpoint：每次转移后)
   const cpEvents = eventLog.query({ traceId: "trace-1", eventType: "checkpoint.created" });
   assert.equal(cpEvents.length, 1);
   const cpEvent = cpEvents[0];
@@ -657,14 +652,17 @@ test("5. Checkpoint: sdk.checkpoint.save stores checkpoint and emits checkpoint.
   assert.equal(cpEvent.identity.executionId, "exec-1");
   assert.equal(cpEvent.identity.workLoopId, "test-loop");
   assert.ok((cpEvent.payload as Record<string, unknown>).checkpointId, "checkpointId should be present");
+  assert.equal((cpEvent.payload as { label?: string }).label, "done#1");
 
-  // Checkpoint retrievable from CheckpointStore
+  // Checkpoint retrievable from CheckpointStore with controlState/seq（Task 6 carry-forward）
   const cpId = (cpEvent.payload as Record<string, string>).checkpointId;
   const record = checkpointStore.get("agent-1", cpId);
   assert.ok(record);
-  assert.deepStrictEqual(record.context, savedCtx);
-  assert.deepStrictEqual(record.state, savedState);
-  assert.equal(record.label, "mid-run");
+  assert.deepStrictEqual(record.context, testContext("completed"));
+  assert.deepStrictEqual(record.state, { counter: 1 });
+  assert.equal(record.label, "done#1");
+  assert.equal(record.controlState, "done");
+  assert.equal(record.seq, 1);
   assert.equal(record.agentInstanceId, "agent-1");
   assert.equal(record.workLoopId, "test-loop");
   assert.equal(record.workLoopVersion, "1.0.0");
@@ -737,32 +735,43 @@ test("5b. Absent identity fields: omitting schedulerInstanceId/dispatchId preser
 
 // ── Test 5c: Checkpoint lineage (M2) ────────────────────────────────
 
-test("5c. Checkpoint lineage: parentCheckpointId chains across sequential saves", async () => {
-  const checkpointIds: string[] = [];
-
+test("5c. Checkpoint lineage: parentCheckpointId chains across sequential auto-checkpoints", async () => {
+  // 四状态自驱动机器（s0→s1→s2→s3 terminal）：3 次转移 → 3 个自动 checkpoint
   const impl: WorkLoopImplementation = {
     id: "test-loop",
     version: "1.0.0",
     cloneModes: ["fresh"],
+    executorKind: "local-model",
     initialContext: () => testContext("init"),
     initialState: () => ({ step: 0 }),
-    run: async (_input: WorkLoopInput, sdk: WorkLoopSDK): Promise<WorkLoopResult> => {
-      // Save three checkpoints in sequence
-      const cp1 = await sdk.checkpoint.save(testContext("cp1"), { step: 1 }, "first");
-      checkpointIds.push(cp1.checkpointId);
-
-      const cp2 = await sdk.checkpoint.save(testContext("cp2"), { step: 2 }, "second");
-      checkpointIds.push(cp2.checkpointId);
-
-      const cp3 = await sdk.checkpoint.save(testContext("cp3"), { step: 3 }, "third");
-      checkpointIds.push(cp3.checkpointId);
-
-      return {
-        status: "completed",
-        output: { standard: { text: "chained" } },
-        context: testContext("final"),
-        state: { step: 4 },
-      };
+    machine: {
+      states: [{ id: "s0" }, { id: "s1" }, { id: "s2" }, { id: "s3", terminal: true }],
+      initial: "s0",
+      transitions: (s, e) => {
+        if (s === "s0" && e.type === "start") return "s1";
+        if (s === "s1" && e.type === "go") return "s2";
+        if (s === "s2" && e.type === "go") return "s3";
+        return undefined;
+      },
+      step: async (_ctx, state, event) => {
+        if (event.type === "start") {
+          return { context: testContext("cp1"), state: { step: 1 }, event: { type: "go" } };
+        }
+        const step = (state as { step: number }).step ?? 0;
+        if (step === 1) {
+          return { context: testContext("cp2"), state: { step: 2 }, event: { type: "go" } };
+        }
+        return {
+          context: testContext("final"),
+          state: { step: 3 },
+          terminal: {
+            status: "completed",
+            output: { standard: { text: "chained" } },
+            context: testContext("final"),
+            state: { step: 3 },
+          },
+        };
+      },
     },
   };
 
@@ -792,37 +801,38 @@ test("5c. Checkpoint lineage: parentCheckpointId chains across sequential saves"
 
   const result = await runner.run(defaultRequest());
   assert.equal(result.status, "completed");
-  assert.equal(checkpointIds.length, 3);
+  assert.equal((result.state as { step: number }).step, 3);
 
-  // Retrieve all checkpoints and verify lineage
-  const cp1 = checkpointStore.get("agent-1", checkpointIds[0]);
-  const cp2 = checkpointStore.get("agent-1", checkpointIds[1]);
-  const cp3 = checkpointStore.get("agent-1", checkpointIds[2]);
+  // 3 auto-checkpoints（s1#1 / s2#2 / s3#3）
+  const cpEvents = eventLog.query({ traceId: "trace-1", eventType: "checkpoint.created" });
+  sortBySeq(cpEvents);
+  assert.equal(cpEvents.length, 3);
 
-  // First checkpoint: no parent (first in chain)
+  const ids: string[] = [];
+  for (const ev of cpEvents) {
+    ids.push((ev.payload as { checkpointId: string }).checkpointId);
+  }
+
+  // Retrieve all checkpoints and verify lineage + controlState/seq
+  const cp1 = checkpointStore.get("agent-1", ids[0]);
+  const cp2 = checkpointStore.get("agent-1", ids[1]);
+  const cp3 = checkpointStore.get("agent-1", ids[2]);
+
   assert.equal(cp1.parentCheckpointId, undefined, "first checkpoint should have no parent");
+  assert.equal(cp2.parentCheckpointId, ids[0], "second checkpoint parent should be first checkpoint");
+  assert.equal(cp3.parentCheckpointId, ids[1], "third checkpoint parent should be second checkpoint");
 
-  // Second checkpoint: parent = first
-  assert.equal(
-    cp2.parentCheckpointId,
-    checkpointIds[0],
-    "second checkpoint parent should be first checkpoint",
-  );
-
-  // Third checkpoint: parent = second
-  assert.equal(
-    cp3.parentCheckpointId,
-    checkpointIds[1],
-    "third checkpoint parent should be second checkpoint",
-  );
-
-  // Labels and context are preserved correctly
-  assert.equal(cp1.label, "first");
-  assert.equal(cp2.label, "second");
-  assert.equal(cp3.label, "third");
+  assert.equal(cp1.label, "s1#1");
+  assert.equal(cp2.label, "s2#2");
+  assert.equal(cp3.label, "s3#3");
+  assert.equal(cp1.controlState, "s1");
+  assert.equal(cp2.controlState, "s2");
+  assert.equal(cp3.controlState, "s3");
+  assert.equal(cp1.seq, 1);
+  assert.equal(cp2.seq, 2);
+  assert.equal(cp3.seq, 3);
   assert.equal(cp1.context.metadata.contextId, "cp1");
   assert.equal(cp2.context.metadata.contextId, "cp2");
-  assert.equal(cp3.context.metadata.contextId, "cp3");
 });
 
 // ── Test 6: CAS conflict ───────────────────────────────────────────
@@ -836,32 +846,25 @@ test("6. CAS conflict: returns state-conflict error, preserves winning state", a
   const stateStore = new AgentRuntimeStateStore(store);
   const checkpointStore = new CheckpointStore(store);
 
-  // Capture stateStore in closure for the impl
+  // Capture stateStore in closure for the δ
   const capturedStateStore = stateStore;
 
-  const impl: WorkLoopImplementation = {
-    id: "test-loop",
-    version: "1.0.0",
-    cloneModes: ["fresh"],
-    initialContext: () => testContext("init"),
-    initialState: () => ({}),
-    run: async (_input: WorkLoopInput): Promise<WorkLoopResult> => {
+  const impl = machineImpl({
+    step: async () => {
       // Simulate a concurrent commit by another runner/scheduler
-      // This bumps the version so our commit will fail
       capturedStateStore.commit(
         "agent-1",
         testContext("concurrent-winner"),
         { counter: 42 },
         1, // expected version = 1 (what we initialized with)
       );
-
       return {
-        status: "completed",
         context: testContext("my-result"),
         state: { counter: 1 },
+        terminal: { status: "completed", context: testContext("my-result"), state: { counter: 1 } },
       };
     },
-  };
+  });
 
   const definitions = new DefinitionRegistry();
   definitions.register(workloopDef());
@@ -919,16 +922,11 @@ test("runtime snapshot auto-initialized on first run (no explicit initialize)", 
 // ── Additional: implementation throws unexpectedly ─────────────────
 
 test("implementation that throws returns workloop-error, does not commit", async () => {
-  const impl: WorkLoopImplementation = {
-    id: "test-loop",
-    version: "1.0.0",
-    cloneModes: ["fresh"],
-    initialContext: () => testContext("init"),
-    initialState: () => ({ counter: 0 }),
-    run: async (): Promise<WorkLoopResult> => {
+  const impl = machineImpl({
+    step: async () => {
       throw new Error("unexpected boom");
     },
-  };
+  });
 
   const definitions = new DefinitionRegistry();
   definitions.register(workloopDef());
@@ -968,18 +966,17 @@ test("implementation that throws returns workloop-error, does not commit", async
 // ── Test 7: Paused WorkLoop ─────────────────────────────────────────
 
 test("7. Paused run: emits agent.paused, does not commit snapshot", async () => {
-  const impl: WorkLoopImplementation = {
-    id: "test-loop",
-    version: "1.0.0",
-    cloneModes: ["fresh"],
-    initialContext: () => testContext("init"),
-    initialState: () => ({ counter: 0 }),
-    run: async (): Promise<WorkLoopResult> => ({
-      status: "paused",
+  const impl = machineImpl({
+    step: async () => ({
       context: testContext("paused-ctx"),
       state: { counter: 1, note: "midway" },
+      terminal: {
+        status: "paused",
+        context: testContext("paused-ctx"),
+        state: { counter: 1, note: "midway" },
+      },
     }),
-  };
+  });
 
   const definitions = new DefinitionRegistry();
   definitions.register(workloopDef());
@@ -1012,15 +1009,13 @@ test("7. Paused run: emits agent.paused, does not commit snapshot", async () => 
 
   // agent.paused event emitted
   const events = eventLog.query({ traceId: "trace-1" });
-  events.sort((a, b) => {
-    const seqA = parseInt(a.eventId.split(":").pop()!, 10);
-    const seqB = parseInt(b.eventId.split(":").pop()!, 10);
-    return seqA - seqB;
-  });
+  sortBySeq(events);
   const types = events.map((e) => e.eventType);
   assert.deepStrictEqual(types, [
     "agent.started",
     "workloop.started",
+    "checkpoint.created",
+    "machine.transition",
     "agent.paused",
   ]);
 
@@ -1029,4 +1024,187 @@ test("7. Paused run: emits agent.paused, does not commit snapshot", async () => 
   assert.equal(snap!.version, 1);
   assert.equal(snap!.value.context.metadata.contextId, "init");
   assert.equal((snap!.value.state as { counter: number }).counter, 0);
+});
+
+// ── Test 8: machine workloop 经 MachineRuntime 驱动（market-bid） ──
+
+test("runner: machine workloop 经 MachineRuntime 驱动 + machine.transition 事件", async () => {
+  const db = memoryDB();
+  const store = new NamespacedStore(db);
+  const eventLog = new EventLog(db);
+  const stateStore = new AgentRuntimeStateStore(store);
+  const checkpointStore = new CheckpointStore(store);
+  const definitions = new DefinitionRegistry();
+  definitions.register({
+    kind: "workloop",
+    id: "market-bid-loop",
+    version: "1.0.0",
+    sdkVersionRange: "^1.0.0",
+    configSchema: { type: "object" },
+    requiredCapabilities: [],
+    cloneModes: ["fresh"],
+  });
+  const registry = new WorkLoopRegistry(definitions);
+  registry.register(createMarketBidLoop({ balance: 100 }));
+
+  const bidModel: ModelPort = {
+    complete: async () => ({ message: { role: "assistant", content: "37" } }),
+  };
+
+  const runner = new WorkLoopRunner(
+    registry,
+    stateStore,
+    checkpointStore,
+    eventLog,
+    store,
+    bidModel,
+    noopTools(),
+    noopArtifacts(),
+  );
+
+  // runner auto-init（market-bid initialContext/initialState）
+  const result = await runner.run(defaultRequest({
+    workLoopId: "market-bid-loop",
+    workLoopVersion: "1.0.0",
+    config: {},
+  }));
+
+  assert.equal(result.status, "completed");
+  assert.equal((result.output?.custom as { stake: number }).stake, 37);
+
+  const events = eventLog.query({ traceId: "trace-1" });
+  sortBySeq(events);
+  const types = events.map((e) => e.eventType);
+
+  // workloop.started → machine.transition → workloop.completed → agent.completed
+  const iStarted = types.indexOf("workloop.started");
+  const iTransition = types.indexOf("machine.transition");
+  const iCompleted = types.indexOf("workloop.completed");
+  const iAgent = types.indexOf("agent.completed");
+  assert.ok(iStarted !== -1, `missing workloop.started in ${types}`);
+  assert.ok(iTransition !== -1, `missing machine.transition in ${types}`);
+  assert.ok(iCompleted !== -1, `missing workloop.completed in ${types}`);
+  assert.ok(iAgent !== -1, `missing agent.completed in ${types}`);
+  assert.ok(iStarted < iTransition, "workloop.started should precede machine.transition");
+  assert.ok(iTransition < iCompleted, "machine.transition should precede workloop.completed");
+  assert.ok(iCompleted < iAgent, "workloop.completed should precede agent.completed");
+
+  // carry-forward：arena_bid.model_completed telemetry 恢复 agent 字段
+  const bidEvent = events.find((e) => e.eventType === "arena_bid.model_completed");
+  assert.ok(bidEvent, "arena_bid.model_completed should be emitted");
+  assert.equal((bidEvent!.payload as { agent?: string }).agent, "agent-1");
+  assert.equal(bidEvent!.identity.agentInstanceId, "agent-1");
+});
+
+// ── Test 9: resumeFromCheckpointId 从 checkpoint 恢复续跑 ───────────
+
+test("runner: resumeFromCheckpointId 从 checkpoint 恢复续跑", async () => {
+  const db = memoryDB();
+  const store = new NamespacedStore(db);
+  const eventLog = new EventLog(db);
+  const stateStore = new AgentRuntimeStateStore(store);
+  const checkpointStore = new CheckpointStore(store);
+  const definitions = new DefinitionRegistry();
+  definitions.register(workloopDef());
+  const registry = new WorkLoopRegistry(definitions);
+
+  // 四状态自驱动机器（s0→s1→s2→s3 terminal）；start 事件在任意状态均可续跑
+  // （resume 简化：从 start 事件重新进入转移表）
+  const resumeImpl: WorkLoopImplementation = {
+    id: "test-loop",
+    version: "1.0.0",
+    cloneModes: ["fresh"],
+    executorKind: "local-model",
+    initialContext: () => testContext("init"),
+    initialState: () => ({ step: 0 }),
+    machine: {
+      states: [{ id: "s0" }, { id: "s1" }, { id: "s2" }, { id: "s3", terminal: true }],
+      initial: "s0",
+      transitions: (s, e) => {
+        if (e.type === "start") {
+          if (s === "s0") return "s1";
+          if (s === "s1") return "s2";
+          if (s === "s2") return "s3";
+        }
+        return undefined;
+      },
+      step: async (_ctx, state, event) => {
+        if (event.type === "start") {
+          const step = (state as { step: number }).step ?? 0;
+          if (step === 0) return { context: testContext("cp1"), state: { step: 1 }, event: { type: "start" } };
+          if (step === 1) return { context: testContext("cp2"), state: { step: 2 }, event: { type: "start" } };
+          return {
+            context: testContext("final"),
+            state: { step: 3 },
+            terminal: {
+              status: "completed",
+              output: { standard: { text: "resumed" } },
+              context: testContext("final"),
+              state: { step: 3 },
+            },
+          };
+        }
+        return { context: _ctx, state };
+      },
+    },
+  };
+  registry.register(resumeImpl);
+
+  const runner = new WorkLoopRunner(
+    registry,
+    stateStore,
+    checkpointStore,
+    eventLog,
+    store,
+    noopModel(),
+    noopTools(),
+    noopArtifacts(),
+  );
+
+  stateStore.initialize("agent-rs", testContext("init"), { step: 0 });
+
+  // ── Run 1：s0→s1→s2→s3，3 次转移，3 个自动 checkpoint ──
+  const r1 = await runner.run(defaultRequest({
+    agentInstanceId: "agent-rs",
+    executionId: "exec-rs-1",
+  }));
+  assert.equal(r1.status, "completed");
+  assert.equal((r1.state as { step: number }).step, 3);
+
+  const cpEvents = eventLog.query({ traceId: "trace-1", eventType: "checkpoint.created" });
+  assert.equal(cpEvents.length, 3);
+
+  // 取 run 1 的 s1#1 checkpoint（controlState s1 / seq 1 / memory {step:1}）
+  const s1cp = cpEvents.find((e) => (e.payload as { label?: string }).label === "s1#1");
+  assert.ok(s1cp, "s1#1 checkpoint should exist");
+  const resumeCpId = (s1cp!.payload as { checkpointId: string }).checkpointId;
+
+  // checkpoint 记录带 controlState/seq（Task 6 carry-forward）
+  const rec = checkpointStore.get("agent-rs", resumeCpId);
+  assert.equal(rec.label, "s1#1");
+  assert.equal(rec.controlState, "s1");
+  assert.equal(rec.seq, 1);
+  assert.deepStrictEqual(rec.state, { step: 1 });
+
+  // ── Run 2：resumeFromCheckpointId → 从 s1 续跑剩余 2 次转移 → completed ──
+  const r2 = await runner.run(defaultRequest({
+    agentInstanceId: "agent-rs",
+    executionId: "exec-rs-2",
+    traceId: "trace-rs-2",
+    resumeFromCheckpointId: resumeCpId,
+  }));
+  assert.equal(r2.status, "completed");
+  assert.equal((r2.state as { step: number }).step, 3);
+
+  // CAS 提交成功：init(1) → run1(2) → run2(3)
+  const snap = stateStore.get("agent-rs");
+  assert.equal(snap!.version, 3);
+  assert.equal((snap!.value.state as { step: number }).step, 3);
+
+  // resume 续跑：2 次新转移，首条 fromState = s1（恢复的控制状态）
+  const rsEvents = eventLog.query({ traceId: "trace-rs-2" });
+  const rsTransitions = rsEvents.filter((e) => e.eventType === "machine.transition");
+  assert.equal(rsTransitions.length, 2, "resume run should re-execute 2 remaining transitions");
+  assert.equal((rsTransitions[0].payload as { fromState?: string }).fromState, "s1");
+  assert.equal((rsTransitions[0].payload as { toState?: string }).toState, "s2");
 });

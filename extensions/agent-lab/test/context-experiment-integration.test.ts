@@ -114,12 +114,13 @@ function overBudgetContext(): WorkContext {
   };
 }
 
-// ── pi-default-loop stub (simple model-complete only) ───────────────
+// ── pi-default-loop stub (simple model-complete only; machine 驱动，Task 6) ──
 
 const piDefaultLoopStub: WorkLoopImplementation = {
   id: "pi-default-loop",
   version: "1.0.0",
   cloneModes: ["fresh", "fork"],
+  executorKind: "local-model",
 
   initialContext(config: unknown): WorkContext {
     const cfg = config as Record<string, unknown> | undefined;
@@ -134,40 +135,47 @@ const piDefaultLoopStub: WorkLoopImplementation = {
     return {};
   },
 
-  async run(input: { context: WorkContext; config: unknown; task: string; state: unknown },
-    sdk: { model: ModelPort; context: { append: (ctx: WorkContext, msgs: WorkMessage[], id: string) => WorkContext } },
-  ) {
-    const result = await sdk.model.complete(input.context);
+  machine: {
+    states: [{ id: "idle" }, { id: "done", terminal: true }],
+    initial: "idle",
+    transitions: (s, e) => (s === "idle" && e.type === "start" ? "done" : undefined),
+    step: async (ctx, state, _event, sdk) => {
+      const result = await sdk.model.complete(ctx);
 
-    const newContextId = `ctx-${crypto.randomUUID()}`;
-    const newContext = sdk.context.append(
-      input.context,
-      [result.message],
-      newContextId,
-    );
+      const newContextId = `ctx-${crypto.randomUUID()}`;
+      const newContext = sdk.context.append(
+        ctx,
+        [result.message],
+        newContextId,
+      );
 
-    const usage = result.usage ?? {
-      input: 10,
-      output: 5,
-      cacheRead: 0,
-      cacheWrite: 0,
-      cost: 0,
-      turns: 1,
-      toolCalls: 0,
-      durationMs: 0,
-    };
+      const usage = result.usage ?? {
+        input: 10,
+        output: 5,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: 0,
+        turns: 1,
+        toolCalls: 0,
+        durationMs: 0,
+      };
 
-    return {
-      status: "completed" as const,
-      output: {
-        standard: {
-          text: typeof result.message.content === "string" ? result.message.content : "",
-          usage,
+      return {
+        context: newContext,
+        state,
+        terminal: {
+          status: "completed",
+          output: {
+            standard: {
+              text: typeof result.message.content === "string" ? result.message.content : "",
+              usage,
+            },
+          },
+          context: newContext,
+          state,
         },
-      },
-      context: newContext,
-      state: input.state,
-    };
+      };
+    },
   },
 };
 

@@ -21,7 +21,7 @@ function fakeSdk(modelReply: string, opts?: { failModel?: boolean; checkpoints?:
     tools: { async execute() { return undefined; } },
     storage: { get: () => undefined, put: (_k, v) => ({ value: v, version: 1 }) },
     artifacts: { async put() { return "ref"; }, async get() { return undefined; } },
-    checkpoint: { async save(context, state, label) { const id = `ckpt-${checkpoints.length}`; checkpoints.push({ id, context, state, label }); return { checkpointId: id }; } },
+    checkpoint: { async save(context, state, opts) { const id = `ckpt-${checkpoints.length}`; checkpoints.push({ id, context, state, label: opts?.label }); return { checkpointId: id }; } },
     telemetry: { emit() {} },
     control: { signal: new AbortController().signal, throwIfCancelled() {} },
   } as unknown as WorkLoopSDK;

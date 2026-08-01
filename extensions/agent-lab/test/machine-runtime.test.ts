@@ -44,8 +44,8 @@ function makeSdk(overrides: Partial<WorkLoopSDK> = {}): WorkLoopSDK {
     },
     artifacts: { put: async () => "ref", get: async () => undefined },
     checkpoint: {
-      save: async (ctx, state, label) => {
-        checkpoints.push(`${ctx.metadata.contextId}:${label ?? ""}`);
+      save: async (ctx, state, opts) => {
+        checkpoints.push(`${ctx.metadata.contextId}:${opts?.label ?? ""}`);
         return { checkpointId: `cp${checkpoints.length}` };
       },
     },
@@ -69,11 +69,11 @@ const singleMachine: MachineDefinition = {
 };
 
 test("runtime: 单转移完成 + 自动 checkpoint + 转移 Trace", async () => {
-  const checkpoints: string[] = [];
+  const checkpoints: Array<{ label?: string; controlState?: string; seq?: number }> = [];
   const sdk = makeSdk({
     checkpoint: {
-      save: async (ctx, _s, label) => {
-        checkpoints.push(label ?? "");
+      save: async (ctx, _s, opts) => {
+        checkpoints.push({ label: opts?.label, controlState: opts?.controlState, seq: opts?.seq });
         return { checkpointId: `cp${checkpoints.length}` };
       },
     },
@@ -86,7 +86,8 @@ test("runtime: 单转移完成 + 自动 checkpoint + 转移 Trace", async () => 
   const { result, finalSeq } = await runtime.run();
   assert.equal(result.status, "completed");
   assert.equal(finalSeq, 1);
-  assert.deepEqual(checkpoints, ["done#1"]);          // 每次转移后 checkpoint，label = `${next}#${seq}`
+  // 每次转移后 checkpoint，label = `${next}#${seq}`，并写入 controlState/seq（Task 6）
+  assert.deepEqual(checkpoints, [{ label: "done#1", controlState: "done", seq: 1 }]);
   assert.deepEqual(transitions, ["done"]);
 });
 

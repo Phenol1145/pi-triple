@@ -72,15 +72,19 @@ export function createMarketBidLoop(config: ArenaBidLoopConfig = {}): WorkLoopIm
       transitions: (state, event) =>
         state === "idle" && event.type === "start" ? "done" : undefined,
       step: async (ctx, state, event, sdk) => {
-        // task 来自初始事件 payload（MachineRuntime 注入：{ type: "start", payload: { task } }）
-        const task = ((event.payload as { task?: string } | undefined)?.task) ?? "竞价";
+        // task 来自初始事件 payload（MachineRuntime 注入：{ type: "start", payload: { task, agentInstanceId } }）
+        const payload = event.payload as { task?: string; agentInstanceId?: string } | undefined;
+        const task = payload?.task ?? "竞价";
+        // Task 6 carry-forward：恢复 pre-migration 的 telemetry agent 字段
+        // （MachineRuntime start 事件 payload 携带 agentInstanceId）。
+        const agentInstanceId = payload?.agentInstanceId ?? "";
         const bidContext = buildBidContext(task, config);
 
         let reply: string;
         try {
           const res = await sdk.model.complete(bidContext, { model: config.model });
           reply = typeof res.message.content === "string" ? res.message.content : JSON.stringify(res.message.content);
-          sdk.telemetry.emit("arena_bid.model_completed", { model: config.model });
+          sdk.telemetry.emit("arena_bid.model_completed", { agent: agentInstanceId, model: config.model });
           const { stake, reasoning } = parseBidReply(reply, balance);
           const result: WorkLoopResult = {
             status: "completed",
@@ -90,7 +94,7 @@ export function createMarketBidLoop(config: ArenaBidLoopConfig = {}): WorkLoopIm
           };
           return { context: bidContext, state, terminal: result };
         } catch (err) {
-          sdk.telemetry.emit("arena_bid.model_failed", { model: config.model });
+          sdk.telemetry.emit("arena_bid.model_failed", { agent: agentInstanceId, model: config.model });
           return {
             context: bidContext,
             state,

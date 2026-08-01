@@ -8,6 +8,8 @@ import { CheckpointStore } from "./checkpoints.ts";
 import type { CheckpointRecord } from "./checkpoints.ts";
 import { createContextOperations } from "./context.ts";
 import { createInstrumentedModelPort } from "../workloops/model-port.ts";
+import { MachineRuntime } from "./machine-runtime.ts";
+import type { ResumeState } from "./machine-runtime.ts";
 import type {
   WorkLoopImplementation,
   WorkLoopInput,
@@ -35,6 +37,8 @@ export interface WorkLoopRunRequest {
   schedulerInstanceId?: string;
   /** P6a I1: set by SchedulerRunner or experiment entry point for event identity */
   dispatchId?: string;
+  /** 从指定 checkpoint 恢复续跑（MachineRuntime.resumeStateOf 重建控制状态/序号） */
+  resumeFromCheckpointId?: string;
 }
 
 // ── Runner ───────────────────────────────────────────────────────────
@@ -232,16 +236,30 @@ export class WorkLoopRunner {
 
     let result: WorkLoopResult;
     try {
-      // run 已标 @deprecated（Task 4 契约）：machine 驱动的新实现不提供 run，
-      // runner 的 machine 路径（MachineRuntime + executor）在 Task 6 适配；
-      // 在此之前对无 run 实现给出明确的 typed 失败而非 TypeError。
-      if (!implementation.run) {
-        throw new Error(
-          `workloop ${workLoopId}@${workLoopVersion} 已迁移为 machine 驱动，` +
-          "runner machine 路径（Task 6）尚未接线",
-        );
+      // MachineRuntime 驱动（Task 6）：machine 必填（契约重构后，run 已删除）；
+      // executor 由 workloop 工厂创建并挂在 implementation.executor（runner 只读）。
+      let resumeFrom: ResumeState | undefined;
+      if (request.resumeFromCheckpointId) {
+        try {
+          const cp = this.checkpointStore.get(
+            agentInstanceId,
+            request.resumeFromCheckpointId,
+          );
+          resumeFrom = MachineRuntime.resumeStateOf(cp);
+        } catch {
+          // checkpoint 不存在 → 容错按全新 run 处理（resume 信息缺失不致命）
+        }
       }
-      result = await implementation.run(input, sdk);
+      const runtime = new MachineRuntime({
+        machine: implementation.machine,
+        input,
+        sdk,
+        executor: implementation.executor,
+        budgets: { maxTurns: 100 },
+        resumeFrom,
+      });
+      const runResult = await runtime.run();
+      result = runResult.result;
     } catch (err) {
       // Thrown error → workloop-error
       if (signal?.aborted) {
@@ -400,7 +418,11 @@ export class WorkLoopRunner {
       } as WorkLoopSDK["storage"] & { _store: NamespacedStore },
 
       checkpoint: {
-        save: async (context: WorkContext, state: unknown, label?: string) => {
+        save: async (
+          context: WorkContext,
+          state: unknown,
+          opts?: string | { label?: string; controlState?: string; seq?: number },
+        ) => {
           const checkpointId = crypto.randomUUID();
           const record: CheckpointRecord = {
             checkpointId,
@@ -409,17 +431,25 @@ export class WorkLoopRunner {
             workLoopId,
             workLoopVersion,
             optimizationRoundId,
-            label,
             context,
             state,
             createdAt: Date.now(),
           };
+          // 向后兼容字符串 label（旧调用形式）；对象形式携带 controlState/seq
+          // （MachineRuntime 自动 checkpoint 写入，resume 时重建）。
+          if (typeof opts === "string") {
+            record.label = opts;
+          } else if (opts) {
+            if (opts.label !== undefined) record.label = opts.label;
+            if (opts.controlState !== undefined) record.controlState = opts.controlState;
+            if (opts.seq !== undefined) record.seq = opts.seq;
+          }
           this.checkpointStore.save(agentInstanceId, record);
 
           this.emitEvent(
             nextEventId("checkpoint.created"),
             "checkpoint.created",
-            { checkpointId, label },
+            { checkpointId, label: record.label },
             undefined,
             request,
           );

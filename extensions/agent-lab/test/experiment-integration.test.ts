@@ -358,15 +358,17 @@ test("(e) checkpoint parentCheckpointId lineage across saved checkpoints", async
   assert.equal(snap!.version, 3, "version should be 3 after init + 2 commits"); // init=1, run1→2, run2→3
 
   // ── Real checkpoint lineage test ─────────────────────────────
-  // Save two checkpoints through the CheckpointStore directly.
+  // Save two checkpoints through the CheckpointStore directly on a FRESH
+  // agent namespace（run 1/2 的 MachineRuntime 自动 checkpoint 已占用
+  // budgeted-history agent 的 latest 指针——用独立 agent 隔离 lineage 断言）。
   // The second one automatically gets parentCheckpointId from the first.
-
+  const lineageAgentId = "agent-lineage-only";
   const snapCtx = snap!.value.context;
   const snapState = snap!.value.state;
 
-  rt.checkpointStore.save(agentId, {
+  rt.checkpointStore.save(lineageAgentId, {
     checkpointId: "ck-parent",
-    agentInstanceId: agentId,
+    agentInstanceId: lineageAgentId,
     executionId: "exec-run-1",
     workLoopId: "budgeted-history",
     workLoopVersion: "1.0.0",
@@ -377,9 +379,9 @@ test("(e) checkpoint parentCheckpointId lineage across saved checkpoints", async
     createdAt: Date.now(),
   });
 
-  rt.checkpointStore.save(agentId, {
+  rt.checkpointStore.save(lineageAgentId, {
     checkpointId: "ck-child",
-    agentInstanceId: agentId,
+    agentInstanceId: lineageAgentId,
     executionId: "exec-run-2",
     workLoopId: "budgeted-history",
     workLoopVersion: "1.0.0",
@@ -391,10 +393,8 @@ test("(e) checkpoint parentCheckpointId lineage across saved checkpoints", async
   });
 
   // Retrieve and verify lineage
-  const parent = rt.checkpointStore.get(agentId, "ck-parent");
-  const child = rt.checkpointStore.get(agentId, "ck-child");
-
-  assert.equal(parent.checkpointId, "ck-parent");
+  const parent = rt.checkpointStore.get(lineageAgentId, "ck-parent");
+  const child = rt.checkpointStore.get(lineageAgentId, "ck-child");
   assert.equal(parent.label, "first checkpoint");
   assert.equal(parent.parentCheckpointId, undefined,
     "first checkpoint should have no parent (or explicitly set)");
@@ -407,7 +407,7 @@ test("(e) checkpoint parentCheckpointId lineage across saved checkpoints", async
   // Verify that saving does NOT mutate the caller's record (hygiene)
   const callerRecord = {
     checkpointId: "ck-caller",
-    agentInstanceId: agentId,
+    agentInstanceId: lineageAgentId,
     executionId: "exec-run-3",
     workLoopId: "budgeted-history",
     workLoopVersion: "1.0.0",
@@ -418,7 +418,7 @@ test("(e) checkpoint parentCheckpointId lineage across saved checkpoints", async
     createdAt: Date.now(),
   };
   const parentCheckpointIdBefore = callerRecord.parentCheckpointId;
-  rt.checkpointStore.save(agentId, callerRecord);
+  rt.checkpointStore.save(lineageAgentId, callerRecord);
   assert.equal(callerRecord.parentCheckpointId, parentCheckpointIdBefore,
     "caller record should not be mutated by save");
 });
@@ -457,17 +457,31 @@ test("(f) M7 isolation: experiment agent storage/checkpoint namespaces don't col
     id: "ws-loop",
     version: "1.0.0",
     cloneModes: ["fresh"],
+    executorKind: "local-model",
     initialContext: () => wsCtx,
     initialState: () => ({ wsMode: true }),
-    run: async (_input, _sdk) => ({
-      status: "completed",
-      context: {
-        systemPrompt: "ws-done",
-        messages: [{ role: "assistant", content: "ws-style" }],
-        metadata: { contextId: "ctx-ws-done", sourceRefs: [], artifactRefs: [] },
-      },
-      state: { wsMode: true, done: true },
-    }),
+    machine: {
+      states: [{ id: "idle" }, { id: "done", terminal: true }],
+      initial: "idle",
+      transitions: (s, e) => (s === "idle" && e.type === "start" ? "done" : undefined),
+      step: async () => ({
+        context: {
+          systemPrompt: "ws-done",
+          messages: [{ role: "assistant", content: "ws-style" }],
+          metadata: { contextId: "ctx-ws-done", sourceRefs: [], artifactRefs: [] },
+        },
+        state: { wsMode: true, done: true },
+        terminal: {
+          status: "completed",
+          context: {
+            systemPrompt: "ws-done",
+            messages: [{ role: "assistant", content: "ws-style" }],
+            metadata: { contextId: "ctx-ws-done", sourceRefs: [], artifactRefs: [] },
+          },
+          state: { wsMode: true, done: true },
+        },
+      }),
+    },
   });
 
   // Run both agents

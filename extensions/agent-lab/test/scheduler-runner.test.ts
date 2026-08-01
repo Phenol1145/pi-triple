@@ -672,14 +672,24 @@ test("F: SDK agents.run delegates to WorkLoopRunner with merged config; rejects 
     id: "pi-default-loop",
     version: "1.0.0",
     cloneModes: ["fresh"],
+    executorKind: "local-model",
     initialContext: () => testContext("init"),
     initialState: () => ({ counter: 0 }),
-    run: async (input: WorkLoopInput, _sdk: WorkLoopSDK): Promise<WorkLoopResult> => ({
-      status: "completed",
-      output: { standard: { text: `did: ${input.task}` } },
-      context: testContext("done"),
-      state: { counter: 1 },
-    }),
+    machine: {
+      states: [{ id: "idle" }, { id: "done", terminal: true }],
+      initial: "idle",
+      transitions: (s, e) => (s === "idle" && e.type === "start" ? "done" : undefined),
+      step: async (_ctx, _state, event) => ({
+        context: testContext("done"),
+        state: { counter: 1 },
+        terminal: {
+          status: "completed",
+          output: { standard: { text: `did: ${((event.payload as { task?: string })?.task) ?? ""}` } },
+          context: testContext("done"),
+          state: { counter: 1 },
+        },
+      }),
+    },
   });
 
   const stateStore = new AgentRuntimeStateStore(store);
