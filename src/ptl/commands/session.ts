@@ -127,9 +127,21 @@ export async function execSessionResume(id: string, args: string[]): Promise<Com
   const cfg = loadConfig();
   const tpl = cfg.templates[r.templateId] ?? {};
   const { buildPiLaunch } = await import("../launcher.js");
+  // 会话 cwd 跟随纸带原 cwd（避免 pi 将纸带判为跨项目会话而弹 fork 询问）
+  const { parseSessionHeader, scanSessionFiles } = await import("../session/pi-scan.js");
+  let workspaceCwd: string | undefined;
+  try {
+    const f = scanSessionFiles(cfg).find((x) => x.id === r.id);
+    if (f) {
+      const first = (await (await import("node:fs/promises")).readFile(f.file, "utf-8")).split("\n", 1)[0] ?? "";
+      const h = parseSessionHeader(first);
+      if (h?.cwd) workspaceCwd = h.cwd;
+    }
+  } catch { /* 读不到则用模板 workspace 兜底 */ }
   const launch = await buildPiLaunch(r.templateId, {
     provider: tpl.provider, model: tpl.model, thinking: tpl.thinking, tools: tpl.tools, excludeTools: tpl.excludeTools,
     resumeSession: r.id,
+    ...(workspaceCwd ? { workspaceCwd } : {}),
   });
   const name = flags.name || `${getTemplateAlias(r.templateId, cfg)}-${Date.now().toString(36)}`;
   const { startPitSession } = await import("../tmux.js");

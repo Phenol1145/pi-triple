@@ -112,7 +112,7 @@ export async function buildPiLaunch(templateId: string, options: {
   args.push("--session-dir", sessionDir);
 
   if (options.continueSession) args.push("--continue");
-  if (options.resumeSession) args.push("--resume", options.resumeSession);
+  if (options.resumeSession) args.push("--session", options.resumeSession);
 
   // tenant system prompt
   const tenantPromptPath = path.join(dataDir, "templates", templateId, "PROMPT.md");
