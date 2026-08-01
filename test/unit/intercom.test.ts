@@ -10,8 +10,8 @@ import os from "node:os";
 // 直接导入源码
 import { Mailbox } from "../../extensions/pit-communicate/mailbox.js";
 import { createMessage, validateMessage } from "../../extensions/pit-communicate/protocol.js";
-import { Presence } from "../../extensions/pit-communicate/presence.js";
-import { Registry } from "../../extensions/pit-communicate/registry.js";
+import { Presence } from "../../extensions/_shared/presence.js";
+import { Registry } from "../../extensions/_shared/registry.js";
 import { Delivery } from "../../extensions/pit-communicate/delivery.js";
 
 let root: string;
@@ -119,6 +119,28 @@ describe("Presence", () => {
     expect(Presence.read(statePath)?.status).toBe("busy");
     p.cleanup();
     expect(fs.existsSync(statePath)).toBe(false);
+  });
+
+  it("updateName 静态更新 name 且不破坏其他字段", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "intercom-updatename-"));
+    try {
+      const statePath = path.join(dir, "state.json");
+      const p = new Presence(dir, {
+        pid: 123, status: "idle", name: "old", model: "m", mode: "manual",
+        startedAt: new Date().toISOString(), lastHeartbeat: new Date().toISOString(),
+      });
+      p.start();
+      const ok = Presence.updateName(statePath, "new-name");
+      expect(ok).toBe(true);
+      const state = Presence.read(statePath);
+      expect(state?.name).toBe("new-name");
+      expect(state?.pid).toBe(123);
+      p.cleanup();
+      // 文件不存在 → false
+      expect(Presence.updateName(path.join(dir, "nope.json"), "x")).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

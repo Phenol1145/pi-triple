@@ -10,13 +10,12 @@
  */
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { Mailbox } from "./mailbox.js";
-import { Presence } from "./presence.js";
-import type { SessionState } from "./presence.js";
-import { Registry } from "./registry.js";
-import type { RegistryEntry } from "./registry.js";
+import { Presence } from "../../_shared/presence.js";
+import type { SessionState } from "../../_shared/presence.js";
+import { Registry } from "../../_shared/registry.js";
+import type { RegistryEntry } from "../../_shared/registry.js";
 import { Delivery } from "./delivery.js";
 import type { IntercomConfig, ReviewMode } from "./delivery.js";
 import { Watcher } from "./watcher.js";
@@ -24,23 +23,9 @@ import type { WatcherSideEffects } from "./watcher.js";
 import { Audit } from "./audit.js";
 import { createMessage } from "./protocol.js";
 import type { PitMessage } from "./protocol.js";
+import { resolveMailboxRoot, resolveTenantId } from "../../_shared/paths.js";
 
 // ── Helpers ──────────────────────────────────────────────────
-
-function resolveMailboxRoot(): string {
-  const agentDir = process.env.PI_CODING_AGENT_DIR ?? "";
-  if (agentDir) {
-    const dataDir = path.resolve(agentDir, "..", "..");
-    return path.join(dataDir, "mailbox");
-  }
-  return path.join(process.env.PI_TRIPLE_HOME ?? path.join(os.homedir(), ".pi-triple"), "data", "mailbox");
-}
-
-function resolveTenantId(): string {
-  const agentDir = process.env.PI_CODING_AGENT_DIR ?? "";
-  if (agentDir) return path.basename(agentDir);
-  return "local";
-}
 
 function loadIntercomConfig(): IntercomConfig {
   const config: IntercomConfig = { defaultMode: "manual" };

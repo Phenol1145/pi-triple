@@ -1,5 +1,5 @@
 /**
- * Pi-Triple Intercom — Session Registry
+ * Pi-Triple 共享会话注册表（_shared — 平台内部共享，非扩展，勿加 index.ts）
  *
  * 每个租户维护 registry.json，记录活跃会话的基本信息。
  * 供 /pit ps 快速列出同租户所有会话，不需要逐个读 state.json。

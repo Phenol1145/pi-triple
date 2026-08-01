@@ -90,6 +90,25 @@ export class Presence {
   // ── 静态工具方法 ──────────────────────────────────────────
 
   /**
+   * 一次性静态更新 state.json 的 name 字段（供 pit-control 使用，不启动心跳）。
+   * 读-改-写原子（tmp + rename）；文件不存在或损坏返回 false。
+   */
+  static updateName(statePath: string, name: string): boolean {
+    const state = Presence.read(statePath);
+    if (!state) return false;
+    state.name = name;
+    state.lastHeartbeat = new Date().toISOString();
+    const tmp = `${statePath}.tmp-${process.pid}`;
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+      fs.renameSync(tmp, statePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * 检查 state.json 指向的会话是否在线。
    * 条件：lastHeartbeat 在 TTL 内 + pid 存活。
    */
