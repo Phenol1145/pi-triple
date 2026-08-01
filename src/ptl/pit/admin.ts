@@ -4,7 +4,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
+import os from "node:os";
 import { spawnSync } from "node:child_process";
+import { compareVersions, PIT_REPO } from "../version-check.js";
 import {
   loadConfig, resolveDataDir,
   getTemplateAlias, getDefaultTemplateId,
@@ -22,9 +25,93 @@ export async function cmdMigrate(flags: Record<string, string>): Promise<void> {
   await migrate({ templateId, dryRun: flags["dry-run"] === "true" });
 }
 
+// ─── 阶段② Pi-Triple 本体更新（GitHub Release 拉包）────────
+
+export function buildAssetUrl(tag: string, version: string): string {
+  return `https://github.com/${PIT_REPO}/releases/download/${tag}/pi-triple-${version}.tgz`;
+}
+
+export function parseLatestRelease(json: unknown): { tag: string; version: string; assetName: string; digest?: string } | undefined {
+  const data = json as { tag_name?: string; assets?: Array<{ name?: string; digest?: string }> };
+  if (typeof data.tag_name !== "string") return undefined;
+  const tag = data.tag_name;
+  const version = tag.replace(/^v/, "");
+  const asset = (data.assets ?? []).find((a) => a.name === `pi-triple-${version}.tgz`);
+  if (!asset?.name) return undefined;
+  return {
+    tag,
+    version,
+    assetName: asset.name,
+    digest: typeof asset.digest === "string" && asset.digest.startsWith("sha256:") ? asset.digest.slice(7) : undefined,
+  };
+}
+
+export function verifySha256(actualHex: string, expectedHex: string): boolean {
+  return actualHex.toLowerCase() === expectedHex.toLowerCase();
+}
+
+async function updatePitSelf(): Promise<boolean> {
+  try {
+    console.log("  检查 Pi-Triple 本体更新…");
+    const res = await fetch(`https://api.github.com/repos/${PIT_REPO}/releases/latest`, {
+      headers: { "User-Agent": "pi-triple", accept: "application/vnd.github+json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      console.log(`  \x1b[31m❌ 无法检查本体更新（GitHub API ${res.status}）\x1b[0m`);
+      return false;
+    }
+    const release = parseLatestRelease(await res.json());
+    if (!release) {
+      console.log("  \x1b[31m❌ 无法解析 GitHub Release（未找到 pi-triple tarball asset）\x1b[0m");
+      return false;
+    }
+    const pkg = JSON.parse(fs.readFileSync(new URL("../../../package.json", import.meta.url), "utf-8")) as { version: string };
+    const cmp = compareVersions(release.version, pkg.version);
+    if (cmp !== undefined && cmp <= 0) {
+      console.log(`  \x1b[32m✅ Pi-Triple 已是最新版 (v${pkg.version})\x1b[0m`);
+      return true;
+    }
+    console.log(`  当前 v${pkg.version} → 最新 v${release.version}，下载中…`);
+
+    const url = buildAssetUrl(release.tag, release.version);
+    const dl = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+    if (!dl.ok) {
+      console.log(`  \x1b[31m❌ 下载失败（HTTP ${dl.status}）: ${url}\x1b[0m`);
+      return false;
+    }
+    const buf = Buffer.from(await dl.arrayBuffer());
+    if (release.digest) {
+      const actual = crypto.createHash("sha256").update(buf).digest("hex");
+      if (!verifySha256(actual, release.digest)) {
+        console.log("  \x1b[31m❌ sha256 校验失败，已中止（不安装）\x1b[0m");
+        return false;
+      }
+    }
+    const tmpFile = path.join(os.tmpdir(), `pi-triple-${release.version}.tgz`);
+    fs.writeFileSync(tmpFile, buf);
+    console.log(`  \x1b[36m安装 pi-triple@${release.version}（npm install -g，约需 10-30s）…\x1b[0m`);
+    const r = spawnSync("npm", ["install", "-g", tmpFile], { stdio: "inherit" });
+    fs.rmSync(tmpFile, { force: true });
+    if (r.status === 0) {
+      console.log(`  \x1b[32m✅ Pi-Triple 已升级到 v${release.version}，重启 pit 会话生效\x1b[0m`);
+      return true;
+    }
+    console.log("  \x1b[31m❌ npm install -g 失败（可尝试 sudo 或检查 npm 权限）\x1b[0m");
+    return false;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`  \x1b[31m❌ 本体更新失败: ${msg}\x1b[0m`);
+    return false;
+  }
+}
+
 export async function handleUpdate(flags: Record<string, string>): Promise<void> {
-  const updateAll = flags.all === "true";
+  const dryRun = flags["dry-run"] === "true";
+  // 语义：默认/--all = 全量（含②）；--extensions = ①+③；--pi-only = 仅①
+  const updateAll = flags.all === "true" || (flags.extensions !== "true" && flags["pi-only"] !== "true");
   const updateExt = flags.extensions === "true" || updateAll;
+  const updateSelf = updateAll; // 仅默认/--all 时含阶段②（--extensions 不含）
 
   console.log("  检查 pi 更新…");
   const cur = spawnSync("pi", ["--version"], { encoding: "utf-8" });
@@ -40,11 +127,20 @@ export async function handleUpdate(flags: Record<string, string>): Promise<void>
   console.log(`  当前: v${curVer}  最新: v${latestVer}`);
   if (curVer === latestVer) {
     console.log("  \x1b[32m✅ pi 已是最新版\x1b[0m");
+  } else if (dryRun) {
+    console.log(`  \x1b[33m⚠ pi 有更新（v${latestVer}）→ 运行 pit update 升级\x1b[0m`);
   } else {
     console.log("  升级中…");
     const r = spawnSync("npm", ["install", "-g", `@earendil-works/pi-coding-agent@${latestVer}`], { stdio: "inherit" });
     if (r.status === 0) { console.log(`  \x1b[32m✅ pi 已升级到 v${latestVer}\x1b[0m`); }
     else { console.log("  \x1b[31m❌ pi 升级失败\x1b[0m"); process.exit(1); }
+  }
+
+  // 阶段② Pi-Triple 本体（GitHub Release）
+  if (updateSelf && !dryRun) {
+    await updatePitSelf();
+  } else if (updateAll && dryRun) {
+    console.log("  [dry-run] 将检查 Pi-Triple 本体（GitHub Release）");
   }
 
   if (updateExt) {
