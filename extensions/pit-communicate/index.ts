@@ -125,7 +125,8 @@ export default function pitMail(api: any /* ExtensionAPI */) {
   const delivery = new Delivery(intercomConfig);
   const watcher = new Watcher(mailbox, delivery);
 
-  let sessionName = `session-${sessionId.slice(0, 6)}`;
+  const existingEntry = registry.get(sessionId);
+  let sessionName = process.env.PI_SESSION_NAME ?? existingEntry?.name ?? `session-${sessionId.slice(0, 6)}`;
   let cachedCtx: any = null;
 
   const presence = new Presence(mailbox.baseDir, {
@@ -223,9 +224,6 @@ export default function pitMail(api: any /* ExtensionAPI */) {
         { value: "accept", label: "accept <#>", description: "接收消息" },
         { value: "reject", label: "reject <#>", description: "拒绝消息" },
         { value: "ps", label: "ps", description: "列出注册会话" },
-        { value: "sessions", label: "sessions", description: "列出后台会话" },
-        { value: "start", label: "start <name>", description: "启动后台会话" },
-        { value: "stop", label: "stop <name>", description: "停止后台会话" },
         { value: "mode", label: "mode <manual|auto|hybrid>", description: "设置审核模式" },
         { value: "name", label: "name <name>", description: "设置会话名称" },
         { value: "status", label: "status", description: "通信状态" },
@@ -239,9 +237,9 @@ export default function pitMail(api: any /* ExtensionAPI */) {
         return filtered.length > 0 ? filtered : null;
       }
 
-      // 第二级：会话名补全（send/ask/share/stop）
+      // 第二级：会话名补全（send/ask/share）
       const cmd2 = parts[0];
-      if (["send", "ask", "share", "stop"].includes(cmd2) && parts.length === 2) {
+      if (["send", "ask", "share"].includes(cmd2) && parts.length === 2) {
         const entries = registry.list();
         const names = entries.map((e: any) => e.name).filter(Boolean);
         const p2 = parts[1] ?? "";
@@ -473,60 +471,6 @@ export default function pitMail(api: any /* ExtensionAPI */) {
         return;
       }
 
-      // ── SESSION MANAGEMENT (tmux) ────────────────────────
-      if (cmd === "start") {
-        const name = rest[0];
-        if (!name) { ctx.ui.notify("Usage: /pit start <name>", "warning"); return; }
-        const { execSync } = await import("node:child_process");
-        try {
-          execSync(`tmux has-session -t pit-${name} 2>/dev/null`);
-          ctx.ui.notify(`Session "${name}" already running. /pit stop ${name} first.`, "warning");
-        } catch {
-          const agentDir2 = process.env.PI_CODING_AGENT_DIR ?? "";
-          execSync(`tmux new-session -d -s pit-${name} -x 200 -y 50 'PI_CODING_AGENT_DIR=${agentDir2} pi'`);
-          ctx.ui.notify(`\x1b[32m✅ Background session "${name}" started\x1b[0m\nSwitch: Ctrl+B s (tmux) or exit and run: pit attach ${name}`);
-        }
-        return;
-      }
-
-      if (cmd === "stop") {
-        const name = rest[0];
-        if (!name) { ctx.ui.notify("Usage: /pit stop <name>", "warning"); return; }
-        const { execSync } = await import("node:child_process");
-        try {
-          execSync(`tmux kill-session -t pit-${name} 2>/dev/null`);
-          ctx.ui.notify(`\x1b[32m✅ Stopped "${name}"\x1b[0m`);
-        } catch {
-          ctx.ui.notify(`Session "${name}" not found`, "warning");
-        }
-        return;
-      }
-
-      if (cmd === "sessions") {
-        const { execSync } = await import("node:child_process");
-        try {
-          const out = execSync("tmux list-sessions -F '#{session_name} #{session_windows} #{session_created}' 2>/dev/null", { encoding: "utf-8" });
-          const pits = out.trim().split("\n").filter((l: string) => l.startsWith("pit-"));
-          if (pits.length === 0) {
-            ctx.ui.notify("No background sessions.\nStart: /pit start <name>");
-          } else {
-            const lines = ["\x1b[1mBackground Sessions\x1b[0m"];
-            for (const l of pits) {
-              const [full, win, created] = l.split(" ");
-              const name2 = full.replace(/^pit-/, "");
-              const age = Math.floor((Date.now() / 1000 - parseInt(created)) / 60);
-              lines.push(`  ${name2.padEnd(16)} ${win}w  ${age}m ago`);
-            }
-            lines.push("\nSwitch: Ctrl+B s (tmux)");
-            lines.push("Stop:   /pit stop <name>");
-            ctx.ui.notify(lines.join("\n"));
-          }
-        } catch {
-          ctx.ui.notify("tmux not available", "warning");
-        }
-        return;
-      }
-
       // ── HELP ──────────────────────────────────────────────
       ctx.ui.notify(
         "Commands:\n" +
@@ -538,12 +482,10 @@ export default function pitMail(api: any /* ExtensionAPI */) {
         "  /pit accept <#>           Accept message\n" +
         "  /pit reject <#>           Reject message\n" +
         "  /pit ps                   List registered sessions\n" +
-        "  /pit sessions             List background sessions (tmux)\n" +
-        "  /pit start <name>         Start background session\n" +
-        "  /pit stop <name>          Stop background session\n" +
         "  /pit mode <m|a|h>         Set review mode\n" +
         "  /pit name <name>          Set display name\n" +
         "  /pit status               Intercom status\n" +
+        "\nSession management: /control start|stop|ls (pit-control)\n" +
         "\nSwitch sessions: Ctrl+B s (tmux)",
       );
     },
