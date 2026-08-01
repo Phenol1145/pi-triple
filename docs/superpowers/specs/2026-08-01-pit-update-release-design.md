@@ -61,6 +61,8 @@ pit update --all              # 全量（兼容现有 flag）
 - `ctx.ui.notify(\`⚠ pit 更新可用: v${v}（当前 ${cur}）→ 运行 pit update 一次更新全部\`, "warning")`
 - pi SDK 有更新同理（文案区分）。
 
+**当前版本获取（扩展侧）**：`resolveInstalledPitVersion()`——`spawnSync("npm", ["root", "-g"])` 取全局根，读 `pi-triple/package.json` 的 `version`；失败（未全局安装，如源码运行）则返回 undefined，跳过本体检查（只报 pi SDK）。
+
 **辅通道（CLI）**：`pit start` / `pi` 命令启动前 stderr 一行同样文案（兜底：无扩展环境的瞬时可见）。
 
 **不提示场景**：`pit update` / `pit help` / `pit --version` / `pit onboard` 自身；离线 env；缓存未过期；无更新。
