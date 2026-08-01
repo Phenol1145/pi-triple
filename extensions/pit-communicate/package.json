@@ -1,6 +1,8 @@
 {
   "name": "pit-communicate",
   "version": "0.1.0",
+  "private": true,
+  "type": "module",
   "description": "Pi-Triple Intercom — cross-session communication for pi",
   "main": "index.ts",
   "keywords": ["pi-extension", "pi-triple", "intercom", "mailbox"],

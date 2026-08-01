@@ -7,9 +7,29 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** 共享层覆盖的目录名 */
 const SHARED_DIRS = ["extensions", "skills", "git", "npm"];
+
+/**
+ * 定位包内 bundled extensions/ 目录（从模块文件位置逐级向上探测，最近优先，最多 4 级）。
+ * 布局有两种：
+ *   - 发布（npm 包）：<pkg>/dist/ptl/shared-layer.js → 包根/extensions（上 2 级）
+ *   - 开发（仓库源码）：<repo>/src/ptl/shared-layer.ts → 仓库根/extensions（上 2 级）
+ * 找不到返回 null。
+ */
+export function resolveBundledDir(moduleUrl: string): string | null {
+  let cursor = path.dirname(fileURLToPath(moduleUrl));
+  for (let i = 0; i < 4; i++) {
+    const candidate = path.join(cursor, "extensions");
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(cursor);
+    if (parent === cursor) break; // 已到文件系统根
+    cursor = parent;
+  }
+  return null;
+}
 
 /** 初始化共享层目录 */
 export function initSharedLayer(sharedDir: string): void {
@@ -160,12 +180,10 @@ export function promoteToShared(templateDir: string, sharedDir: string): {
 export function installBundledExtensions(sharedDir: string): string[] {
   const installed: string[] = [];
 
-  // 定位包内 extensions/ 目录
-  // 编译后在 dist/shared-layer.js，包根在上一级
-  const packageRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-  const bundledDir = path.join(packageRoot, "extensions");
+  // 定位包内 extensions/ 目录（发布：包根；开发：仓库根）
+  const bundledDir = resolveBundledDir(import.meta.url);
 
-  if (!fs.existsSync(bundledDir)) return installed;
+  if (!bundledDir) return installed;
 
   const targetExtDir = path.join(sharedDir, "extensions");
   fs.mkdirSync(targetExtDir, { recursive: true });
@@ -194,9 +212,9 @@ export function installBundledExtensions(sharedDir: string): string[] {
 export function syncBundledExtensions(sharedDir: string): string[] {
   const synced: string[] = [];
 
-  const packageRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-  const bundledDir = path.join(packageRoot, "extensions");
-  if (!fs.existsSync(bundledDir)) return synced;
+  // 定位包内 extensions/ 目录（发布：包根；开发：仓库根）
+  const bundledDir = resolveBundledDir(import.meta.url);
+  if (!bundledDir) return synced;
 
   const targetExtDir = path.join(sharedDir, "extensions");
   fs.mkdirSync(targetExtDir, { recursive: true });
