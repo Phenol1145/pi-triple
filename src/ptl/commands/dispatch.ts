@@ -110,6 +110,11 @@ function renameTemplateCommand(oldName: string, newName: string): Promise<Comman
 }
 
 function detachCommand(): Promise<CommandResult> {
+  // 防御：不在 tmux 内直接返回，避免 detach-client 误伤调用方所在 client
+  //（历史事故：测试/脚本继承 TMUX env 时 detach-client 把真实 client detach 掉）
+  if (!process.env.TMUX) {
+    return Promise.resolve({ ok: false, message: "", error: { code: "NOT_IN_TMUX", message: "不在 tmux 会话中" } });
+  }
   let r: ReturnType<typeof spawnSync>;
   try {
     r = spawnSync("tmux", ["detach-client"], { encoding: "utf-8" });

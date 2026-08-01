@@ -87,8 +87,16 @@ describe("dispatchCommand — 执行", () => {
     expect(r.handoff).toEqual({ cmd: "pit", args: ["hub", "submit", "my-agent"] });
   });
   it("detach（非 tmux 环境）→ NOT_IN_TMUX 错误", async () => {
-    const r = await dispatchCommand("detach", []);
-    expect(r.ok).toBe(false);
-    expect(r.error?.code).toBe("NOT_IN_TMUX");
+    // 隔离：测试进程可能继承真实 TMUX env——若不隔离，detach-client 会
+    // 真的把当前 tmux client detach 掉（历史事故：跑 vitest 导致会话被 detach）
+    const savedTmux = process.env.TMUX;
+    delete process.env.TMUX;
+    try {
+      const r = await dispatchCommand("detach", []);
+      expect(r.ok).toBe(false);
+      expect(r.error?.code).toBe("NOT_IN_TMUX");
+    } finally {
+      if (savedTmux !== undefined) process.env.TMUX = savedTmux;
+    }
   });
 });
