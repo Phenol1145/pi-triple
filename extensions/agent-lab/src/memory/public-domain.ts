@@ -97,6 +97,15 @@ export class PublicDomainStore {
   }
 
   /**
+   * 公域全部 official 条目（status === "official"；遍历 entries/ 经内部 MemoryStore，
+   * 按 id 字典序稳定排序）。装配层只读访问器（plan Task 3 / spec §3.2 联合检索），
+   * 返回快照——不持有锁（读路径无写者，单进程内同步串行）。
+   */
+  listOfficialEntries(): MemoryEntry[] {
+    return this.store.retrieve({ status: ["official"] });
+  }
+
+  /**
    * fork：拷贝当前全部条目 → destDir（复用 MemoryStore 拷贝：读源全部条目逐条写入目标 store，
    * 索引重建）；返回当前 generation。fork 不递增 generation——generation 仅在成功 merge 后原子递增
    * （plan Step 3 / spec §2 不变量 3）。
