@@ -7,6 +7,7 @@ import { MemoryPipeline } from "../src/memory/pipeline.ts";
 import { MemoryStore } from "../src/memory/store.ts";
 import { RuleRegistry } from "../src/memory/rules.ts";
 import { createEntry, AXIOM_RULE_ID } from "../src/memory/entry.ts";
+import { AuditChain } from "../src/memory/audit-chain.ts";
 
 function fresh() {
   const dir = mkdtempSync(path.join(tmpdir(), "mem-pipe-"));
@@ -129,6 +130,51 @@ test("promote assigns new idempotencyKey, merges draft traces, clears TTL", () =
     assert.deepEqual(promoted.meta.sourceTraces, []); // 草稿 sourceTraces 并入（不新增）
     const idem = readJsonl(dir, "idem.jsonl") as Array<{ key: string; entryId: string }>;
     assert.ok(idem.some((i) => i.key === promoted.idempotencyKey && i.entryId === r.draft!.id)); // 新 key 注册幂等表
+  }
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("promote rejects draft with meta.notWriteBack (not-write-back 校验链拒绝)", () => {
+  const { pipe, store, dir } = fresh();
+  // 草稿条目带 meta.notWriteBack: true（引用审核动作的条目标记不可回写）
+  const r = pipe.write({
+    idempotencyKey: "k5", kind: "fact", anchors: ["x"], content: "bad", ruleRef: "fact-rule",
+    meta: { version: 1, createdAt: 1, updatedAt: 1, sourceTraces: [], hitCount: 0, notWriteBack: true },
+  });
+  assert.equal(r.ok, false);
+  if (!r.ok && r.draft) {
+    assert.equal(r.draft.meta.notWriteBack, true); // sinkDraft 保留 meta 标记
+    const errs = pipe.promote(r.draft.id, "good|pair");
+    assert.ok(errs.some((e) => e.includes(`not write-back: ${r.draft!.id}`)));
+    assert.equal(store.get(r.draft.id)!.status, "draft"); // 拒绝 → 未被 promote
+  }
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("promote rejects draft marked via markNotWriteBack; normal draft unaffected", () => {
+  const { pipe, store, dir } = fresh();
+  const chain = new AuditChain(
+    { agentSide: "all-vote", operatorSide: "auto-approve" },
+    { active: () => [], isActive: () => false },
+    { notify: () => {}, veto: () => false },
+    dir, // 与管道同 dir：markNotWriteBack 落盘 dir/not-write-back.jsonl
+  );
+  // 草稿 d1：markNotWriteBack 写入 → promote 拒绝
+  const r1 = pipe.write({ idempotencyKey: "k6", kind: "fact", anchors: ["x"], content: "bad", ruleRef: "fact-rule" });
+  assert.equal(r1.ok, false);
+  if (!r1.ok && r1.draft) {
+    chain.markNotWriteBack(r1.draft.id);
+    const errs = pipe.promote(r1.draft.id, "good|pair");
+    assert.ok(errs.some((e) => e.includes(`not write-back: ${r1.draft!.id}`)));
+    assert.equal(store.get(r1.draft.id)!.status, "draft");
+  }
+  // 草稿 d2：无标记 → 正常 promote（回归）
+  const r2 = pipe.write({ idempotencyKey: "k7", kind: "fact", anchors: ["y"], content: "bad", ruleRef: "fact-rule" });
+  assert.equal(r2.ok, false);
+  if (!r2.ok && r2.draft) {
+    const errs = pipe.promote(r2.draft.id, "good|pair");
+    assert.deepEqual(errs, []);
+    assert.equal(store.get(r2.draft.id)!.status, "official");
   }
   rmSync(dir, { recursive: true, force: true });
 });

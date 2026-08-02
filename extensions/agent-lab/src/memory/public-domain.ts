@@ -21,7 +21,7 @@ import { MemoryStore } from "./store.ts";
  */
 export type WriteBackResult =
   | { ok: true; generation: number }
-  | { ok: false; reason: "conflict" | "overlap" | "generation-stale"; detail: string };
+  | { ok: false; reason: "conflict" | "overlap" | "generation-stale" | "not-write-back"; detail: string };
 
 export interface SubmitWriteBackOpts {
   baseGeneration: number;
@@ -49,6 +49,24 @@ export class PublicDomainStore {
 
   private generationPath(): string {
     return join(this.dir, "generation.json");
+  }
+
+  /** not-write-back 标记集（dir/not-write-back.jsonl；审核链 markNotWriteBack 写入；损坏行跳过）。 */
+  private notWriteBackIds(): Set<string> {
+    const p = join(this.dir, "not-write-back.jsonl");
+    if (!existsSync(p)) return new Set();
+    const ids = new Set<string>();
+    for (const line of readFileSync(p, "utf-8").split("\n")) {
+      const t = line.trim();
+      if (t === "") continue;
+      try {
+        const rec = JSON.parse(t) as { entryId?: unknown };
+        if (typeof rec.entryId === "string") ids.add(rec.entryId);
+      } catch {
+        // 损坏行跳过（append-only 日志容错）
+      }
+    }
+    return ids;
   }
 
   private deadLetterPath(): string {
@@ -113,6 +131,18 @@ export class PublicDomainStore {
         reason: "generation-stale",
         detail: `baseGeneration ${opts.baseGeneration} != current ${current}`,
       };
+    }
+    // 写校验链拒绝（spec §6）：delta 中任何条目带 meta.notWriteBack 或命中
+    // dir/not-write-back.jsonl 标记（引用审核动作的条目不可回写）→ 拒绝合入
+    const marked = this.notWriteBackIds();
+    for (const entry of opts.delta) {
+      if (entry.meta.notWriteBack === true || marked.has(entry.id)) {
+        return {
+          ok: false,
+          reason: "not-write-back",
+          detail: `delta id ${entry.id} 不可回写（引用审核动作的条目，not-write-back 标记）`,
+        };
+      }
     }
     for (const entry of opts.delta) {
       if (this.store.get(entry.id)) {

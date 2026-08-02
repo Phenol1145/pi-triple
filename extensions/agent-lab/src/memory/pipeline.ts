@@ -180,11 +180,17 @@ export class MemoryPipeline {
    * 显式 promote：同 id 新版本（version 延续）+ promotedFrom + 草稿 sourceTraces
    * 并入 + 新 idempotencyKey（注册进幂等表）；草稿 TTL 使命结束（清除）。
    * 返回错误数组（空 = 成功）。
+   * not-write-back 校验（写校验链拒绝）：草稿条目（或其来源 promotedFrom 条目）带
+   * meta.notWriteBack 或命中 dir/not-write-back.jsonl 标记 → 拒绝（不可回写条目）。
    */
   promote(draftId: string, content: string): string[] {
     const draft = this.deps.store.get(draftId);
     if (!draft) return [`draft not found: ${draftId}`];
     if (draft.status !== "draft") return [`entry ${draftId} is not a draft`];
+
+    // 写校验链拒绝：引用审核动作的条目标记不可回写（spec §6）
+    const blocked = this.notWriteBackBlockedId(draft);
+    if (blocked !== undefined) return [`not write-back: ${blocked}`];
 
     // 校验新 content（结构 + 规则链，复用 write 的校验语义）
     const candidate = createEntry({ ...draft, content } as Parameters<typeof createEntry>[0]);
@@ -219,6 +225,36 @@ export class MemoryPipeline {
 
   private idemLookup(key: string): IdemRecord | undefined {
     return this.readJsonl<IdemRecord>(this.file("idem.jsonl")).find((r) => r.key === key);
+  }
+
+  /** not-write-back 标记集（dir/not-write-back.jsonl；审核链 markNotWriteBack 写入；损坏行跳过）。 */
+  private notWriteBackIds(): Set<string> {
+    const p = this.file("not-write-back.jsonl");
+    if (!existsSync(p)) return new Set();
+    const ids = new Set<string>();
+    for (const line of readFileSync(p, "utf-8").split("\n")) {
+      const t = line.trim();
+      if (t === "") continue;
+      try {
+        const rec = JSON.parse(t) as { entryId?: unknown };
+        if (typeof rec.entryId === "string") ids.add(rec.entryId);
+      } catch {
+        // 损坏行跳过（append-only 日志容错，同 readJsonl）
+      }
+    }
+    return ids;
+  }
+
+  /** 不可回写拦截：草稿自身或其来源条目（promotedFrom）带 meta.notWriteBack 或命中标记文件 → 返回被拦条目 id。 */
+  private notWriteBackBlockedId(draft: MemoryEntry): string | undefined {
+    const candidates = draft.promotedFrom !== undefined ? [draft.id, draft.promotedFrom] : [draft.id];
+    const marked = this.notWriteBackIds();
+    for (const id of candidates) {
+      const entry = this.deps.store.get(id);
+      if (entry !== undefined && entry.meta.notWriteBack === true) return id;
+      if (marked.has(id)) return id;
+    }
+    return undefined;
   }
 
   private retryCount(key: string): number {

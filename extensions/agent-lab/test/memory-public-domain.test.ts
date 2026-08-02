@@ -6,6 +6,7 @@ import path from "node:path";
 import { PublicDomainStore } from "../src/memory/public-domain.ts";
 import { MemoryStore } from "../src/memory/store.ts";
 import { createEntry } from "../src/memory/entry.ts";
+import { AuditChain } from "../src/memory/audit-chain.ts";
 
 function fresh() {
   const dir = mkdtempSync(path.join(tmpdir(), "mem-pub-"));
@@ -107,6 +108,43 @@ test("generation persists across instances", () => {
   const r = pub.submitWriteBack({ baseGeneration: base, delta: [createEntry({ kind: "fact", anchors: ["b"], content: "y", id: "e2" })] });
   assert.equal(r.ok, true);
   assert.equal(new PublicDomainStore(dir).generation(), 1);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("submitWriteBack rejects delta entry with meta.notWriteBack (not-write-back 校验链拒绝)", () => {
+  const { pub, dir } = fresh();
+  const base = pub.fork(dir);
+  const r = pub.submitWriteBack({
+    baseGeneration: base,
+    delta: [createEntry({ kind: "fact", anchors: ["b"], content: "y", id: "e2", meta: { version: 1, createdAt: 1, updatedAt: 1, sourceTraces: [], hitCount: 0, notWriteBack: true } })],
+  });
+  assert.equal(r.ok, false);
+  if (!r.ok) {
+    assert.equal(r.reason, "not-write-back");
+    assert.ok(r.detail.includes("e2"));
+  }
+  assert.equal(pub.generation(), base);                          // 拒绝 → 不递增
+  assert.equal(new MemoryStore(dir).get("e2"), undefined);      // 拒绝 → 未合入
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("submitWriteBack rejects delta marked via markNotWriteBack; normal delta unaffected", () => {
+  const { pub, dir } = fresh();
+  const chain = new AuditChain(
+    { agentSide: "all-vote", operatorSide: "auto-approve" },
+    { active: () => [], isActive: () => false },
+    { notify: () => {}, veto: () => false },
+    dir, // 与公域同 dir：markNotWriteBack 落盘 dir/not-write-back.jsonl
+  );
+  chain.markNotWriteBack("e2");
+  const base = pub.fork(dir);
+  const r1 = pub.submitWriteBack({ baseGeneration: base, delta: [createEntry({ kind: "fact", anchors: ["b"], content: "y", id: "e2" })] });
+  assert.equal(r1.ok, false);
+  if (!r1.ok) assert.equal(r1.reason, "not-write-back");
+  // 正常 delta（无标记）→ fast-forward 回归
+  const r2 = pub.submitWriteBack({ baseGeneration: base, delta: [createEntry({ kind: "fact", anchors: ["c"], content: "z", id: "e3" })] });
+  assert.equal(r2.ok, true);
+  if (r2.ok) assert.equal(r2.generation, base + 1);
   rmSync(dir, { recursive: true, force: true });
 });
 
