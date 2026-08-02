@@ -143,6 +143,12 @@ export interface OptimizationRoundRecord {
   activatedAt?: number;
 }
 
+/** 记忆规格（spec §2.3 MemorySpecSchema；装配注册持久化字段，结构与装配层 MemorySpec 一致）。 */
+export interface MemorySpec {
+  dialect?: "json" | "xml" | "markdown"; // markdown = draft-only 方言
+  maxEntries?: number;
+}
+
 export interface AgentInstanceRecord {
   id: string;
   schedulerInstanceId: string;
@@ -151,6 +157,10 @@ export interface AgentInstanceRecord {
   sourceTemplateId?: string;
   sourceAgentId?: string;
   cloneOperationId?: string;
+  /** 装配注册持久化（spec §2.2 step 5 N-I9）：记忆规格（可空列 memory_spec）。 */
+  memorySpec?: MemorySpec;
+  /** 装配注册持久化（spec §2.2 step 5 N-I9）：初始资本（可空列 endowment）。 */
+  endowment?: { K: number; initialFloor: number };
   createdAtRoundId: string;
   status: AgentInstanceStatus;
   createdAt: number;

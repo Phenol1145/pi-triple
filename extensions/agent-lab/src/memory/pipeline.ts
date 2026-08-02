@@ -54,7 +54,7 @@ export interface PipelineDeps {
   onEvent?: (ev: PipelineEvent) => void;
 }
 
-interface IdemRecord { key: string; entryId: string; }
+interface IdemRecord { key: string; entryId: string; watermark?: number; }
 interface BufferRecord { key: string; content: string; anchors: string[]; kind?: string; ts: number; }
 interface ConsumedRecord { key: string; }
 interface RetryRecord { key: string; count: number; }
@@ -169,7 +169,7 @@ export class MemoryPipeline {
       },
     };
     this.deps.store.write(traced);
-    this.appendJsonl(this.file("idem.jsonl"), { key, entryId: traced.id });
+    this.appendJsonl(this.file("idem.jsonl"), { key, entryId: traced.id, watermark: this.deps.trace.transitionSeq });
     this.appendJsonl(this.file("buffer-consumed.jsonl"), { key });
     this.clearRetry(key);
     this.deps.onEvent?.({ type: "memory_tx", action: "write", ok: true, entryId: traced.id, idempotencyKey: key, at: this.now() });
@@ -206,7 +206,7 @@ export class MemoryPipeline {
       ttlExpiresAt: undefined, // 清除草稿 TTL（official 条目不携带过期语义）
       meta: { sourceTraces: [...draft.meta.sourceTraces] }, // 草稿 sourceTraces 并入
     });
-    this.appendJsonl(this.file("idem.jsonl"), { key: newKey, entryId: draftId });
+    this.appendJsonl(this.file("idem.jsonl"), { key: newKey, entryId: draftId, watermark: this.deps.trace.transitionSeq });
     return [];
   }
 
@@ -219,6 +219,22 @@ export class MemoryPipeline {
     const consumed = new Set(this.readJsonl<ConsumedRecord>(this.file("buffer-consumed.jsonl")).map((r) => r.key));
     const remaining = this.readJsonl<BufferRecord>(this.file("buffer.jsonl")).filter((r) => !consumed.has(r.key));
     this.rewriteJsonl(this.file("buffer.jsonl"), remaining);
+  }
+
+  /**
+   * 幂等键表水位 prune（契约②，spec §4 ②）：resume 到目标 checkpoint seq 时调用。
+   * 只删 watermark **已定义且 ≤ seq** 的记录；watermark 缺失（旧行，无此字段）的记录
+   * 保留——保守永不误删（第三轮裁决钉死：缺失 ≠ 0）。返回删除条数。
+   * 落盘 = tmp+rename 原子重写（对齐 dedup.jsonl prune 先例）。
+   */
+  pruneIdem(seq: number): number {
+    const recs = this.readJsonl<IdemRecord>(this.file("idem.jsonl"));
+    const remaining = recs.filter((r) => r.watermark === undefined || r.watermark > seq);
+    const deleted = recs.length - remaining.length;
+    if (deleted > 0) {
+      this.rewriteJsonl(this.file("idem.jsonl"), remaining);
+    }
+    return deleted;
   }
 
   // ---- 内部：幂等表 / 重试计数 / 草稿区 ----

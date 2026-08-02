@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS lab_agent_instances (
   source_template_id TEXT,
   source_agent_id TEXT,
   clone_operation_id TEXT,
+  memory_spec TEXT,
+  endowment TEXT,
   created_round_id TEXT NOT NULL,
   status TEXT NOT NULL,
   created_ts INTEGER NOT NULL

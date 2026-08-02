@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, existsSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { MemoryPipeline } from "../src/memory/pipeline.ts";
@@ -131,6 +131,46 @@ test("promote assigns new idempotencyKey, merges draft traces, clears TTL", () =
     const idem = readJsonl(dir, "idem.jsonl") as Array<{ key: string; entryId: string }>;
     assert.ok(idem.some((i) => i.key === promoted.idempotencyKey && i.entryId === r.draft!.id)); // 新 key 注册幂等表
   }
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("pruneIdem deletes only defined-watermark <= seq records; missing watermark kept", () => {
+  const { pipe, dir } = fresh();
+  // 写 3 条（watermark 2 / 5 / 缺失——旧行无 watermark 格式）
+  appendFileSync(
+    path.join(dir, "idem.jsonl"),
+    JSON.stringify({ key: "k1", entryId: "e1", watermark: 2 }) + "\n" +
+    JSON.stringify({ key: "k2", entryId: "e2", watermark: 5 }) + "\n" +
+    JSON.stringify({ key: "k3", entryId: "e3" }) + "\n",
+  );
+  const deleted = pipe.pruneIdem(3);
+  assert.equal(deleted, 1);   // 只删 watermark ≤ 3 的（2 那条）
+  const idem = readJsonl(dir, "idem.jsonl") as Array<{ key: string; watermark?: number }>;
+  const keys = idem.map((r) => r.key).sort();
+  assert.deepEqual(keys, ["k2", "k3"], "watermark 5 与缺失 watermark 的记录保留");
+  assert.equal(idem.find((r) => r.key === "k2")?.watermark, 5);
+  assert.equal(idem.find((r) => r.key === "k3")?.watermark, undefined);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("pruneIdem: 无 idem 文件 / 无匹配 → 返回 0 且不落盘", () => {
+  const { pipe, dir } = fresh();
+  assert.equal(pipe.pruneIdem(3), 0);
+  appendFileSync(path.join(dir, "idem.jsonl"), JSON.stringify({ key: "k9", entryId: "e9", watermark: 7 }) + "\n");
+  assert.equal(pipe.pruneIdem(3), 0);   // 7 > 3 → 不删
+  assert.equal((readJsonl(dir, "idem.jsonl") as unknown[]).length, 1);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("write registers idem record with watermark = trace.transitionSeq", () => {
+  const { pipe, dir } = fresh();   // trace: { traceId: "t1", transitionSeq: 5 }
+  const key = pipe.observe({ content: "a|b", anchors: ["x"] });
+  const r = pipe.write({ idempotencyKey: key, kind: "fact", anchors: ["x"], content: "a|b", ruleRef: "fact-rule" });
+  assert.equal(r.ok, true);
+  const idem = readJsonl(dir, "idem.jsonl") as Array<{ key: string; watermark?: number }>;
+  const rec = idem.find((i) => i.key === key);
+  assert.ok(rec, "write 落幂等表");
+  assert.equal(rec!.watermark, 5);   // 扩展记录格式 {key, entryId, watermark}
   rmSync(dir, { recursive: true, force: true });
 });
 

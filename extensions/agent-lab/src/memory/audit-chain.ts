@@ -74,6 +74,13 @@ interface RequestState {
 
 type AgentVerdict = "pass" | "fail" | "tie";
 
+/** 审核裁决事件（契约④：onDecision 回调载荷；D 的组合链驱动窗口与 merge）。 */
+export interface AuditDecisionEvent {
+  requestId: string;
+  decision: "approved" | "rejected";
+  delta: AuditRequest["delta"];
+}
+
 export class AuditChain {
   /** 投票记录（v1 内存 Map；持久化留后续）。 */
   private votes = new Map<string, AuditVote[]>();
@@ -85,6 +92,8 @@ export class AuditChain {
   private operator: AuditOperator;
   /** 记忆库目录（recordEvent/markNotWriteBack 落盘处；默认 cwd/dir）。 */
   private dir: string;
+  /** 裁决回调（契约④：approve 裁决后分发；注册返回反注册）。 */
+  private decisionListeners: Array<(d: AuditDecisionEvent) => void> = [];
 
   constructor(config: AuditConfig, agentRegistry: AuditAgentRegistry, operator: AuditOperator, dir: string = join(process.cwd(), "dir")) {
     this.config = config;
@@ -136,17 +145,46 @@ export class AuditChain {
   }
 
   /**
+   * 注册裁决回调（契约④）：approve() 裁决后收到 { requestId, decision, delta }——
+   * 通过/否决都通知。返回反注册函数（摘除后不再收）。
+   */
+  onDecision(cb: (d: AuditDecisionEvent) => void): () => void {
+    this.decisionListeners.push(cb);
+    return () => {
+      this.decisionListeners = this.decisionListeners.filter((l) => l !== cb);
+    };
+  }
+
+  /**
    * 组合矩阵裁决（同步入口）：agent 侧先审 → operator 侧策略生效 → 任一否决 = 拒绝。
+   * 裁决后分发 onDecision（契约④：任一否决/通过都通知）。
    */
   approve(req: AuditRequest): boolean {
     // operator 是最终否决权（任一否决 = 拒绝，可推翻 agent 通过）
-    if (this.operator.veto?.() === true) return false;
-    const votes = this.votes.get(req.id) ?? [];
-    const verdict = this.agentVerdict(req, votes);
-    if (verdict === "fail") return false;
-    if (verdict === "pass") return true;
-    // 平局/分歧 → operator 裁决（operator 侧策略生效）
-    return this.operatorSide(verdict);
+    let result: boolean;
+    if (this.operator.veto?.() === true) {
+      result = false;
+    } else {
+      const votes = this.votes.get(req.id) ?? [];
+      const verdict = this.agentVerdict(req, votes);
+      if (verdict === "fail") {
+        result = false;
+      } else if (verdict === "pass") {
+        result = true;
+      } else {
+        // 平局/分歧 → operator 裁决（operator 侧策略生效）
+        result = this.operatorSide(verdict);
+      }
+    }
+    const event: AuditDecisionEvent = {
+      requestId: req.id,
+      decision: result ? "approved" : "rejected",
+      delta: req.delta,
+    };
+    for (const listener of [...this.decisionListeners]) {
+      listener(event);
+    }
+    return result;
   }
 
   private operatorSide(_verdict: "tie"): boolean {

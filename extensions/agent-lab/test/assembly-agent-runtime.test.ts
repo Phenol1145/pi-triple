@@ -62,6 +62,8 @@ function fresh(opts: { withLoadSnapshot: boolean }) {
 
   let attachCount = 0;
   let stopCount = 0;
+  const pruneDedupSeqs: number[] = [];
+  const pruneIdemSeqs: number[] = [];
   const memory = {
     dsp,
     attachSdk(): void {
@@ -74,6 +76,17 @@ function fresh(opts: { withLoadSnapshot: boolean }) {
     },
     retrieve(): never[] {
       return [];
+    },
+    // 契约⑩ + ② 同钩子：resume 水位 prune（comms.pruneDedup / pipeline.pruneIdem）
+    comms: {
+      pruneDedup(seq: number): void {
+        pruneDedupSeqs.push(seq);
+      },
+    },
+    pipeline: {
+      pruneIdem(seq: number): void {
+        pruneIdemSeqs.push(seq);
+      },
     },
   };
 
@@ -91,6 +104,7 @@ function fresh(opts: { withLoadSnapshot: boolean }) {
 
   const checkpointStore = {
     latest: () => ({ checkpointId: "cp-latest", seq: 9 }),
+    get: (_agentId: string, checkpointId: string) => ({ checkpointId, seq: 12 }),
   };
 
   return {
@@ -100,6 +114,8 @@ function fresh(opts: { withLoadSnapshot: boolean }) {
     buildModes,
     attachCount: () => attachCount,
     stopCount: () => stopCount,
+    pruneDedupSeqs,
+    pruneIdemSeqs,
     runner: runner as unknown as ConstructorParameters<typeof AgentRuntime>[0]["runner"],
     memory: memory as unknown as MemoryHost,
     ledger,
@@ -183,6 +199,37 @@ test("resume() 无 checkpointStore 依赖 → 不带 resumeFromCheckpointId（�
   await rt.resume();
   const req = f.runRequests[0];
   assert.equal(req.resumeFromCheckpointId, undefined);
+});
+
+// 6. 契约⑩ + ② 同钩子：resume 水位 prune（comms pruneDedup + idem pruneIdem，seq = resume 目标 checkpoint seq）
+test("resume(checkpointId) prunes comms dedup + idem at target checkpoint seq", async () => {
+  const f = fresh({ withLoadSnapshot: false });
+  const rt = makeRuntime(f);   // 带 checkpointStore（get → seq 12）
+  await rt.resume("cp-5");
+  const req = f.runRequests[0];
+  assert.equal(req.resumeFromCheckpointId, "cp-5");
+  assert.deepEqual(f.pruneDedupSeqs, [12], "pruneDedup 用显式 checkpoint 的 seq");
+  assert.deepEqual(f.pruneIdemSeqs, [12], "pruneIdem 用显式 checkpoint 的 seq");
+});
+
+test("resume() 无参 prunes at latest checkpoint seq", async () => {
+  const f = fresh({ withLoadSnapshot: false });
+  const rt = makeRuntime(f);   // latest → seq 9
+  await rt.resume();
+  const req = f.runRequests[0];
+  assert.equal(req.resumeFromCheckpointId, "cp-latest");
+  assert.deepEqual(f.pruneDedupSeqs, [9]);
+  assert.deepEqual(f.pruneIdemSeqs, [9]);
+});
+
+test("resume() 无 checkpointStore → prune at seq 0（latest ?? 0）", async () => {
+  const f = fresh({ withLoadSnapshot: false });
+  const rt = makeRuntime(f, { withCheckpointStore: false });
+  await rt.resume();
+  const req = f.runRequests[0];
+  assert.equal(req.resumeFromCheckpointId, undefined);
+  assert.deepEqual(f.pruneDedupSeqs, [0]);
+  assert.deepEqual(f.pruneIdemSeqs, [0]);
 });
 
 // 3. dispose 停止 sweeper（mock timer）

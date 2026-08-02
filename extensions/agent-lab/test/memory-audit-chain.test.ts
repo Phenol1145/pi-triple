@@ -140,3 +140,47 @@ test("markNotWriteBack appends and dedupes", () => {
   assert.deepEqual(ids, ["e1", "e2"]);
   rmSync(dir, { recursive: true, force: true });
 });
+
+// ---- 契约④：onDecision 回调出口（spec §4 ④；砍定时器——D 的组合链驱动窗口与 merge） ----
+
+test("onDecision: 注册回调 → approve 通过后收到 approved + delta", () => {
+  const chain = new AuditChain(cfg(), agents, op);
+  const events: Array<{ requestId: string; decision: string; delta: unknown }> = [];
+  chain.onDecision((d) => { events.push(d); });
+  chain.vote({ requestId: "r1", voter: "a1", decision: "approve", at: 1 });
+  chain.vote({ requestId: "r1", voter: "a2", decision: "approve", at: 2 });
+  assert.equal(chain.approve(req), true);
+  assert.deepEqual(events, [{ requestId: "r1", decision: "approved", delta: { entryId: "e1", kind: "fact" } }]);
+});
+
+test("onDecision: 任一否决/拒绝也通知 rejected（operator veto 路径）", () => {
+  const chain = new AuditChain(cfg({ operatorSide: "manual" }), agents, { notify: () => {}, veto: () => true });
+  const decisions: string[] = [];
+  chain.onDecision((d) => { decisions.push(d.decision); });
+  assert.equal(chain.approve(req), false);
+  assert.deepEqual(decisions, ["rejected"]);
+});
+
+test("onDecision: 反注册后不再收到通知", () => {
+  const chain = new AuditChain(cfg(), agents, op);
+  let count = 0;
+  const off = chain.onDecision(() => { count += 1; });
+  chain.approve(req);   // all-vote 无票 → rejected → 通知 1 次
+  assert.equal(count, 1);
+  off();                // 反注册
+  chain.approve(req);
+  assert.equal(count, 1);   // 不再通知
+});
+
+test("onDecision: 多监听者，反注册只摘除自己", () => {
+  const chain = new AuditChain(cfg(), agents, op);
+  const a: string[] = [];
+  const b: string[] = [];
+  const offA = chain.onDecision((d) => { a.push(d.decision); });
+  chain.onDecision((d) => { b.push(d.decision); });
+  chain.approve(req);
+  offA();
+  chain.approve(req);
+  assert.deepEqual(a, ["rejected"]);          // 只收第一次
+  assert.deepEqual(b, ["rejected", "rejected"]); // 全程收
+});

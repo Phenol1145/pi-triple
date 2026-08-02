@@ -88,10 +88,16 @@ export class AgentRuntime {
    * resume(checkpointId?)：checkpointId → resumeFromCheckpointId；无参 → latest
    * （checkpointStore.latest，适配说明见文件头 1）。task：恢复 checkpoint 关联任务文本
    * ——CheckpointRecord 无 task 字段 → ""（spec：无则 ""）。
+   * 契约⑩ + ②（同钩子）：resume 目标 checkpoint 的 seq 水位 prune——
+   * comms.pruneDedup(seq) + pipeline.pruneIdem(seq)（防"已投递被拒收/键存在条目已回滚"不对称）。
    */
   async resume(checkpointId?: string): Promise<WorkLoopResult> {
     this.attachSdkOnce();
     this.restoreDspOrder();
+    // 契约⑩ + ②：prune seq = resume 目标 checkpoint 的 seq（显式 = get().seq；无参 = latest().seq ?? 0）
+    const targetSeq = this.resolveTargetSeq(checkpointId);
+    this.deps.memory.comms?.pruneDedup(targetSeq);
+    this.deps.memory.pipeline.pruneIdem(targetSeq);
     let resumeFromCheckpointId: string | undefined;
     if (checkpointId !== undefined) {
       resumeFromCheckpointId = checkpointId;
@@ -146,6 +152,17 @@ export class AgentRuntime {
   /** latest checkpoint seq（无 checkpointStore / 无 checkpoint → 0）。 */
   private latestSeq(): number {
     return this.deps.checkpointStore?.latest(this.agentId)?.seq ?? 0;
+  }
+
+  /**
+   * resume 目标 seq（契约②/⑩）：显式 checkpointId → CheckpointStore.get(agentId, id).seq；
+   * 无参 → latest(agentId)?.seq ?? 0（CheckpointRecord.seq 可选——旧 checkpoint 无 seq → 0）。
+   */
+  private resolveTargetSeq(checkpointId: string | undefined): number {
+    if (checkpointId !== undefined) {
+      return this.deps.checkpointStore?.get(this.agentId, checkpointId).seq ?? 0;
+    }
+    return this.latestSeq();
   }
 
   /** WorkLoopRunRequest 组装：自填身份字段 + 绑定 definition（config 缺省 = definition 配置）。 */
