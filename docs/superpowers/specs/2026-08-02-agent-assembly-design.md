@@ -42,9 +42,8 @@
 export interface AgentAssemblerDeps {
   registry: DefinitionRegistry;              // workloop 解析
   agentStore: AgentInstanceStore;            // AgentInstanceRecord 持久（repository）
-  ledger: LedgerPort;                        // 开户
-  ruleStore: RuleBootstrap;                  // 公理 + 基础规则（全局共享层，来自记忆系统）
-  cloneService: AgentCloneService;           // fork 语义（既有）
+  ledger: LedgerPort;                        // 开户（续跑幂等语义，§2.4）
+  ruleBootstrap: RuleBootstrap;              // 全局规则库只读视图（公理 + 基础规则 = 公域规则域）
   workDir: string;                           // 装配产物目录（记忆域/快照/日志根）
   comms?: {                                  // 通讯桥接（可选——无则 agent 无 comms）
     transport: CommsTransport;               // pit-communicate 桥接注入
@@ -60,7 +59,8 @@ export interface AgentAssembler {
 export interface AssembleOptions {
   cloneMode: "fresh" | "fork";
   sourceAgentId?: string;                    // fork 模式的源 agent
-  endowment?: { K: number; floor: number };  // 初始资本（默认 = DEFAULT_MARKET_CONFIG.endowment）
+  schedulerInstanceId: string;               // 市场宿主实例（必传——D 提供；独立装配需宿主）
+  endowment?: { K: number; initialFloor: number };  // 初始资本（默认 = DEFAULT_MARKET_CONFIG.endowment；floor 改名防与价格 floor 混淆）
   memory?: MemorySpec;                       // 覆盖/补充 AgentDefinition.memory
 }
 ```
@@ -75,10 +75,15 @@ assembleAgent(ref, opts):
      b. memory 声明（definition.memory ?? opts.memory）过 MemorySpecSchema（新增，§2.3）
   3. 实例化：
      a. initialContext/initialState（workloop 自带）
-     b. 记忆域初始化：fresh = 最小合集（公理引用 + 基础规则共享链接 + 空私域目录）；
-        fork = 最小合集 + 源 agent 私域整库拷贝（目录级拷贝，含自建规则/事实/经验）
-  4. 开户：ledger.open(agentId, endowment.K)——已存在账户 → 装配失败（幂等冲突）
-  5. 注册持久：AgentInstanceRecord { id, schedulerInstanceId, definition, memorySpec?, endowment?, status: "active" }（可选字段向后兼容）
+     b. 记忆域初始化（§2.5 规则链）：
+        fresh = 最小合集（私域空 + 规则 fallback 链指向全局规则库）
+        fork = 最小合集 + 源 agent 私域整库拷贝（目录级拷贝；
+               拷贝后重建索引——源多文件跨文件不一致的修复路径）
+  4. 开户（续跑幂等，§2.4）：ledger.open(agentId, endowment.K)
+     ——账户已存在且余额 == endowment.K → 视为本装配续跑（崩溃恢复）
+     ——账户已存在但余额 ≠ endowment → 装配失败（冲突）
+  5. 注册持久：AgentInstanceRecord { id, schedulerInstanceId(必传宿主), definition,
+     memorySpec?, endowment?, status: "ready"（既有枚举）, createdAtRoundId?（可选） }
   6. 组装 AgentRuntime（§3）并返回
 ```
 
@@ -86,13 +91,29 @@ assembleAgent(ref, opts):
 
 ```typescript
 export interface MemorySpec {
-  dialect?: "json" | "xml" | "markdown";     // 默认 "json"（该 agent 的沉淀方言）
+  dialect?: "json" | "xml" | "markdown";     // 默认 "json"；markdown = draft-only 方言（写入恒草稿区，诚实标注）
   maxEntries?: number;                        // 私域条目上限（默认 1000）
-  projection?: { mode: "auto" | "manual"; maxTokens?: number };  // 默认 auto
 }
 ```
 
-校验规则：dialect ∈ 白名单；maxEntries 正整数；projection.mode ∈ 白名单；未知字段 → 校验错误。
+校验规则：dialect ∈ 白名单；maxEntries 正整数；未知字段 → 校验错误。
+
+### 2.4 开户语义（续跑幂等 + 回滚路径）
+
+- `ledger.open(agentId, K)`：新账户 → 开户；已存在且余额 == K → **续跑**（装配崩溃恢复友好——重试不永久失败）；已存在且余额 ≠ K → 装配失败（冲突）
+- **回滚交付项**：SqliteLedger 增加 `removeAccount(agentId)`（装配失败路径调用，清理残留账户）
+- 装配原子性声明：先校验后落盘；任一步失败 → 已创建的记忆域目录清理 + 账户回滚（removeAccount）
+
+### 2.5 记忆域模型（公域 = 全部 kind 的检索作用域，修正）
+
+- **公域记忆 = 全部 kind 的共享域**（fact/experience/preference/rule 等）——不是规则专属；公域**不拷贝进私域**，是**检索作用域**（retrieve 天然含"私域 + 可及公域"，记忆系统 §5 语义）
+- **私域**：agent 自己的沉淀（写）；fork = 源私域整库拷贝（拷贝后重建索引——多文件跨文件不一致的修复路径）
+- **规则链（特殊子集）**：规则是**校验依赖**（content 校验需要 ruleRef 可解析——运行前提），故需要解析链：`RuleRegistry` 扩展只读 fallback——resolveRule 先查私域 → 未命中查全局规则库；**写永远落私域**（agent 自建规则）
+  - 全局规则库 = 公域 kind=rule 条目（公理 + 基础规则）；装配层经 `RuleBootstrap`（新类型：公理 + 基础规则只读视图）注入
+  - 事实/经验/偏好**无此依赖**（只检索、不解析——retrieve 走公域作用域即可）
+- **fresh = 最小合集**：规则链（公理 + 基础规则 fallback）+ 私域空 + 公域可检索
+- **公域修改（任何 kind）= 公域提交**：fork 私域修改 → AuditChain 审核 → PublicDomainStore.submitWriteBack merge 回公域（复用 T8/T9，无新路径）；规则修改只是其一个实例——与 meta 审核循环裁决（operator 亲审）一致
+- 公域更新（任何 kind merge 后）：检索作用域天然最新（不拷贝故无漂移）；规则 fallback 只读视图同样天然最新
 
 ---
 
@@ -104,15 +125,15 @@ export interface MemorySpec {
 export class AgentRuntime {
   readonly agentId: string;
   constructor(deps: {
-    machineRuntime: MachineRuntime;           // 既有（runner 驱动）
+    runner: WorkLoopRunner;                   // 既有 runner（每次 run/resume 新建 MachineRuntime 由 runner 负责）
     memory: MemoryHost;                       // 记忆挂载（§3.2）
     comms?: CommsChannel;                     // 可选
     dsp: DspBuilder;                          // DSP（含 dir 显式）
     ledger: LedgerPort;
   });
-  run(input: WorkLoopInput): Promise<WorkLoopResult>;    // 委托 machineRuntime；run 前 DSP restore 顺序（§4-⑦）
-  resume(checkpointId?: string): Promise<WorkLoopResult>;
-  dispose(): void;                            // 清理 comms 监听/定时器（TTL sweeper）
+  run(request: WorkLoopRunRequest): Promise<WorkLoopResult>;   // 委托 runner；traceId/executionId 由本类生成（UUID）
+  resume(checkpointId?: string): Promise<WorkLoopResult>;      // 无参 = latest checkpoint（checkpointStore 指针）
+  dispose(): void;                            // 清理 comms 监听/定时器
 }
 ```
 
@@ -126,13 +147,17 @@ export class AgentRuntime {
 
 ```typescript
 export interface LedgerPort {
-  open(agentId: string, initialK: number): void;      // 开户（重复 → 抛错）
+  open(agentId: string, initialK: number): void;      // 开户（已存在且余额=K → 续跑；否则抛错）
   balance(agentId: string): number;
   credit(agentId: string, amount: number, reason: string): void;
-  debit(agentId: string, amount: number, reason: string): void;
-  close(agentId: string): void;                       // 破产/淘汰
+  debit(agentId: string, amount: number, reason: string): void;  // 余额不足 → 抛错（adapter 检测 clamp）
+  freeze(agentId: string, amount: number, reason: string): void; // 竞价质押（D 准备）
+  unfreeze(agentId: string, amount: number, reason: string): void;
 }
-export class SqliteLedgerAdapter implements LedgerPort { /* 包装 arena SqliteLedger */ }
+export class SqliteLedgerAdapter implements LedgerPort {
+  /* 包装 arena SqliteLedger；交付项：SqliteLedger 增加 removeAccount（装配回滚）；
+     开户 flat-K 语义 = 直接 INSERT（绕过 ensureEndowed 的模型价格计算）*/
+}
 ```
 
 ---
@@ -141,15 +166,16 @@ export class SqliteLedgerAdapter implements LedgerPort { /* 包装 arena SqliteL
 
 | # | 契约 | 落实方式（本子项目） |
 |---|---|---|
-| ① | write 幂等命中 → revive | MemoryHost 在 write 幂等命中后查 `isPendingActivation` → `WatermarkManager.revive(entryId, nextCheckpointSeq)`（C-1 复活路径） |
-| ② | idem 键表水位 prune | resume 时对 idem 表执行水位 prune（对齐 dedup.jsonl 的 `{key, watermark}` + prune——扩展 pipeline 幂等表记录格式） |
-| ③ | TTL sweeper | AgentRuntime 生命周期内定时清扫（默认每小时）：draft 且 ttlExpiresAt 过期 → archived；dispose 清理定时器 |
-| ④ | 审核窗口自动关闭 | AuditChain 配置驱动：veto 制在线全投或超时（5 分钟）自动 closeWindow；all-vote/representative 时间或数量硬截止（定时器在 AgentRuntime 内） |
-| ⑤ | 方言解析调用点 | sdk.memory.write 包装：按 MemorySpec.dialect 预解析（parseDialect）→ 失败/低置信 → 草稿区路由（markdown 默认草稿 + 明确反馈） |
-| ⑥ | pit-communicate 真实桥接 + 纸带注入 | CommsTransport 适配器（mailbox 发送/接收/activePeers）；onTapeInjection → WorkContext.messages 追加 user 消息（来源标记 `peer:<id>`）——与 operator 消息同通道 |
-| ⑦ | DSP restore 顺序 | AgentRuntime.run 前：先 restore(装配时快照) 再 build——无快照回退新鲜检索（防御） |
+| ① | write 幂等命中 → revive | MemoryHost 在 write 幂等命中后查 `isPendingActivation` → `WatermarkManager.revive(entryId, nextCheckpointSeq)`；**nextCheckpointSeq 供给 = runner 只读 getter（C5 裁决：currentSeq/nextCheckpointSeq，加方法不改行为）——明确交付项** |
+| ② | idem 键表水位 prune | resume 时对 idem 表执行水位 prune（扩展记录格式 `{key, watermark}`；**旧行无 watermark = 视为 0**——保守保留永不误删；对齐 dedup.jsonl 先例） |
+| ③ | TTL sweeper | AgentRuntime 生命周期内定时清扫（默认每小时，可配）：draft 且 ttlExpiresAt 过期 → archived；dispose 清理定时器；**draft→promote 竞态**：归档与 promote 之间目标消失 → 明确报错路径 |
+| ④ | 审核窗口 | **配置透传 + onDecision 回调出口（砍定时器，YAGNI）**：AuditChain 加 onDecision 回调（v1 透传 decision）——D 的组合链驱动窗口与 merge，不回来改 C |
+| ⑤ | 方言解析 | sdk.memory.write 包装内**预检**：parseDialect 只做错误检测与警告（不替换 content——ruleRef EBNF 校验是权威）；**markdown = draft-only 方言**（写入恒草稿 + 明确反馈，写进 MemorySpec 文档） |
+| ⑥ | pit-communicate 真实桥接 + 纸带注入 | CommsTransport 适配器（mailbox 发送/接收/activePeers，**强制 delivery=auto**——agent↔agent 不可走 manual 人工门）；onTapeInjection → WorkContext.messages 追加 user 消息（来源标记 `peer:<id>`）；**local-model 轨 v1 不支持 comms 注入**（消息排队，下一 run 并入任务种子——显式声明） |
+| ⑦ | DSP restore 顺序 | **snapshot 生产者 = runner checkpoint 后钩子**（装配层挂 checkpoint 事件 → DspBuilder.snapshot(seq)）；DspBuilder 加 `loadSnapshot(seq)`；首次 run 无快照 → 回退新鲜检索（防御） |
 | ⑧ | AuditChain/DspBuilder dir 显式 | 装配时传入 workDir 下子目录——杜绝 process.cwd() 兜底 |
 | ⑨ | 身份映射 | IdentityMap 落 workDir；sessionId 刷新回调（pit-communicate session_start 时） |
+| ⑩ | comms dedup prune（补漏项） | resume 时 `CommsChannel.pruneDedup(seq)`（与 ② 同钩子——comms.ts 自注"调用方：resume 时"） |
 
 **未接线（明确留给 D）**：审核→merge 组合链端到端（AuditChain 审批通过 → PublicDomainStore.submitWriteBack 的驱动）；市场竞价接入；多货币账本语义。
 
