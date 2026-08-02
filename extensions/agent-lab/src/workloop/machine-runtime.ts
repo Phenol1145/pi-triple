@@ -33,6 +33,8 @@ export interface MachineRuntimeOptions {
   budgets?: RuntimeBudgets;
   resumeFrom?: ResumeState;
   checkpointEvery?: number;
+  /** 每次转移 seq 递增时回调（Task 6：runner 侧 seq 透传，不改变运行时行为） */
+  onSeq?: (seq: number) => void;
 }
 
 export interface MachineTransitionRecord {
@@ -91,6 +93,7 @@ export class MachineRuntime {
   private readonly budgets: Required<RuntimeBudgets>;
   private readonly checkpointEvery: number;
   private readonly resumeFrom?: ResumeState;
+  private readonly onSeq?: (seq: number) => void;
 
   constructor(opts: MachineRuntimeOptions) {
     this.machine = opts.machine;
@@ -103,6 +106,7 @@ export class MachineRuntime {
     };
     this.checkpointEvery = opts.checkpointEvery ?? 1;
     this.resumeFrom = opts.resumeFrom;
+    this.onSeq = opts.onSeq;
   }
 
   async run(): Promise<MachineRuntimeResult> {
@@ -180,6 +184,7 @@ export class MachineRuntime {
 
       // ── δ 执行 ──
       seq += 1;
+      this.onSeq?.(seq); // Task 6：seq 透传（每次递增调用，runner 侧记录）
       const fromState = transitions.at(-1)?.toState ?? controlState;
       const stepResult = await this.machine.step(ctx, memory, event, dspSdk);
       ctx = stepResult.context;

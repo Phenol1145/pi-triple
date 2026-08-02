@@ -58,6 +58,14 @@ export class WorkLoopRunner {
   /** Per-agent FIFO tail: maps agentInstanceId → tail Promise<WorkLoopResult> */
   private readonly tails = new Map<string, Promise<WorkLoopResult>>();
 
+  /** onCheckpoint 钩子注册表（Task 6）：checkpoint.created emit 时分发；返回反注册函数 */
+  private readonly onCheckpointHandlers = new Set<
+    (info: { agentInstanceId: string; checkpointId: string; seq: number }) => void
+  >();
+
+  /** in-flight seq 注册表（Task 6）：MachineRuntime 构造时注册，run 结束注销 */
+  private readonly seqRegistry = new Map<string, number>();
+
   constructor(
     registry: WorkLoopRegistry,
     stateStore: AgentRuntimeStateStore,
@@ -103,6 +111,31 @@ export class WorkLoopRunner {
     });
 
     return tail;
+  }
+
+  /**
+   * Register a checkpoint hook. Fired after each checkpoint.created emit
+   * with the agent instance id, checkpoint id and the machine transition
+   * seq that produced it. Filtering by agentInstanceId is left to the
+   * caller. Returns an unregister function; after it is invoked the
+   * callback no longer fires.
+   */
+  onCheckpoint(
+    cb: (info: { agentInstanceId: string; checkpointId: string; seq: number }) => void,
+  ): () => void {
+    this.onCheckpointHandlers.add(cb);
+    return () => {
+      this.onCheckpointHandlers.delete(cb);
+    };
+  }
+
+  /**
+   * Current in-flight machine transition seq for an agent (registered
+   * while a MachineRuntime run is executing, deregistered when it
+   * settles). Returns 0 when the agent is not in-flight.
+   */
+  currentSeqOf(agentInstanceId: string): number {
+    return this.seqRegistry.get(agentInstanceId) ?? 0;
   }
 
   // ── Internal execution ───────────────────────────────────────────
@@ -252,16 +285,23 @@ export class WorkLoopRunner {
           // checkpoint 不存在 → 容错按全新 run 处理（resume 信息缺失不致命）
         }
       }
-      const runtime = new MachineRuntime({
-        machine: implementation.machine,
-        input,
-        sdk,
-        executor: implementation.executor,
-        budgets: { maxTurns: request.maxTurns ?? 100 },
-        resumeFrom,
-      });
-      const runResult = await runtime.run();
-      result = runResult.result;
+      // 注册 in-flight seq（Task 6）：构造时注册、run 结束（含抛错）注销
+      this.seqRegistry.set(agentInstanceId, 0);
+      try {
+        const runtime = new MachineRuntime({
+          machine: implementation.machine,
+          input,
+          sdk,
+          executor: implementation.executor,
+          budgets: { maxTurns: request.maxTurns ?? 100 },
+          resumeFrom,
+          onSeq: (seq) => this.seqRegistry.set(agentInstanceId, seq),
+        });
+        const runResult = await runtime.run();
+        result = runResult.result;
+      } finally {
+        this.seqRegistry.delete(agentInstanceId);
+      }
     } catch (err) {
       // Thrown error → workloop-error
       if (signal?.aborted) {
@@ -448,13 +488,16 @@ export class WorkLoopRunner {
           }
           this.checkpointStore.save(agentInstanceId, record);
 
+          // Task 6：payload 增 seq（in-flight 注册表取当前转移序号）+ onCheckpoint 钩子分发
+          const seq = this.seqRegistry.get(agentInstanceId) ?? 0;
           this.emitEvent(
             nextEventId("checkpoint.created"),
             "checkpoint.created",
-            { checkpointId, label: record.label },
+            { checkpointId, label: record.label, seq },
             undefined,
             request,
           );
+          this.dispatchOnCheckpoint({ agentInstanceId, checkpointId, seq });
 
           return { checkpointId };
         },
@@ -483,6 +526,16 @@ export class WorkLoopRunner {
   }
 
   // ── Event helpers ────────────────────────────────────────────────
+
+  private dispatchOnCheckpoint(info: {
+    agentInstanceId: string;
+    checkpointId: string;
+    seq: number;
+  }): void {
+    for (const handler of this.onCheckpointHandlers) {
+      handler(info);
+    }
+  }
 
   private emitLifecycleEvent(
     eventId: string,

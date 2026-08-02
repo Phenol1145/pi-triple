@@ -132,6 +132,25 @@ export class CheckpointStore {
     }
     return structuredClone(entry.value);
   }
+
+  /**
+   * Retrieve the most recent checkpoint for an agent via the "latest"
+   * pointer (the same pointer save() maintains with CAS). Returns a
+   * defensive copy; undefined when the agent has no checkpoint yet.
+   * Read-only — the pointer's CAS write path is unchanged.
+   */
+  latest(agentId: string): CheckpointRecord | undefined {
+    const pointer = this.store.get<{ checkpointId: string }>(
+      checkpointNamespace(agentId),
+      "latest",
+    );
+    if (!pointer) return undefined;
+    const entry = this.store.get<CheckpointRecord>(
+      checkpointNamespace(agentId),
+      checkpointKey(pointer.value.checkpointId),
+    );
+    return entry ? structuredClone(entry.value) : undefined;
+  }
 }
 
 // ── AgentCloneService ────────────────────────────────────────────────
