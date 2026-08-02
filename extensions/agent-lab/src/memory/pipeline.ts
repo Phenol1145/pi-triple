@@ -222,14 +222,16 @@ export class MemoryPipeline {
   }
 
   /**
-   * 幂等键表水位 prune（契约②，spec §4 ②）：resume 到目标 checkpoint seq 时调用。
-   * 只删 watermark **已定义且 ≤ seq** 的记录；watermark 缺失（旧行，无此字段）的记录
-   * 保留——保守永不误删（第三轮裁决钉死：缺失 ≠ 0）。返回删除条数。
-   * 落盘 = tmp+rename 原子重写（对齐 dedup.jsonl prune 先例）。
+   * 幂等键表水位 prune（契约②，spec §4.3）：resume 到目标 checkpoint seq 时调用。
+   * 丢弃晚于 S 的键表增量：只删 watermark **已定义且 > seq** 的记录（这些键对应的
+   * 条目在 resume 后被水位屏蔽/回滚——防"键存在但条目已回滚"不对称；删除后重放
+   * write 不再幂等命中被屏蔽条目 → 重新落库复活）。watermark 缺失（旧行，无此字段，
+   * 视为 0）→ 0 > seq 恒假 → 保留（保守保留永不误删，第三轮裁决：旧行视为 0）。
+   * 返回删除条数。落盘 = tmp+rename 原子重写（对齐 dedup.jsonl prune 先例）。
    */
   pruneIdem(seq: number): number {
     const recs = this.readJsonl<IdemRecord>(this.file("idem.jsonl"));
-    const remaining = recs.filter((r) => r.watermark === undefined || r.watermark > seq);
+    const remaining = recs.filter((r) => r.watermark === undefined || r.watermark <= seq);
     const deleted = recs.length - remaining.length;
     if (deleted > 0) {
       this.rewriteJsonl(this.file("idem.jsonl"), remaining);

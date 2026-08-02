@@ -134,9 +134,9 @@ test("promote assigns new idempotencyKey, merges draft traces, clears TTL", () =
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("pruneIdem deletes only defined-watermark <= seq records; missing watermark kept", () => {
+test("pruneIdem deletes only defined-watermark > seq records (drop post-S increments); missing watermark kept", () => {
   const { pipe, dir } = fresh();
-  // 写 3 条（watermark 2 / 5 / 缺失——旧行无 watermark 格式）
+  // 写 3 条（watermark 2 / 5 / 缺失——旧行无 watermark 格式，视为 0 保守保留）
   appendFileSync(
     path.join(dir, "idem.jsonl"),
     JSON.stringify({ key: "k1", entryId: "e1", watermark: 2 }) + "\n" +
@@ -144,21 +144,30 @@ test("pruneIdem deletes only defined-watermark <= seq records; missing watermark
     JSON.stringify({ key: "k3", entryId: "e3" }) + "\n",
   );
   const deleted = pipe.pruneIdem(3);
-  assert.equal(deleted, 1);   // 只删 watermark ≤ 3 的（2 那条）
+  assert.equal(deleted, 1);   // 只删 watermark > 3 的（5 那条——晚于 S 的键表增量）
   const idem = readJsonl(dir, "idem.jsonl") as Array<{ key: string; watermark?: number }>;
   const keys = idem.map((r) => r.key).sort();
-  assert.deepEqual(keys, ["k2", "k3"], "watermark 5 与缺失 watermark 的记录保留");
-  assert.equal(idem.find((r) => r.key === "k2")?.watermark, 5);
+  assert.deepEqual(keys, ["k1", "k3"], "watermark 2 与缺失 watermark 的记录保留（缺失视为 0 → 0 > seq 恒假）");
+  assert.equal(idem.find((r) => r.key === "k1")?.watermark, 2);
   assert.equal(idem.find((r) => r.key === "k3")?.watermark, undefined);
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("pruneIdem: 无 idem 文件 / 无匹配 → 返回 0 且不落盘", () => {
+test("pruneIdem: 无 idem 文件 → 0；晚于 S 的增量删除；无匹配 → 0 且不落盘", () => {
   const { pipe, dir } = fresh();
   assert.equal(pipe.pruneIdem(3), 0);
+  // watermark 7 > 3 → 晚于 S 的键表增量 → 删
   appendFileSync(path.join(dir, "idem.jsonl"), JSON.stringify({ key: "k9", entryId: "e9", watermark: 7 }) + "\n");
-  assert.equal(pipe.pruneIdem(3), 0);   // 7 > 3 → 不删
-  assert.equal((readJsonl(dir, "idem.jsonl") as unknown[]).length, 1);
+  assert.equal(pipe.pruneIdem(3), 1);   // 7 > 3 → 删
+  assert.equal((readJsonl(dir, "idem.jsonl") as unknown[]).length, 0);
+  // watermark ≤ seq / 缺失 → 无匹配 → 0 且不落盘（保守保留）
+  appendFileSync(
+    path.join(dir, "idem.jsonl"),
+    JSON.stringify({ key: "k8", entryId: "e8", watermark: 2 }) + "\n" +
+    JSON.stringify({ key: "k7", entryId: "e7" }) + "\n",
+  );
+  assert.equal(pipe.pruneIdem(3), 0);   // 2 ≤ 3、缺失 → 不删
+  assert.equal((readJsonl(dir, "idem.jsonl") as unknown[]).length, 2);
   rmSync(dir, { recursive: true, force: true });
 });
 
