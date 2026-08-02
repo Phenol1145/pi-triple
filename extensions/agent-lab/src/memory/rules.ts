@@ -22,9 +22,12 @@ interface RuleFile {
 
 export class RuleRegistry {
   private dir: string;
+  /** 解析回退链（装配层 Task 4：公域只读视图注入；写路径不受影响——registerRule/updateRule 永远本目录）。 */
+  private fallback?: { resolveRule(id: string): CompiledRule | undefined };
 
-  constructor(dir: string) {
+  constructor(dir: string, fallback?: { resolveRule(id: string): CompiledRule | undefined }) {
     this.dir = dir;
+    this.fallback = fallback;
   }
 
   private axiomPath(): string {
@@ -117,7 +120,8 @@ export class RuleRegistry {
   resolveRule(ruleId: string): CompiledRule | undefined {
     const filePath = ruleId === AXIOM_RULE_ID ? this.axiomPath() : this.rulePath(ruleId);
     const data = this.readJson<RuleFile>(filePath);
-    if (!data) return undefined;
+    // 本目录未命中 → fallback 链（无 fallback 时既有行为不变：undefined）
+    if (!data) return this.fallback?.resolveRule(ruleId);
 
     // Handle legacy format where the file is a raw MemoryEntry (no wrapper)
     const ruleFile: RuleFile = data.entry ? data : { entry: data as unknown as MemoryEntry };
