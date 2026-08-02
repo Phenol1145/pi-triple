@@ -1,0 +1,202 @@
+# 装配层设计（子项目 C）
+
+- **日期**：2026-08-02
+- **状态**：设计（待评审）
+- **范围**：agent 装配——`assembleAgent` 把声明（AgentDefinition + memory spec）变成可运行的经济主体（AgentRuntime）；记忆系统（子项目 B ✅）的接线契约落实；开户与注册持久。
+- **定位**：市场经济体制（方案 A）三阶段之③——经济层（D：多货币/嵌套市场/elo/竞价 workflow）的前置。前序：pit-flow 运行时扩展（A ✅）+ 记忆系统（B ✅）。
+
+---
+
+## 1. 背景与目标
+
+### 1.1 现状
+
+- **AgentInstance 只是登记记录**：`AgentInstanceRecord`（core/contracts.ts:146）持有 id/definition/status，无执行能力
+- **WorkLoopRuntime sidecar**（create-runtime.ts）：core/registry/runner/adapter/stateStore/checkpointStore/cloneService——运行时基座，未接记忆
+- **记忆系统已就绪**（B ✅）：MemoryStore/RuleRegistry/MemoryPipeline/WatermarkManager/PublicDomainStore/AuditChain/CommsChannel/DspBuilder + `mountMemorySdk`（Task 12）
+- **账本已有**：arena 的 SqliteLedger（账户/余额/交易）
+
+### 1.2 差距
+
+1. 无"装配"动作：定义 → 可执行主体的实例化路径不存在
+2. 记忆系统是离散模块，无宿主挂载（mountMemorySdk 无调用方）
+3. 记忆系统最终评审的 9 项接线契约（revive/idem prune/TTL sweeper/审核窗口/方言解析/pit-communicate 桥接/纸带注入/DSP restore/dir 显式）无落实方
+4. 经济主体无账本账户（开户路径缺失）
+
+### 1.3 目标
+
+1. `createAgentAssembler(deps)` 工厂 + `assembleAgent(ref, opts) → AgentRuntime`
+2. **AgentRuntime**：可运行经济主体（MachineRuntime 包装 + memory/comms/dsp 挂载 + run/resume/dispose）
+3. 记忆域初始化语义：**fresh = 最小记忆合集**（公理引用 + 基础规则共享 + 空私域）；**fork = 最小合集 + 源私域整库拷贝**
+4. LedgerPort 抽象 + SqliteLedger 默认实现（开户：endowment.K）
+5. 9 项接线契约落实（本 spec §4）
+6. 零破坏：既有 workloop/runtime 测试全绿；AgentInstanceRecord 扩展向后兼容
+
+---
+
+## 2. 装配器与装配流程
+
+### 2.1 工厂与依赖
+
+```typescript
+export interface AgentAssemblerDeps {
+  registry: DefinitionRegistry;              // workloop 解析
+  agentStore: AgentInstanceStore;            // AgentInstanceRecord 持久（repository）
+  ledger: LedgerPort;                        // 开户
+  ruleStore: RuleBootstrap;                  // 公理 + 基础规则（全局共享层，来自记忆系统）
+  cloneService: AgentCloneService;           // fork 语义（既有）
+  workDir: string;                           // 装配产物目录（记忆域/快照/日志根）
+  comms?: {                                  // 通讯桥接（可选——无则 agent 无 comms）
+    transport: CommsTransport;               // pit-communicate 桥接注入
+    identity: { agentId: string; tenantId: string; sessionId: string };
+  };
+  now?: () => number;
+}
+
+export function createAgentAssembler(deps: AgentAssemblerDeps): AgentAssembler;
+export interface AgentAssembler {
+  assembleAgent(ref: AgentRef, opts: AssembleOptions): AgentRuntime;
+}
+export interface AssembleOptions {
+  cloneMode: "fresh" | "fork";
+  sourceAgentId?: string;                    // fork 模式的源 agent
+  endowment?: { K: number; floor: number };  // 初始资本（默认 = DEFAULT_MARKET_CONFIG.endowment）
+  memory?: MemorySpec;                       // 覆盖/补充 AgentDefinition.memory
+}
+```
+
+### 2.2 装配流程（顺序钉死）
+
+```
+assembleAgent(ref, opts):
+  1. 解析注册表：workloop {id, version} 已注册（machine 契约）——未注册 → 装配失败（明确错误）
+  2. 校验：
+     a. workloop.config 过 parameterSchema（registry 既有校验）
+     b. memory 声明（definition.memory ?? opts.memory）过 MemorySpecSchema（新增，§2.3）
+  3. 实例化：
+     a. initialContext/initialState（workloop 自带）
+     b. 记忆域初始化：fresh = 最小合集（公理引用 + 基础规则共享链接 + 空私域目录）；
+        fork = 最小合集 + 源 agent 私域整库拷贝（目录级拷贝，含自建规则/事实/经验）
+  4. 开户：ledger.open(agentId, endowment.K)——已存在账户 → 装配失败（幂等冲突）
+  5. 注册持久：AgentInstanceRecord { id, schedulerInstanceId, definition, memorySpec?, endowment?, status: "active" }（可选字段向后兼容）
+  6. 组装 AgentRuntime（§3）并返回
+```
+
+### 2.3 MemorySpecSchema（新增）
+
+```typescript
+export interface MemorySpec {
+  dialect?: "json" | "xml" | "markdown";     // 默认 "json"（该 agent 的沉淀方言）
+  maxEntries?: number;                        // 私域条目上限（默认 1000）
+  projection?: { mode: "auto" | "manual"; maxTokens?: number };  // 默认 auto
+}
+```
+
+校验规则：dialect ∈ 白名单；maxEntries 正整数；projection.mode ∈ 白名单；未知字段 → 校验错误。
+
+---
+
+## 3. AgentRuntime
+
+### 3.1 结构与生命周期
+
+```typescript
+export class AgentRuntime {
+  readonly agentId: string;
+  constructor(deps: {
+    machineRuntime: MachineRuntime;           // 既有（runner 驱动）
+    memory: MemoryHost;                       // 记忆挂载（§3.2）
+    comms?: CommsChannel;                     // 可选
+    dsp: DspBuilder;                          // DSP（含 dir 显式）
+    ledger: LedgerPort;
+  });
+  run(input: WorkLoopInput): Promise<WorkLoopResult>;    // 委托 machineRuntime；run 前 DSP restore 顺序（§4-⑦）
+  resume(checkpointId?: string): Promise<WorkLoopResult>;
+  dispose(): void;                            // 清理 comms 监听/定时器（TTL sweeper）
+}
+```
+
+### 3.2 MemoryHost（记忆挂载点）
+
+- `mountMemorySdk(sdk, deps)`（记忆系统 Task 12 已建）——AgentRuntime 把 sdk 桥接到 MachineRuntime 的 WorkLoopSDK（machine 的 δ 通过 sdk.memory/sdk.comms 访问）
+- 记忆域目录布局（装配产物目录下）：`<workDir>/agents/<agentId>/memory/`（entries/index/counters/buffer/idem/dedup/dsp-snapshots/audit-events/not-write-back）
+- 规则链：公理 + 基础规则为**共享引用**（全局规则库），agent 自建规则落私域
+
+### 3.3 LedgerPort
+
+```typescript
+export interface LedgerPort {
+  open(agentId: string, initialK: number): void;      // 开户（重复 → 抛错）
+  balance(agentId: string): number;
+  credit(agentId: string, amount: number, reason: string): void;
+  debit(agentId: string, amount: number, reason: string): void;
+  close(agentId: string): void;                       // 破产/淘汰
+}
+export class SqliteLedgerAdapter implements LedgerPort { /* 包装 arena SqliteLedger */ }
+```
+
+---
+
+## 4. 接线契约落实（记忆系统最终 rulings 的 9 项）
+
+| # | 契约 | 落实方式（本子项目） |
+|---|---|---|
+| ① | write 幂等命中 → revive | MemoryHost 在 write 幂等命中后查 `isPendingActivation` → `WatermarkManager.revive(entryId, nextCheckpointSeq)`（C-1 复活路径） |
+| ② | idem 键表水位 prune | resume 时对 idem 表执行水位 prune（对齐 dedup.jsonl 的 `{key, watermark}` + prune——扩展 pipeline 幂等表记录格式） |
+| ③ | TTL sweeper | AgentRuntime 生命周期内定时清扫（默认每小时）：draft 且 ttlExpiresAt 过期 → archived；dispose 清理定时器 |
+| ④ | 审核窗口自动关闭 | AuditChain 配置驱动：veto 制在线全投或超时（5 分钟）自动 closeWindow；all-vote/representative 时间或数量硬截止（定时器在 AgentRuntime 内） |
+| ⑤ | 方言解析调用点 | sdk.memory.write 包装：按 MemorySpec.dialect 预解析（parseDialect）→ 失败/低置信 → 草稿区路由（markdown 默认草稿 + 明确反馈） |
+| ⑥ | pit-communicate 真实桥接 + 纸带注入 | CommsTransport 适配器（mailbox 发送/接收/activePeers）；onTapeInjection → WorkContext.messages 追加 user 消息（来源标记 `peer:<id>`）——与 operator 消息同通道 |
+| ⑦ | DSP restore 顺序 | AgentRuntime.run 前：先 restore(装配时快照) 再 build——无快照回退新鲜检索（防御） |
+| ⑧ | AuditChain/DspBuilder dir 显式 | 装配时传入 workDir 下子目录——杜绝 process.cwd() 兜底 |
+| ⑨ | 身份映射 | IdentityMap 落 workDir；sessionId 刷新回调（pit-communicate session_start 时） |
+
+**未接线（明确留给 D）**：审核→merge 组合链端到端（AuditChain 审批通过 → PublicDomainStore.submitWriteBack 的驱动）；市场竞价接入；多货币账本语义。
+
+---
+
+## 5. 测试策略
+
+1. **装配成功路径**：mock deps → AgentRuntime 可 run 一轮（machine 驱动 + 记忆挂载 + 开户 + 注册断言）
+2. **失败路径**：workloop 未注册 / config 违 parameterSchema / memory 违 MemorySpecSchema / 重复开户
+3. **fresh vs fork 记忆域**：fresh = 最小合集（公理+基础规则+空私域）；fork = 整库拷贝断言（条目数/内容一致）+ fork 后独立演化互不影响
+4. **接线契约逐项**（①②③⑤⑥⑦⑧ 各一测试；④ 定时器 mock）
+5. **零破坏回归**：既有 workloop/runtime/arena 测试全绿（AgentInstanceRecord 扩展向后兼容）
+6. **bench 演示**：真实最小装配（pi-default-loop + json 方言 + endowment）+ 一轮 run 冒烟
+
+---
+
+## 6. 范围与非目标（YAGNI）
+
+- ✅ createAgentAssembler + AgentRuntime + MemoryHost + LedgerPort（SqliteLedger 默认）
+- ✅ 记忆域初始化（fresh 最小合集 / fork 整库拷贝）+ 开户 + 注册
+- ✅ 9 项接线契约（①-⑨）
+- ✅ bench 演示脚本
+- ⛔ CLI 装配命令（API 先行，CLI 后置）
+- ⛔ 多货币账本语义（D）
+- ⛔ 审核→merge 组合链端到端（D）
+- ⛔ 市场竞价接入（D）
+- ⛔ 修改既有 runtime 工厂签名（只新增，不改既有行为）
+
+---
+
+## 7. 关键不变量
+
+1. **装配失败零副作用**：任一步失败 → 已开户账户回滚/已写文件清理（装配原子性：先校验后落盘）
+2. **fresh ≠ 零记忆**：最小合集（公理 + 基础规则）是运行前提
+3. **fork 拷贝是快照**：拷贝后源/目标私域独立演化（无同步）
+4. **AgentInstanceRecord 向后兼容**：仅新增可选字段
+5. **sdk 挂载零破坏**：既有 workloop 不感知 memory/comms（可选字段）
+6. **接线契约 ①-⑨ 全部有测试**（无"留白契约"——记忆系统 rulings 在本子项目必须闭合）
+7. **dir 显式传递**：杜绝 process.cwd() 兜底（⑧）
+
+---
+
+## 8. 隐藏依赖与风险
+
+1. **arena SqliteLedger**：node:sqlite（DatabaseSync）——依赖 Node 22+；SqliteLedgerAdapter 包装的接口映射需核对（open/credit/debit 签名差异）
+2. **MachineRuntime 的 nextCheckpointSeq 供给**：①⑦ 依赖引擎暴露下一 checkpoint seq（既有 checkpointEvery 机制——需确认暴露方式，必要时 runner 侧加 getter）
+3. **pit-communicate bridge**：mailbox 按 (tenant, session) 寻址——transport 适配器需要 session 上下文（IdentityMap 已建）；delivery mode 强制 auto（agent↔agent）
+4. **WorkContext.messages 追加的注入点**：runner 的执行循环内（委托式 = 任务文本注入点；本地式 = messages 直接追加）——两轨注入语义差异
+5. **TTL sweeper 与 checkpoint 的交互**：清扫动作本身是否进 Trace（记忆系统 §9 观测）——v1 记录审计事件即可
+6. **AgentInstanceStore**：AgentInstanceRecord 的存储位置（core repository？新 store？）——复用 core/storage/repository（getInstance 等既有接口，加装配写入路径）
