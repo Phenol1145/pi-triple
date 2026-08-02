@@ -403,6 +403,36 @@ export class CoreRepository {
     );
   }
 
+  /** 按 id 单查 agent（SQL WHERE id = ?）。装配层注册预检（幂等 oracle）用；
+   *  既有 agent 查询（listAgents/findAgentByModel）按 scheduler_instance_id 维度，本方法独立。 */
+  getAgent(agentId: string): AgentInstanceRecord | undefined {
+    const row = this.db.prepare(
+      `SELECT id, scheduler_instance_id, definition_json, model, source_template_id, source_agent_id,
+              clone_operation_id, created_round_id, status, created_ts
+       FROM lab_agent_instances WHERE id = ?
+       LIMIT 1`
+    ).get(agentId) as {
+      id: string; scheduler_instance_id: string; definition_json: string; model: string | null;
+      source_template_id: string | null; source_agent_id: string | null; clone_operation_id: string | null;
+      created_round_id: string; status: string; created_ts: number;
+    } | undefined;
+
+    if (!row) return undefined;
+
+    return {
+      id: row.id,
+      schedulerInstanceId: row.scheduler_instance_id,
+      definition: JSON.parse(row.definition_json) as AgentInstanceRecord["definition"],
+      model: row.model ?? undefined,
+      sourceTemplateId: row.source_template_id ?? undefined,
+      sourceAgentId: row.source_agent_id ?? undefined,
+      cloneOperationId: row.clone_operation_id ?? undefined,
+      createdAtRoundId: row.created_round_id,
+      status: row.status as AgentInstanceRecord["status"],
+      createdAt: row.created_ts,
+    };
+  }
+
   insertRoutingBinding(
     schedulerInstanceId: string,
     binding: SchedulerInstanceDraftSpec["routingBindings"][number],
