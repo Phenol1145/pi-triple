@@ -122,6 +122,48 @@ test("validateContent returns error for unregistered ruleRef", () => {
   assert.ok(errs.some((e) => e.includes("rule not found: nonexistent")));
 });
 
+test("updateRule rejects axiom updates (axiom.json untouched)", () => {
+  const dir = freshDir();
+  const r = new RuleRegistry(dir);
+  r.bootstrapAxiom();
+  const v1 = r.resolveRule(AXIOM_RULE_ID)!.version;
+  const axiomUpdate = createEntry({
+    kind: "rule",
+    anchors: ["memory.fact"],
+    content: "fact = word ;",
+    ruleRef: AXIOM_RULE_ID,
+    id: AXIOM_RULE_ID,
+  });
+  const errs = r.updateRule(axiomUpdate);
+  assert.ok(errs.some((e) => e.includes("axiom cannot be updated")));
+  // axiom.json 不变：版本未递增，且未产生 rules/axiom.json 脏文件
+  assert.equal(r.resolveRule(AXIOM_RULE_ID)!.version, v1);
+  assert.ok(!existsSync(path.join(dir, "rules", "axiom.json")));
+});
+
+test("updateRule rejects non-rule kind (version unchanged)", () => {
+  const r = new RuleRegistry(freshDir());
+  r.bootstrapAxiom();
+  const rule = createEntry({
+    kind: "rule",
+    anchors: ["memory.fact"],
+    content: "fact = word ;",
+    ruleRef: AXIOM_RULE_ID,
+  });
+  r.registerRule(rule);
+  const v1 = r.resolveRule(rule.id)!.version;
+  const factUpdate = createEntry({
+    kind: "fact",
+    anchors: ["memory.fact"],
+    content: "fact = word, word ;",
+    ruleRef: AXIOM_RULE_ID,
+    id: rule.id,
+  });
+  const errs = r.updateRule(factUpdate);
+  assert.ok(errs.some((e) => e.includes('kind must be "rule"')));
+  assert.equal(r.resolveRule(rule.id)!.version, v1);
+});
+
 test("updateRule succeeds with valid EBNF and atomically writes", () => {
   const r = new RuleRegistry(freshDir());
   r.bootstrapAxiom();

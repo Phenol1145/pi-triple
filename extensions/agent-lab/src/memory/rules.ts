@@ -161,6 +161,10 @@ export class RuleRegistry {
   }
 
   updateRule(entry: MemoryEntry): string[] {
+    // 守卫：axiom 由 bootstrap 固定管理，resolveRule 固定读 axiom.json——经 updateRule 写入 rules/axiom.json 永不生效
+    if (entry.id === AXIOM_RULE_ID) return ["axiom cannot be updated via updateRule"];
+    if (entry.kind !== "rule") return ['kind must be "rule"'];
+
     // Parse EBNF first — fail early, old version untouched
     const result = parseEbnf(entry.content);
     if (!result.ok) {
