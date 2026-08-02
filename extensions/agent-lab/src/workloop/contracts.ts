@@ -1,4 +1,5 @@
 import type { MachineDefinition, ExecutorKind, Executor } from "./machine.ts";
+import type { MemorySdkPort, CommsSdkPort } from "../memory/sdk.ts";
 
 export interface WorkMessage { role: string; content: unknown; [key: string]: unknown }
 export interface WorkTool { name: string; [key: string]: unknown }
@@ -114,6 +115,10 @@ export interface WorkLoopSDK {
   checkpoint: CheckpointPort;
   telemetry: WorkLoopTelemetry;
   control: WorkLoopControl;
+  /** 记忆能力（Task 12 挂载；可选纯类型扩展，未挂载 = undefined，零行为变更）。 */
+  memory?: MemorySdkPort;
+  /** 通讯能力（Task 12 挂载；可选纯类型扩展，未挂载 = undefined，零行为变更）。 */
+  comms?: CommsSdkPort;
 }
 
 export interface WorkLoopImplementation {
