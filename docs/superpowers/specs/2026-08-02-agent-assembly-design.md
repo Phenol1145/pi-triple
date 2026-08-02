@@ -86,8 +86,8 @@ assembleAgent(ref, opts):
      ——账户已存在 ∧ 已注册 → 已被步骤 2b 拦截
      ——余额探测不参与幂等判定（余额是易变量，K=0 边界不可靠）
   5. 注册持久：AgentInstanceRecord { id, schedulerInstanceId(必传宿主), definition,
-     memorySpec?, endowment?, status: "ready"（既有枚举）, createdAtRoundId? }
-     —— **N-I9 交付项**：schema 迁移（created_round_id 改可空 + 新增 memory_spec/endowment 可空列）；装配语境无优化轮 → 哨兵 ""（迁移后合法）
+     memorySpec?, endowment?, status: "ready"（既有枚举）, createdAtRoundId }
+     —— **N-I9 交付项（第三轮裁决：选哨兵，不做 nullability 迁移）**：created_round_id 保持 NOT NULL，装配语境填哨兵 ""；memory_spec/endowment 经 ALTER TABLE ADD COLUMN（SQLite 支持）新增可空列
   6. 组装 AgentRuntime（§3）并返回
 ```
 
@@ -111,13 +111,13 @@ export interface MemorySpec {
 ### 2.5 记忆域模型（公域 = 全部 kind 的检索作用域，修正）
 
 - **公域记忆 = 全部 kind 的共享域**（fact/experience/preference/rule 等）——不是规则专属；公域**不拷贝进私域**，是**检索作用域**（N-C2 裁决：选 a 组合检索——本 spec 明确为对记忆系统 §5/§6 的模型变更，交付项全列）：
-  - **联合检索交付项**：MemoryHost.retrieve = 私域（水位过滤）+ 可及公域（PublicDomainStore official 条目，无水位——公域不随 resume 回滚）**并集**（去重按 id；排序私域优先）
+  - **联合检索交付项**：MemoryHost.retrieve = 私域（水位过滤）+ 可及公域 **并集**（去重按 id；排序私域优先）；**PublicDomainStore 加读访问器交付项**（`listOfficialEntries()`——现仅 submitWriteBack/fork/generation/deadLetter，无读面）；**可及公域 v1 = 全局公域全部 official 条目**（无域隔离——团队/全局域隔离留 D 审核路由）
   - **DSP 公域区交付项**：记忆入口区 = 私域段（水位过滤）+ 公域段（直接可见）两段拼接
   - **公域库位置**：全局共享目录（workDir 同级 `<root>/public-domain/`，跨 agent 共享）；初始化 = PublicDomainBootstrap（幂等：空库时写入种子条目）
   - **权限一致性**：resolveRule fallback 与 retrieve 公域作用域同为"可及公域"——无反向不对称
 - **私域**：agent 自己的沉淀（写）；fork = 源私域整库拷贝（拷贝后重建索引——多文件跨文件不一致的修复路径）
 - **规则链（特殊子集）**：规则是**校验依赖**（content 校验需要 ruleRef 可解析——运行前提），故需要解析链：`RuleRegistry` 扩展只读 fallback——resolveRule 先查私域 → 未命中查全局规则库；**写永远落私域**（agent 自建规则）
-  - 全局规则库 = 公域 kind=rule 条目（公理 + 基础规则）；装配层经 `RuleBootstrap`（新类型）注入；**位置/初始化（N-I3）**：全局共享目录 `<root>/rules/`；`RuleBootstrap.ensureInitialized()` 幂等 bootstrap（公理 + 基础规则模板；tmp+rename 先写者胜，无并发竞态）
+  - **全局规则库 = 公域 kind=rule 条目的只读视图（第三轮裁决——不建独立规则库目录，消除两库漂移）**：`RuleBootstrap` = 包装 PublicDomainStore 的 kind=rule 只读视图（resolveRule 读公域 rule 条目 + 现场编译 + 内存缓存）；种子唯一来源 = `PublicDomainBootstrap`（幂等：空库写入公理 + 基础规则模板）；审核 merge 后 fallback 天然最新（无独立物化副本）
   - 事实/经验/偏好**无此依赖**（只检索、不解析——retrieve 走公域作用域即可）
 - **fresh = 最小合集**：规则链（公理 + 基础规则 fallback）+ 私域空 + 公域可检索
 - **公域修改（任何 kind）= 公域提交**：fork 私域修改 → AuditChain 审核 → PublicDomainStore.submitWriteBack merge 回公域（复用 T8/T9，无新路径）；规则修改只是其一个实例——与 meta 审核循环裁决（operator 亲审）一致
@@ -140,8 +140,8 @@ export class AgentRuntime {
     ledger: LedgerPort;
   });
   run(req: { task: string; config?: unknown; optimizationRoundId?: string; signal?: AbortSignal }): Promise<WorkLoopResult>;
-  // 签名收窄（N-I1）：agentInstanceId/workLoopId/workLoopVersion/traceId/executionId/schedulerInstanceId 由本类自填（绑定 AgentDefinition，外部不可指定别的 workloop）
-  resume(checkpointId?: string): Promise<WorkLoopResult>;      // 无参 = latest（CheckpointStore.latest 公开访问器，交付项）
+  // 签名收窄（N-I1）：agentInstanceId/workLoopId/workLoopVersion/traceId/executionId/schedulerInstanceId 由本类自填（绑定 AgentDefinition，外部不可指定别的 workloop）；optimizationRoundId 无优化轮时填 ""（runner 必填，哨兵）
+  resume(checkpointId?: string): Promise<WorkLoopResult>;      // 无参 = latest（CheckpointStore.latest 公开访问器，交付项）；task 填恢复 checkpoint 关联任务文本（无则 ""）
   dispose(): void;                            // 清理 comms 监听/定时器
 }
 ```
@@ -156,7 +156,7 @@ export class AgentRuntime {
 
 ```typescript
 export interface LedgerPort {
-  open(agentId: string, initialK: number): void;      // 开户（已存在且余额=K → 续跑；否则抛错）
+  open(agentId: string, initialK: number): { created: boolean };  // 返回 created 标记（attempt-local 回滚前提）；已存在 → { created: false }（续跑由注册预检裁决）
   balance(agentId: string): number;
   credit(agentId: string, amount: number, reason: string): void;
   debit(agentId: string, amount: number, reason: string): void;  // 余额不足 → 抛错（adapter 检测 clamp）
@@ -175,15 +175,15 @@ export class SqliteLedgerAdapter implements LedgerPort {
 
 | # | 契约 | 落实方式（本子项目） |
 |---|---|---|
-| ① | write 幂等命中 → revive | MemoryHost 在 write 幂等命中后查 `isPendingActivation` → `WatermarkManager.revive(entryId, nextCheckpointSeq)`；**seq 供给（N-I7 改动面）**：MachineRuntime 加只读当前 seq 面 + runner 透传 getter（穿透 in-flight 实例——交付项，加方法不改行为） |
-| ② | idem 键表水位 prune | resume 时对 idem 表执行水位 prune（扩展记录格式 `{key, watermark}`；**旧行无 watermark = 视为 0**——保守保留永不误删；**prune seq 来源 = CheckpointStore.latest(agentId).seq ?? 0**，N-I6）；对齐 dedup.jsonl 先例 |
+| ① | write 幂等命中 → revive | MemoryHost 在 write 幂等命中后查 `isPendingActivation` → `WatermarkManager.revive(entryId, nextCheckpointSeq)`；**seq 供给（N-I7 改动面）**：MachineRuntime 加只读当前 seq 面 + runner 透传 getter（in-flight 注册表：构造时注册、run 结束注销——交付项，加方法不改行为） |
+| ② | idem 键表水位 prune | resume 时对 idem 表执行水位 prune（扩展记录格式 `{key, watermark}`；**旧行无 watermark = 视为 0**——保守保留永不误删；**prune seq = resume 目标 checkpoint 的 seq**（显式 checkpointId 时 = 该 checkpoint 的 seq；无参 = CheckpointStore.latest(agentId).seq ?? 0）——第三轮裁决：防"键存在但条目已回滚"不对称）；对齐 dedup.jsonl 先例 |
 | ③ | TTL sweeper | AgentRuntime 生命周期内定时清扫（默认每小时，可配）：draft 且 ttlExpiresAt 过期 → archived；dispose 清理定时器；**draft→promote 竞态**：归档与 promote 之间目标消失 → 明确报错路径 |
 | ④ | 审核窗口 | **配置透传 + onDecision 回调出口（砍定时器，YAGNI）**：AuditChain 加 onDecision 回调（v1 透传 decision）——D 的组合链驱动窗口与 merge，不回来改 C |
 | ⑤ | 方言解析 | sdk.memory.write 包装内**预检**：parseDialect 只做错误检测与警告（不替换 content——ruleRef EBNF 校验是权威）；**markdown = draft-only 方言**（写入恒草稿 + 明确反馈，写进 MemorySpec 文档） |
-| ⑥ | pit-communicate 真实桥接 + 纸带注入 | CommsTransport 适配器（mailbox 发送/接收/activePeers，**强制 delivery=auto**——agent↔agent 不可走 manual 人工门）；**收件缓冲（N-I4 交付项）**：comms-inbox.jsonl（workDir 下，持久化、容量上限默认 100 条）——消息先入队，run 开始时并入（委托式 = 任务文本；local-model = 任务种子；run 不活跃时消息累积不丢），并入时 WorkContext.messages 追加 user 消息（来源标记 `peer:<id>`） |
-| ⑦ | DSP restore 顺序 | **snapshot 生产者 = runner onCheckpoint 钩子（N-I2 交付项：runner 加 onCheckpoint 注册 + checkpoint.created payload 加 seq 字段；时序 = save 后 emit）** → DspBuilder.snapshot(seq, "realtime")；DspBuilder 加 `loadSnapshot(seq)`；首次 run 无快照 → 回退新鲜检索（防御） |
+| ⑥ | pit-communicate 真实桥接 + 纸带注入 | CommsTransport 适配器（mailbox 发送/接收/activePeers，**强制 delivery=auto**——agent↔agent 不可走 manual 人工门）；**收件缓冲（N-I4 + 第三轮 ack 语义）**：comms-inbox.jsonl（workDir 下，持久化、容量默认 100，溢出 drop-oldest）——消息入队带 `mergedAtSeq`；并入时 WorkContext.messages 追加 user 消息（来源标记 `peer:<id>`）；**ack**：checkpoint seq ≥ mergedAtSeq 落盘后删除（防 resume 回滚后消息丢失）；resume 重并入未 ack 条目按 msgId 去重（防重复） |
+| ⑦ | DSP restore 顺序 | **snapshot 生产者 = runner onCheckpoint 钩子（N-I2 交付项：runner 加 onCheckpoint 注册（按 agentInstanceId 过滤 + dispose 反注册）+ checkpoint.created payload 加 seq；时序 = save 后 emit）** → DspBuilder.snapshot(seq, "realtime")；DspBuilder 加 `loadSnapshot(seq)`；首次 run 无快照 → 回退新鲜检索（防御） |
 | ⑧ | AuditChain/DspBuilder dir 显式 | 装配时传入 workDir 下子目录——杜绝 process.cwd() 兜底 |
-| ⑨ | 身份映射 | IdentityMap 落 workDir；sessionId 刷新回调（pit-communicate session_start 时） |
+| ⑨ | 身份映射 | IdentityMap 落 workDir 为**权威源**（装配时注册 agentId → tenant/session，deps.comms.identity 仅作装配输入）；sessionId 刷新回调（pit-communicate session_start 时） |
 | ⑩ | comms dedup prune（补漏项） | resume 时 `CommsChannel.pruneDedup(seq)`（与 ② 同钩子——comms.ts 自注"调用方：resume 时"） |
 
 **未接线（明确留给 D）**：审核→merge 组合链端到端（AuditChain onDecision → PublicDomainStore.submitWriteBack 的驱动）；市场竞价接入；多货币账本语义。
