@@ -31,12 +31,16 @@ MemoryEntry {
   anchors: string[]                 // ≥1，锚点非空（写入校验；语义稳定由规则条目维护）
   content: string                   // 规则约束的构成（语言体系，§3）
   ruleRef: string                   // 指定构造规则的规则条目 id（axiom 除外，自指）
+  idempotencyKey?: string           // 沉淀幂等键（δ 观察时预分配，write 重放去重）
+  status: "draft" | "official" | "archived"   // 草稿/正式/归档（草稿区生命周期）
+  ttlExpiresAt?: number             // 草稿 TTL 到期时间（wall clock）
+  promotedFrom?: string             // 正式条目记录其来源草稿 id（promote 链）
   meta: {
     version: number, createdAt, updatedAt,
-    sourceTraces: Array<{ traceId, transitionSeq, branch? }>,   // 多源溯源（数组；branch 可选，跨分支引用）
+    sourceTraces: Array<{ traceId, transitionSeq, branch? }>,   // 多源溯源（数组；branch 可选）
     hitCount: number,               // 旁路计数器（不参与版本化，不保证崩溃精确）
-    checkpointWatermark?: number,   // 落库时的 checkpoint seq（resume 一致性，§4.2）
-    dialectVersion?: string,        // 写入所用方言适配器版本（适配器更新后旧条目保留原版本记录）
+    dialectVersion?: string,        // 写入所用方言适配器版本
+    versions?: Array<{ version, watermark, contentHash }>  // 版本级水位线（R1：每版本记录落地 seq）
   }
 }
 ```
@@ -44,7 +48,7 @@ MemoryEntry {
 **不变量（五条，含修订）**：
 1. **原子性**——一条目 = 一个可独立理解的语义事实。**约定级**（语义不可机械验证），EBNF 结构尽力约束（单谓词结构）；不做机械校验
 2. **不可再分**——引用必须引用整个条目（不允许"条目的一部分"）
-3. **版本化 CAS**——更新 = 新版本（不原地改）；**v1 版本模型 = 库级 generation**（公域回写声明 base generation；基线过期 → 拒绝 + **饿死防护**：允许基于新 base 重新提交同一修改（δ 重放沉淀），重试 ≤3 次；DAG（parents[]+内容哈希+三路合并）列为后续专项）；单条目版本仍为整数递增（条目内）
+3. **版本化 CAS**——更新 = 新版本（不原地改）；**v1 版本模型 = 库级 generation + 条目级 entry-overlap 冲突检测**：generation 仅作快照标识/游标（不参与冲突判定）；回写声明 base（generation + 条目集合）→ merge 点做 **entry-overlap 检测**（提交 delta 与当前库的条目重叠）→ 不重叠自动 **fast-forward**（零冲突合入），重叠 → 驳回（提交方基于新 base 重提 delta，重试 ≤3）；**merge 序列化 + generation 原子递增**（单写者 merge 队列）；**重试耗尽 → 死信区**（事件留痕 + operator 可处置，不静默丢）；DAG（parents[]+内容哈希+三路合并）列为后续专项
 4. **溯源完整**——每条目携带完整 sourceTraces（数组）；跨 fork 拷贝时物化溯源摘要（源 agent 的 Trace 不可达时，拷贝时固化来源描述）
 5. **锚点非空**——写入即校验；无锚点拒绝
 6. **热字段分离**——hitCount 等高频字段走旁路计数器（独立存储，不触发版本化、不参与 CAS、崩溃回退可接受）
@@ -85,9 +89,9 @@ L0 语义层：统一语义树（字段/关系/值域——模型无关）
 - **重试上限**：每条目校验失败重试 ≤2 次，超限直接草稿区（token = 货币，封住烧钱循环）
 
 **草稿区 promote 路径（第三轮评审 N5）**：
-- 草稿条目可被 **δ 显式重写 promote**（修正 content 后重新 write，校验通过 → 正式条目，替代原草稿）
+- 草稿条目可被 **δ 显式重写 promote**：修正 content 后重新 write → 校验通过 → 正式条目——**同 id、version 延续**（promote 是新版本而非新条目），`promotedFrom` 记录草稿 id，草稿 sourceTraces 并入正式条目，idempotencyKey 新生（草稿已消费的 key 不复用）
 - 低置信方言（markdown）写入时**明确反馈**：返回 `unverified + TTL 7 天 + 可 promote`（写入方知道状态，不静默）
-- TTL 到期未 promote → 归档（可恢复查询，检索默认排除）——不静默消失，事件表留痕
+- **TTL 时钟语义**：wall clock（低频 agent 零活跃转移也到期）；TTL 到期 → archived（可 promote-from-archive 恢复——归档不删数据，仅检索排除）；事件表留痕
 
 ### 3.4 agent 理解语法的三重通道
 
@@ -104,19 +108,20 @@ L0 语义层：统一语义树（字段/关系/值域——模型无关）
        → 原子落库（tmp+rename；写入顺序：条目先、索引后；启动时索引重建/校验）
 ```
 
-### 4.2 resume 一致性（水位线方案，第三轮评审 N1）
+### 4.2 resume 一致性（版本级水位线，第四轮评审 R1）
 
-- 条目落库时记录 `checkpointWatermark`（落库时的 checkpoint seq）
-- **resume 时 L3 屏蔽规则**：恢复的 checkpoint seq 为 S——检索与投影默认**排除 checkpointWatermark > S 的条目**（“未来沉淀”隔离，不参与行为）；不删除（版本化保留）
-- 效果：纸带/L2/DSP 快照/缓冲回滚与 L3 隔离同步——单 agent 时间旅行一致；sourceTraces 悬空不产生（未来条目被屏蔽不引用）
+- **watermark 赋值语义（钉死）**：条目/版本落库时，watermark = **该转移完成时将保存的 checkpoint seq**（转移开始时即预定——引擎提供 nextCheckpointSeq；禁止取“上一已完成 seq”——会导致 sourceTraces 悬空）
+- **版本级粒度**：watermark 挂在**版本**上（每版本记录落地 seq，`meta.versions[]`）——屏蔽规则：**遮蔽 watermark > S 的版本，可见版本 = watermark ≤ S 的最新版**（条目 v1 在 S 时可见、v2 被屏蔽，互不干扰；与 DSP 快照一致——快照在 S 时刻生成只含当时可见版本）
+- **resume 时 L3 屏蔽规则（仅私域）**：恢复的 checkpoint seq 为 S——检索/投影默认排除 watermark > S 的版本（“未来沉淀”隔离，不删除）；**公域不随 resume 回滚**（性质同 comms，不可撤回）
 - 该机制在子项目 B 内实现，**不推给子项目 C**（C 的装配 fork 另定义记忆域快照的复制语义）
 
-### 4.3 幂等与缓冲（第三轮评审 N3）
+### 4.3 幂等与缓冲（第三轮 N3 + 第四轮 C-1）
 
 - **write-behind 缓冲条目预分配 `idempotencyKey`**（UUID，δ 观察时即生成）
 - `sdk.memory.write(entry)` 携带 key：落库时检查 key 已存在 → 返回已有条目（**幂等，重放不重复**）
-- **消费标记与落库同批次**：条目文件 + 消费标记同目录顺序写（条目先、标记后、索引最后）——崩溃恢复后缓冲重放不再产生重复条目
-- 诚实声明：转移中途崩溃时该转移内未消费的缓冲观察丢失（checkpoint 在转移完成后保存——这是已知边界，文档化，不承诺“崩溃不丢”）
+- **幂等命中 × 屏蔽条目（C-1 修复）**：命中条目 watermark > 当前 resume seq（被水位线屏蔽的“未来沉淀”）→ **以同 key 重落库**（内容不变，watermark = 当前转移的 nextCheckpointSeq）——记忆复活，不永久不可见
+- **消费标记与落库同批次**：条目文件 + 消费标记同目录顺序写（条目先、标记后、索引最后）——崩溃恢复后缓冲重放不再产生重复条目；**幂等键表随 checkpoint 水位同步**（resume 时丢弃晚于 S 的键表增量——防“键存在但条目被回滚”不对称）
+- 诚实声明：转移中途崩溃时该转移内未消费的缓冲观察丢失（checkpoint 在转移完成后保存——已知边界，文档化）
 - **沉淀自动钩子（v1 轻量）**：DSP 投影加"本轮可沉淀候选"提示位（转移结束时列出候选观察，δ 决定是否沉淀——缓解"LLM 忘了写"）
 - **并发控制**：统一入口 MemoryStore 串行化写入（单写者队列），CAS 冲突重试语义明确
 - **事件-落库顺序**：先落库、后发事件（事件可重放补偿）；崩溃窗口内以落库为准
@@ -133,16 +138,26 @@ L0 语义层：统一语义树（字段/关系/值域——模型无关）
 私域：agent 专属，默认沉淀目标，读写仅本 agent
 公域：fork-merge 模型（类 extension/git）
   初始化：从原始记忆库拷贝（fork）→ 本地自由修改
-  回写：声明 base version → 冲突检测（基线过期 → 拒绝，要求重新 fork）
+  回写：声明 base（generation + 条目集合）→ merge 点 **entry-overlap 检测**（提交 delta 与当前库条目重叠）→ 不重叠自动 fast-forward（零冲突合入），重叠 → 驳回（基于新 base 重提 delta，重试 ≤3）→ 耗尽 → 死信区（事件留痕 + operator 处置，不静默丢）
   同步：显式 pull（定期拉取上游 + 冲突检测）；fork 漂移防护 = base version 强制
 ```
 
-**审核链（v1 完整矩阵，用户裁决）**——参数化表（第三轮评审 N4）：
+**审核链（v1 完整矩阵，用户裁决）**——参数化表（第三轮 N4 + 第四轮 R3）：
 - agent 侧策略（可配置）：全员投票 / veto 制 / 评审代表；operator 侧策略（可配置）：agent 代审 / 一致放行 / 亲自审
 - **合成规则（串联）**：agent 侧先审 → 通过后 operator 侧策略生效 → 任一否决 = 拒绝（agent 侧否决直接拒绝；operator 是最终否决权，可推翻 agent 侧通过）
-- **quorum 参数**：阈值默认**过半活跃**（可配置）；超时默认 **5 分钟**（可配置）；**弃权计入分母**（离线/超时 = 弃权，不阻塞但不稀释分母——弃权不视为通过）；平局（票数相等）→ operator 裁决
+- **策略 × 基数 × 弃权 × 平局组合矩阵**（第四轮 R3）：
+  | agent 策略 | quorum 基数 | 弃权处理 | 平局 |
+  |---|---|---|---|
+  | 全员投票 | 活跃数（提交时在线快照） | 弃权计入分母（弃权≠通过票，也不稀释阈值——分母固定为提交时活跃快照）；默认需过半赞成 | 票数相等 → operator 裁决 |
+  | veto 制 | 全部相关 agent（含离线） | 离线=弃权（不否决）；**无 veto = 通过**（不需赞成票过半） | 不适用 |
+  | 评审代表 | 被选代表数（默认 2，可配） | 代表弃权 → 换选补充 | 代表分歧 → operator 裁决 |
+- **超时参数**：默认 5 分钟（可配置）；超时未投 = 弃权
 - **聚合投递**：审核请求按窗口聚合批量投递（默认 1 分钟窗口或 10 条，可配置）
-- **operator 一票否决** + 否决时可附反馈（经 comms 送达提交 agent；审核结果落 L3/事件表，提交方可轮询——防“提交方状态悬挂”)
+- **审核批准与 base 解耦（第四轮 R2）**：审核批准的是 delta **内容**；merge 点做 entry-overlap 检测——重叠 → 驳回重审（批准作废，重新提交），不重叠 → 自动 fast-forward（批准仍有效）——消除“审核通过 ≠ merge 成功”的 TOCTOU
+- **operator 一票否决** + 否决时可附反馈（经 comms 送达提交 agent）
+- **审核结果仅落审计事件表，不落 L3（第四轮 R3）**：审核动作/结果不是记忆条目——防递归审核；任何引用审核动作的条目标记**不可回写**（写校验链拒绝，防私域回写泄漏）
+- **meta 审核循环**：审核规则/审核策略条目的修改固定走 operator 亲审
+- 按域审核：团队域提交 → 团队相关 agent；全局域提交 → 全体 + operator
 - **审核结果条目递归封堵**：审核结果/审核动作本身**不写入公域**（写审计事件表，不进公域记忆——防递归审核）
 - **meta 审核循环**：审核规则/审核策略条目的修改固定走 operator 亲审
 - 按域审核：团队域提交 → 团队相关 agent；全局域提交 → 全体 + operator
@@ -164,7 +179,7 @@ L0 语义层：统一语义树（字段/关系/值域——模型无关）
 - **comms 与用户消息同通道（用户裁决）**：纸带片段作为 user 消息追加进接收方纸带（带来源标记 `peer:<id>`），与 operator 消息走完全相同注入路径——不绕过校验链（因为不冒充记忆）
 - **传输复用 pit-communicate + 语义桥接 `sdk.comms`**（C 方案）：`send(peer, tapeFragment)` / 收件事件 `comms_received`（可触发转移）；进 WorkLoopSDK
 - **comms 独立日志**（append-only，checkpoint 只存日志指针——防 checkpoint 膨胀）
-- **幂等**：接收侧按 msgId 去重——msgId 由 sdk.comms 发送方生成（UUID）；去重范围 = 接收 agent 全局；**去重状态持久化**（comms 日志旁 dedup 文件，重启加载——pit-communicate processedIds 是内存态，重启后重复投递，接收侧必须幂等）；纸带 fork/clone 时 comms 消息不随分支重放（消息是事件不是纸带内容，纸带中的 observation 副本是数据可克隆）
+- **幂等**：接收侧按 msgId 去重——msgId 由 sdk.comms 发送方生成（UUID）；去重范围 = 接收 agent 全局；**去重状态随 checkpoint 水位同步（第四轮 R4）**：dedup 记录带 checkpoint 水位，resume 后丢弃晚于 S 的 dedup 记录（允许重复投递，纸带 append-only + 内容比对兜底——防“已投递但被拒收”的幽灵拒收）；纸带 fork/clone 时 comms 消息不随分支重放（消息是事件不是纸带内容）
 - **mode 映射**：agent↔agent 消息**必须 auto 模式**（manual 模式会被人力门卡死"近实时"）
 - **身份映射**：agentId → (tenantId, sessionId) 映射层（mailbox 按 tenant/session 寻址——需新建）；**映射持久化 + 刷新**：sessionId 易失（会话重启失效）——映射表存 agentId → tenantId + 最新 session 指针，会话重启时刷新指针；**投递失败（目标离线）→ 消息进队列等待上线**（mailbox pending 语义复用），不静默丢
 - **大小上限**：tapeFragment 上限（默认 4KB，可配置——与 DSP 预算联动）；flow human 门 = comms 等待点（带超时/取消语义；等待中收到 comms_received 事件 → 排队不中断，waiting_human 恢复后一并处理）
@@ -192,14 +207,14 @@ L0 语义层：统一语义树（字段/关系/值域——模型无关）
 1. LLM 无状态读写头；记忆全部由状态机/存储侧持有
 2. L2/L3 进可见层唯一通道 = 投影；comms/用户消息 = 纸带 user 通道（不冒充记忆）
 3. 层间冗余真相源：L2 > L3 > L1 片段
-4. 版本模型 = 库级 generation + base 声明 + 冲突拒绝 + 饿死防护重试（DAG 后续）；条目级版本整数递增
+4. 版本模型 = 库级 generation（仅作快照标识）+ 条目级 entry-overlap 冲突检测 + merge 原子递增 + fast-forward/重提重试（≤3）/死信区；条目级版本整数递增
 5. 沉淀先落库后事件；写入顺序：条目 + 消费标记同批次、索引最后；启动索引重建
-6. 草稿区 TTL + 重试上限 + 显式 promote 路径（不静默丢）
-7. comms 幂等（msgId 去重，去重状态持久化）+ auto mode + 大小上限 + 离线排队
-8. DSP 检索快照进 checkpoint（可重放性；4KB 上限；恢复不计数）
+6. 草稿区 TTL + 重试上限 + 显式 promote 路径（同 id 新版本，不静默丢）
+7. comms 幂等（msgId 去重，去重状态随 checkpoint 水位同步）+ auto mode + 大小上限 + 离线排队
+8. DSP 检索快照进 checkpoint（可重放性；4KB 上限；恢复不计数；与版本级水位线一致——快照只含当时可见版本）
 9. 规则更新事务（EBNF + 编译产物同版本原子生效）
-10. 审核 quorum/超时/弃权参数化；审核结果不进公域（防递归）；meta 规则修改 operator 亲审
-11. resume 水位线：checkpointWatermark > S 的条目标定“未来沉淀”，检索/投影屏蔽（不删除）
+10. 审核组合矩阵参数化（基数/弃权/平局）；审核批准与 base 解耦（merge 点重检）；审核结果仅审计事件表（防递归）；meta 规则修改 operator 亲审
+11. resume 水位线（仅私域）：遮蔽 watermark > S 的版本，可见版本 = watermark ≤ S 的最新版；公域不随 resume 回滚（同 comms）
 
 ## 12. 隐藏依赖与风险（对抗性评审确认）
 
