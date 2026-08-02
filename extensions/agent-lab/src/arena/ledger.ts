@@ -75,6 +75,10 @@ export class SqliteLedger implements Ledger {
     const row = this.db.prepare(`SELECT balance FROM credits WHERE agent = ?`).get(a) as { balance: number } | undefined;
     return row?.balance ?? 0;
   }
+  /** 删除账户（装配回滚/清理用）。不存在 → no-op。 */
+  removeAccount(a: AgentId): void {
+    this.db.prepare(`DELETE FROM credits WHERE agent = ?`).run(a);
+  }
   ensureEndowed(a: AgentId, m: ModelInfo, templateId?: string): void {
     if (this.db.prepare(`SELECT agent FROM credits WHERE agent = ?`).get(a)) return;
     const initial = this.endowment.initialCredits(m);
