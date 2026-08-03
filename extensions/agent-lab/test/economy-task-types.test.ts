@@ -87,7 +87,7 @@ test("③ list 全量：按注册顺序返回全部类型", () => {
 test("④a insertAgent/getAgent round-trips accepts（JSON array）", () => {
   const db = new DatabaseSync(":memory:");
   const repo = new CoreRepository(db);
-  repo.insertAgent(agentRecord("agent-acc-1", { accepts: ["market", "review"] }));
+  repo.insertAgent(agentRecord("agent-acc-1", { model: "openai/gpt-4o", sourceTemplateId: "template-A", accepts: ["market", "review"] }));
   const got = repo.getAgent("agent-acc-1");
   assert.ok(got !== undefined);
   assert.deepEqual(got.accepts, ["market", "review"]);
@@ -95,6 +95,10 @@ test("④a insertAgent/getAgent round-trips accepts（JSON array）", () => {
   const listed = repo.listAgents("si-1");
   assert.equal(listed.length, 1);
   assert.deepEqual(listed[0].accepts, ["market", "review"]);
+  // findAgentByModel 同一列 round-trip（fix round 1：补 accepts 路径覆盖）
+  const found = repo.findAgentByModel("si-1", "openai/gpt-4o", "template-A");
+  assert.ok(found !== undefined);
+  assert.deepEqual(found.accepts, ["market", "review"]);
   db.close();
 });
 
