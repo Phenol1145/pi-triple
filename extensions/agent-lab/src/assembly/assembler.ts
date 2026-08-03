@@ -6,6 +6,7 @@
 //       config 来源 = 解析定义携带的可选 config 字段（WorkLoopDefinition 类型无此字段，duck-typed；
 //       AssembleOptions 亦无 config 输入——T1 冻结，定义级 config 为装配语境默认配置））
 //   2b. agentStore.getAgent(agentId)（agentId = idGen 生成 UUID，供后续复用）→ 已注册抛错（幂等冲突）
+//   2b′. RESERVED_IDS 黑名单校验（spec §2：池/校准执行者不经外部装配路径；早于开户/记忆域）
 //   2c. validateMemorySpec(def.memory ?? opts.memory)（def.memory 同为 duck-typed 可选字段）
 //   3. 记忆域初始化：
 //      fresh → 空私域 + fallback=ruleBootstrap（MemoryHost 构造于 <root>/agents/<id>/）
@@ -35,6 +36,7 @@ import { CommsChannel } from "../memory/comms.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { DEFAULT_MARKET_CONFIG } from "../config.ts";
 import type { LedgerPort } from "./ledger-port.ts";
+import { RESERVED_IDS } from "../economy/central-pool.ts";
 import type { RuleBootstrap } from "./rule-bootstrap.ts";
 import { MemoryHost } from "./memory-host.ts";
 import { AgentRuntime } from "./agent-runtime.ts";
@@ -104,6 +106,11 @@ class Assembler implements AgentAssembler {
     const agentId = this.idGen();
     if (this.deps.agentStore.getAgent(agentId)) {
       throw new Error(`agent already registered: ${agentId}`);
+    }
+
+    // ── 2b′. RESERVED_IDS 校验（spec §2：黑名单阻止外部装配；早于开户/记忆域初始化）──
+    if (RESERVED_IDS.has(agentId)) {
+      throw new Error(`reserved agent id: ${agentId}`);
     }
 
     // ── 2c. memory 声明校验 ───────────────────────────────────────

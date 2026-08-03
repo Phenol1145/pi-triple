@@ -5,6 +5,7 @@
 //   - freeze: reason → taskId 派生键 `freeze:<agentId>:<reason>`；SqliteLedger.freeze 返回 false → 抛错
 //   - unfreeze: 整笔解冻（SqliteLedger.unfreeze 按 taskId 整笔）
 import { SqliteLedger } from "../arena/ledger.ts";
+import { RESERVED_IDS } from "../economy/central-pool.ts";
 
 export interface LedgerPort {
   open(agentId: string, initialK: number): { created: boolean };
@@ -25,6 +26,10 @@ export class SqliteLedgerAdapter implements LedgerPort {
   }
 
   open(agentId: string, initialK: number): { created: boolean } {
+    // RESERVED_IDS 黑名单前置拒绝（spec §2 / I-R5-2）：池/校准执行者不经外部装配路径开户
+    if (RESERVED_IDS.has(agentId)) {
+      throw new Error(`reserved agent id: ${agentId}`);
+    }
     // 已存在（含零余额账户）→ 续跑信号，不重复入账
     const exists = this.impl.leaderboard().some((r) => r.agent === agentId);
     if (exists) return { created: false };
