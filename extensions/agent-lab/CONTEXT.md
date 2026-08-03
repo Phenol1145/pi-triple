@@ -76,3 +76,37 @@ _Avoid_: 把定义 id 当作实例身份去 UUID 化
 _Avoid_: 用随机 UUID 作事件幂等键
 
 **判断标准**：是「某个具体运行实例」（会改名、被 FK 引用、有生命周期）→ UUID 身份 + name；是「类型/契约」（代码按语义引用）或「幂等键」→ 保持语义名。
+
+### 记忆系统（L3 语义记忆，`src/memory/`）
+
+**三层记忆**：L1 纸带（Context/Session，append-only + 时间索引）；L2 数据域（credit/elo 等 State 面持久数据）；**L3 语义记忆**（LLM 可读写的知识库——本子系统）。**统一不变量：LLM 是无状态读写头；L2/L3 进模型可见层的唯一通道 = 投影（DSP）；通讯与用户消息 = 纸带 user 通道（不冒充记忆）**。
+
+**MemoryEntry**:
+L3 的原子单位——单一清晰语义、不可再分、版本化（content 不可变、修改即新版本）、溯源数组、锚点非空（`anchor: <文本> `，`text` 段）。kind 开放注册（`kind:<id>`）；内置 **axiom**（唯一公理——自我引用「遵循公理」的自我指涉，存在性等同一阶逻辑一致性，冲突须拒绝）、**rule**（行为规则：id/触发条件/参数/EBNF 语法/默认值/优先级）、**fact**、**experience**、**preference**；其余记为方言条目。参数无单位（仅实例局部语义）。
+_Avoid_: note, snippet, chunk
+
+**语言体系（四层）**：L0 语义层（knowledge/experience/preference/...）；L1 语法层（**EBNF**——人类可续写的表达文法；其他结构化格式（JSON/XML）经 fenced 围栏识别转交确定性解析）；L2 方言层（JSON/XML 确定性 + markdown（默认低置信 → draft-only 草稿区）；自然语言永不承诺）；L3 语义约束层（事实=两实体+关系；经验=场景+动作+效果）。LLM 读取时**只看语义不懂语法**——语法服务于持久化与迁移。
+
+**DSP（动态系统提示词）**：每轮运行时重建的可见层投影——记忆入口区（工作记忆）+ 工具列表区 + 投影区（阈值参数注入）。静态协议（SSP）= AGENT.md 固定工作协议（仅纸带方式/delivery=auto/身份/记乎原则），**不写具体记忆**。L2 credit → DSP 投影注入（非条目）。
+
+**公域（Public Domain）**：全局共享 L3（全部 kind 的检索作用域）。**私域**：每 agent 自己的 L3。写入私域自由；**发轫（genesis）**：私域→公域 fork-merge（发轫分支自由 merge，merge 需审核链）；公域记忆**不可直接编辑**。规则的唯一解析依赖 = 公域（fallback 链）。
+
+**审核链**：单一审核算子 compose：operator（信任源）/model（agent）/self（预定义规则，无 LLM 参与，试运行/拒绝词）；组合矩阵（C1-C9）+ quorum + 超时/弃权规则 + operator 一票否决；结果仅入审计事件表（不可回写标记）。
+
+**通讯**：agent↔agent / agent↔operator = **纸带交换**（CommsChannel：msgId 幂等；auto mode：写入方写纸带（L1）+ 接收方 user 消息注入；TUI 收集通讯记录）。桥接 pit-communicate 传输。
+
+### 装配层（Agent Assembly，`src/assembly/`）
+
+**Assembler**：6 步装配（resolve workloop → configSchema 校验 → 注册预检 → 记忆域初始化 → 开户 → 注册持久化）→ 组装 AgentRuntime。**装配原子性**（attempt-local）：任何后续步骤失败 → 回滚本次副作用（记忆域目录删除 + 账户注销——仅限本次创建）。
+
+**AgentRuntime**：装配产物——run(task, config) 自填绑定字段（traceId/executionId/agentInstanceId/workLoopId/optimizerRoundId），委托共享注入的 WorkLoopRunner 执行；resume = resumeFromCheckpointId；dispose 停后台组件。
+
+**记忆域**：agent 专属 L2+L3 落盘目录（`.pi-platform-data/agents/<id>/`）。**fresh** = 最小记忆合集（公理 + 基础规则 + 空私域）；**fork** = 最小合集 + 源私域整库拷贝（索引重建 + 独立演化）。
+
+**LedgerPort**：账本抽象——open（endowment 首次记账，返回 created 标记）/balance/debit（**余额预检抛错**——钱的事 fail-fast）/freeze/unfreeze/settle；removeAccount 仅装配回滚（attempt-local）。**记忆域初始化与开户成功解耦**：记忆域失败不取消既有账户（新开户失败则回滚——语义差异）。
+
+**续跑幂等**（崩溃后重装配）：oracle = **注册记录预检**（getAgent——唯一全序 oracle）；开户幂等 = created 标记（余额不参与判定）；记忆域残留不删除（保守）。
+
+**规则链（Rule Chain）**：agent 的完整行为规则 = 公域规则库（kind=rule 只读视图）+ 私域解析/公理——可续写（LLM 生成 EBNF → 私域 → 发轫进公域）。**修改规则：改公共规则 = 版本分叉 + 审核；改自己 = 私域新规则条目（若公域已有更具体规则则冗余）**。规则冲突 = 规则条目自身（触发相同、参数不同）→ **每次装配时审核**（默认值候补）+ 发轫进公域时审核。
+
+_Avoid_: （装配层）provision, bootstrap（bootstrap 已用于种子初始化场景，避免泛指装配）
