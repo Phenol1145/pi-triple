@@ -79,7 +79,7 @@ export class SqliteLedger implements Ledger {
       for (const row of rows) {
         const uuid = resolveAgentId(row.agent);
         if (uuid !== undefined && uuid !== row.agent) {
-          this.db.prepare(`UPDATE ${table} SET ${col} = ? WHERE ${pkCol} = ?`).run(uuid, row.pk);
+          this.db.prepare(`UPDATE ${table} SET ${col} = ? WHERE ${pkCol} = ? AND ${col} = ?`).run(uuid, row.pk, row.agent);
         }
       }
     }

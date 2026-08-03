@@ -115,3 +115,37 @@ test("迁移：resolveAgentId 返回相同值不更新", () => {
   assert.equal(rows[0].agent, "uuid-1");
   assert.equal(rows[0].balance, 100);
 });
+
+test("迁移：arena_freezes 复合主键下只更新目标行", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS credits (
+      agent TEXT PRIMARY KEY, balance REAL NOT NULL, frozen REAL NOT NULL DEFAULT 0, updated_ts INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS credit_tx (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, agent TEXT NOT NULL, delta REAL NOT NULL,
+      reason TEXT, task_id TEXT, round INTEGER, agent_turn INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS market_tasks (
+      task_id TEXT PRIMARY KEY, round INTEGER, role TEXT, prompt TEXT, difficulty TEXT,
+      odds REAL, reward REAL, winner TEXT, winner_model TEXT, stake REAL, status TEXT, created_ts INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS arena_freezes (
+      task_id TEXT NOT NULL, agent TEXT NOT NULL, amount REAL NOT NULL, created_ts INTEGER NOT NULL,
+      PRIMARY KEY (task_id, agent)
+    );
+  `);
+  // 复合主键时代，同一 task_id 可有多行不同 agent
+  db.prepare(`INSERT INTO arena_freezes (task_id, agent, amount, created_ts) VALUES (?, ?, ?, ?)`).run("task-1", "openai/gpt-4o", 100, Date.now());
+  db.prepare(`INSERT INTO arena_freezes (task_id, agent, amount, created_ts) VALUES (?, ?, ?, ?)`).run("task-1", "anthropic/claude-3", 200, Date.now());
+
+  const resolveAgentId = makeResolver({ "openai/gpt-4o": "uuid-1" });
+  new SqliteLedger(db, fixedEndow, resolveAgentId);
+
+  const rows = db.prepare(`SELECT task_id, agent, amount FROM arena_freezes ORDER BY amount`).all() as { task_id: string; agent: string; amount: number }[];
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].agent, "uuid-1"); // 被 map 的迁移
+  assert.equal(rows[0].amount, 100);
+  assert.equal(rows[1].agent, "anthropic/claude-3"); // 未被 map 的保持不变
+  assert.equal(rows[1].amount, 200);
+});
