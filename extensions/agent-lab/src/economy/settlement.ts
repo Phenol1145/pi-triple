@@ -67,6 +67,12 @@ export function computeConsensus(reviews: ReviewInput[]): { R: number; accuracie
   if (reviews.length === 0) {
     throw new Error("computeConsensus: empty reviews");
   }
+  // fix round 3（H2）：r_i ∈ [0,1] 边界守卫——越界抛错（NaN 亦命中：比较全 false）。
+  for (const r of reviews) {
+    if (!(r.score >= 0 && r.score <= 1)) {
+      throw new Error(`computeConsensus: score out of range [0,1]: ${r.score}`);
+    }
+  }
   const sorted = [...reviews].sort((a, b) => a.score - b.score);
   // n 奇数 → 正中位；n 偶数 → 上中位数（均等于 index floor(n/2)）
   const R = sorted[Math.floor(reviews.length / 2)].score;
@@ -92,6 +98,11 @@ export function planSettlement(args: PlanSettlementArgs): SettlementPlan {
   const majorError = args.majorError === true;
   const isCalibration = args.groundTruthScore !== undefined;
 
+  // fix round 3（H2）：O_r ≥ 2 守卫（spec M-R4-2 禁止退化——settle_i 公式要求）。
+  if (task.oddsR < 2) {
+    throw new Error(`planSettlement: oddsR must be ≥ 2 (M-R4-2), got ${task.oddsR}`);
+  }
+
   // 共识 R 恒为评审中位数（校准任务亦保留——观测/事件使用）；准确度按锚点计算。
   const { R } = computeConsensus(reviews);
   const c = isCalibration ? args.groundTruthScore! : R;
@@ -103,6 +114,8 @@ export function planSettlement(args: PlanSettlementArgs): SettlementPlan {
 
   // ── 执行者结算 ──
   // majorError → −stake（显式分支，不代入公式）；否则 stake×(O−1)×(2c−1)
+  // 协调者裁决：majorError → elo outcome=0（K×(0−expected) 与 −stake 一致惩罚）；
+  // spec 未钉死，D2 ledger 记录。
   const outcome = majorError ? 0 : c;
   const executorSettle = majorError ? -winnerStake : winnerStake * (task.odds - 1) * (2 * c - 1);
   const domainCur = domainElo(executorElo, task.typeId);

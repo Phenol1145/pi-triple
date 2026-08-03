@@ -384,3 +384,42 @@ test("market.settle：groundTruthScore 经 state 透传 → c 按 ground truth�
 
   db.close();
 });
+
+// ── 12. 守卫（fix round 3：空评审 / r_i∈[0,1] 边界 / O_r≥2）──────────
+test("守卫：computeConsensus 空评审抛错（empty reviews）", () => {
+  assert.throws(() => computeConsensus([]), /empty reviews/);
+});
+
+test("守卫：r 越界 [0,1] 抛错（r=1.5）——computeConsensus 直接校验", () => {
+  assert.throws(
+    () =>
+      computeConsensus([
+        { reviewerId: "r1", score: 0.2 },
+        { reviewerId: "r2", score: 1.5 },
+      ]),
+    /out of range/
+  );
+});
+
+test("守卫：r 越界 [0,1] 抛错（r=−0.5 下界）", () => {
+  assert.throws(
+    () =>
+      computeConsensus([
+        { reviewerId: "r1", score: -0.5 },
+        { reviewerId: "r2", score: 0.7 },
+      ]),
+    /out of range/
+  );
+});
+
+test("守卫：planSettlement r 越界抛错（r=1.5 经 computeConsensus 校验）", () => {
+  const reviews: ReviewInput[] = [
+    { reviewerId: "r1", score: 0.2 },
+    { reviewerId: "r2", score: 1.5 },
+  ];
+  assert.throws(() => planSettlement(standardArgs(makeTask(), reviews)), /out of range/);
+});
+
+test("守卫：O_r<2 抛错（oddsR=1——M-R4-2 禁止退化）", () => {
+  assert.throws(() => planSettlement(standardArgs(makeTask({ oddsR: 1 }))), /oddsR/);
+});
