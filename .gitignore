@@ -9,3 +9,4 @@ dist/
 *.tgz
 *.zip
 pi-triple.json
+.DS_Store
