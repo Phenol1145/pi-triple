@@ -296,6 +296,16 @@ test("校准任务：groundTruthScore=0.9 → c=0.9（非 R）；a_i=1−|r_i−
   closeTo(plan.reviewerSettles.get("r5")!, 2);
 });
 
+test("校准锚点越界守卫：groundTruthScore<0 或 >1 抛错（H3）", () => {
+  const reviews: ReviewInput[] = [{ reviewerId: "r1", score: 0.8 }];
+  const args = standardArgs(makeTask({ isCalibration: true }), reviews);
+  assert.throws(() => planSettlement({ ...args, groundTruthScore: -0.1 }), /groundTruthScore must be in \[0,1\]/);
+  assert.throws(() => planSettlement({ ...args, groundTruthScore: 1.5 }), /groundTruthScore must be in \[0,1\]/);
+  // 边界合法
+  const ok = planSettlement({ ...args, groundTruthScore: 0 });
+  closeTo(ok.executorSettle, 15 * (makeTask({}).odds - 1) * (2 * 0 - 1));
+});
+
 // ── 8. odds=1 退化 ─────────────────────────────────────────────────
 test("odds=1 退化：settle=0（义务性任务）；税不含执行者项", () => {
   const plan = planSettlement(standardArgs(makeTask({ odds: 1 })));

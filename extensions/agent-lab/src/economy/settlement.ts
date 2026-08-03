@@ -97,6 +97,10 @@ export function planSettlement(args: PlanSettlementArgs): SettlementPlan {
   const { task, winnerId, winnerStake, reviews, eloFn, taxRate, executorElo, reviewerElos, taskRating } = args;
   const majorError = args.majorError === true;
   const isCalibration = args.groundTruthScore !== undefined;
+  // fix round 3（H3）：校准锚点范围守卫——越界会产出越界 c/a_i/settle（评审者 r_i 已有 [0,1] 守卫）。
+  if (isCalibration && !(args.groundTruthScore! >= 0 && args.groundTruthScore! <= 1)) {
+    throw new Error(`planSettlement: groundTruthScore must be in [0,1], got ${args.groundTruthScore}`);
+  }
 
   // fix round 3（H2）：O_r ≥ 2 守卫（spec M-R4-2 禁止退化——settle_i 公式要求）。
   if (task.oddsR < 2) {
