@@ -86,12 +86,14 @@ export class CoreRepository {
         this.db.exec(`ALTER TABLE lab_agent_instances ADD COLUMN ${col} TEXT`);
       }
     }
-    // Add elo_global / elo_by_domain columns to lab_agent_instances if missing
-    // (N-I9，spec §3.2：全局分 + 分域分——结算双写持久化；旧表无此列，经 ALTER 新增
-    // 可空列；新库由 _applyCoreMigrations 同一路径补列——构造函数恒执行，等效新库直建)
+    // Add elo_global / elo_by_domain / accepts columns to lab_agent_instances if missing
+    // (N-I9，spec §3.2 + §4.1：全局分/分域分/承接声明——结算双写 + 承接过滤持久化；旧表无此列，
+    // 经 ALTER 新增可空列；新库由 _applyCoreMigrations 同一路径补列——构造函数恒执行，等效新库直建。
+    // CORE_SCHEMA 已同步三列（Task 4 minor 裁决：新库直建完整性），此处仅服务旧库。)
     for (const [col, colType] of [
       ["elo_global", "REAL"],
       ["elo_by_domain", "TEXT"],
+      ["accepts", "TEXT"],
     ] as const) {
       const cols = this.db.prepare(
         `PRAGMA table_info(lab_agent_instances)`
@@ -310,11 +312,11 @@ export class CoreRepository {
   listAgents(schedulerInstanceId: string): AgentInstanceRecord[] {
     const rows = this.db.prepare(
       `SELECT id, definition_json, model, source_template_id, source_agent_id, clone_operation_id,
-              created_round_id, status, created_ts
+              accepts, created_round_id, status, created_ts
        FROM lab_agent_instances WHERE scheduler_instance_id = ? ORDER BY created_ts`
     ).all(schedulerInstanceId) as Array<{
       id: string; definition_json: string; model: string | null; source_template_id: string | null;
-      source_agent_id: string | null; clone_operation_id: string | null;
+      source_agent_id: string | null; clone_operation_id: string | null; accepts: string | null;
       created_round_id: string; status: string; created_ts: number;
     }>;
 
@@ -326,6 +328,7 @@ export class CoreRepository {
       sourceTemplateId: row.source_template_id ?? undefined,
       sourceAgentId: row.source_agent_id ?? undefined,
       cloneOperationId: row.clone_operation_id ?? undefined,
+      accepts: row.accepts !== null ? JSON.parse(row.accepts) as string[] : undefined,
       createdAtRoundId: row.created_round_id,
       status: row.status as AgentInstanceRecord["status"],
       createdAt: row.created_ts,
@@ -385,13 +388,13 @@ export class CoreRepository {
   findAgentByModel(schedulerInstanceId: string, model: string, templateId?: string): AgentInstanceRecord | undefined {
     const row = this.db.prepare(
       `SELECT id, definition_json, model, source_template_id, source_agent_id, clone_operation_id,
-              created_round_id, status, created_ts
+              accepts, created_round_id, status, created_ts
        FROM lab_agent_instances
        WHERE scheduler_instance_id = ? AND model = ? AND (source_template_id = ? OR (? IS NULL AND source_template_id IS NULL))
        LIMIT 1`
     ).get(schedulerInstanceId, model, templateId ?? null, templateId ?? null) as {
       id: string; definition_json: string; model: string | null; source_template_id: string | null;
-      source_agent_id: string | null; clone_operation_id: string | null;
+      source_agent_id: string | null; clone_operation_id: string | null; accepts: string | null;
       created_round_id: string; status: string; created_ts: number;
     } | undefined;
     if (!row) return undefined;
@@ -402,6 +405,7 @@ export class CoreRepository {
       sourceTemplateId: row.source_template_id ?? undefined,
       sourceAgentId: row.source_agent_id ?? undefined,
       cloneOperationId: row.clone_operation_id ?? undefined,
+      accepts: row.accepts !== null ? JSON.parse(row.accepts) as string[] : undefined,
       createdAtRoundId: row.created_round_id,
       status: row.status as AgentInstanceRecord["status"],
       createdAt: row.created_ts,
@@ -412,8 +416,8 @@ export class CoreRepository {
     this.db.prepare(
       `INSERT INTO lab_agent_instances
        (id, scheduler_instance_id, definition_json, model, source_template_id, source_agent_id,
-        clone_operation_id, memory_spec, endowment, elo_global, elo_by_domain, created_round_id, status, created_ts)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        clone_operation_id, memory_spec, endowment, elo_global, elo_by_domain, accepts, created_round_id, status, created_ts)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       record.id,
       record.schedulerInstanceId,
@@ -426,6 +430,7 @@ export class CoreRepository {
       record.endowment !== undefined ? JSON.stringify(record.endowment) : null,
       record.eloGlobal ?? null,
       record.eloByDomain !== undefined ? JSON.stringify(record.eloByDomain) : null,
+      record.accepts !== undefined ? JSON.stringify(record.accepts) : null,
       record.createdAtRoundId,
       record.status,
       record.createdAt,
@@ -437,14 +442,14 @@ export class CoreRepository {
   getAgent(agentId: string): AgentInstanceRecord | undefined {
     const row = this.db.prepare(
       `SELECT id, scheduler_instance_id, definition_json, model, source_template_id, source_agent_id,
-              clone_operation_id, memory_spec, endowment, elo_global, elo_by_domain, created_round_id, status, created_ts
+              clone_operation_id, memory_spec, endowment, elo_global, elo_by_domain, accepts, created_round_id, status, created_ts
        FROM lab_agent_instances WHERE id = ?
        LIMIT 1`
     ).get(agentId) as {
       id: string; scheduler_instance_id: string; definition_json: string; model: string | null;
       source_template_id: string | null; source_agent_id: string | null; clone_operation_id: string | null;
       memory_spec: string | null; endowment: string | null;
-      elo_global: number | null; elo_by_domain: string | null;
+      elo_global: number | null; elo_by_domain: string | null; accepts: string | null;
       created_round_id: string; status: string; created_ts: number;
     } | undefined;
 
@@ -462,6 +467,7 @@ export class CoreRepository {
       endowment: row.endowment !== null ? JSON.parse(row.endowment) as AgentInstanceRecord["endowment"] : undefined,
       eloGlobal: row.elo_global ?? undefined,
       eloByDomain: row.elo_by_domain !== null ? JSON.parse(row.elo_by_domain) as Record<string, number> : undefined,
+      accepts: row.accepts !== null ? JSON.parse(row.accepts) as string[] : undefined,
       createdAtRoundId: row.created_round_id,
       status: row.status as AgentInstanceRecord["status"],
       createdAt: row.created_ts,

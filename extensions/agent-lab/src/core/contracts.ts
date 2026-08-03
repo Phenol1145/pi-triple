@@ -165,6 +165,8 @@ export interface AgentInstanceRecord {
   eloGlobal?: number;
   /** elo 分域分 JSON map（spec §3.2，可空列 elo_by_domain）；回退 byDomain[t] ?? global。 */
   eloByDomain?: Record<string, number>;
+  /** 承接声明（spec §4.1）：该 agent 可承接的任务类型 id 数组（可空列 accepts，JSON array）。 */
+  accepts?: string[];
   createdAtRoundId: string;
   status: AgentInstanceStatus;
   createdAt: number;

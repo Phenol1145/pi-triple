@@ -50,6 +50,9 @@ CREATE TABLE IF NOT EXISTS lab_agent_instances (
   clone_operation_id TEXT,
   memory_spec TEXT,
   endowment TEXT,
+  elo_global REAL,
+  elo_by_domain TEXT,
+  accepts TEXT,
   created_round_id TEXT NOT NULL,
   status TEXT NOT NULL,
   created_ts INTEGER NOT NULL
