@@ -225,4 +225,66 @@ describe("subflow node execution scenarios", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // B1: 子 run 的 meta 必须持久化 parentRunId = 父 runId
+  it("scenario 6: child run meta persists parentRunId", async () => {
+    const child = {
+      name: "child6",
+      entry: "c1",
+      nodes: [{ id: "c1", type: "code", fn: "double", args: ["x"], writes: { result: "{{output.result}}" } }],
+      edges: [],
+      state: { x: 5 },
+    };
+    const { run, store, runId: parentRunId, dir } = runFlow({
+      name: "parent6",
+      entry: "p1",
+      nodes: [{ id: "p1", type: "subflow", flow: child, out: { result: "final" } }],
+      edges: [],
+      state: {},
+    });
+    try {
+      const result = await run(store, parentRunId);
+      expect(result.status).toBe("done");
+
+      const childMeta = store.listRuns()
+        .map((r) => store.loadMeta(r.runId))
+        .find((m) => m.parentRunId === parentRunId);
+      expect(childMeta).toBeDefined();
+      expect(childMeta!.parentRunId).toBe(parentRunId);
+      expect(childMeta!.name).toBe("child6");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // I3: 子 flow 含 human 节点时，父 run 进入 waiting_human 并释放父锁
+  it("scenario 7: child flow with human gate propagates waiting_human to parent and releases parent lock", async () => {
+    const child = {
+      name: "child7",
+      entry: "h1",
+      nodes: [{ id: "h1", type: "human", message: "child human gate" }],
+      edges: [],
+    };
+    const { run, store, runId: parentRunId, dir } = runFlow({
+      name: "parent7",
+      entry: "p1",
+      nodes: [{ id: "p1", type: "subflow", flow: child, out: {} }],
+      edges: [],
+      state: {},
+    });
+    try {
+      const result = await run(store, parentRunId);
+      expect(result.status).toBe("waiting_human");
+
+      const parentMeta = store.loadMeta(parentRunId);
+      expect(parentMeta.status).toBe("waiting_human");
+
+      // 父锁已释放，必须能重新获取
+      const lock = store.acquireExecLock(parentRunId);
+      expect(lock).toBeDefined();
+      lock.release();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

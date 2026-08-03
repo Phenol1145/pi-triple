@@ -456,8 +456,9 @@ async function executeWaveLoop(
     if (ready.length === 0) {
       // Check for hunger
       if (activeCandidates.length > 0) {
-        // If every active candidate already failed in this run, propagate the
-        // actual failure reason instead of a generic hunger message.
+        // I2 裁决：allFailed 语义扩展为“所有 active candidate 在本进程内均已失败”。
+        // 动机：scenario ③（drain 失败后重试仍全部失败）需要把真实失败原因传播出去，
+        // 而不是饥饿；静态分析显示既有 hunger 测试不依赖旧的“全部节点都曾失败过”语义。
         const allFailed = activeCandidates.every((t) => failedThisRun.has(t));
         if (allFailed) {
           const latestWc = store.latestWaveCheckpoint(runId);
@@ -692,6 +693,8 @@ async function executeWaveLoop(
 
         // Subflow node: execute a nested flow in a new run, map inputs/outputs
         if (nodeSnapshot.type === "subflow") {
+          // 已知限制（I1）：嵌套 resume = 各层按自身 checkpoint 独立恢复；
+          // 父 resume 不重连既有子 run（human 节点的子 flow 进度不跨父 resume 保留）。
           const subflowId = nodeId;
           const flowRef = nodeSnapshot.flow;
           let childDef: FlowDef;
@@ -720,7 +723,8 @@ async function executeWaveLoop(
           }
 
           // Create child run in the same store; checkpoints are isolated per run.
-          const childRunId = store.createRun(childDef, meta.input);
+          // 持久化父 runId 关联，满足 subflow 子图审计/追踪契约。
+          const childRunId = store.createRun(childDef, meta.input, runId);
           const childState = store.loadState(childRunId);
 
           // Apply in mapping: parent state key -> child state key

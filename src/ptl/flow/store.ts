@@ -38,6 +38,7 @@ export interface RunMeta {
   input: Record<string, string>;
   graphVersion: number;
   stepCount: number;
+  parentRunId?: string;                    // subflow 子 run 关联父 runId
   firedEpoch?: Record<string, number>;   // v2: per-node completion count
   consumed?: Record<string, number>;       // v2: per-edge "pred→target" consumed count
   editRequested?: boolean;                 // v2: barrier
@@ -153,7 +154,7 @@ export class FlowStore {
     return fs.existsSync(path.join(this.runDir(runId), "meta.json"));
   }
 
-  createRun(def: FlowDef, input: Record<string, string>): string {
+  createRun(def: FlowDef, input: Record<string, string>, parentRunId?: string): string {
     const runId = randomUUID();
     const dir = this.runDir(runId);
     fs.mkdirSync(dir, { recursive: true });
@@ -189,6 +190,7 @@ export class FlowStore {
       input,
       graphVersion: 1,
       stepCount: 0,
+      parentRunId,
     };
     this.writeAtomic(path.join(dir, "meta.json"), meta);
 
