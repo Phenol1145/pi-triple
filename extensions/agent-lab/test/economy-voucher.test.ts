@@ -132,6 +132,7 @@ test("⑥b burn rejects negative units and leaves state unchanged", () => {
   ledger.ensureEndowed("a", model("m/a"));
   v.buy("a", "llm", 5);
   assert.throws(() => v.burn("a", "llm", -1), /units must be positive/);
+  assert.throws(() => v.burn("a", "llm", 0), /units must be positive/);
   assert.equal(v.balance("a", "llm"), 5);
   assert.equal(v.burnHistory("a", "llm").length, 0);
   const n = store.raw.prepare(`SELECT COUNT(*) AS n FROM voucher_burns WHERE agent_id = ?`).get("a") as { n: number };
