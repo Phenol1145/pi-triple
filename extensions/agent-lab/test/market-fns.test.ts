@@ -1,6 +1,7 @@
 // 市场 code fns 前半测试（plan Task 2 / spec §5.1 announce/shortlist/select）。
 // 覆盖：announce 常规与校准分支、shortlist 承接过滤+elo 域分/回退+maxFanout 截断、
-// select stake-elo-power 公式+同分字典序、未注册类型拒收。
+// select stake-elo-power 公式+同分字典序、未注册类型拒收；
+// round 2 修复：表名隔离共存、select 域 elo、Store 方法幂等、校准占位回退、裁决去 elo 层。
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -17,6 +18,7 @@ import type { Ledger } from "../src/arena/types.ts";
 import type { VoucherPort } from "../src/economy/voucher-port.ts";
 import { CoreRepository } from "../src/core/storage/repository.ts";
 import type { AgentInstanceRecord } from "../src/core/contracts.ts";
+import { SqliteLedger } from "../src/arena/ledger.ts";
 
 function agentRecord(id: string, over: Partial<AgentInstanceRecord> = {}): AgentInstanceRecord {
   return {
@@ -291,6 +293,209 @@ test("announce：未注册类型 → 抛错（I5 市场拒收）", () => {
     () => fn({}, makeCtx({ taskSpec: spec })),
     /not registered|未注册|拒收/
   );
+
+  db.close();
+});
+
+// ── round 2: SqliteLedger 与 MarketStore 同库共存（表名隔离）────────
+test("round 2：同库 SqliteLedger 与 MarketStore 并存无冲突", () => {
+  const db = new DatabaseSync(":memory:");
+  const fixedEndow = { initialCredits: () => 1000 };
+  const ledger = new SqliteLedger(db, fixedEndow);
+  const store = new MarketStore(db);
+
+  // arena 遗留 market_tasks 表写入
+  ledger.ensureEndowed("m/a", { id: "m/a", provider: "p", name: "m/a", accessRoute: "free" });
+  ledger.createTask(
+    { id: "arena-task", role: "r", prompt: "p", difficulty: "easy", odds: 1.5, reward: 10 },
+    "m/a",
+    100,
+    1,
+    "m/a"
+  );
+
+  // economy 新 economy_tasks / economy_bids 表写入
+  const taskId = "eco-task";
+  store.createTask({
+    taskId,
+    typeId: "code",
+    publisherId: "pub",
+    maxStake: 10,
+    odds: 2,
+    reviewerCount: 3,
+    stakeR: 5,
+    oddsR: 1,
+    voucherAllowance: 2,
+    brief: "b",
+    status: "open",
+    createdAt: Date.now(),
+  });
+  store.recordBid(taskId, "bid-a", 5);
+
+  // 两边数据各回各表
+  const arenaTask = ledger.getTask("arena-task")!;
+  assert.equal(arenaTask.winner, "m/a");
+  assert.equal(arenaTask.status, "pending");
+
+  const ecoTask = store.getTask(taskId)!;
+  assert.equal(ecoTask.typeId, "code");
+  assert.equal(ecoTask.status, "open");
+  assert.deepEqual(store.getBids(taskId), [{ bidderId: "bid-a", stake: 5 }]);
+
+  // 表级隔离：arena 的 market_tasks 与 economy 的 economy_tasks/economy_bids 同时存在
+  const tables = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('market_tasks','economy_tasks','economy_bids')")
+    .all() as Array<{ name: string }>;
+  assert.deepEqual(
+    tables.map((t) => t.name).sort(),
+    ["economy_bids", "economy_tasks", "market_tasks"]
+  );
+
+  db.close();
+});
+
+// ── round 2: select 使用域 elo（eloByDomain → eloGlobal → INITIAL）────
+test("round 2：select 使用域 elo 而非全局 elo", () => {
+  const db = new DatabaseSync(":memory:");
+  const deps = makeDeps(db);
+  const registry = makeCodeRegistry();
+  registerMarketCodeFns(registry, deps);
+
+  const repo = new CoreRepository(db);
+  // a1 域分高但全局低；a2 全局高但域分低
+  repo.insertAgent(agentRecord("a1", { eloGlobal: 1400, eloByDomain: { code: 1700 } }));
+  repo.insertAgent(agentRecord("a2", { eloGlobal: 1800, eloByDomain: { code: 1500 } }));
+
+  const fn = registry.resolve("market.select")!;
+  const result = fn(
+    {},
+    makeCtx({
+      typeId: "code",
+      shortlist: ["a1", "a2"],
+      bids: [
+        { agentId: "a1", stake: 10 },
+        { agentId: "a2", stake: 10 },
+      ],
+      odds: 2,
+    })
+  ) as { winnerId: string; winnerStake: number };
+
+  // 同 stake 同 odds 时，域 elo 高者 score 更高
+  assert.equal(result.winnerId, "a1");
+  assert.equal(result.winnerStake, 10);
+
+  db.close();
+});
+
+// ── round 2: MarketStore 方法幂等第二次返回 false ───────────────────
+test("round 2：MarketStore createTask / recordBid / updateTask / getBids 幂等行为", () => {
+  const db = new DatabaseSync(":memory:");
+  const store = new MarketStore(db);
+  const task: import("../src/economy/market-store.ts").MarketTask = {
+    taskId: "t1",
+    typeId: "code",
+    publisherId: "pub",
+    maxStake: 10,
+    odds: 2,
+    reviewerCount: 3,
+    stakeR: 5,
+    oddsR: 1,
+    voucherAllowance: 2,
+    brief: "b",
+    status: "open",
+    createdAt: 1,
+  };
+
+  assert.equal(store.createTask(task), true, "第一次 createTask 应返回 true");
+  assert.equal(store.createTask(task), false, "第二次 createTask 应返回 false");
+
+  assert.equal(store.recordBid("t1", "b1", 5), true, "第一次 recordBid 应返回 true");
+  assert.equal(store.recordBid("t1", "b1", 5), false, "第二次相同 recordBid 应返回 false");
+
+  // getBids 是只读查询，两次结果一致即幂等
+  const first = store.getBids("t1");
+  const second = store.getBids("t1");
+  assert.deepEqual(first, [{ bidderId: "b1", stake: 5 }]);
+  assert.deepEqual(second, first);
+
+  assert.equal(store.updateTask("t1", { status: "awarded" }), true, "第一次 updateTask 应返回 true");
+  assert.equal(store.updateTask("t1", { status: "awarded" }), false, "第二次无变化 updateTask 应返回 false");
+
+  db.close();
+});
+
+// ── round 2: calibration 占位回退（未提供/draw 返回 undefined）──────
+test("round 2：rng 命中 calibrationRate 但 calibration 未提供时不触发校准", () => {
+  const db = new DatabaseSync(":memory:");
+  const deps = makeDeps(db, { rng: () => 0.05, calibration: undefined });
+  const registry = makeCodeRegistry();
+  registerMarketCodeFns(registry, deps);
+
+  const fn = registry.resolve("market.announce")!;
+  const result = fn({}, makeCtx({ taskSpec: baseTaskSpec() })) as { taskId: string; isCalibration: boolean };
+
+  assert.equal(result.isCalibration, false);
+  const task = deps.store.getTask(result.taskId)!;
+  assert.equal(task.isCalibration, false);
+  assert.equal(task.groundTruth, undefined);
+
+  db.close();
+});
+
+test("round 2：rng 命中 calibrationRate 但 draw 返回 undefined 时不触发校准", () => {
+  const db = new DatabaseSync(":memory:");
+  const deps = makeDeps(db, {
+    rng: () => 0.05,
+    calibration: { draw: () => undefined },
+  });
+  const registry = makeCodeRegistry();
+  registerMarketCodeFns(registry, deps);
+
+  const fn = registry.resolve("market.announce")!;
+  const result = fn({}, makeCtx({ taskSpec: baseTaskSpec() })) as { taskId: string; isCalibration: boolean };
+
+  assert.equal(result.isCalibration, false);
+  const task = deps.store.getTask(result.taskId)!;
+  assert.equal(task.isCalibration, false);
+  assert.equal(task.groundTruth, undefined);
+
+  db.close();
+});
+
+// ── round 2: select 同分裁决去 elo 层（score → stake → agentId）─────
+test("round 2：select 同分裁决 score 相同看 stake，不再比较 elo", () => {
+  const db = new DatabaseSync(":memory:");
+  const deps = makeDeps(db);
+  const registry = makeCodeRegistry();
+  registerMarketCodeFns(registry, deps);
+
+  const repo = new CoreRepository(db);
+  // a1 elo 高，a2 elo 低；通过调整 stake 使 score 相等
+  // score = stake * sqrt(elo/1500)
+  // a1: stake=10, elo=1600 → score = 10 * sqrt(1600/1500)
+  // a2: stake=10 * sqrt(1600/1500), elo=1500 → score 相同
+  const a1Stake = 10;
+  const a2Stake = 10 * Math.sqrt(1600 / 1500);
+  repo.insertAgent(agentRecord("a1", { eloGlobal: 1600 }));
+  repo.insertAgent(agentRecord("a2", { eloGlobal: 1500 }));
+
+  const fn = registry.resolve("market.select")!;
+  const result = fn(
+    {},
+    makeCtx({
+      typeId: "code",
+      shortlist: ["a1", "a2"],
+      bids: [
+        { agentId: "a1", stake: a1Stake },
+        { agentId: "a2", stake: a2Stake },
+      ],
+      odds: 2,
+    })
+  ) as { winnerId: string; winnerStake: number };
+
+  // score 相同 → 比较 stake，a2 stake 更高
+  assert.equal(result.winnerId, "a2");
+  assert.equal(result.winnerStake, a2Stake);
 
   db.close();
 });

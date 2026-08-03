@@ -1,7 +1,8 @@
 // 市场任务持久化（plan Task 2 / spec §5.1）。
-// 复用 D1 market_tasks 表并扩展本任务所需字段：publisher_id、reviewer_count、
-// stake_r、odds_r、voucher_allowance、ground_truth、is_calibration。
-// market_bids 表记录每任务各竞标者的 stake（供 select 节点消费）。
+// 协调者裁决（fix round 2）：不与 D1 arena ledger.ts 的既有 market_tasks 表复用——
+// arena 遗留表（round/role/prompt/winner_model 列）与本任务 schema 冲突，
+// 新表改名 economy_tasks / economy_bids 做干净命名空间隔离。
+// economy_bids 表记录每任务各竞标者的 stake（供 select 节点消费）。
 import type { DatabaseSync } from "node:sqlite";
 
 export interface MarketTask {
@@ -24,8 +25,8 @@ export interface MarketTask {
   isCalibration?: boolean;
 }
 
-const MARKET_TASKS_SCHEMA = `
-CREATE TABLE IF NOT EXISTS market_tasks (
+const ECONOMY_TASKS_SCHEMA = `
+CREATE TABLE IF NOT EXISTS economy_tasks (
   task_id TEXT PRIMARY KEY,
   type_id TEXT NOT NULL,
   publisher_id TEXT NOT NULL,
@@ -45,7 +46,7 @@ CREATE TABLE IF NOT EXISTS market_tasks (
   is_calibration INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS market_bids (
+CREATE TABLE IF NOT EXISTS economy_bids (
   task_id TEXT NOT NULL,
   bidder_id TEXT NOT NULL,
   stake REAL NOT NULL,
@@ -58,7 +59,7 @@ export class MarketStore {
 
   constructor(db: DatabaseSync) {
     this.db = db;
-    this.db.exec(MARKET_TASKS_SCHEMA);
+    this.db.exec(ECONOMY_TASKS_SCHEMA);
   }
 
   /**
@@ -68,7 +69,7 @@ export class MarketStore {
    */
   createTask(t: MarketTask): boolean {
     const result = this.db.prepare(
-      `INSERT OR IGNORE INTO market_tasks
+      `INSERT OR IGNORE INTO economy_tasks
        (task_id, type_id, publisher_id, max_stake, odds, reviewer_count, stake_r, odds_r,
         voucher_allowance, brief, status, winner_id, winner_stake, created_at, settled_at,
         ground_truth, is_calibration)
@@ -95,29 +96,44 @@ export class MarketStore {
     return (result.changes ?? 0) > 0;
   }
 
-  updateTask(taskId: string, patch: Partial<MarketTask>): void {
+  /**
+   * 更新市场任务；返回是否真实发生变更。
+   * fix round 2：idempotent——任务不存在或 patch 各字段与现值完全相同 → 返回 false。
+   * （SQLite 的 changes 对“赋值同值”也计 1，因此需先比对现值再决定是否 UPDATE。）
+   */
+  updateTask(taskId: string, patch: Partial<MarketTask>): boolean {
+    const current = this.getTask(taskId);
+    if (!current) return false;
+
     const sets: string[] = [];
-    const values: Array<string | number | null | undefined> = [];
+    const values: Array<string | number | null> = [];
+    const push = (col: string, value: string | number | null | undefined, prev: unknown) => {
+      if (value === undefined) return;
+      if (value === prev) return;
+      sets.push(`${col} = ?`);
+      values.push(value);
+    };
 
-    if (patch.typeId !== undefined) { sets.push("type_id = ?"); values.push(patch.typeId); }
-    if (patch.publisherId !== undefined) { sets.push("publisher_id = ?"); values.push(patch.publisherId); }
-    if (patch.maxStake !== undefined) { sets.push("max_stake = ?"); values.push(patch.maxStake); }
-    if (patch.odds !== undefined) { sets.push("odds = ?"); values.push(patch.odds); }
-    if (patch.reviewerCount !== undefined) { sets.push("reviewer_count = ?"); values.push(patch.reviewerCount); }
-    if (patch.stakeR !== undefined) { sets.push("stake_r = ?"); values.push(patch.stakeR); }
-    if (patch.oddsR !== undefined) { sets.push("odds_r = ?"); values.push(patch.oddsR); }
-    if (patch.voucherAllowance !== undefined) { sets.push("voucher_allowance = ?"); values.push(patch.voucherAllowance); }
-    if (patch.brief !== undefined) { sets.push("brief = ?"); values.push(patch.brief); }
-    if (patch.status !== undefined) { sets.push("status = ?"); values.push(patch.status); }
-    if (patch.winnerId !== undefined) { sets.push("winner_id = ?"); values.push(patch.winnerId); }
-    if (patch.winnerStake !== undefined) { sets.push("winner_stake = ?"); values.push(patch.winnerStake); }
-    if (patch.settledAt !== undefined) { sets.push("settled_at = ?"); values.push(patch.settledAt); }
-    if (patch.groundTruth !== undefined) { sets.push("ground_truth = ?"); values.push(patch.groundTruth); }
-    if (patch.isCalibration !== undefined) { sets.push("is_calibration = ?"); values.push(patch.isCalibration ? 1 : 0); }
+    push("type_id", patch.typeId, current.typeId);
+    push("publisher_id", patch.publisherId, current.publisherId);
+    push("max_stake", patch.maxStake, current.maxStake);
+    push("odds", patch.odds, current.odds);
+    push("reviewer_count", patch.reviewerCount, current.reviewerCount);
+    push("stake_r", patch.stakeR, current.stakeR);
+    push("odds_r", patch.oddsR, current.oddsR);
+    push("voucher_allowance", patch.voucherAllowance, current.voucherAllowance);
+    push("brief", patch.brief, current.brief);
+    push("status", patch.status, current.status);
+    push("winner_id", patch.winnerId, current.winnerId);
+    push("winner_stake", patch.winnerStake, current.winnerStake);
+    push("settled_at", patch.settledAt, current.settledAt);
+    push("ground_truth", patch.groundTruth, current.groundTruth);
+    push("is_calibration", patch.isCalibration === undefined ? undefined : patch.isCalibration ? 1 : 0, current.isCalibration ? 1 : 0);
 
-    if (sets.length === 0) return;
+    if (sets.length === 0) return false;
     values.push(taskId);
-    this.db.prepare(`UPDATE market_tasks SET ${sets.join(", ")} WHERE task_id = ?`).run(...values);
+    const result = this.db.prepare(`UPDATE economy_tasks SET ${sets.join(", ")} WHERE task_id = ?`).run(...values);
+    return (result.changes ?? 0) > 0;
   }
 
   getTask(taskId: string): MarketTask | undefined {
@@ -125,7 +141,7 @@ export class MarketStore {
       `SELECT task_id, type_id, publisher_id, max_stake, odds, reviewer_count, stake_r, odds_r,
               voucher_allowance, brief, status, winner_id, winner_stake, created_at, settled_at,
               ground_truth, is_calibration
-       FROM market_tasks WHERE task_id = ?`
+       FROM economy_tasks WHERE task_id = ?`
     ).get(taskId) as {
       task_id: string;
       type_id: string;
@@ -169,15 +185,21 @@ export class MarketStore {
     };
   }
 
-  recordBid(taskId: string, bidderId: string, stake: number): void {
-    this.db.prepare(
-      `INSERT OR REPLACE INTO market_bids (task_id, bidder_id, stake) VALUES (?, ?, ?)`
+  /**
+   * 记录竞标。fix round 2：幂等——同 (task_id, bidder_id) 重复竞标返回 false。
+   * 语义调整：由 INSERT OR REPLACE（upsert 覆盖 stake）改为 INSERT OR IGNORE（重复拒收），
+   * 与 createTask 的幂等语义一致（PK 冲突即“已存在”）。
+   */
+  recordBid(taskId: string, bidderId: string, stake: number): boolean {
+    const result = this.db.prepare(
+      `INSERT OR IGNORE INTO economy_bids (task_id, bidder_id, stake) VALUES (?, ?, ?)`
     ).run(taskId, bidderId, stake);
+    return (result.changes ?? 0) > 0;
   }
 
   getBids(taskId: string): Array<{ bidderId: string; stake: number }> {
     const rows = this.db.prepare(
-      `SELECT bidder_id, stake FROM market_bids WHERE task_id = ? ORDER BY stake DESC, bidder_id ASC`
+      `SELECT bidder_id, stake FROM economy_bids WHERE task_id = ? ORDER BY stake DESC, bidder_id ASC`
     ).all(taskId) as Array<{ bidder_id: string; stake: number }>;
     return rows.map((r) => ({ bidderId: r.bidder_id, stake: r.stake }));
   }

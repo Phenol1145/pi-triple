@@ -106,12 +106,16 @@ function announce(
   }
 
   const rng = deps.rng ?? Math.random;
-  const isCalibration = rng() < deps.calibrationRate;
+  const rngHitCalibration = rng() < deps.calibrationRate;
 
   let cal: { taskId: string; brief: string; groundTruth: string; groundTruthScore: number } | undefined;
-  if (isCalibration) {
+  if (rngHitCalibration) {
     cal = deps.calibration?.draw(rng);
   }
+
+  // fix round 2：校准占位回退——rng 命中 calibrationRate 但 calibration 未提供 /
+  // draw 返回 undefined 时不触发校准（落普通任务，isCalibration=false、groundTruth=undefined）。
+  const isCalibration = rngHitCalibration && cal !== undefined;
 
   const taskId = cal?.taskId ?? spec.taskId ?? generateId();
   const task: MarketTask = {
@@ -170,7 +174,11 @@ function select(
   const bids = (state.bids as Array<{ agentId: string; stake: number }> | undefined)
     ?? (args?.bids as typeof state.bids)
     ?? [];
-  const odds = Number(state.odds ?? args?.odds ?? state.taskSpec?.odds ?? 1);
+  const odds = Number(state.odds ?? args?.odds ?? (state.taskSpec as Record<string, unknown> | undefined)?.odds ?? 1);
+  // fix round 2（Important 1）：select 用域 elo——byDomain[typeId] ?? global ?? INITIAL（与 shortlist/spec §3.2 一致）。
+  const typeId = String(
+    state.typeId ?? args?.typeId ?? (state.taskSpec as Record<string, unknown> | undefined)?.typeId ?? ""
+  );
   const taskRating = 1500 + 200 * (odds - 1);
 
   const formula = deps.selection.get("stake-elo-power");
@@ -178,16 +186,16 @@ function select(
 
   const candidates = shortlist.map((agentId) => {
     const info = lookupAgent(deps, agentId);
-    const elo = info.eloGlobal ?? ELO_DEFAULTS.INITIAL;
+    const elo = info.eloByDomain?.[typeId] ?? info.eloGlobal ?? ELO_DEFAULTS.INITIAL;
     const stake = bidMap.get(agentId) ?? 0;
     const score = formula.score({ stake, elo }, { taskRating });
     return { agentId, stake, elo, score };
   });
 
+  // fix round 2（Important 4）：同分裁决层 = score → stake → agentId 字典序（spec §3.3 字面，无 elo 层）。
   candidates.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     if (b.stake !== a.stake) return b.stake - a.stake;
-    if (b.elo !== a.elo) return b.elo - a.elo;
     return a.agentId.localeCompare(b.agentId);
   });
 
