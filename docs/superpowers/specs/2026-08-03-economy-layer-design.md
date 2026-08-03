@@ -1,7 +1,7 @@
 # 经济层（Economy Layer）设计 Spec
 
 **日期**：2026-08-03
-**状态**：设计修订（Round 4 裁决已落地：评审负 settle 入池/对称课税/合成执行者/补偿实际燃烧/O=1 无补偿）
+**状态**：设计定稿（5 轮对抗性评审 CONVERGED——合计 11C/25I/12M 全部裁决落地）
 **父文档**：`docs/superpowers/2026-08-03-market-economy-overview.md`
 **依赖**：子项目 A（pit-flow 运行时扩展，已合并）、B（记忆系统，已合并）、C（装配层，已合并）、arena 遗留
 **范围**：完整经济语义（Q1-B）
@@ -57,7 +57,7 @@ type BurnCause = { traceId: string; transitionSeq: number } | { periodic: "memor
 
 ## 2 中央池（Central Pool）
 
-- `agentId = "central-pool"`——**RESERVED_IDS 黑名单**：装配器步骤 2b 后校验拒绝 + LedgerPort.open 拒绝。
+- `agentId = "central-pool"`——**RESERVED_IDS 黑名单**：阻止**外部**装配/开户/竞价（装配器步骤 2b 后校验拒绝 + LedgerPort.open 拒绝）；**系统启动时直接初始化池账户**（绕过 LedgerPort.open 走 SqliteLedger 底层——I-R5-2 裁决：池是真实账本账户但不经装配路径）。**池资金操作 = 专用内部路径**（I-R5-1 裁决：`SqliteLedger` 新增池专用 `poolDebit`（允许负余额——绕过 debit 夹紧）——仅系统内部（endowment 出池/校准 escrow）可用，不进 LedgerPort 公开接口）。
 - 入池：税 + 凭证销售收入；出池：endowment（flat 100）。**允许赤字**（观测可见）。
 
 ## 3 elo 系统
@@ -161,7 +161,7 @@ announce（code）→ persist_task（effect：任务落库 + escrow_max 冻结�
 4. **评审者结算**：`settle_reviewer_i = stake_r × (O_r − 1) × (2a_i − 1)`（O_r 发布方声明，默认 2——**约束 `O_r ≥ 2`**（M-R4-2：O_r=1 零报酬零冻结退化禁止）；评审报酬从 escrow 出）。**评审者负 settle → 入中央池**（C-R4-1 裁决：评审偏差伤害市场信誉机制本身——公共性损害罚没社会化；与执行者负 settle 直付发布方不对称，因受害主体不同）。
 5. **被评对象完成度 `c = R`** → 执行者结算与 elo。
 6. **评审者 elo**：评审域 update（outcome = a_i）。
-7. **校准任务锚定**（I6/I-6/I-3 裁决）：operator 注入**校准任务**（预设 ground truth——评审者不可辨识：任务结构与常规任务相同，标记仅在系统侧）；校准任务上：**评审者 `a_i` 按与 ground truth 的偏差计算**（非共识偏差）；**执行者 `c` 也由 ground truth 评估器直接评定**（评审者偏差不连坐执行者）；**校准比例 = operator 策略参数 `calibrationRate`（默认 10%）**——评审者不知哪些任务校准 → 任何偏差都有 p 概率被捕获（期望惩罚 ∝ p × elo 损失，威慑可量化）。**合成执行者 `calibration-executor`**（I-R4-2 裁决：RESERVED_IDS 扩展——execute 节点产出预制标准交付物；其 settle **直接入池**（operator 无利可图）；校准任务 escrow 来源 = 池——货币政策操作，审计可见）。
+7. **校准任务锚定**（I6/I-6/I-3 裁决）：operator 注入**校准任务**（预设 ground truth——评审者不可辨识：任务结构与常规任务相同，标记仅在系统侧）；校准任务上：**评审者 `a_i` 按与 ground truth 的偏差计算**（非共识偏差）；**执行者 `c` 也由 ground truth 评估器直接评定**（评审者偏差不连坐执行者）；**校准比例 = operator 策略参数 `calibrationRate`（默认 10%）**——评审者不知哪些任务校准 → 任何偏差都有 p 概率被捕获（期望惩罚 ∝ p × elo 损失，威慑可量化）。**合成执行者 `calibration-executor`**（I-R4-2/M-R5-1/2/3/4 裁决：RESERVED_IDS 扩展——execute 节点**短路产出静态预制交付物**（无 LLM 调用、**不消耗凭证**）；**`stake_cal = 0`**（c=1 由 ground truth 保证，settle 与 escrow 项池内自抵——省略）；其 settle **直接入池**（operator 无利可图）；校准任务 escrow 来源 = 池（货币政策操作，审计可见）；**校准 O_r = 2**（与常规一致）；**注入点 = announce 步骤按 `calibrationRate` 概率替换常规任务**；校准事件带 `isCalibration: true` 标记（§8 审计可区分））。
 8. **流标阶梯**（I12）：**N_min = 3**；评审激活 < N_min → 评审轮失败 → **重试 2 次**（escrow 保持）→ 仍流标 → **operator 兜底评审**（单评审，R = operator 评价）；**已接单少数评审者：stake_r 退还 + 凭证成本从 escrow 补偿**（voucherAllowance 覆盖）。
 9. **递归终止**：共识偏差 + 校准任务双重评定——一层收敛。
 10. **审计**：`economy.review_consensus` 含 R 与全部 r_i；观测层监控系统性偏差。
@@ -175,7 +175,7 @@ announce（code）→ persist_task（effect：任务落库 + escrow_max 冻结�
 
 - **执行经验**：`场景=任务 动作=执行 结果=c=R 收益=settle(税后)`。
 - **竞价经验**（含未中标）：`场景=竞价 动作=出价s 结果=中标/未中标(winner,stake)`。
-- **评审经验**：`场景=评审 动作=评价r_i 结果=中位R 准确性a_i 收益=settle_i`。
+- **评审经验**：`场景=评审 动作=评价r_i 结果=中位R 准确性a_i 收益=settle_i`（**校准任务上 `结果` 字段写 ground truth 并加 `evaluationMode: "consensus"|"ground-truth"`**——M-R5-6：防误导性经验）。
 - **组织违约经验**（成员视角）。
 - 经验 → 沉淀管道 → 规则化 → 发轫 → 审核链 → **onDecision → submitWriteBack**（公域规则演化闭环）。
 
