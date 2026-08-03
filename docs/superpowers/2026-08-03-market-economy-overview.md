@@ -26,7 +26,7 @@
 | A | pit-flow 运行时扩展（code 节点 + metrics） | ✅ 已合并 | 2026-08-02-workflow-runtime-extension-design.md | feat/flow-runtime-extension |
 | B | 记忆系统（L3 语义记忆 + 语言体系 + 公域/审核链/通讯） | ✅ 已合并 | 2026-08-02-memory-system-design.md | feat/memory-system |
 | C | 装配层（Agent Assembly） | ✅ 已合并 | 2026-08-02-agent-assembly-design.md | feat/agent-assembly |
-| D | **经济层**（多货币/汇率/elo/嵌套市场/竞价 workflow 化/货币循环观测） | 设计启动 | （待写） | （待建） |
+| D | **经济层**（多货币/汇率/elo/嵌套市场/竞价 workflow 化/货币循环观测） | **spec 定稿（5 轮评审收敛）** | 2026-08-03-economy-layer-design.md | （待建） |
 
 ## 已确认设计决策（跨子项目）
 
