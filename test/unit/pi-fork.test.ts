@@ -166,4 +166,30 @@ describe("pi-fork", () => {
     expect(entries.some((e) => e.type === "compaction")).toBe(true);
     expect(entries.some((e) => e.id === "e2")).toBe(true); // firstKeptEntryId 目标在主线内
   });
+
+  it("transfer 运行中的会话：拒绝且源文件不动", () => {
+    writeSession("a.jsonl", [H1, E1]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = transferSession(src, { templateId: "t2" }, true);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe("ALREADY_RUNNING");
+    expect(fs.existsSync(src.file)).toBe(true);
+    expect(fs.readdirSync(path.join(root, "sessions", "t2"))).toHaveLength(0);
+  });
+
+  it("transfer 成功后子会话 parentSession 重链到新路径", () => {
+    const srcFile = writeSession("a.jsonl", [H1, E1]);
+    // 子会话：同模板，parentSession 指向源文件
+    const childHeader = H1.replace(
+      '"id":"aaaaaaaa-1111-4111-8111-111111111111"',
+      `"id":"bbbbbbbb-2222-4222-8222-222222222222","parentSession":"${srcFile}"`,
+    );
+    writeSession("child.jsonl", [childHeader, E1]);
+    const src = scanSessionFiles(root).find((f) => f.id === "aaaaaaaa-1111-4111-8111-111111111111")!;
+    const r = transferSession(src, { templateId: "t2" }, false);
+    expect(r.ok).toBe(true);
+    const dest = (r.data as { file: string }).file;
+    const child = scanSessionFiles(root).find((f) => f.id === "bbbbbbbb-2222-4222-8222-222222222222")!;
+    expect(child.parentSession).toBe(dest);
+  });
 });

@@ -137,8 +137,13 @@ export function cloneSession(source: PiSessionFile, opts: ForkOpts): CommandResu
 /**
  * transfer：新 header 只更新 cwd（parentSession 保留），写入目标模板后
  * 删除源文件；目标模板存在同 id 会话 → ALREADY_EXISTS（防静默覆盖）。
+ * running=true（会话正在运行）→ 拒绝转移，不碰源文件。
+ * 转移成功后把所有 parentSession=旧路径的子会话重链到新路径（谱系保持）。
  */
-export function transferSession(source: PiSessionFile, opts: TransferOpts): CommandResult {
+export function transferSession(source: PiSessionFile, opts: TransferOpts, running?: boolean): CommandResult {
+  if (running) {
+    return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${source.id.slice(0, 8)}… 正在运行，请先停止再转移（pit session stop <id>）` } };
+  }
   const parsed = readEntries(source.file);
   if (!parsed) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话文件无效或不可读: ${source.file}` } };
   const warned = parsed.skipped > 0 ? `（跳过 ${parsed.skipped} 行损坏数据）` : "";
@@ -158,14 +163,34 @@ export function transferSession(source: PiSessionFile, opts: TransferOpts): Comm
     const lines = [JSON.stringify(header), ...parsed.entries.map((e) => JSON.stringify(e))];
     fs.writeFileSync(destFile, lines.join("\n") + "\n", { flag: "wx" });
     fs.rmSync(source.file); // 写入成功才删源（回滚安全）
+    // 源已删后才重链子会话（保持“写入成功才删源”的回滚安全顺序）
+    const relinked = rewriteChildrenParent(source.file, destFile, dataDirOf(source));
     return {
       ok: true,
-      message: `✅ 已转移会话 ${source.id.slice(0, 8)}… → 模板 ${target.templateId}${warned}`,
+      message: `✅ 已转移会话 ${source.id.slice(0, 8)}… → 模板 ${target.templateId}${warned}${relinked > 0 ? `（已重链 ${relinked} 个子会话）` : ""}`,
       data: { file: destFile },
     };
   } catch (err: any) {
     return { ok: false, message: "", error: { code: "WRITE_FAILED", message: `转移失败（源文件未动）: ${err?.message ?? err}` } };
   }
+}
+
+/** 重写所有 parentSession 指向旧路径的子会话为新路径（谱系保持） */
+function rewriteChildrenParent(oldPath: string, newPath: string, dataDir: string): number {
+  let n = 0;
+  for (const f of scanSessionFiles(dataDir)) {
+    if (f.file === oldPath || f.file === newPath) continue;
+    if (f.parentSession !== oldPath) continue;
+    try {
+      const lines = fs.readFileSync(f.file, "utf-8").split("\n");
+      const header = JSON.parse(lines[0]!) as SessionHeader;
+      header.parentSession = newPath;
+      lines[0] = JSON.stringify(header);
+      fs.writeFileSync(f.file, lines.join("\n"));
+      n++;
+    } catch { /* 单个子会话重写失败不影响转移本身 */ }
+  }
+  return n;
 }
 
 /**
