@@ -161,6 +161,10 @@ export interface AgentInstanceRecord {
   memorySpec?: MemorySpec;
   /** 装配注册持久化（spec §2.2 step 5 N-I9）：初始资本（可空列 endowment）。 */
   endowment?: { K: number; initialFloor: number };
+  /** elo（spec §3.2）：全局分（初始 1500，可空列 elo_global）。 */
+  eloGlobal?: number;
+  /** elo 分域分 JSON map（spec §3.2，可空列 elo_by_domain）；回退 byDomain[t] ?? global。 */
+  eloByDomain?: Record<string, number>;
   createdAtRoundId: string;
   status: AgentInstanceStatus;
   createdAt: number;

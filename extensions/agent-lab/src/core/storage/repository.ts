@@ -86,6 +86,20 @@ export class CoreRepository {
         this.db.exec(`ALTER TABLE lab_agent_instances ADD COLUMN ${col} TEXT`);
       }
     }
+    // Add elo_global / elo_by_domain columns to lab_agent_instances if missing
+    // (N-I9，spec §3.2：全局分 + 分域分——结算双写持久化；旧表无此列，经 ALTER 新增
+    // 可空列；新库由 _applyCoreMigrations 同一路径补列——构造函数恒执行，等效新库直建)
+    for (const [col, colType] of [
+      ["elo_global", "REAL"],
+      ["elo_by_domain", "TEXT"],
+    ] as const) {
+      const cols = this.db.prepare(
+        `PRAGMA table_info(lab_agent_instances)`
+      ).all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === col)) {
+        this.db.exec(`ALTER TABLE lab_agent_instances ADD COLUMN ${col} ${colType}`);
+      }
+    }
     // model 列就绪后建 UNIQUE 索引（防同 instance 同 model 同 template 重复 agent）。
     // 阶段 3a 联邦统一市场：UNIQUE 加 source_template_id，允许跨模板同 model 的 agent 共存。
     // 不放 CORE_SCHEMA：旧库表已存在但无 model 列，CREATE INDEX 会先于 ALTER 失败。
@@ -398,8 +412,8 @@ export class CoreRepository {
     this.db.prepare(
       `INSERT INTO lab_agent_instances
        (id, scheduler_instance_id, definition_json, model, source_template_id, source_agent_id,
-        clone_operation_id, memory_spec, endowment, created_round_id, status, created_ts)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        clone_operation_id, memory_spec, endowment, elo_global, elo_by_domain, created_round_id, status, created_ts)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       record.id,
       record.schedulerInstanceId,
@@ -410,6 +424,8 @@ export class CoreRepository {
       record.cloneOperationId ?? null,
       record.memorySpec !== undefined ? JSON.stringify(record.memorySpec) : null,
       record.endowment !== undefined ? JSON.stringify(record.endowment) : null,
+      record.eloGlobal ?? null,
+      record.eloByDomain !== undefined ? JSON.stringify(record.eloByDomain) : null,
       record.createdAtRoundId,
       record.status,
       record.createdAt,
@@ -421,13 +437,14 @@ export class CoreRepository {
   getAgent(agentId: string): AgentInstanceRecord | undefined {
     const row = this.db.prepare(
       `SELECT id, scheduler_instance_id, definition_json, model, source_template_id, source_agent_id,
-              clone_operation_id, memory_spec, endowment, created_round_id, status, created_ts
+              clone_operation_id, memory_spec, endowment, elo_global, elo_by_domain, created_round_id, status, created_ts
        FROM lab_agent_instances WHERE id = ?
        LIMIT 1`
     ).get(agentId) as {
       id: string; scheduler_instance_id: string; definition_json: string; model: string | null;
       source_template_id: string | null; source_agent_id: string | null; clone_operation_id: string | null;
       memory_spec: string | null; endowment: string | null;
+      elo_global: number | null; elo_by_domain: string | null;
       created_round_id: string; status: string; created_ts: number;
     } | undefined;
 
@@ -443,6 +460,8 @@ export class CoreRepository {
       cloneOperationId: row.clone_operation_id ?? undefined,
       memorySpec: row.memory_spec !== null ? JSON.parse(row.memory_spec) as AgentInstanceRecord["memorySpec"] : undefined,
       endowment: row.endowment !== null ? JSON.parse(row.endowment) as AgentInstanceRecord["endowment"] : undefined,
+      eloGlobal: row.elo_global ?? undefined,
+      eloByDomain: row.elo_by_domain !== null ? JSON.parse(row.elo_by_domain) as Record<string, number> : undefined,
       createdAtRoundId: row.created_round_id,
       status: row.status as AgentInstanceRecord["status"],
       createdAt: row.created_ts,
