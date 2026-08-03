@@ -123,6 +123,22 @@ export class SqliteLedger implements Ledger {
     this.recordTx(a, -actual, reason, taskId, round, templateId);
   }
   /**
+   * 借记但不夹紧到 [0, balance]：允许负余额。用于池/系统内部资金路径（central-pool 等）。
+   * 单事务包裹；金额可以为任意非负数（调用方校验）。
+   */
+  debitUnclamped(a: AgentId, amt: number, reason: string, taskId?: string, round?: number, templateId?: string): void {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.ensureRow(a, templateId);
+      this.db.prepare(`UPDATE credits SET balance = balance - ?, updated_ts = ? WHERE agent = ?`).run(amt, this.now(), a);
+      this.recordTx(a, -amt, reason, taskId, round, templateId);
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+  /**
    * 冻结指定账户的信用额以锁定任务 stake。
    * 使用 INSERT OR IGNORE 实现幂等：同 (taskId, agent) 二次调用时，即使金额不同
    * 也会静默忽略、不更新金额，并返回 true。若需变更冻结金额，必须调用 adjustFreeze。

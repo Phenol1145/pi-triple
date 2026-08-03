@@ -1,9 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import type { DatabaseSync } from "node:sqlite";
 import { SqliteStore } from "../src/store/store.ts";
 import { SqliteLedger } from "../src/arena/ledger.ts";
 import { SettlementPolicyV1 } from "../src/arena/policies.ts";
 import { DEFAULT_MARKET_CONFIG } from "../src/config.ts";
+import { ensureCentralPool, poolDebit, CENTRAL_POOL_ID } from "../src/economy/central-pool.ts";
 import type { ModelInfo } from "../src/types.ts";
 import type { EndowmentPolicy } from "../src/arena/types.ts";
 
@@ -185,4 +187,83 @@ test("unfreeze 并发同 taskId 只生效一次", () => {
 test("errorMode 字段被忽略：stakeTimesOdds 配置下 majorError 仍 -stake", () => {
   const p = new SettlementPolicyV1({ ...DEFAULT_MARKET_CONFIG, settlement: { tax: 5, errorMode: "stakeTimesOdds" } });
   assert.equal(p.settle({ odds: 4 } as any, 10, { majorError: true } as any), -10);
+});
+
+// ── Task 1 D2 rulings: debitUnclamped / adjustFreeze interface / unfreeze fault injection ──
+
+test("debitUnclamped allows negative balance and does not clamp", () => {
+  const { ledger } = mk();
+  ledger.ensureEndowed("m/a", model("m/a"));
+  ledger.debitUnclamped("m/a", 1500, "overdraft");
+  assert.equal(ledger.balance("m/a"), -500);
+});
+
+test("debitUnclamped works for any agent (general API, not pool-only)", () => {
+  const { ledger } = mk();
+  ledger.debitUnclamped("any-agent", 100, "seed-via-debit");
+  assert.equal(ledger.balance("any-agent"), -100);
+});
+
+test("poolDebit uses debitUnclamped and allows central-pool negative balance", () => {
+  const { ledger } = mk();
+  ensureCentralPool(ledger);
+  poolDebit(ledger, 100, "outflow");
+  assert.equal(ledger.balance(CENTRAL_POOL_ID), -100);
+});
+
+test("adjustFreeze is exposed on Ledger interface", () => {
+  const { ledger } = mk();
+  ledger.ensureEndowed("m/a", model("m/a")); // balance 1000
+  ledger.freeze("m/a", 300, "t1"); // balance 700, frozen 300
+  const delta = ledger.adjustFreeze("m/a", "t1", 200); // unfreeze 100
+  assert.equal(delta, 100);
+  assert.equal(ledger.balance("m/a"), 800);
+  assert.equal(ledger.unfreeze("m/a", "t1"), 200);
+  assert.equal(ledger.balance("m/a"), 1000);
+});
+
+test("unfreeze rolls back on post-BEGIN failure and leaves freeze row intact", () => {
+  const { store, ledger } = mk();
+  ledger.ensureEndowed("m/a", model("m/a"));
+  ledger.freeze("m/a", 300, "t1");
+
+  // Proxy db: BEGIN IMMEDIATE succeeds, then the first subsequent prepare throws.
+  const raw = store.raw;
+  let failNext = false;
+  const failingDb = new Proxy(raw, {
+    get(target, prop) {
+      if (prop === "exec") {
+        return (sql: string) => {
+          if (sql === "BEGIN IMMEDIATE") {
+            failNext = true;
+            return target.exec(sql);
+          }
+          return target.exec(sql);
+        };
+      }
+      if (prop === "prepare") {
+        return (...args: unknown[]) => {
+          if (failNext) {
+            failNext = false;
+            throw new Error("injected failure after BEGIN");
+          }
+          return target.prepare(...args);
+        };
+      }
+      return target[prop as keyof typeof target];
+    },
+  }) as DatabaseSync;
+
+  const failingLedger = new SqliteLedger(failingDb, fixedEndow);
+  assert.throws(() => failingLedger.unfreeze("m/a", "t1"), /injected failure after BEGIN/);
+
+  // Balance and frozen column unchanged; freeze row still present.
+  assert.equal(ledger.balance("m/a"), 700);
+  const frozen = store.raw.prepare(`SELECT frozen FROM credits WHERE agent = 'm/a'`).get() as { frozen: number };
+  assert.equal(frozen.frozen, 300);
+  const freezeRow = store.raw.prepare(`SELECT amount FROM arena_freezes WHERE task_id = 't1' AND agent = 'm/a'`).get() as
+    | { amount: number }
+    | undefined;
+  assert.ok(freezeRow);
+  assert.equal(freezeRow.amount, 300);
 });

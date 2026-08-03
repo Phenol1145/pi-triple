@@ -115,8 +115,8 @@ announce（code）→ persist_task（effect：任务落库 + escrow_max 冻结�
   → collect_bids（fanout：并行 bidding workloop → stake 数组（各自已冻结 stake×(O−1)））
   → select（code：SelectionFormula → winner）
   → adjust_escrow（effect：调减解冻 + 未中标者 bid 解冻——幂等 taskId）
-  → execute（workloop：中标者 AgentRuntime.run）
-  → review（fanout：N 个评审者并行评审 workloop → 密封 r_i）
+  → execute（workloop body = agent 节点，v1 走 spawnAgent 调用中标者 AgentRuntime.run）
+  → review（fanout body = agent 节点，v1 走 spawnAgent 调用 N 个评审者并行评审 workloop → 密封 r_i）
   → consensus（code：中位数共识 → R, {a_i}）
   → settle（code：全部结算数值纯计算）
   → apply_settlement（effect：escrow 划付/负 settle 直付/税/elo 双写/燃烧/事件——幂等 taskId）
@@ -124,7 +124,7 @@ announce（code）→ persist_task（effect：任务落库 + escrow_max 冻结�
 
 ### 5.2 pit-flow 引擎扩展
 
-1. **占位扇出节点**（`type: "fanout"`）：`maxFanout`（默认 32）编译期展开占位分支（静态图不变）；候选 = 上游 shortlist 输出（≤ maxFanout 已截断）；**首轮执行候选快照进 checkpoint**（resume 用快照不重算）；激活前 N 分支，**no-op 分支不产元素**；失败隔离。
+1. **占位扇出节点**（`type: "fanout"`）：`maxFanout`（默认 32）运行时逐项激活（图保持静态 + 首轮候选快照 resume）——D1 实证裁决；候选 = 上游 shortlist 输出（≤ maxFanout 已截断）；**首轮执行候选快照进 checkpoint**（resume 用快照不重算）；激活前 N 分支，**no-op 分支不产元素**；失败隔离。
 2. **effect 节点**（`type: "effect"`）：确定性副作用执行器（EffectRegistry，CodeRegistry 同构）；**幂等存储 = `flow_effects` 表**（`(flowRunId, nodeId, idempotencyKey) → {status, resultSummary, ts}`）；**内部整体单事务原子**（共享 DatabaseSync；幂等记录同事务——部分失败不存在）；重试 skip 返回结果摘要。
 3. **子图节点**（`type: "subflow"`）：嵌套市场表达；输入/输出映射。
 

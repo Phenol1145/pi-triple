@@ -50,6 +50,11 @@ CREATE TABLE IF NOT EXISTS voucher_burns (
  * 与 SqliteLedger 共享同一 DatabaseSync（spec C1）。双层记账：
  * buy = 单事务（credit 预检 → debit agent → credit 池 → 余额+batch 入账）；
  * burn = 单事务（余额预检 → FIFO 批次折算历史成本 → burn 落库）。
+ *
+ * 重要耦合约定（D1 ruling / spec C1）：注入的 ledger 必须是共享同一 DatabaseSync 的
+ * SqliteLedger 实例。本类在 `buy` 中直读 `credits` 表做余额预检，并依赖 ledger 的
+ * debit/credit 在共享事务内修改同一 credits 行。若 ledger 为适配层/远程实现，预检与扣减
+ * 之间将出现数据边界，必须改用基于 ledger.balance() + 显式乐观锁的实现，否则破坏 I1。
  */
 export class SqliteVoucher implements VoucherPort {
   private db: DatabaseSync;

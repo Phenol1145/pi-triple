@@ -56,7 +56,11 @@ export interface Ledger {
   ensureEndowed(a: AgentId, m: ModelInfo, templateId?: string): void;
   credit(a: AgentId, amt: number, reason: string, taskId?: string, round?: number, templateId?: string): void;
   debit(a: AgentId, amt: number, reason: string, taskId?: string, round?: number, templateId?: string): void;
+  /** 借记但不夹紧到 [0, balance]：允许负余额（池/内部资金路径专用）。 */
+  debitUnclamped(a: AgentId, amt: number, reason: string, taskId?: string, round?: number, templateId?: string): void;
   freeze(a: AgentId, amt: number, taskId: string): boolean;
+  /** 将已有的冻结额原子调整为 newAmount。正数返回 = 解冻返回余额。 */
+  adjustFreeze(a: AgentId, taskId: string, newAmount: number): number;
   unfreeze(a: AgentId, taskId: string): number;
   leaderboard(): { agent: AgentId; balance: number }[];
   history(a?: AgentId, limit?: number): CreditTx[];

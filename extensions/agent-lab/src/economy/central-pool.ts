@@ -7,10 +7,10 @@
 //   - poolDebit 绕过 debit 夹紧（SqliteLedger.debit 把 actual 夹到 [0, balance]）——仅系统内部
 //     （endowment 出池 / 校准 escrow）可用，不进 LedgerPort 公开接口（I-R5-1 裁决）
 //
-// 实现要点：借 SqliteLedger.credit（`balance = balance + amt`，无夹紧）实现建行与负余额——
+// 实现要点：
 //   - ensureCentralPool = credit(id, 0)：credit 内部先 ensureRow 建行（balance=0），重复调用幂等
 //     （已存在 → 仅记 0-delta 审计事务，余额不变）
-//   - poolDebit = credit(id, -amount)：负额直接减，允许赤字（观测可见，spec §2）
+//   - poolDebit = debitUnclamped(id, amount)：允许负余额（观测可见，spec §2）
 //   - poolCredit = credit(id, +amount)
 import type { SqliteLedger } from "../arena/ledger.ts";
 
@@ -28,13 +28,13 @@ export function ensureCentralPool(ledger: SqliteLedger): void {
 
 /**
  * 池专用借记：允许负余额（绕过 debit 夹紧）——仅系统内部（endowment 出池 / 校准 escrow）。
- * 借 credit(负额)：SqliteLedger.credit 无夹紧（`balance = balance + amt`），负额直接减。
+ * 使用 SqliteLedger.debitUnclamped，语义显式，不再依赖 credit(负数)。
  */
 export function poolDebit(ledger: SqliteLedger, amount: number, reason: string): void {
   if (!(amount >= 0)) {
     throw new Error(`poolDebit: amount must be >= 0 (got ${amount})`);
   }
-  ledger.credit(CENTRAL_POOL_ID, -amount, reason);
+  ledger.debitUnclamped(CENTRAL_POOL_ID, amount, reason);
 }
 
 /** 池专用贷记（税 + 凭证销售收入入池）。 */
