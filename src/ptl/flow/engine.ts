@@ -581,6 +581,94 @@ async function executeWaveLoop(
           return;
         }
 
+        // Fanout node: expand into multiple item branches
+        if (nodeSnapshot.type === "fanout") {
+          const fanoutId = nodeId;
+          const itemsFrom = nodeSnapshot.itemsFrom ?? "items";
+          const bodyNodes = nodeSnapshot.body ?? [];
+          const maxFanout = nodeSnapshot.maxFanout ?? 32;
+
+          // Resume path: use the snapshot captured on the first wave.
+          const snapshot = store.getFanoutSnapshot(runId, fanoutId);
+          const items: unknown[] = snapshot !== undefined ? snapshot : (preWaveState[itemsFrom] as unknown[] ?? []);
+
+          // Validate items length
+          if (items.length > maxFanout) {
+            nodeResults.set(nodeId, {
+              ok: false,
+              output: `fanout "${fanoutId}": ${items.length} items exceed maxFanout of ${maxFanout}. Increase maxFanout or truncate items.`,
+              exitCode: -1,
+              signal: "fanout: items exceed maxFanout",
+            });
+            return;
+          }
+
+          // Store snapshot for resume (write to meta) — idempotent; first wave wins.
+          store.setFanoutSnapshot(runId, fanoutId, items as unknown[]);
+
+          // Execute body for each item. Branch failures are isolated: the failed
+          // branch produces no element, but the fanout node itself succeeds so the
+          // flow can continue.
+          const results: unknown[] = [];
+
+          for (let idx = 0; idx < items.length; idx++) {
+            const item = items[idx];
+
+            // Per-item state: inject `${fanoutId}.item`; keep pre-wave base state.
+            const itemState: Record<string, unknown> = { ...preWaveState, [`${fanoutId}.item`]: item };
+
+            let branchOk = true;
+            for (const bodyNodeDef of bodyNodes) {
+              const bodyNodeSnapshot = JSON.parse(JSON.stringify(bodyNodeDef)) as NodeDef;
+
+              // Render prompt from item-scoped state for agent-like bodies.
+              const bodyPrompt = interpolate(bodyNodeSnapshot.prompt ?? "", { state: itemState, input: meta.input });
+              const bodyCwd = bodyNodeSnapshot.cwd
+                ? path.join(workspaceDir, bodyNodeSnapshot.cwd)
+                : workspaceDir;
+              fs.mkdirSync(bodyCwd, { recursive: true });
+
+              let bodyOutput: string;
+              let bodyOk: boolean;
+              try {
+                const spawnRes = await spawnAgent(bodyNodeSnapshot, bodyPrompt, bodyCwd, process.env);
+                bodyOutput = spawnRes.output;
+                bodyOk = spawnRes.exitCode === 0 && spawnRes.signal === null;
+              } catch (err: any) {
+                bodyOutput = err?.message ?? String(err);
+                bodyOk = false;
+              }
+
+              if (!bodyOk) {
+                branchOk = false;
+                break;
+              }
+
+              // Apply body-node writes into the per-item state.
+              const bodyWrites = bodyNodeSnapshot.writes ?? {};
+              const resolvedState = applyFanoutBodyWrites(bodyWrites, itemState, bodyOutput, idx, item, fanoutId);
+              Object.assign(itemState, resolvedState);
+            }
+
+            if (branchOk) {
+              // Collect the branch result: explicit `${fanoutId}.result` write wins,
+              // otherwise fall back to the original item.
+              const result = itemState[`${fanoutId}.result`] ?? item;
+              results.push(result);
+            }
+            // Failed branches do not emit anything (failure isolation).
+          }
+
+          const output = JSON.stringify(results);
+          nodeResults.set(nodeId, {
+            ok: true,
+            output,
+            exitCode: 0,
+            signal: null,
+          });
+          return;
+        }
+
         // Agent node: render from pre-wave state
         const renderedPrompt = interpolate(nodeSnapshot.prompt ?? "", { state: preWaveState, input: meta.input });
         const nodeCwd = nodeSnapshot.cwd
@@ -633,6 +721,19 @@ async function executeWaveLoop(
       const currentMeta = store.loadMeta(runId);
       if (currentMeta.status === "waiting_human") {
         return { status: "waiting_human" };
+      }
+    }
+
+    // Fanout configuration errors (e.g. items > maxFanout) should fail the run
+    // immediately with a clear message, rather than leaving the graph hungry.
+    for (const nodeId of ready) {
+      const r = nodeResults.get(nodeId);
+      if (!r?.ok) {
+        const nodeDef = graph.nodes.find((n) => n.id === nodeId);
+        if (nodeDef?.type === "fanout") {
+          await failRunV2(store, runId, r?.output ?? `fanout "${nodeId}" failed`, lock);
+          return { status: "failed", error: r?.output ?? `fanout "${nodeId}" failed` };
+        }
       }
     }
 
@@ -703,13 +804,28 @@ async function executeWaveLoop(
       mergedState[key] = applyReducer(fieldDefs.reducer, current, additions);
     }
 
-    store.saveState(runId, mergedState);
+    // Fanout nodes materialise their collected result arrays directly into the
+    // configured `out` state key.
+    for (const nodeId of sortedReady) {
+      const r = nodeResults.get(nodeId);
+      if (!r?.ok) continue;
+      const nodeDef = graph.nodes.find((n) => n.id === nodeId);
+      if (nodeDef?.type !== "fanout") continue;
+      const outKey = nodeDef.out ?? "results";
+      try {
+        mergedState[outKey] = JSON.parse(r.output) as unknown[];
+      } catch {
+        mergedState[outKey] = [];
+      }
+    }
 
-    // effect 幂等记录随波落库（成功才写；fn 抛错无记录 → 重试重新执行）
+    // effect 幂等记录先落库，再写 state（保证幂等记录与 checkpoint 一起持久化）
     if (pendingEffectRecords.size > 0) {
       store.appendEffectRecords(runId, [...pendingEffectRecords.values()]);
       pendingEffectRecords.clear();
     }
+
+    store.saveState(runId, mergedState);
 
     // Update stepCount and rewrite node checkpoints with correct seq + stateAfter
     const finalState = store.loadState(runId);
@@ -993,6 +1109,82 @@ function resolveWriteValue(key: string, raw: string, output: string): unknown {
     return undefined;
   }
   return raw;
+}
+
+/**
+ * Resolve fanout body-node writes within a single item branch.
+ * Supports the same substitutions as resolveWriteValue, scoped to the
+ * per-item state (`state.*`), the raw `item`, and the current `output`.
+ */
+function applyFanoutBodyWrites(
+  writes: Record<string, string>,
+  state: Record<string, unknown>,
+  output: string,
+  _idx: number,
+  _item: unknown,
+  fanoutId: string,
+): Record<string, unknown> {
+  const resolved: Record<string, unknown> = {};
+
+  for (const [key, raw] of Object.entries(writes)) {
+    // {{output}} → body node output
+    if (raw === "{{output}}") {
+      resolved[key] = output;
+      continue;
+    }
+
+    // {{output.path}} → JSON path into body output
+    const outPathMatch = raw.match(/^\{\{output\.(.+)\}\}$/);
+    if (outPathMatch) {
+      try {
+        const parsed = JSON.parse(output) as Record<string, unknown>;
+        let val: unknown = parsed;
+        for (const seg of outPathMatch[1]!.split(".")) {
+          if (val === null || val === undefined || typeof val !== "object") {
+            val = undefined;
+            break;
+          }
+          val = (val as Record<string, unknown>)[seg];
+        }
+        resolved[key] = val;
+      } catch {
+        resolved[key] = undefined;
+      }
+      continue;
+    }
+
+    // {{item}} → current item
+    if (raw === "{{item}}") {
+      resolved[key] = _item;
+      continue;
+    }
+
+    // {{state.*}} → read from per-item state
+    const stateMatch = raw.match(/^\{\{state\.(.+)\}\}$/);
+    if (stateMatch) {
+      let val: unknown = state;
+      for (const seg of stateMatch[1]!.split(".")) {
+        if (val === null || val === undefined || typeof val !== "object") {
+          val = undefined;
+          break;
+        }
+        val = (val as Record<string, unknown>)[seg];
+      }
+      resolved[key] = val;
+      continue;
+    }
+
+    // {{fanoutId.item}} → convenience alias for the injected item
+    if (raw === `{{${fanoutId}.item}}`) {
+      resolved[key] = _item;
+      continue;
+    }
+
+    // 字面量
+    resolved[key] = raw;
+  }
+
+  return resolved;
 }
 
 async function failRun(store: FlowStore, runId: string, error: string): Promise<void> {

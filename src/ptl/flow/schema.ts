@@ -19,7 +19,7 @@ export interface FlowDef {
 
 export interface NodeDef {
   id: string;
-  type: "agent" | "human" | "code" | "effect";
+  type: "agent" | "human" | "code" | "effect" | "fanout";
   model?: string;
   template?: string;
   prompt?: string;
@@ -33,6 +33,12 @@ export interface NodeDef {
   timeoutSec?: number;
   needs?: string[];  // v2: explicit AND-join predecessors
   writes?: Record<string, string>;
+
+  // fanout 类型专属字段
+  maxFanout?: number;  // fanout 节点：最大并发数，默认 32
+  itemsFrom?: string;   // fanout 节点：state 键——候选数组来源
+  body?: NodeDef[];     // fanout 节点：子流程模板——单项 item 注入 state 键 `${id}.item`
+  out?: string;         // fanout 节点：结果数组写入的 state 键
 }
 
 export interface EdgeDef {
@@ -118,11 +124,11 @@ export function validateFlow(
       }
       if (id) nodeIds.add(id);
 
-      if (type && type !== "agent" && type !== "human" && type !== "code" && type !== "effect") {
-        errors.push(`nodes[${i}]: type must be "agent", "human", "code" or "effect", got "${type}"`);
+      if (type && type !== "agent" && type !== "human" && type !== "code" && type !== "effect" && type !== "fanout") {
+        errors.push(`nodes[${i}]: type must be "agent", "human", "code", "effect" or "fanout", got "${type}"`);
       }
 
-      const node: NodeDef = { id: id ?? `_invalid_${i}`, type: (type as "agent" | "human" | "code" | "effect") ?? "agent" };
+      const node: NodeDef = { id: id ?? `_invalid_${i}`, type: (type as "agent" | "human" | "code" | "effect" | "fanout") ?? "agent" };
 
       if (type === "agent") {
         if (!nObj.prompt) {
@@ -204,6 +210,39 @@ export function validateFlow(
             errors.push(`nodes[${i}] (effect "${id}"): args must be a string array`);
           } else {
             node.args = nObj.args as string[];
+          }
+        }
+      }
+
+      if (type === "fanout") {
+        // fanout 类型：itemsFrom、body、out 为必需字段
+        if (!nObj.itemsFrom) {
+          errors.push(`nodes[${i}] (fanout "${id || "?"}"): itemsFrom is required`);
+        } else if (typeof nObj.itemsFrom !== "string") {
+          errors.push(`nodes[${i}] (fanout "${id}"): itemsFrom must be a string`);
+        } else {
+          node.itemsFrom = nObj.itemsFrom as string;
+        }
+
+        if (!nObj.body) {
+          errors.push(`nodes[${i}] (fanout "${id || "?"}"): body is required`);
+        } else if (!Array.isArray(nObj.body)) {
+          errors.push(`nodes[${i}] (fanout "${id}"): body must be an array`);
+        } else {
+          node.body = nObj.body as NodeDef[];
+        }
+
+        if (!nObj.out) {
+          errors.push(`nodes[${i}] (fanout "${id || "?"}"): out is required`);
+        } else if (typeof nObj.out !== "string") {
+          errors.push(`nodes[${i}] (fanout "${id}"): out must be a string`);
+        } else {
+          node.out = nObj.out as string;
+        }
+
+        if (nObj.maxFanout !== undefined) {
+          if (typeof nObj.maxFanout !== "number" || !Number.isInteger(nObj.maxFanout) || nObj.maxFanout < 1) {
+            errors.push(`nodes[${i}] (fanout "${id}"): maxFanout must be a positive integer`);
           }
         }
       }

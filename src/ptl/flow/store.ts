@@ -43,6 +43,7 @@ export interface RunMeta {
   editRequested?: boolean;                 // v2: barrier
   editBaseWave?: number;                   // v2: wave where barrier triggered
   pendingEdits?: Array<{ path: string; value: unknown }>; // v2: queued edits
+  fanoutSnapshots?: Record<string, unknown[]>; // v2: fanout 首轮候选快照
 }
 
 export interface Checkpoint {
@@ -333,6 +334,20 @@ export class FlowStore {
     const p = path.join(this.runDir(runId), "flow_effects.json");
     const existing = this.loadEffectRecords(runId);
     this.writeAtomic(p, [...existing, ...records]);
+  }
+
+  // ── Fanout snapshots (v2) ─────────────────────────────────
+
+  getFanoutSnapshot(runId: string, fanoutId: string): unknown[] | undefined {
+    const meta = this.loadMeta(runId);
+    return meta.fanoutSnapshots?.[fanoutId];
+  }
+
+  setFanoutSnapshot(runId: string, fanoutId: string, items: unknown[]): void {
+    const meta = this.loadMeta(runId);
+    const snapshots = { ...(meta.fanoutSnapshots ?? {}) };
+    snapshots[fanoutId] = items;
+    this.updateMeta(runId, { fanoutSnapshots: snapshots });
   }
 
   // ── Meta ──────────────────────────────────────────────────
