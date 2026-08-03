@@ -614,8 +614,10 @@ async function executeWaveLoop(
           for (let idx = 0; idx < items.length; idx++) {
             const item = items[idx];
 
-            // Per-item state: inject `${fanoutId}.item`; keep pre-wave base state.
-            const itemState: Record<string, unknown> = { ...preWaveState, [`${fanoutId}.item`]: item };
+            // Per-item state: inject nested `{ [fanoutId]: { item } }` so that
+            // `{{state.fanoutId.item}}` resolves naturally via the existing path
+            // interpolation, and `{{fanoutId.item}}` reads the same nested value.
+            const itemState: Record<string, unknown> = { ...preWaveState, [fanoutId]: { item } };
 
             let branchOk = true;
             for (const bodyNodeDef of bodyNodes) {
@@ -1174,9 +1176,14 @@ function applyFanoutBodyWrites(
       continue;
     }
 
-    // {{fanoutId.item}} → convenience alias for the injected item
+    // {{fanoutId.item}} → convenience alias for the nested injected item
     if (raw === `{{${fanoutId}.item}}`) {
-      resolved[key] = _item;
+      const nested = state[fanoutId];
+      if (nested !== null && typeof nested === "object" && "item" in (nested as Record<string, unknown>)) {
+        resolved[key] = (nested as Record<string, unknown>).item;
+      } else {
+        resolved[key] = _item;
+      }
       continue;
     }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from "vitest";
 import { FlowStore } from "../../src/ptl/flow/store.js";
-import { makeRunFlowV2, type RunResult } from "../../src/ptl/flow/engine.js";
+import { makeRunFlowV2, makeResumeFlowV2, type RunResult } from "../../src/ptl/flow/engine.js";
+import path from "node:path";
 import { validateFlow } from "../../src/ptl/flow/schema.js";
 import { registerCodeFn } from "../../src/ptl/flow/code-registry.js";
 
@@ -234,7 +235,7 @@ describe("fanout node execution scenarios", () => {
     const state = store.loadState(runId);
     expect(state.results).toBeDefined();
     expect(Array.isArray(state.results)).toBe(true);
-    expect(state.results.length).toBe(3);
+    expect(state.results).toEqual(["item1", "item2", "item3"]);
   });
 
   // Scenario 2: 0 候选 → 空数组
@@ -333,9 +334,28 @@ describe("fanout node execution scenarios", () => {
     expect(state.results).not.toContain(undefined);
   });
 
-  // Scenario 6: 快照：首轮后篡改 state[itemsFrom] → resume 仍用首轮候选
-  it("scenario 6: snapshot: after first round modify state[itemsFrom] → resume still uses first round candidates", async () => {
-    const flow = createFanoutFlow("fanout1");
+  // Scenario 6: 首轮完成后篡改 state[itemsFrom]，强制 resume 仍用首轮候选快照
+  it("scenario 6: resume uses first-round candidate snapshot even after state[itemsFrom] is tampered", async () => {
+    const flow = {
+      name: "test_fanout_snapshot_resume",
+      entry: "fanout1",
+      nodes: [
+        {
+          id: "fanout1",
+          type: "fanout" as const,
+          itemsFrom: "items",
+          body: [
+            {
+              id: "item_processor",
+              type: "code" as const,
+              fn: "append_result",
+            },
+          ],
+          out: "results",
+        },
+      ],
+      edges: [{ from: "fanout1", to: "end" }],
+    };
     const runId = store.createRun(flow, {});
 
     store.saveState(runId, {
@@ -343,24 +363,46 @@ describe("fanout node execution scenarios", () => {
       results: [],
     });
 
-    const result = await runFlowV2(store, runId);
+    const result1 = await runFlowV2(store, runId);
+    expect(result1.status).toBe("done");
+    expect(store.loadState(runId).results).toEqual(["item1", "item2", "item3"]);
 
-    expect(result.status).toBe("done");
-
-    const state = store.loadState(runId);
-    expect(state.results.length).toBe(3);
-
-    // After completion, modify items (simulating external modification)
+    // Tamper the candidate source after completion
     store.saveState(runId, {
-      items: ["different_item1", "different_item2"],
-      results: state.results,
+      items: ["tampered"],
+      results: [],
     });
 
-    // Resume should not re-read items, but use the snapshot from checkpoint
-    // This is verified by the wave checkpoint containing the original items
-    const waveCp = store.latestWaveCheckpoint(runId);
-    expect(waveCp).toBeDefined();
-    expect(waveCp?.stateAfter.items).toEqual(["item1", "item2", "item3"]);
+    // Force the fanout node to re-execute by resetting epoch state and
+    // removing wave checkpoints, then resume the same runId.
+    const meta = store.loadMeta(runId);
+    store.updateMeta(runId, {
+      status: "running",
+      firedEpoch: {},
+      consumed: {},
+      stepCount: 0,
+    });
+    const wavesDir = path.join(store.runDir(runId), "waves");
+    const fs = require("node:fs") as typeof import("node:fs");
+    if (fs.existsSync(wavesDir)) {
+      fs.rmSync(wavesDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(wavesDir, { recursive: true });
+
+    const resume = makeResumeFlowV2(async (node, _prompt, _cwd, _env) => {
+      if (node.type === "code") {
+        const fn = node.fn as string;
+        if (fn === "append_result") {
+          return { output: JSON.stringify("item processed"), exitCode: 0, signal: null };
+        }
+      }
+      return { output: "", exitCode: 0, signal: null };
+    });
+    const result2 = await resume(store, runId);
+
+    expect(result2.status).toBe("done");
+    // Snapshot should win over the tampered state[itemsFrom]
+    expect(store.loadState(runId).results).toEqual(["item1", "item2", "item3"]);
   });
 
   // Scenario 7: maxFanout 默认 32
@@ -371,6 +413,22 @@ describe("fanout node execution scenarios", () => {
     const fanoutNode = flow.nodes.find((n) => n.id === "fanout1") as any;
 
     expect(fanoutNode.maxFanout).toBeUndefined();
+  });
+
+  it("scenario 7b: 33 candidates without maxFanout should fail with default 32", async () => {
+    const flow = createFanoutFlow("fanout1");
+    const runId = store.createRun(flow, {});
+
+    const items = Array.from({ length: 33 }, (_, i) => `item${i + 1}`);
+    store.saveState(runId, {
+      items,
+      results: [],
+    });
+
+    const result = await runFlowV2(store, runId);
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("maxFanout");
   });
 });
 
@@ -421,5 +479,96 @@ describe("fanout node default maxFanout behavior", () => {
 
     const state = store.loadState(runId);
     expect(state.results.length).toBe(40);
+  });
+});
+
+describe("fanout body agent prompt interpolation", () => {
+  let store: FlowStore;
+  const testDir = "/tmp/pit-flow-test-fanout-agent-prompt";
+
+  beforeEach(() => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    if (fs.existsSync(testDir)) {
+      fs.rmSync(testDir, { recursive: true, force: true });
+    }
+    store = new FlowStore(testDir);
+  });
+
+  afterEach(() => {
+    try {
+      const fs = require("node:fs") as typeof import("node:fs");
+      if (fs.existsSync(testDir)) {
+        fs.rmSync(testDir, { recursive: true, force: true });
+      }
+    } catch {
+      // ignore
+    }
+  });
+
+  it("receives the current item value via {{state.fanoutId.item}}", async () => {
+    const flow = {
+      name: "test_fanout_body_agent",
+      entry: "entry",
+      nodes: [
+        {
+          id: "entry",
+          type: "code" as const,
+          fn: "identity",
+        },
+        {
+          id: "fanout1",
+          type: "fanout" as const,
+          itemsFrom: "items",
+          body: [
+            {
+              id: "body_agent",
+              type: "agent" as const,
+              prompt: "process {{state.fanout1.item}}",
+            },
+          ],
+          out: "results",
+        },
+        {
+          id: "end_fanout",
+          type: "code" as const,
+          fn: "no_op",
+          writes: {},
+        },
+      ],
+      edges: [
+        { from: "entry", to: "fanout1" },
+        { from: "fanout1", to: "end_fanout" },
+      ],
+    };
+
+    const runId = store.createRun(flow, {});
+    store.saveState(runId, {
+      items: ["alpha", "beta"],
+      results: [],
+    });
+
+    const prompts: string[] = [];
+    const run = makeRunFlowV2(async (node, renderedPrompt, _cwd, _env) => {
+      if (node.type === "code") {
+        const fn = node.fn as string;
+        if (fn === "identity") {
+          return { output: JSON.stringify({ result: "ok" }), exitCode: 0, signal: null };
+        }
+        if (fn === "no_op") {
+          return { output: "", exitCode: 0, signal: null };
+        }
+      }
+      if (node.id === "body_agent") {
+        prompts.push(renderedPrompt);
+        return { output: "processed", exitCode: 0, signal: null };
+      }
+      return { output: "", exitCode: 0, signal: null };
+    });
+
+    const result = await run(store, runId);
+
+    expect(result.status).toBe("done");
+    expect(prompts).toEqual(["process alpha", "process beta"]);
+    expect(store.loadState(runId).results).toEqual(["alpha", "beta"]);
   });
 });

@@ -455,6 +455,31 @@ describe("flow-schema validate v2", () => {
   });
 });
 
+describe("fanout node", () => {
+  it("retains maxFanout after validateFlow", () => {
+    const r = validateFlow({
+      name: "fanout-max",
+      entry: "f",
+      nodes: [
+        {
+          id: "f",
+          type: "fanout",
+          itemsFrom: "items",
+          body: [{ id: "b", type: "code", fn: "x" }],
+          out: "results",
+          maxFanout: 64,
+        },
+      ],
+      edges: [{ from: "f", to: "end" }],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const f = r.def.nodes.find((n) => n.id === "f");
+      expect(f?.maxFanout).toBe(64);
+    }
+  });
+});
+
 describe("code nodes", () => {
   const codeFlow = (over: Record<string, unknown>): unknown => ({
     name: "t", entry: "c", nodes: [{ id: "c", type: "code", fn: "market.score", ...over }], edges: [],

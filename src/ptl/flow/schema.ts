@@ -243,6 +243,8 @@ export function validateFlow(
         if (nObj.maxFanout !== undefined) {
           if (typeof nObj.maxFanout !== "number" || !Number.isInteger(nObj.maxFanout) || nObj.maxFanout < 1) {
             errors.push(`nodes[${i}] (fanout "${id}"): maxFanout must be a positive integer`);
+          } else {
+            node.maxFanout = nObj.maxFanout as number;
           }
         }
       }
