@@ -938,13 +938,16 @@ async function executeWaveLoop(
       }
     }
 
-    // effect 幂等记录先落库，再写 state（保证幂等记录与 checkpoint 一起持久化）
+    // 不变量：幂等记录存在 ⟹ state 必已包含 effect 输出。
+    // 因此必须先持久化 state，再追加 effect 记录。若崩溃发生在两者之间，
+    // 下次 resume 时记录不存在，effect 会重执行（at-least-once；spec §5.2
+    // 要求 effect fn 按业务键幂等），从而保证 state 与记录不会永久不一致。
+    store.saveState(runId, mergedState);
+
     if (pendingEffectRecords.size > 0) {
       store.appendEffectRecords(runId, [...pendingEffectRecords.values()]);
       pendingEffectRecords.clear();
     }
-
-    store.saveState(runId, mergedState);
 
     // Update stepCount and rewrite node checkpoints with correct seq + stateAfter
     const finalState = store.loadState(runId);

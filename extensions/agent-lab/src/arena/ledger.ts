@@ -122,6 +122,11 @@ export class SqliteLedger implements Ledger {
     this.db.prepare(`UPDATE credits SET balance = balance - ?, updated_ts = ? WHERE agent = ?`).run(actual, this.now(), a);
     this.recordTx(a, -actual, reason, taskId, round, templateId);
   }
+  /**
+   * 冻结指定账户的信用额以锁定任务 stake。
+   * 使用 INSERT OR IGNORE 实现幂等：同 (taskId, agent) 二次调用时，即使金额不同
+   * 也会静默忽略、不更新金额，并返回 true。若需变更冻结金额，必须调用 adjustFreeze。
+   */
   freeze(a: AgentId, amt: number, taskId: string): boolean {
     this.ensureRow(a);
     this.db.exec("BEGIN IMMEDIATE");

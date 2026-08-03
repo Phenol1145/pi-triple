@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -95,6 +95,37 @@ describe("effect node execution", () => {
       expect(cps.length).toBeGreaterThan(1);
       // 幂等记录落库
       expect(store.loadEffectRecords(runId).length).toBe(1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("persists state before appending effect idempotency records", async () => {
+    registerEffect("test.effect.order", () => ({ value: "ok" }));
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flow-effect-order-"));
+    const store = new FlowStore(dir);
+    const saveStateSpy = vi.spyOn(store, "saveState");
+    const appendSpy = vi.spyOn(store, "appendEffectRecords");
+    const runId = store.createRun({
+      name: "t", entry: "e",
+      nodes: [{ id: "e", type: "effect", effect: "test.effect.order", writes: { out: "{{output}}" } }],
+      edges: [],
+    } as any, {});
+    const run = makeRunFlowV2(mockSpawnAgent);
+    const result = await run(store, runId);
+    try {
+      expect(result.status).toBe("done");
+      expect(appendSpy).toHaveBeenCalledTimes(1);
+      expect(saveStateSpy).toHaveBeenCalled();
+
+      const appendOrder = (appendSpy.mock.invocationCallOrder as number[])[0]!;
+      const saveOrders = saveStateSpy.mock.invocationCallOrder as number[];
+      const lastSaveBeforeAppend = Math.max(...saveOrders.filter((o) => o < appendOrder));
+      expect(lastSaveBeforeAppend).toBeGreaterThan(0);
+
+      const idx = saveOrders.indexOf(lastSaveBeforeAppend);
+      expect(saveStateSpy.mock.calls[idx]![1]).toMatchObject({ out: '{"value":"ok"}' });
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

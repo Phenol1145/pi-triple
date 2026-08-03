@@ -113,6 +113,31 @@ test("⑤ burn: insufficient voucher balance throws, state unchanged", () => {
   assert.equal(n.n, 0); // no batch drained
 });
 
+test("⑥ buy rejects non-positive units and leaves state unchanged", () => {
+  const { store, ledger } = mk();
+  const v = new SqliteVoucher({ db: store.raw, ledger, rates: { creditPerUnit: RATES } });
+  ledger.ensureEndowed("a", model("m/a"));
+  assert.throws(() => v.buy("a", "llm", -5), /units must be positive/);
+  assert.throws(() => v.buy("a", "llm", 0), /units must be positive/);
+  assert.equal(v.balance("a", "llm"), 0);
+  assert.equal(ledger.balance("a"), 1000);
+  assert.equal(ledger.balance("central-pool"), 0);
+  const n = store.raw.prepare(`SELECT COUNT(*) AS n FROM voucher_batches WHERE agent_id = ?`).get("a") as { n: number };
+  assert.equal(n.n, 0);
+});
+
+test("⑥b burn rejects negative units and leaves state unchanged", () => {
+  const { store, ledger } = mk();
+  const v = new SqliteVoucher({ db: store.raw, ledger, rates: { creditPerUnit: RATES } });
+  ledger.ensureEndowed("a", model("m/a"));
+  v.buy("a", "llm", 5);
+  assert.throws(() => v.burn("a", "llm", -1), /units must be positive/);
+  assert.equal(v.balance("a", "llm"), 5);
+  assert.equal(v.burnHistory("a", "llm").length, 0);
+  const n = store.raw.prepare(`SELECT COUNT(*) AS n FROM voucher_burns WHERE agent_id = ?`).get("a") as { n: number };
+  assert.equal(n.n, 0);
+});
+
 test("⑥ burnHistory: traceId precise filter and sinceTs", () => {
   const { store, ledger } = mk();
   const v = new SqliteVoucher({ db: store.raw, ledger, rates: { creditPerUnit: RATES } });

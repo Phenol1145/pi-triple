@@ -66,6 +66,7 @@ export class SqliteVoucher implements VoucherPort {
   }
 
   buy(agentId: string, kind: VoucherKind, units: number): void {
+    if (units <= 0) throw new Error("units must be positive");
     const cost = units * this.rates[kind];
     this.db.exec("BEGIN IMMEDIATE");
     try {
@@ -97,6 +98,7 @@ export class SqliteVoucher implements VoucherPort {
   }
 
   burn(agentId: string, kind: VoucherKind, units: number, cause: BurnCause): void {
+    if (units <= 0) throw new Error("units must be positive");
     this.db.exec("BEGIN IMMEDIATE");
     try {
       const balRow = this.db.prepare(`SELECT units FROM voucher_balances WHERE agent_id = ? AND kind = ?`).get(agentId, kind) as { units: number } | undefined;
