@@ -5,8 +5,9 @@
 import type { Ledger } from "../arena/types.ts";
 import type { VoucherPort } from "./voucher-port.ts";
 import type { MarketStore, MarketTask } from "./market-store.ts";
-import { EloFormulaRegistry, SelectionFormulaRegistry, ELO_DEFAULTS } from "./elo.ts";
+import { EloFormulaRegistry, SelectionFormulaRegistry, ELO_DEFAULTS, taskRatingFromOdds } from "./elo.ts";
 import type { TaskTypeRegistry } from "./task-types.ts";
+import { computeConsensus, planSettlement, DEFAULT_TAX_RATE, type ReviewInput } from "./settlement.ts";
 import { randomUUID } from "node:crypto";
 
 /** 本地 CodeFn 类型（与 PTL code-registry.ts 同形）。 */
@@ -92,6 +93,8 @@ export function registerMarketCodeFns(registry: CodeRegistry, deps: MarketFnsDep
   registry.register("market.announce", (args, ctx) => announce(ctx.state, deps, args));
   registry.register("market.shortlist", (args, ctx) => shortlist(ctx.state, deps, args));
   registry.register("market.select", (args, ctx) => select(ctx.state, deps, args));
+  registry.register("market.consensus", (args, ctx) => consensus(ctx.state, deps, args));
+  registry.register("market.settle", (args, ctx) => settle(ctx.state, deps, args));
 }
 
 function announce(
@@ -204,4 +207,73 @@ function select(
     throw new Error("market.select: empty shortlist");
   }
   return { winnerId: winner.agentId, winnerStake: winner.stake };
+}
+
+// ── consensus / settle（plan Task 3 / spec §7/§7a）──
+// 薄壳：从 flow state/args 读入，委托 settlement.ts 纯函数（无副作用）。
+
+function readReviews(state: Readonly<Record<string, unknown>>, args?: Record<string, unknown>): ReviewInput[] {
+  const raw = (state.reviews as ReviewInput[] | undefined) ?? (args?.reviews as ReviewInput[] | undefined) ?? [];
+  return raw.map((r) => ({ reviewerId: String(r.reviewerId), score: Number(r.score) }));
+}
+
+function toElo(raw: unknown): { global: number; byDomain: Record<string, number> } {
+  const e = raw as { global?: number; byDomain?: Record<string, number> } | undefined;
+  return {
+    global: Number(e?.global ?? ELO_DEFAULTS.INITIAL),
+    byDomain: e?.byDomain ?? {},
+  };
+}
+
+function toEloMap(raw: unknown): Map<string, { global: number; byDomain: Record<string, number> }> {
+  const out = new Map<string, { global: number; byDomain: Record<string, number> }>();
+  if (raw instanceof Map) {
+    for (const [id, e] of raw) {
+      out.set(String(id), toElo(e));
+    }
+  } else if (raw && typeof raw === "object") {
+    for (const [id, e] of Object.entries(raw as Record<string, unknown>)) {
+      out.set(id, toElo(e));
+    }
+  }
+  return out;
+}
+
+function consensus(
+  state: Readonly<Record<string, unknown>>,
+  _deps: MarketFnsDeps,
+  args?: Record<string, unknown>
+): { R: number; accuracies: Map<string, number> } {
+  return computeConsensus(readReviews(state, args));
+}
+
+function settle(
+  state: Readonly<Record<string, unknown>>,
+  deps: MarketFnsDeps,
+  args?: Record<string, unknown>
+): ReturnType<typeof planSettlement> {
+  const taskId = String(state.taskId ?? args?.taskId ?? "");
+  const task = deps.store.getTask(taskId);
+  if (!task) {
+    throw new Error(`market.settle: task not found: ${taskId}`);
+  }
+
+  const gtRaw = state.groundTruthScore ?? args?.groundTruthScore;
+  const groundTruthScore = gtRaw !== undefined && gtRaw !== null ? Number(gtRaw) : undefined;
+  const taskRating = Number(state.taskRating ?? args?.taskRating ?? taskRatingFromOdds(task.odds));
+  const eloFn = deps.elo.get(String(state.eloFormulaId ?? args?.eloFormulaId ?? "simple-elo"));
+
+  return planSettlement({
+    task,
+    winnerId: String(state.winnerId ?? args?.winnerId ?? task.winnerId ?? ""),
+    winnerStake: Number(state.winnerStake ?? args?.winnerStake ?? task.winnerStake ?? 0),
+    reviews: readReviews(state, args),
+    majorError: Boolean(state.majorError ?? args?.majorError ?? false),
+    groundTruthScore,
+    eloFn,
+    taxRate: Number(state.taxRate ?? args?.taxRate ?? DEFAULT_TAX_RATE),
+    executorElo: toElo(state.executorElo ?? args?.executorElo),
+    reviewerElos: toEloMap(state.reviewerElos ?? args?.reviewerElos),
+    taskRating,
+  });
 }
