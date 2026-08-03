@@ -20,13 +20,18 @@ interface SessionHeader {
   parentSession?: string;
 }
 
-function readEntries(file: string): { header: SessionHeader; entries: any[] } | null {
+function readEntries(file: string): { header: SessionHeader; entries: any[]; skipped: number } | null {
   try {
     const lines = fs.readFileSync(file, "utf-8").trim().split("\n").filter((l) => l.trim());
     if (lines.length === 0) return null;
     const header = JSON.parse(lines[0]!) as SessionHeader;
     if (header.type !== "session" || typeof header.id !== "string") return null;
-    return { header, entries: lines.slice(1).map((l) => JSON.parse(l)) };
+    const entries: any[] = [];
+    let skipped = 0;
+    for (const l of lines.slice(1)) {
+      try { entries.push(JSON.parse(l)); } catch { skipped++; } // 单行损坏跳过（双写者/截断容忍）
+    }
+    return { header, entries, skipped };
   } catch {
     return null;
   }
@@ -101,13 +106,14 @@ function writeNewSession(dir: string, cwd: string, parentSession: string | undef
 export function forkSession(source: PiSessionFile, opts: ForkOpts): CommandResult {
   const parsed = readEntries(source.file);
   if (!parsed) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话文件无效或不可读: ${source.file}` } };
+  const warned = parsed.skipped > 0 ? `（跳过 ${parsed.skipped} 行损坏数据）` : "";
   const target = resolveTarget(source, opts);
   if (!target.ok) return target.error;
   const written = writeNewSession(target.dir, target.cwd, source.file, parsed.entries);
   if (!written.ok) return written.error;
   return {
     ok: true,
-    message: `✅ 已 fork 会话 ${source.id.slice(0, 8)}… → ${path.basename(written.file)}`,
+    message: `✅ 已 fork 会话 ${source.id.slice(0, 8)}… → ${path.basename(written.file)}${warned}`,
     data: { file: written.file, id: written.id },
   };
 }
@@ -116,13 +122,14 @@ export function forkSession(source: PiSessionFile, opts: ForkOpts): CommandResul
 export function cloneSession(source: PiSessionFile, opts: ForkOpts): CommandResult {
   const parsed = readEntries(source.file);
   if (!parsed) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话文件无效或不可读: ${source.file}` } };
+  const warned = parsed.skipped > 0 ? `（跳过 ${parsed.skipped} 行损坏数据）` : "";
   const target = resolveTarget(source, opts);
   if (!target.ok) return target.error;
   const written = writeNewSession(target.dir, target.cwd, source.file, parsed.entries);
   if (!written.ok) return written.error;
   return {
     ok: true,
-    message: `✅ 已克隆会话 ${source.id.slice(0, 8)}… → ${path.basename(written.file)}`,
+    message: `✅ 已克隆会话 ${source.id.slice(0, 8)}… → ${path.basename(written.file)}${warned}`,
     data: { file: written.file, id: written.id },
   };
 }
@@ -134,6 +141,7 @@ export function cloneSession(source: PiSessionFile, opts: ForkOpts): CommandResu
 export function transferSession(source: PiSessionFile, opts: TransferOpts): CommandResult {
   const parsed = readEntries(source.file);
   if (!parsed) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话文件无效或不可读: ${source.file}` } };
+  const warned = parsed.skipped > 0 ? `（跳过 ${parsed.skipped} 行损坏数据）` : "";
   const target = resolveTarget(source, opts);
   if (!target.ok) return target.error;
   if (target.templateId === source.templateId) {
@@ -152,7 +160,7 @@ export function transferSession(source: PiSessionFile, opts: TransferOpts): Comm
     fs.rmSync(source.file); // 写入成功才删源（回滚安全）
     return {
       ok: true,
-      message: `✅ 已转移会话 ${source.id.slice(0, 8)}… → 模板 ${target.templateId}`,
+      message: `✅ 已转移会话 ${source.id.slice(0, 8)}… → 模板 ${target.templateId}${warned}`,
       data: { file: destFile },
     };
   } catch (err: any) {
@@ -171,6 +179,7 @@ export function transferSession(source: PiSessionFile, opts: TransferOpts): Comm
 export function forkSessionAtNode(source: PiSessionFile, opts: BranchOpts): CommandResult {
   const parsed = readEntries(source.file);
   if (!parsed) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话文件无效或不可读: ${source.file}` } };
+  const warned = parsed.skipped > 0 ? `（跳过 ${parsed.skipped} 行损坏数据）` : "";
   const byId = new Map(parsed.entries.map((e) => [e.id as string, e]));
   const node = byId.get(opts.at);
   if (!node) {
@@ -232,7 +241,7 @@ export function forkSessionAtNode(source: PiSessionFile, opts: BranchOpts): Comm
   if (!written.ok) return written.error;
   return {
     ok: true,
-    message: `✅ 已从节点 ${opts.at} 建分支 → ${path.basename(written.file)}（${finalPath.length} 事件）`,
+    message: `✅ 已从节点 ${opts.at} 建分支 → ${path.basename(written.file)}（${finalPath.length} 事件）${warned}`,
     data: { file: written.file, id: written.id, events: finalPath.length },
   };
 }

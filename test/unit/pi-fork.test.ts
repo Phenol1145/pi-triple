@@ -113,6 +113,16 @@ describe("pi-fork", () => {
     expect(forkSessionAtNode(src, { at: "zzz" }).error?.code).toBe("NODE_NOT_FOUND");
   });
 
+  it("fork 容忍纸带损坏行：跳过坏行、其余事件照常复制", () => {
+    writeSession("a.jsonl", [H1, E1, "this-is-not-json{{{", E2]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = forkSession(src, {});
+    expect(r.ok).toBe(true);
+    const content = fs.readFileSync((r.data as { file: string }).file, "utf-8").trim().split("\n");
+    const ids = content.slice(1).map((l) => JSON.parse(l) as any).map((e) => e.id);
+    expect(ids).toEqual(["e1", "e2"]);
+  });
+
   it("branch compaction 完整性：firstKeptEntryId 引用不在主线时调整（保留 compaction + 警告）", () => {
     // 主线 e1→e6(compaction, firstKeptEntryId=e2)→e2→e3；node=e3 时 e2 在主线内 → 完整
     writeSession("a.jsonl", [H1, E1, E6, E2, E3]);
