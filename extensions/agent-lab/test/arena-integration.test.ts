@@ -504,7 +504,7 @@ test("Scenario 4: abandoned auction — schedule froze but no settle → staleTa
 
 // ── Scenario 5: Bankruptcy ────────────────────────────────────────────
 
-test("Scenario 5: bankruptcy — settle leaves balance 0 → bankrupt metric emitted → subsequent bid stake 0", async () => {
+test("Scenario 5: bankruptcy — repeated stakeOnly losses drain balance to 0 → subsequent bid stake 0", async () => {
   const winnerModel = "openai/gpt-4o";
   const candidates = [model(winnerModel)];
 
@@ -514,7 +514,7 @@ test("Scenario 5: bankruptcy — settle leaves balance 0 → bankrupt metric emi
     arenaCandidates: candidates,
     modelCaller: {
       async complete(_model, _prompt, _timeoutMs) {
-        return "500"; // substantial stake
+        return "1000"; // all-in bid each round (stake capped at floor(0.5×balance))
       },
     },
   });
@@ -522,54 +522,60 @@ test("Scenario 5: bankruptcy — settle leaves balance 0 → bankrupt metric emi
   await rt.bootstrap();
   const runner = rt.runner();
 
-  // First dispatch: schedule + freeze
-  const r1 = await runner.dispatch({
-    traceId: "bankrupt-trace-1",
-    role: "worker",
-    task: "doomed task",
-    settlementRef: "bankrupt-ref-1",
-    mode: "select",
-  });
-  assert.equal(r1.status, "completed");
-
-  // Settle with majorError + stakeTimesOdds to drain balance
-  const settled = await runner.settle(
-    "bankrupt-ref-1",
-    settleOutcome({ majorError: true, completion: 0 }),
-  );
-  assert.equal(settled, true);
-
-  // Check bankrupt event
-  const events1 = rt.core.events.query({ traceId: "bankrupt-trace-1" });
-  const bankruptEvents = events1.filter(
-    (e) => e.eventType === "scheduler.market.bankrupt",
-  );
-  // Bankrupt may or may not fire depending on exact D/U calculation
-  // At minimum, check that balance is now 0
-  const balanceAfterSettle = rt.ledger.balance(agentId);
-  // The settle uses stakeTimesOdds mode → D = -stake * odds with majorError
-  // This should drain balance close to 0
-  if (balanceAfterSettle <= 0 && bankruptEvents.length > 0) {
-    assert.ok(true, "bankrupt event emitted when balance reached 0");
+  // stakeOnly: D = -stake (no odds multiplier), and unfreeze cancels the stake
+  // deduction, so a single majorError loses only stake+usage — not enough to
+  // bankrupt a 1000-endowed agent (stake capped at floor(0.5×balance)).
+  // Repeated losing rounds drain the balance until it can no longer stake;
+  // the final round hits no-eligible-bids (→ fallback) and the opt-out tax
+  // drains the remainder to 0.
+  let balance = fixedEndow.initialCredits(candidates[0]);
+  let round = 0;
+  let lastRoundCompleted = true;
+  while (balance > 0 && round < 15) {
+    round += 1;
+    const traceId = `bankrupt-trace-${round}`;
+    const ref = `bankrupt-ref-${round}`;
+    const r = await runner.dispatch({
+      traceId,
+      role: "worker",
+      task: "doomed task",
+      settlementRef: ref,
+      mode: "select",
+    });
+    balance = rt.ledger.balance(agentId);
+    if (r.status !== "completed") {
+      lastRoundCompleted = false;
+      break; // 余量不足以支撑下一注 → no-eligible-bids → fallback（opt-out tax 清零余额）
+    }
+    const settled = await runner.settle(
+      ref,
+      settleOutcome({ majorError: true, completion: 0 }),
+    );
+    assert.equal(settled, true, `settle round ${round} should succeed`);
+    balance = rt.ledger.balance(agentId);
   }
+  assert.equal(
+    lastRoundCompleted,
+    false,
+    "final dispatch should fall back when balance can no longer stake",
+  );
+  assert.ok(balance <= 0, `balance should be drained to 0, got ${balance}`);
 
-  // Second dispatch: same candidate, now balance is near 0
+  // Post-bankrupt dispatch: same candidate, balance is 0 → bid clamped to 0
+  // → no-eligible-bids → fail or fallback
   const r2 = await runner.dispatch({
-    traceId: "bankrupt-trace-2",
+    traceId: "bankrupt-trace-final",
     role: "worker",
     task: "post-bankrupt task",
-    settlementRef: "bankrupt-ref-2",
+    settlementRef: "bankrupt-ref-final",
     mode: "select",
   });
-
-  // With balance near 0, the bid should be clamped to 0 → no-eligible-bids
-  // So this should fail or fallback
   assert.ok(
     r2.status === "failed" || r2.status === "fallback",
     `post-bankrupt dispatch should fail/fallback, got ${r2.status}`,
   );
 
-  // Verify balance is near 0
+  // Verify balance is 0
   const finalBalance = rt.ledger.balance(agentId);
   assert.ok(
     finalBalance <= 0,

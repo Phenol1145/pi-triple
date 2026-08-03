@@ -79,7 +79,7 @@ export type Mode = "classic" | "market";
 export interface MarketConfig {
   endowment: { K: number; floor: number };
   odds: { easy: number; medium: number; hard: number };
-  settlement: { tax: number; errorMode: "stakeOnly" | "stakeTimesOdds" };
+  settlement: { tax: number; /** @deprecated 行为恒 stakeOnly（spec §7/M-R4-3）：值被忽略，仅保留读取兼容 */ errorMode: "stakeOnly" | "stakeTimesOdds" };
   cost: { tokenMult: number; toolMult: number; latencyMult: number; resourceFactor: number; toolWeights: Record<string, number> };
   bidding: { timeoutMs: number; promptTemplate: string; maxCallsPerDispatch: number; minStake: number; engine: "model-caller" | "workloop"; maxConcurrentBids: number; bidTurnBudget: number; bidSkill: string };
   market: { staleTaskTimeoutMs: number; eligibility: string; maxBidders: number; bidderSelector: string; diversityFactor: number };

@@ -629,8 +629,8 @@ test("settle: bankrupt metric when balance reaches 0", async () => {
     settleOutcome({ majorError: true }),
   );
 
-  // Due to errorMode = stakeTimesOdds, the loss could be > balance
-  // Check for bankrupt event
+  // errorMode 钉死 stakeOnly（值被忽略）：bid=1000 == 全部余额（maxStakeRatio 1.0）
+  // → D = -stake = -1000，settle 后 balance 归零 → bankrupt
   const bankrupt = findEvent(settleEvents, "scheduler.market.bankrupt");
   // Bankrupt may or may not fire depending on D/U computation
   // At minimum, balance should be low

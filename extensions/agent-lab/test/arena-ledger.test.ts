@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SqliteStore } from "../src/store/store.ts";
 import { SqliteLedger } from "../src/arena/ledger.ts";
+import { SettlementPolicyV1 } from "../src/arena/policies.ts";
+import { DEFAULT_MARKET_CONFIG } from "../src/config.ts";
 import type { ModelInfo } from "../src/types.ts";
 import type { EndowmentPolicy } from "../src/arena/types.ts";
 
@@ -166,4 +168,21 @@ test("frozen column never goes below zero after unfreeze", () => {
   assert.equal(ledger.unfreeze("m/a", "t1"), 300);
   const frozen = (store.raw.prepare(`SELECT frozen FROM credits WHERE agent = 'm/a'`).get() as { frozen: number });
   assert.equal(frozen.frozen, 0);
+});
+
+// ── Task 1: errorMode stakeOnly pin + unfreeze transaction wrap (M-R4-3) ──
+
+test("unfreeze 并发同 taskId 只生效一次", () => {
+  const { ledger } = mk();
+  ledger.credit("a", 100, "seed");
+  ledger.freeze("a", 30, "t1");
+  assert.equal(ledger.balance("a"), 70);
+  ledger.unfreeze("a", "t1");
+  ledger.unfreeze("a", "t1"); // 第二次 no-op
+  assert.equal(ledger.balance("a"), 100); // 不双重解冻
+});
+
+test("errorMode 字段被忽略：stakeTimesOdds 配置下 majorError 仍 -stake", () => {
+  const p = new SettlementPolicyV1({ ...DEFAULT_MARKET_CONFIG, settlement: { tax: 5, errorMode: "stakeTimesOdds" } });
+  assert.equal(p.settle({ odds: 4 } as any, 10, { majorError: true } as any), -10);
 });

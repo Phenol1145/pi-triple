@@ -27,7 +27,8 @@ export class SettlementPolicyV1 implements SettlementPolicy {
   constructor(cfg: MarketConfig) { this.cfg = cfg; }
   settle(t: ArenaTask, stake: number, o: Outcome): number {
     const O = t.odds;
-    if (o.majorError) return this.cfg.settlement.errorMode === "stakeOnly" ? -stake : -stake * O;
+    // majorError 恒 -stake（spec §7/M-R4-3）：errorMode 字段已 @deprecated，值被忽略（钉死 stakeOnly）。
+    if (o.majorError) return -stake;
     const c = Math.max(0, Math.min(1, o.completion));
     return stake * (O - 1) * (2 * c - 1);
   }

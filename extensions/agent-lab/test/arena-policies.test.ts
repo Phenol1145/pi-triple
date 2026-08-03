@@ -32,7 +32,8 @@ test("SettlementPolicyV1 betting math", () => {
   assert.ok(Math.abs(p.settle(task, 100, { ...clean, completion: 1 }) - 200) < 1e-9);
   assert.ok(Math.abs(p.settle(task, 100, { ...clean, completion: 0.5 }) - 0) < 1e-9);
   assert.ok(Math.abs(p.settle(task, 100, { ...clean, completion: 0 }) - (-200)) < 1e-9);
-  assert.ok(Math.abs(p.settle(task, 100, { ...clean, majorError: true }) - (-300)) < 1e-9);
+  // majorError 恒 -stake（errorMode 钉死 stakeOnly，字段被忽略）
+  assert.ok(Math.abs(p.settle(task, 100, { ...clean, majorError: true }) - (-100)) < 1e-9);
 });
 
 test("CostModelV1 sums token+tool+inference (durations in seconds)", () => {

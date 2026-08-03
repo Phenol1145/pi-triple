@@ -123,13 +123,24 @@ export class SqliteLedger implements Ledger {
     }
   }
   unfreeze(a: AgentId, taskId: string): number {
-    const freezeRow = this.db.prepare(`SELECT amount FROM arena_freezes WHERE task_id = ?`).get(taskId) as { amount: number } | undefined;
-    if (!freezeRow) return 0; // idempotent: no freeze row
-    const amt = freezeRow.amount;
-    // Unfreeze: add back to balance, subtract from frozen (clamped ≥ 0).
-    this.db.prepare(`UPDATE credits SET balance = balance + ?, frozen = MAX(frozen - ?, 0), updated_ts = ? WHERE agent = ?`).run(amt, amt, this.now(), a);
-    this.db.prepare(`DELETE FROM arena_freezes WHERE task_id = ?`).run(taskId);
-    return amt;
+    // 单事务包裹（M-R4-3）：SELECT→UPDATE→DELETE 原子，崩溃/异常不产生部分状态。
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const freezeRow = this.db.prepare(`SELECT amount FROM arena_freezes WHERE task_id = ?`).get(taskId) as { amount: number } | undefined;
+      if (!freezeRow) {
+        this.db.exec("COMMIT");
+        return 0; // idempotent: no freeze row
+      }
+      const amt = freezeRow.amount;
+      // Unfreeze: add back to balance, subtract from frozen (clamped ≥ 0).
+      this.db.prepare(`UPDATE credits SET balance = balance + ?, frozen = MAX(frozen - ?, 0), updated_ts = ? WHERE agent = ?`).run(amt, amt, this.now(), a);
+      this.db.prepare(`DELETE FROM arena_freezes WHERE task_id = ?`).run(taskId);
+      this.db.exec("COMMIT");
+      return amt;
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
   }
   leaderboard(): { agent: AgentId; balance: number }[] {
     const rows = this.db.prepare(`SELECT agent, balance FROM credits ORDER BY balance DESC, agent ASC`).all() as { agent: string; balance: number }[];

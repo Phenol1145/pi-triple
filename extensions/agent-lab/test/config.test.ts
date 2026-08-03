@@ -31,7 +31,7 @@ test("mode defaults to classic and arena defaults present", () => {
   assert.equal(cfg.mode, "classic");
   assert.equal(cfg.market.endowment.K, 100);
   assert.equal(cfg.market.odds.hard, 5.0);
-  assert.equal(cfg.market.settlement.errorMode, "stakeTimesOdds");
+  assert.equal(cfg.market.settlement.errorMode, "stakeOnly");
 });
 
 test("arena deep-merge keeps siblings", () => {
