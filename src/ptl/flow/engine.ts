@@ -10,13 +10,15 @@
 import path from "node:path";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
-import type { FlowStore, ExecLock, Checkpoint, PendingPayload, WaveCheckpoint } from "./store.js";
+import { createHash } from "node:crypto";
+import type { FlowStore, ExecLock, Checkpoint, PendingPayload, WaveCheckpoint, EffectRecord } from "./store.js";
 import { appendMetrics } from "./store.js";
 import type { FlowDef, NodeDef, EdgeDef } from "./schema.js";
 import { interpolate } from "./template.js";
 import { evalExpr } from "./expr.js";
 import { parseStateField, applyReducer, type StateFieldDef } from "./reducers.js";
 import { resolveCodeFn } from "./code-registry.js";
+import { hasEffect, resolveEffect } from "./effect-registry.js";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -267,7 +269,7 @@ async function executeLoop(
       _lock.release();
       return { status: "waiting_human" };
     } else {
-      // code 节点仅 v2 引擎支持（spec: 兼容性约束）
+      // code 节点仅 v2 引擎支持（spec: 兼容性约束）；effect 节点同理（v1 报同错）
       await failRun(store, runId, `node "${currentNodeId}": code nodes require v2 engine`);
       return { status: "failed", error: `node "${currentNodeId}": code nodes require v2 engine` };
     }
@@ -390,6 +392,8 @@ async function executeWaveLoop(
   const workspaceDir = path.join(dir, "workspace");
   // 本执行进程内失败的节点不再重试（防无限重试）；外部 resume（新进程）可重跑
   const failedThisRun = new Set<string>();
+  // 本波成功执行的 effect 幂等记录（波末随 state/checkpoint 原子落库）
+  const pendingEffectRecords = new Map<string, EffectRecord>();
 
   // Ensure epoch state is initialized
   let meta = store.loadMeta(runId);
@@ -517,6 +521,42 @@ async function executeWaveLoop(
           store.updateMeta(runId, { status: "waiting_human" });
           lock.release();
           nodeResults.set(nodeId, { ok: true, output: "", exitCode: 0, signal: null });
+          return;
+        }
+
+        // Effect node: same-process deterministic side effect（幂等保护）
+        if (nodeSnapshot.type === "effect") {
+          const fnName = nodeSnapshot.effect ?? "";
+          if (!hasEffect(fnName)) {
+            nodeResults.set(nodeId, { ok: false, output: `effect not registered: ${fnName}`, exitCode: -1, signal: "effect not registered" });
+            return;
+          }
+          const argNames = nodeSnapshot.args ?? Object.keys(preWaveState);
+          const idempotencyKey = computeIdempotencyKey(nodeId, fnName, argNames, preWaveState);
+          // 幂等检测：flow_effects 已有记录 → skip（输出 = 存储的 result_summary）
+          const existingRecord = store.loadEffectRecords(runId).find(
+            (r) => r.nodeId === nodeId && r.idempotencyKey === idempotencyKey,
+          );
+          if (existingRecord) {
+            nodeResults.set(nodeId, { ok: true, output: existingRecord.resultSummary, exitCode: 0, signal: null });
+            return;
+          }
+          const fn = resolveEffect(fnName);
+          try {
+            // state 传浅拷贝：防 fn 运行时篡改污染波状态（同波后续节点/波末 reducer 初值）
+            const result = await fn({ state: { ...preWaveState }, runId, nodeId, idempotencyKey, log: () => {} });
+            const output = JSON.stringify(result ?? null);
+            pendingEffectRecords.set(nodeId, {
+              flowRunId: runId,
+              nodeId,
+              idempotencyKey,
+              resultSummary: output,
+              createdAt: Date.now(),
+            });
+            nodeResults.set(nodeId, { ok: true, output, exitCode: 0, signal: null });
+          } catch (err: any) {
+            nodeResults.set(nodeId, { ok: false, output: err?.message ?? String(err), exitCode: -1, signal: "effect fn threw" });
+          }
           return;
         }
 
@@ -665,6 +705,12 @@ async function executeWaveLoop(
 
     store.saveState(runId, mergedState);
 
+    // effect 幂等记录随波落库（成功才写；fn 抛错无记录 → 重试重新执行）
+    if (pendingEffectRecords.size > 0) {
+      store.appendEffectRecords(runId, [...pendingEffectRecords.values()]);
+      pendingEffectRecords.clear();
+    }
+
     // Update stepCount and rewrite node checkpoints with correct seq + stateAfter
     const finalState = store.loadState(runId);
     const newStepCount = meta.stepCount + ready.length;
@@ -706,7 +752,7 @@ async function executeWaveLoop(
         const nodeDef = graph.nodes.find((n) => n.id === nodeId);
         if (nodeDef?.metrics) {
           const result: unknown = (() => {
-            if (nodeDef.type === "code") {
+            if (nodeDef.type === "code" || nodeDef.type === "effect") {
               try { return JSON.parse(r.output) as unknown; } catch { return r.output; }
             }
             return r.output;
@@ -906,6 +952,22 @@ function applyPendingEdit(store: FlowStore, runId: string, edit: { path: string;
   // Apply edits that were queued during running
   // For now, just notify — full implementation is in edit.ts
   // The resume path in edit.ts handles this via setValue
+}
+
+/**
+ * effect 幂等键：确定性哈希（effect 名 + 读取的 args 值）。
+ * 同 (runId, nodeId) 下相同输入 → 同 key → 引擎 skip；输入变化 → 不同 key → 重新执行。
+ * fn 抛错不落记录 → 重试同输入仍同 key 但无记录 → 重新执行。
+ */
+function computeIdempotencyKey(
+  nodeId: string,
+  effectName: string,
+  argNames: string[],
+  state: Record<string, unknown>,
+): string {
+  const payload = [effectName, ...argNames.map((k) => state[k])];
+  const digest = createHash("sha256").update(JSON.stringify(payload)).digest("hex").slice(0, 16);
+  return `${nodeId}:${digest}`;
 }
 
 /** Resolve a write value: plain value, {{output}} substitution, {{increment:x}} */

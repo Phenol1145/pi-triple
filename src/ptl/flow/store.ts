@@ -84,6 +84,15 @@ export interface RunSummary {
   stepCount: number;
 }
 
+/** flow_effects 幂等记录：effect 节点执行成功后落库，(flow_run_id, node_id, idempotency_key) 唯一 */
+export interface EffectRecord {
+  flowRunId: string;
+  nodeId: string;
+  idempotencyKey: string;
+  resultSummary: string;
+  createdAt: number;
+}
+
 export interface ExecLock {
   release(): void;
 }
@@ -308,6 +317,22 @@ export class FlowStore {
   latestWaveCheckpoint(runId: string): WaveCheckpoint | null {
     const list = this.listWaveCheckpoints(runId);
     return list.length > 0 ? list[list.length - 1]! : null;
+  }
+
+  // ── flow_effects 幂等表（文件 flow_effects.json，JSON 数组，原子写）────────
+
+  loadEffectRecords(runId: string): EffectRecord[] {
+    const p = path.join(this.runDir(runId), "flow_effects.json");
+    if (!fs.existsSync(p)) return [];
+    return JSON.parse(fs.readFileSync(p, "utf-8")) as EffectRecord[];
+  }
+
+  /** 波末批量追加幂等记录（一次读 + 一次原子写，避免并发 RMW 竞争） */
+  appendEffectRecords(runId: string, records: EffectRecord[]): void {
+    if (records.length === 0) return;
+    const p = path.join(this.runDir(runId), "flow_effects.json");
+    const existing = this.loadEffectRecords(runId);
+    this.writeAtomic(p, [...existing, ...records]);
   }
 
   // ── Meta ──────────────────────────────────────────────────

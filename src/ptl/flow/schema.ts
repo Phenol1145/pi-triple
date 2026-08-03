@@ -19,12 +19,13 @@ export interface FlowDef {
 
 export interface NodeDef {
   id: string;
-  type: "agent" | "human" | "code";
+  type: "agent" | "human" | "code" | "effect";
   model?: string;
   template?: string;
   prompt?: string;
   message?: string;
   fn?: string;
+  effect?: string;  // effect 节点：EffectRegistry 注册名
   args?: string[];
   metrics?: Record<string, Record<string, string>>;
   tools?: string[];
@@ -117,11 +118,11 @@ export function validateFlow(
       }
       if (id) nodeIds.add(id);
 
-      if (type && type !== "agent" && type !== "human" && type !== "code") {
-        errors.push(`nodes[${i}]: type must be "agent", "human" or "code", got "${type}"`);
+      if (type && type !== "agent" && type !== "human" && type !== "code" && type !== "effect") {
+        errors.push(`nodes[${i}]: type must be "agent", "human", "code" or "effect", got "${type}"`);
       }
 
-      const node: NodeDef = { id: id ?? `_invalid_${i}`, type: (type as "agent" | "human" | "code") ?? "agent" };
+      const node: NodeDef = { id: id ?? `_invalid_${i}`, type: (type as "agent" | "human" | "code" | "effect") ?? "agent" };
 
       if (type === "agent") {
         if (!nObj.prompt) {
@@ -182,6 +183,25 @@ export function validateFlow(
         if (nObj.args !== undefined) {
           if (!Array.isArray(nObj.args) || !nObj.args.every((a: unknown) => typeof a === "string")) {
             errors.push(`nodes[${i}] (code "${id}"): args must be a string array`);
+          } else {
+            node.args = nObj.args as string[];
+          }
+        }
+      }
+
+      if (type === "effect") {
+        // effect 字段 = 注册名（EffectRegistry 白名单），缺省/非字符串 → 校验报错
+        if (nObj.effect === undefined || nObj.effect === null) {
+          errors.push(`nodes[${i}] (effect "${id || "?"}"): effect is required`);
+        } else if (typeof nObj.effect !== "string") {
+          errors.push(`nodes[${i}] (effect "${id || "?"}"): effect must be a string`);
+        } else {
+          node.effect = nObj.effect as string;
+        }
+
+        if (nObj.args !== undefined) {
+          if (!Array.isArray(nObj.args) || !nObj.args.every((a: unknown) => typeof a === "string")) {
+            errors.push(`nodes[${i}] (effect "${id}"): args must be a string array`);
           } else {
             node.args = nObj.args as string[];
           }
