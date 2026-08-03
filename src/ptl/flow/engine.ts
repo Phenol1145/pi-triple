@@ -19,6 +19,7 @@ import { evalExpr } from "./expr.js";
 import { parseStateField, applyReducer, type StateFieldDef } from "./reducers.js";
 import { resolveCodeFn } from "./code-registry.js";
 import { hasEffect, resolveEffect } from "./effect-registry.js";
+import { hasSubflow, resolveSubflow } from "./subflow-registry.js";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -455,6 +456,24 @@ async function executeWaveLoop(
     if (ready.length === 0) {
       // Check for hunger
       if (activeCandidates.length > 0) {
+        // If every active candidate already failed in this run, propagate the
+        // actual failure reason instead of a generic hunger message.
+        const allFailed = activeCandidates.every((t) => failedThisRun.has(t));
+        if (allFailed) {
+          const latestWc = store.latestWaveCheckpoint(runId);
+          let failedOutput: string | undefined;
+          if (latestWc?.partialFailures && latestWc.partialFailures.length > 0) {
+            const failedNodeId = latestWc.partialFailures[0]!;
+            const cps = store.listCheckpoints(runId).filter(
+              (c) => c.nodeId === failedNodeId && c.status === "failed",
+            );
+            failedOutput = cps.length > 0 ? cps[cps.length - 1]!.output : undefined;
+          }
+          const error = failedOutput ?? "flow failed";
+          await failRunV2(store, runId, error, lock);
+          return { status: "failed", error };
+        }
+
         const blocked: string[] = [];
         for (const t of activeCandidates) {
           if (!ready.includes(t)) {
@@ -671,6 +690,80 @@ async function executeWaveLoop(
           return;
         }
 
+        // Subflow node: execute a nested flow in a new run, map inputs/outputs
+        if (nodeSnapshot.type === "subflow") {
+          const subflowId = nodeId;
+          const flowRef = nodeSnapshot.flow;
+          let childDef: FlowDef;
+
+          if (typeof flowRef === "string") {
+            if (!hasSubflow(flowRef)) {
+              nodeResults.set(nodeId, {
+                ok: false,
+                output: `subflow not registered: ${flowRef}`,
+                exitCode: -1,
+                signal: "subflow not registered",
+              });
+              return;
+            }
+            childDef = resolveSubflow(flowRef);
+          } else if (flowRef && typeof flowRef === "object" && !Array.isArray(flowRef)) {
+            childDef = flowRef as FlowDef;
+          } else {
+            nodeResults.set(nodeId, {
+              ok: false,
+              output: `subflow "${subflowId}": missing or invalid flow`,
+              exitCode: -1,
+              signal: "subflow invalid",
+            });
+            return;
+          }
+
+          // Create child run in the same store; checkpoints are isolated per run.
+          const childRunId = store.createRun(childDef, meta.input);
+          const childState = store.loadState(childRunId);
+
+          // Apply in mapping: parent state key -> child state key
+          const inMap = nodeSnapshot.in ?? {};
+          for (const [parentKey, childKey] of Object.entries(inMap)) {
+            childState[childKey] = preWaveState[parentKey];
+          }
+          store.saveState(childRunId, childState);
+
+          // Execute child flow recursively using the same spawnAgent dependency.
+          const runChild = makeRunFlowV2(spawnAgent);
+          const childResult = await runChild(store, childRunId);
+
+          if (childResult.status === "done") {
+            const childFinalState = store.loadState(childRunId);
+            nodeResults.set(nodeId, {
+              ok: true,
+              output: JSON.stringify(childFinalState),
+              exitCode: 0,
+              signal: null,
+            });
+          } else if (childResult.status === "waiting_human") {
+            // Propagate human gate to parent. Parent releases its lock; the subflow
+            // node is not checkpointed, so parent resume will re-enter this node.
+            store.updateMeta(runId, { status: "waiting_human" });
+            lock.release();
+            nodeResults.set(nodeId, {
+              ok: false,
+              output: "subflow waiting for human",
+              exitCode: -1,
+              signal: "subflow waiting_human",
+            });
+          } else {
+            nodeResults.set(nodeId, {
+              ok: false,
+              output: childResult.error ?? `subflow "${subflowId}" failed`,
+              exitCode: -1,
+              signal: "subflow failed",
+            });
+          }
+          return;
+        }
+
         // Agent node: render from pre-wave state
         const renderedPrompt = interpolate(nodeSnapshot.prompt ?? "", { state: preWaveState, input: meta.input });
         const nodeCwd = nodeSnapshot.cwd
@@ -813,11 +906,31 @@ async function executeWaveLoop(
       if (!r?.ok) continue;
       const nodeDef = graph.nodes.find((n) => n.id === nodeId);
       if (nodeDef?.type !== "fanout") continue;
-      const outKey = nodeDef.out ?? "results";
+      const outKey = (nodeDef.out as string | undefined) ?? "results";
       try {
         mergedState[outKey] = JSON.parse(r.output) as unknown[];
       } catch {
         mergedState[outKey] = [];
+      }
+    }
+
+    // Subflow nodes materialise out mappings: child state key -> parent state key.
+    for (const nodeId of sortedReady) {
+      const r = nodeResults.get(nodeId);
+      if (!r?.ok) continue;
+      const nodeDef = graph.nodes.find((n) => n.id === nodeId);
+      if (nodeDef?.type !== "subflow") continue;
+      const outMap = nodeDef.out;
+      if (typeof outMap !== "object" || !outMap || Array.isArray(outMap)) continue;
+      const outMapTyped = outMap as Record<string, string>;
+      let childState: Record<string, unknown>;
+      try {
+        childState = JSON.parse(r.output) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      for (const [childKey, parentKey] of Object.entries(outMapTyped)) {
+        mergedState[parentKey] = childState[childKey];
       }
     }
 

@@ -4,6 +4,7 @@
 
 import { parseExpr } from "./expr.js";
 import { parseStateField, VALID_REDUCERS, type StateFieldDef } from "./reducers.js";
+import { hasSubflow } from "./subflow-registry.js";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ export interface FlowDef {
 
 export interface NodeDef {
   id: string;
-  type: "agent" | "human" | "code" | "effect" | "fanout";
+  type: "agent" | "human" | "code" | "effect" | "fanout" | "subflow";
   model?: string;
   template?: string;
   prompt?: string;
@@ -38,7 +39,11 @@ export interface NodeDef {
   maxFanout?: number;  // fanout 节点：最大并发数，默认 32
   itemsFrom?: string;   // fanout 节点：state 键——候选数组来源
   body?: NodeDef[];     // fanout 节点：子流程模板——单项 item 注入 state 键 `${id}.item`
-  out?: string;         // fanout 节点：结果数组写入的 state 键
+  out?: string | Record<string, string>;  // fanout 节点：结果数组写入的 state 键；subflow 节点：子 state 键 → 父 state 键映射
+
+  // subflow 类型专属字段
+  flow?: string | FlowDef;  // 子 flow 名（registry 解析）或内联 FlowDef
+  in?: Record<string, string>;  // 父 state 键 → 子 state 键映射
 }
 
 export interface EdgeDef {
@@ -124,11 +129,11 @@ export function validateFlow(
       }
       if (id) nodeIds.add(id);
 
-      if (type && type !== "agent" && type !== "human" && type !== "code" && type !== "effect" && type !== "fanout") {
-        errors.push(`nodes[${i}]: type must be "agent", "human", "code", "effect" or "fanout", got "${type}"`);
+      if (type && type !== "agent" && type !== "human" && type !== "code" && type !== "effect" && type !== "fanout" && type !== "subflow") {
+        errors.push(`nodes[${i}]: type must be "agent", "human", "code", "effect", "fanout" or "subflow", got "${type}"`);
       }
 
-      const node: NodeDef = { id: id ?? `_invalid_${i}`, type: (type as "agent" | "human" | "code" | "effect" | "fanout") ?? "agent" };
+      const node: NodeDef = { id: id ?? `_invalid_${i}`, type: (type as "agent" | "human" | "code" | "effect" | "fanout" | "subflow") ?? "agent" };
 
       if (type === "agent") {
         if (!nObj.prompt) {
@@ -245,6 +250,43 @@ export function validateFlow(
             errors.push(`nodes[${i}] (fanout "${id}"): maxFanout must be a positive integer`);
           } else {
             node.maxFanout = nObj.maxFanout as number;
+          }
+        }
+      }
+
+      if (type === "subflow") {
+        // subflow 类型：flow 为必需字段（注册名或内联 FlowDef）
+        if (nObj.flow === undefined || nObj.flow === null) {
+          errors.push(`nodes[${i}] (subflow "${id || "?"}"): flow is required`);
+        } else if (typeof nObj.flow === "string") {
+          node.flow = nObj.flow;
+          if (!hasSubflow(nObj.flow)) {
+            errors.push(`nodes[${i}] (subflow "${id || "?"}"): subflow not registered: "${nObj.flow}"`);
+          }
+        } else if (typeof nObj.flow === "object" && !Array.isArray(nObj.flow)) {
+          const child = validateFlow(nObj.flow);
+          if (!child.ok) {
+            for (const e of child.errors) {
+              errors.push(`nodes[${i}] (subflow "${id || "?"}"): ${e}`);
+            }
+          } else {
+            node.flow = child.def;
+          }
+        } else {
+          errors.push(`nodes[${i}] (subflow "${id || "?"}"): flow must be a registered name or an inline FlowDef object`);
+        }
+
+        if (nObj.in !== undefined) {
+          const inMap = requireStringMap(nObj, "in", errors, `nodes[${i}] (subflow "${id || "?"}")`);
+          if (inMap) node.in = inMap;
+        }
+
+        if (nObj.out !== undefined) {
+          if (typeof nObj.out === "string") {
+            errors.push(`nodes[${i}] (subflow "${id || "?"}"): out must be an object mapping child state keys to parent state keys`);
+          } else {
+            const outMap = requireStringMap(nObj, "out", errors, `nodes[${i}] (subflow "${id || "?"}")`);
+            if (outMap) node.out = outMap;
           }
         }
       }
@@ -532,4 +574,31 @@ function requireArray(
     return null;
   }
   return obj[key] as unknown[];
+}
+
+function requireStringMap(
+  obj: Record<string, unknown>,
+  key: string,
+  errors: string[],
+  prefix = "",
+): Record<string, string> | null {
+  const label = prefix ? `${prefix}.${key}` : key;
+  if (!(key in obj) || obj[key] === undefined || obj[key] === null) {
+    errors.push(`${label}: required`);
+    return null;
+  }
+  if (typeof obj[key] !== "object" || Array.isArray(obj[key])) {
+    errors.push(`${label}: must be an object`);
+    return null;
+  }
+  const map = obj[key] as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(map)) {
+    if (typeof v !== "string") {
+      errors.push(`${label}.${k}: must be a string`);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
 }
