@@ -123,6 +123,39 @@ describe("pi-fork", () => {
     expect(ids).toEqual(["e1", "e2"]);
   });
 
+  it("fork 容错消息：1 行坏数据 → message 含（跳过 1 行损坏数据）", () => {
+    writeSession("a.jsonl", [H1, E1, "this-is-not-json{{{", E2]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = forkSession(src, {});
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("（跳过 1 行损坏数据）");
+  });
+
+  it("clone 容错消息：2 行坏数据 → skipped 计数准确（跳过 2 行）", () => {
+    writeSession("a.jsonl", [H1, E1, "bad{{{", "also-bad", E2]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = cloneSession(src, {});
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("（跳过 2 行损坏数据）");
+  });
+
+  it("transfer 容错消息：跳过行警告接入 message，且源删除语义不变", () => {
+    writeSession("a.jsonl", [H1, E1, "this-is-not-json{{{", E2]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = transferSession(src, { templateId: "t2" });
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("（跳过 1 行损坏数据）");
+    expect(fs.existsSync(src.file)).toBe(false); // 警告不改变转移语义：源仍删除
+  });
+
+  it("branch 容错消息：forkSessionAtNode 的 message 也接入跳过警告", () => {
+    writeSession("a.jsonl", [H1, E1, "this-is-not-json{{{", E2]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = forkSessionAtNode(src, { at: "e2" });
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("（跳过 1 行损坏数据）");
+  });
+
   it("branch compaction 完整性：firstKeptEntryId 引用不在主线时调整（保留 compaction + 警告）", () => {
     // 主线 e1→e6(compaction, firstKeptEntryId=e2)→e2→e3；node=e3 时 e2 在主线内 → 完整
     writeSession("a.jsonl", [H1, E1, E6, E2, E3]);
