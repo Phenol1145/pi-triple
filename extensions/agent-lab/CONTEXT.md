@@ -110,3 +110,30 @@ _Avoid_: note, snippet, chunk
 **规则链（Rule Chain）**：agent 的完整行为规则 = 公域规则库（kind=rule 只读视图）+ 私域解析/公理——可续写（LLM 生成 EBNF → 私域 → 发轫进公域）。**修改规则：改公共规则 = 版本分叉 + 审核；改自己 = 私域新规则条目（若公域已有更具体规则则冗余）**。规则冲突 = 规则条目自身（触发相同、参数不同）→ **每次装配时审核**（默认值候补）+ 发轫进公域时审核。
 
 _Avoid_: （装配层）provision, bootstrap（bootstrap 已用于种子初始化场景，避免泛指装配）
+
+## 目录结构约定（2026-08-05 固化——命名混乱以文档收敛，非改名）
+
+**单数 = 框架契约 / 复数 = 具体插件**（约定俗成，lint 未强制——新代码遵循）：
+
+| 框架（契约/注册表/引擎） | 插件（具体实现） |
+|---|---|
+| `optimizer/`（contracts/registry/facade/shadow/auto-flow） | `optimizers/`（weighted-tuner、ws-projector） |
+| `scheduler/`（contracts/registry/runner/runner-sdk） | `schedulers/`（weighted-scorer、arena-scheduler、bootstrap、names） |
+| `workloop/`（contracts/machine/runner/state-store/checkpoints/registry） | `workloops/`（8 个具体 loop 实现、model-port） |
+
+新代码放置规则：**写契约/抽象/引擎 → 单数目录；写具体实现 → 复数目录**。框架不 import 插件（2026-08-05 解环后单向：插件 → 框架）。
+
+**核心域**（有 `index.ts` 桶导出——外部入口聚合，深 import 仍兼容）：`core/` `arena/` `workloop/` `memory/` `economy/` `assembly/`。其余为支持域（schedulers/optimizers/store/bench/telemetry/scorer/catalog/runtime/experiment/interceptor/commands/config）。
+
+**Ledger 三层委托链**（非重复——分层抽象）：
+
+```
+LedgerOps（economy/voucher-port.ts）  ⊂  LedgerPort（assembly/ledger-port.ts）  ⊂  Ledger（arena/types.ts）
+  debit/credit 最小面                      装配端口 open/balance/removeAccount        胖接口 20+ 方法（完整账本）
+```
+
+ voucher 只依赖 LedgerOps（最小面）；装配层经 LedgerPort（注入可替换）；arena 域内用完整 Ledger。新代码按所需最小面选层。
+
+**事务语义**：见 `docs/transaction-semantics.md`（`repository.transaction` 拒绝嵌套 vs `withSharedTransaction` 嵌套复用——有意的两套，不统一）。
+
+**store/schema 归属**：`core/storage/schema.ts`（lab_* 9 表）/ `store/schema.ts`（runs/role_pin/config 3 表）/ `arena/ledger.ts`（credits 等 5 表）/ `economy/*.ts`（各自 ensureSchema——voucher/market/task-types/org/economy-events）。各域自持 schema（构造时 CREATE TABLE IF NOT EXISTS），无统一 DDL 管理（现状，有意——域自治）。
