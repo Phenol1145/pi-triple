@@ -275,8 +275,8 @@ test("apply_settlement：评审者负 settle → 入中央池", () => {
   assert.equal((evt!.data as { to: string }).to, CENTRAL_POOL_ID);
 });
 
-// ── 5b. 多负流：2 评审者负 settle → reviewerSettles 全量路由（防 negativeFlow 单槽误用）──
-test("apply_settlement：多负流（2 评审者负 settle）→ reviewerSettles 全量路由（negativeFlow 单槽仅展示）", () => {
+// ── 5b. 多负流：2 评审者负 settle → reviewerSettles 全量路由（逐笔入池）──
+test("apply_settlement：多负流（2 评审者负 settle）→ reviewerSettles 全量路由（逐笔入池）", () => {
   const m = mk();
   const { reg, taskId } = setupTask(m);
   m.ledger.ensureEndowed("a1", model("a1"));
@@ -309,10 +309,6 @@ test("apply_settlement：多负流（2 评审者负 settle）→ reviewerSettles
   });
   assert.equal(plan.reviewerSettles.get("r1"), -8);
   closeTo(plan.reviewerSettles.get("r2")!, -6);
-  // 单槽契约（D3 裁决 A）：negativeFlow 只代表最负者（amount=8，非全量 14）——仅展示用
-  assert.equal(plan.negativeFlow!.from, "r1");
-  assert.equal(plan.negativeFlow!.to, "central-pool");
-  closeTo(plan.negativeFlow!.amount, 8);
 
   const r = reg.call("market.apply_settlement", { taskId, plan, winnerId: "a1" }) as { ok: boolean };
   assert.equal(r.ok, true);
@@ -331,8 +327,8 @@ test("apply_settlement：多负流（2 评审者负 settle）→ reviewerSettles
   assert.equal(negEvts.length, 2);
 });
 
-// ── 5c. 执行者负 settle + 评审者负 settle 并存：负流槽被执行者占用时评审者负流仍全量入池 ──
-test("apply_settlement：执行者负 settle + 评审者负 settle 并存 → 评审者负流仍全量入池（negativeFlow 非路由源）", () => {
+// ── 5c. 执行者负 settle + 评审者负 settle 并存：评审者负流仍全量入池 ──
+test("apply_settlement：执行者负 settle + 评审者负 settle 并存 → 评审者负流仍全量入池", () => {
   const m = mk();
   const { reg, taskId } = setupTask(m);
   m.ledger.ensureEndowed("a1", model("a1"));
@@ -358,7 +354,6 @@ test("apply_settlement：执行者负 settle + 评审者负 settle 并存 → �
     ]),
     taskRating: taskRatingFromOdds(3),
   });
-  assert.deepEqual(plan.negativeFlow, { from: "a1", to: "publisher", amount: 15 });
   closeTo(plan.reviewerSettles.get("r1")!, -8);
 
   const r = reg.call("market.apply_settlement", { taskId, plan, winnerId: "a1" }) as { ok: boolean };

@@ -18,11 +18,9 @@
 //   - 评审者 elo outcome=a_i（准确性是评审者的绩效信号）；
 //   - elo 双写增量：global 与 byDomain[typeId] 各按当前值更新（§3.2 回退
 //     byDomain[t] ?? global；plan 只产出增量，落库由 Task 4 effect 完成）；
-//   - negativeFlow 单槽：执行者负 settle 优先（直付 publisher）；否则取最负评审者
-//     代表（入 central-pool）；各评审者负额明细在 reviewerSettles 中，effect 侧可遍历。
-//     契约硬化（D3 裁决 A）：negativeFlow **仅展示用**——effect 路由 MUST 从
-//     reviewerSettles 全量迭代，MUST NOT 用此字段路由评审者负流（多负流时单槽
-//     amount 只代表最负者，非全量）。
+//   - 负流路由源 = reviewerSettles 全量迭代（B 彻底方案：单槽代表字段已移除——负流
+//     无展示层消费；方向语义由 effect 按角色分支保证：执行者 → publisher、评审者
+//     → central-pool）。
 import type { MarketTask } from "./market-store.ts";
 import { ELO_DEFAULTS, type EloFormula } from "./elo.ts";
 
@@ -46,13 +44,6 @@ export interface SettlementPlan {
   taxTotal: number; // max(0,settle)×rate + Σmax(0,settle_i)×rate
   taxRate: number; // 本任务税率（Task 9 经验沉淀：税后 settle 计算需要——与 effects 划付一致）
   groundTruthScore?: number; // 校准锚点（Task 9 经验沉淀：校准 mode 标记 + outcome=groundTruthScore 需要）
-  /**
-   * 负流单槽（**仅展示用**——契约硬化，D3 裁决 A）：
-   * 执行者负 settle → `{from: winnerId, to: "publisher"}`；否则取最负评审者代表
-   * → `{to: "central-pool"}`（amount=最负者单额，非全量）。
-   * ⚠️ effect 路由 MUST 从 reviewerSettles 全量迭代，MUST NOT 用此字段路由评审者负流。
-   */
-  negativeFlow: { from: string; to: "publisher" | "central-pool"; amount: number } | null;
   majorError: boolean;
 }
 
@@ -157,25 +148,9 @@ export function planSettlement(args: PlanSettlementArgs): SettlementPlan {
     });
   }
 
-  // ── 负流（C-2/C-R4-1 不对称）──
-  let negativeFlow: SettlementPlan["negativeFlow"] = null;
-  if (executorSettle < 0) {
-    // 执行者负 settle → 直付发布方（escrow 只托管发布方资金，不经手负流）
-    negativeFlow = { from: winnerId, to: "publisher", amount: -executorSettle };
-  } else {
-    // 评审者负 settle → 入中央池；取最负者作为单槽代表（仅展示用——明细全量在
-    // reviewerSettles，effect 路由源是 reviewerSettles 而非本字段，见字段 JSDoc）。
-    let mostNegative: { reviewerId: string; settle: number } | undefined;
-    for (const [reviewerId, settleI] of reviewerSettles) {
-      if (settleI < 0 && (!mostNegative || settleI < mostNegative.settle)) {
-        mostNegative = { reviewerId, settle: settleI };
-      }
-    }
-    if (mostNegative) {
-      negativeFlow = { from: mostNegative.reviewerId, to: "central-pool", amount: -mostNegative.settle };
-    }
-  }
-
+  // 负流方向（C-2/C-R4-1 不对称）由 effect 侧按角色分支路由：执行者负 settle →
+  // publisher；评审者负 settle → central-pool——源 = reviewerSettles 全量迭代
+  // （B 彻底方案：plan 不产单槽代表字段）。
   return {
     R,
     accuracies,
@@ -186,7 +161,6 @@ export function planSettlement(args: PlanSettlementArgs): SettlementPlan {
     taxTotal,
     taxRate,
     groundTruthScore: args.groundTruthScore,
-    negativeFlow,
     majorError,
   };
 }

@@ -632,7 +632,6 @@ test("评审者负 settle 流向：入池非 publisher", () => {
     reviewerSettles: new Map([["reviewer-neg", -4]]), // 负结算
     reviewerEloDeltas: new Map([["reviewer-neg", { global: -5, domain: -5 }]]),
     taxTotal: 0.6,
-    negativeFlow: { from: "reviewer-neg", to: "central-pool" as const, amount: 4 },
     majorError: false,
   };
 
