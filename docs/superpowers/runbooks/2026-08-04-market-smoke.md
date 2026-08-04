@@ -72,6 +72,26 @@ market-smoke: 1 任务市场闭环（mode=mock（零额度））
 
 SMOKE_LLM=1 成功时差异：`mode=REAL-LLM (SMOKE_LLM=1)`、交付物摘要 = DeepSeek 实际生成代码（前 200 字符）。
 
+## 真实调用实测（SMOKE_LLM=1，2026-08-04 协调者执行）
+
+真实 DeepSeek 闭环已跑通：
+
+```
+mode=REAL-LLM (SMOKE_LLM=1)  凭据：found（~/.pi/agent/auth.json deepseek.key）
+taskId=9b131c33-…  status=settled  winner=w1  winnerStake=15
+execute 调用次数=1
+LLM 交付物摘要：```javascript function twoSum(nums, target) { const map = new Map();
+  for (let i = 0; i < nums.length; i++) { const complement = target - nums[i];
+  if (map.has(complement)) { return [map.get(complement) …```   ← DeepSeek 真实生成
+余额 Σ=2000.000000  Δ=0.000000（资金守恒）
+事件流 18 条全链（escrow_freeze 96 → adjust 86 → bid_freeze×2 → release×1 →
+  review_consensus R=0.85 → settle×4[executor 19.95 + 3 reviewer] → tax×4 → elo_update×4）
+投影 poolBalance=2.4500；elo 分布 [1300,1700)×4
+断言 [PASS]×8 / [FAIL]×0，退出码 0
+```
+
+**意义**：经济层市场闭环 + 真实 LLM 执行端到端验证通过（announce→bid→select→execute[真实 LLM]→review→consensus→settle）。
+
 ## 真实调用说明
 
 - **每次运行仅 1 次 DeepSeek 调用**（execute 相位；temperature 0、max_tokens 300——token 消耗约 1K 内）。
