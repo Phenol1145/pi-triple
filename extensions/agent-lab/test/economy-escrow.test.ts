@@ -4,7 +4,6 @@
 //（Task 1 已交付 freeze/unfreeze 事务包裹，本任务确认 (agentId, taskId) 复合键）。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DatabaseSync } from "node:sqlite";
 import { SqliteLedger } from "../src/arena/ledger.ts";
 import type { EndowmentPolicy } from "../src/arena/types.ts";
 import {
@@ -16,11 +15,12 @@ import {
   releaseBid,
   type EscrowParams,
 } from "../src/economy/escrow.ts";
+import { freshDb } from "./test-utils/fixtures.ts";
 
 const fixedEndow: EndowmentPolicy = { initialCredits: () => 1000 };
 
 function freshLedger() {
-  const db = new DatabaseSync(":memory:");
+  const db = freshDb();
   const ledger = new SqliteLedger(db, fixedEndow);
   return { db, ledger };
 }

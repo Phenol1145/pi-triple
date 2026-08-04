@@ -1,15 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { rmSync } from "node:fs";
 import { SqliteLedger } from "../src/arena/ledger.ts";
 import { SqliteLedgerAdapter } from "../src/assembly/ledger-port.ts";
+import { tmpDir, tmpDbFile } from "./test-utils/fixtures.ts";
 
 function fresh() {
-  const dir = mkdtempSync(path.join(tmpdir(), "asm-ledger-"));
-  const db = new DatabaseSync(path.join(dir, "ledger.db"));
+  const { dir } = tmpDir("asm-ledger-");
+  const db = tmpDbFile(dir);
   const ledger = new SqliteLedger(db);
   return { ledger: new SqliteLedgerAdapter(ledger), db, dir };
 }

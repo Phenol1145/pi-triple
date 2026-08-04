@@ -1,15 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, existsSync, readFileSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { DspBuilder } from "../src/memory/dsp.ts";
 import { MemoryStore } from "../src/memory/store.ts";
 import { WatermarkManager } from "../src/memory/watermark.ts";
 import { createEntry } from "../src/memory/entry.ts";
+import { tmpDir } from "./test-utils/fixtures.ts";
 
 function fresh() {
-  const dir = mkdtempSync(path.join(tmpdir(), "mem-dsp-"));
+  const { dir } = tmpDir("mem-dsp-");
   const store = new MemoryStore(dir);
   const wm = new WatermarkManager(store);
   store.write(createEntry({ kind: "fact", anchors: ["api"], content: "rate=100", id: "m1" }));
@@ -45,7 +45,7 @@ test("snapshot/restore roundtrip without re-querying store", () => {
 // ---- 接口全量覆盖（brief 三个测试之外的补充） ----
 
 test("snapshot persists to dir/dsp-snapshots/<seq>.json with memoryVersion", () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "mem-dsp-"));
+  const { dir, cleanup } = tmpDir("mem-dsp-");
   const store = new MemoryStore(dir);
   const dsp = new DspBuilder(store, new WatermarkManager(store), { maxRealtimeBytes: 4096, maxRestoreBytes: 16384, dir });
   store.write(createEntry({ kind: "fact", anchors: ["api"], content: "rate=100", id: "m1" }));
@@ -55,11 +55,11 @@ test("snapshot persists to dir/dsp-snapshots/<seq>.json with memoryVersion", () 
   const onDisk = JSON.parse(readFileSync(file, "utf-8"));
   assert.deepEqual(onDisk, { text: snap.text, memoryVersion: snap.memoryVersion, atSeq: 10 });
   assert.match(snap.memoryVersion, /^[0-9a-f]{16}$/);
-  rmSync(dir, { recursive: true, force: true });
+  cleanup();
 });
 
 test("content-addressed dedup: same text → same memoryVersion, no rewrite", () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "mem-dsp-"));
+  const { dir, cleanup } = tmpDir("mem-dsp-");
   const store = new MemoryStore(dir);
   const dsp = new DspBuilder(store, new WatermarkManager(store), { maxRealtimeBytes: 4096, maxRestoreBytes: 16384, dir });
   store.write(createEntry({ kind: "fact", anchors: ["api"], content: "rate=100", id: "m1" }));
@@ -73,7 +73,7 @@ test("content-addressed dedup: same text → same memoryVersion, no rewrite", ()
   const s3 = dsp.snapshot(11, "realtime");           // 跨 seq：text 相同 → 版本号一致（内容寻址）
   assert.equal(s3.memoryVersion, s1.memoryVersion);
   assert.equal(s3.atSeq, 11);
-  rmSync(dir, { recursive: true, force: true });
+  cleanup();
 });
 
 test("snapshot at seq only contains versions visible at that seq (watermark masking)", () => {
@@ -112,17 +112,17 @@ test("restore does not count (hitCount untouched, no counter files)", () => {
 });
 
 test("truncation is byte-level and respects limit with multibyte content", () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "mem-dsp-"));
+  const { dir, cleanup } = tmpDir("mem-dsp-");
   const store = new MemoryStore(dir);
   const dsp = new DspBuilder(store, new WatermarkManager(store), { maxRealtimeBytes: 100, maxRestoreBytes: 100 });
   store.write(createEntry({ kind: "fact", anchors: ["api"], content: "记忆内容示例", id: "m1" }));
   const out = dsp.build({ state: { note: "中文状态投影" }, memory: {}, env: {}, budget: { used: 0, max: 8000 } }, "realtime");
   assert.ok(Buffer.byteLength(out, "utf8") <= 100);
-  rmSync(dir, { recursive: true, force: true });
+  cleanup();
 });
 
 test("candidates are truncated last: summary cut before candidates", () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "mem-dsp-"));
+  const { dir, cleanup } = tmpDir("mem-dsp-");
   const store = new MemoryStore(dir);
   // header(16B) + candidates(24B) = 40B 恰好放得下 → 摘要被砍、候选保留
   const dsp = new DspBuilder(store, new WatermarkManager(store), { maxRealtimeBytes: 40, maxRestoreBytes: 40 });
@@ -131,15 +131,15 @@ test("candidates are truncated last: summary cut before candidates", () => {
   assert.ok(out.includes("obs-1"));
   assert.ok(!out.includes("rate=100"));
   assert.ok(Buffer.byteLength(out, "utf8") <= 40);
-  rmSync(dir, { recursive: true, force: true });
+  cleanup();
 });
 
 test("empty store build yields memory entry header without crash; no candidates section when absent", () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "mem-dsp-"));
+  const { dir, cleanup } = tmpDir("mem-dsp-");
   const store = new MemoryStore(dir);
   const dsp = new DspBuilder(store, new WatermarkManager(store), { maxRealtimeBytes: 4096, maxRestoreBytes: 16384 });
   const out = dsp.build({ state: {}, memory: {}, env: {}, budget: { used: 0, max: 8000 } }, "realtime");
   assert.ok(out.includes("Memory Entry"));
   assert.ok(!out.includes("Candidates"));
-  rmSync(dir, { recursive: true, force: true });
+  cleanup();
 });

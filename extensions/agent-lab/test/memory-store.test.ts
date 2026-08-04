@@ -1,13 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { MemoryStore } from "../src/memory/store.ts";
 import { createEntry } from "../src/memory/entry.ts";
+import { tmpDir } from "./test-utils/fixtures.ts";
 
 function fresh(): { store: MemoryStore; dir: string } {
-  const dir = mkdtempSync(path.join(tmpdir(), "mem-store-"));
+  const { dir } = tmpDir("mem-store-");
   return { store: new MemoryStore(dir), dir };
 }
 

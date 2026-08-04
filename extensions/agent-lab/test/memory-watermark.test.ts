@@ -1,15 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { rmSync } from "node:fs";
 import { MemoryStore } from "../src/memory/store.ts";
 import { WatermarkManager } from "../src/memory/watermark.ts";
 import { createEntry } from "../src/memory/entry.ts";
+import { tmpDir } from "./test-utils/fixtures.ts";
 
 function fresh() {
-  const dir = mkdtempSync(path.join(tmpdir(), "mem-wm-"));
+  const { dir } = tmpDir("mem-wm-");
   return { store: new MemoryStore(dir), wm: new WatermarkManager(new MemoryStore(dir)), dir };
 }
 
