@@ -94,9 +94,8 @@ export class SqliteVoucher implements VoucherPort {
         `INSERT INTO voucher_batches (agent_id, kind, units, credit_per_unit, ts) VALUES (?, ?, ?, ?, ?)`,
       ).run(agentId, kind, units, this.rates[kind], Date.now());
       // Task 3 发射点：事务内末尾发射（同事务崩溃一致——事件 INSERT 与 buy 状态原子提交/回滚）。
-      // data 双发同值 cost/creditCost：cost 为投影契约字段（projections.ts 读取），
-      // creditCost 为计划/测试断言字段（协调者裁决命名）——见 task-3-report 适配说明。
-      this.eventBus?.emit({ kind: "currency.buy_voucher", data: { agentId, kind, units, cost, creditCost: cost } });
+      // 命名收敛（plan Task 1）：单字段 creditCost（与 burn 事件对齐——Task 11）——不再双发 cost
+      this.eventBus?.emit({ kind: "currency.buy_voucher", data: { agentId, kind, units, creditCost: cost } });
     });
   }
 

@@ -193,8 +193,8 @@ test("⑦ buy emits currency.buy_voucher to injected eventBus (kind/agentId/unit
   assert.equal(e.data.kind, "llm");
   assert.equal(e.data.units, 5);
   assert.equal(e.data.creditCost, 50);
-  // 投影契约字段（projections.ts 读取 cost）——双发同值闭合两方契约
-  assert.equal(e.data.cost, 50);
+  // 命名收敛（plan Task 1）：事件只带 creditCost——不再双发 cost
+  assert.equal("cost" in e.data, false, "buy_voucher 事件不再含 cost 字段（统 creditCost）");
   assert.ok(typeof e.ts === "number");
 });
 
@@ -216,7 +216,7 @@ test("⑦c buy event persisted in economy_events (bus db 与 voucher 同 db → 
   const replayed = events.replayAll();
   assert.equal(replayed.length, 1);
   assert.equal(replayed[0].kind, "currency.buy_voucher");
-  assert.equal(replayed[0].data.cost, 50);
+  assert.equal("cost" in replayed[0].data, false, "持久化事件同样只带 creditCost");
   assert.equal(replayed[0].data.creditCost, 50);
 });
 

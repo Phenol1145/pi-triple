@@ -22,7 +22,7 @@ test("投影重建一致性：报表字段与账本实际状态一致（发行�
   const events: EconomyEvent[] = [
     ev({ kind: "currency.mint", data: { agentId: "a1", amount: 100 } }, 1000),
     ev({ kind: "currency.mint", data: { agentId: "a2", amount: 100 } }, 2000),
-    ev({ kind: "currency.buy_voucher", data: { agentId: "a1", kind: "llm", units: 10, cost: 100 } }, 3000),
+    ev({ kind: "currency.buy_voucher", data: { agentId: "a1", kind: "llm", units: 10, creditCost: 100 } }, 3000),
     ev({ kind: "currency.burn", data: { agentId: "a1", kind: "llm", units: 3, creditCost: 30 } }, 4000),
     ev({ kind: "currency.tax", data: { taskId: "t1", amount: 5, payer: "pub" } }, 5000),
     ev({ kind: "economy.settle", data: { taskId: "t1", role: "reviewer", agentId: "r1", settle: -2, to: "central-pool" } }, 6000),
@@ -53,9 +53,9 @@ test("投影重建一致性：报表字段与账本实际状态一致（发行�
 // ── Test 2: 双层对账（物理量 ↔ credit 价值——价格信号=比率）──
 test("双层对账：buy/burn 事件 → 物理量与 credit 价值对账（价格信号=两者比率）", () => {
   const events: EconomyEvent[] = [
-    ev({ kind: "currency.buy_voucher", data: { agentId: "a1", kind: "llm", units: 300, cost: 3000 } }, 1000),   // 10 credit/unit
+    ev({ kind: "currency.buy_voucher", data: { agentId: "a1", kind: "llm", units: 300, creditCost: 3000 } }, 1000),   // 10 credit/unit
     ev({ kind: "currency.burn", data: { agentId: "a1", kind: "llm", units: 100, creditCost: 1000 } }, 2000),
-    ev({ kind: "currency.buy_voucher", data: { agentId: "a2", kind: "time", units: 2, cost: 10 } }, 3000),      // 5 credit/unit
+    ev({ kind: "currency.buy_voucher", data: { agentId: "a2", kind: "time", units: 2, creditCost: 10 } }, 3000),      // 5 credit/unit
     ev({ kind: "currency.burn", data: { agentId: "a2", kind: "time", units: 1, creditCost: 5 } }, 4000),
   ];
 
@@ -152,7 +152,7 @@ test("校准偏差榜：isCalibration 事件 → bias = r_i − groundTruth，�
 test("只读性：投影为纯函数——冻结输入可安全重放，两次投影结果一致", () => {
   const events = deepFreeze([
     ev({ kind: "currency.mint", data: { agentId: "a1", amount: 100 } }, 1000),
-    ev({ kind: "currency.buy_voucher", data: { agentId: "a1", kind: "llm", units: 10, cost: 100 } }, 2000),
+    ev({ kind: "currency.buy_voucher", data: { agentId: "a1", kind: "llm", units: 10, creditCost: 100 } }, 2000),
     ev({ kind: "currency.burn", data: { agentId: "a1", kind: "llm", units: 3, creditCost: 30 } }, 3000),
     ev({ kind: "economy.escrow_freeze", data: { taskId: "t1", publisherId: "pub", amount: 96 } }, 4000),
     ev({ kind: "currency.transfer", data: { taskId: "t1", from: "a1", to: "a2", amount: 30 } }, 5000),

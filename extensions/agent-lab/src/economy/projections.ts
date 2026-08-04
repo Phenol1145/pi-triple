@@ -6,7 +6,7 @@
 //
 // 事件 data 形状约定（投影读取面——与现有 emitter 一致，缺失字段防御性跳过）：
 //   currency.mint:         { agentId, amount }                      池出（endowment）
-//   currency.buy_voucher:  { agentId, kind, units, cost }           cost = 支付的 credit
+//   currency.buy_voucher:  { agentId, kind, units, creditCost }  creditCost = 支付的 credit
 //   currency.burn:         { agentId, kind, units, creditCost? }    creditCost 缺省 0（现有 emitBurn 未带——见报告残余风险）
 //   currency.transfer:     { taskId?, from, to, amount }            流速累计
 //   currency.tax:          { taskId, amount, payer }                入池
@@ -115,7 +115,7 @@ export function projectEconomy(events: EconomyEvent[], windowMs?: number): Econo
         const kind = d.kind as VoucherKind;
         if (!VOUCHER_KINDS.includes(kind)) break;
         const units = num(d, "units");
-        const cost = num(d, "cost");
+        const cost = num(d, "creditCost"); // 单字段契约（plan Task 1 命名收敛）
         stock[kind] += units;
         creditValue[kind] += cost;
         poolBalance += cost; // 凭证销售收入入池
