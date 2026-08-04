@@ -113,26 +113,28 @@
 
 ---
 
-## Task 5: 统一事务入口（repository + ledger 裸 BEGIN）
+## Task 5: 事务语义职责边界界定（非统一——文档化 + ledger:52 顺手收敛）
 
 **Files:**
-- Modify: `src/core/storage/repository.ts:135`（裸 BEGIN IMMEDIATE → withSharedTransaction）
-- Modify: `src/arena/ledger.ts:52`（裸 BEGIN → withSharedTransaction；:131 已用）
+- Create: `extensions/agent-lab/docs/transaction-semantics.md`（或补 ARCHITECTURE.md 事务段）
+- Modify（可选顺手）: `src/arena/ledger.ts:52`（一次性 schema 迁移裸 BEGIN → withSharedTransaction——低风险）
 
-**Step 1: 失败测试**
+**背景裁决（2026-08-05 协调者 + 用户确认）**：~~统一事务入口~~ **不统一**。`repository.transaction`（core，拒绝嵌套）与 `withSharedTransaction`（经济层，嵌套复用）是**有意的不同语义**，非债务：
+- **core `repository.transaction`** = 单层防御（一个 service 方法 = 一个事务；嵌套抛错 `"nested core transaction is not supported"`——test/core-optimizer-storage.test.ts:462 测试名 "still throws/unchanged" 证明是有意设计）。防的是"内层吞异常→部分提交不报错"。
+- **`withSharedTransaction`** = 组合原子性（经济层 effect 需调多个各自带事务的方法，嵌套复用成整体单事务）。安全前提 = 所有调用方让异常传播。
+- **差异根源**：抽象层不同——经济层要组合原子性，core 要单层防御。统一会引入 core 几十处未审计调用点的"内层吞异常"风险面。
 
-```ts
-// repository 相关多步写操作可嵌套在共享事务内（外层 withSharedTransaction 开启，内层 repository 方法复用）
-// ledger:52 路径同
-```
+**Step 1: 文档化职责边界**
 
-**Step 2: 实现**
+写清：①两套机制各自的语义/适用层/安全前提；②何时用哪个（新代码指引：组合多存储原子操作→withSharedTransaction；单一 service 高层操作→repository.transaction）；③嵌套在 SQLite 层的真实行为（裸 BEGIN 抛错/拒绝嵌套抛错丢写/复用并入外层）；④`ledger.ts:52` 一次性迁移与运行事务不嵌套（为何可留）。
 
-repository/ledger 裸 `BEGIN IMMEDIATE` → `withSharedTransaction(this.db, ...)`（Task 1 后 tx-utils 在 core，repository 同域直接 import）。**先读两处裸 BEGIN 的上下文**（确认事务边界与嵌套安全——withSharedTransaction 幂等复用）。
+**Step 2: （顺手）ledger:52 收敛**
+
+`ledger.ts:52` 一次性 schema 迁移裸 `BEGIN IMMEDIATE` → `withSharedTransaction`（低风险：构造时跑，不与运行事务嵌套）。**先确认该迁移调用时机**（构造期/显式 migrate——若在已有事务内被调则必须改，否则可选）。
 
 **Step 3: 全绿 + commit**
 
-`refactor(agent-lab): 统一事务入口 withSharedTransaction（repository/ledger 裸 BEGIN 收敛——事务双轨并一轨）`
+`docs(agent-lab): 事务语义职责边界（repository 拒绝嵌套 vs withSharedTransaction 组合复用——非统一，文档化分层）`
 
 ---
 

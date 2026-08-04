@@ -49,8 +49,9 @@ export class SqliteLedger implements Ledger {
     const cols = this.db.prepare(`PRAGMA table_info(arena_freezes)`).all() as Array<{ name: string; pk: number }>;
     const pkCols = cols.filter((c) => c.pk > 0).map((c) => c.name);
     if (pkCols.length === 1 && pkCols[0] === "task_id") {
-      this.db.exec("BEGIN IMMEDIATE");
-      try {
+      // 构造期一次性迁移——此时无活跃事务，withSharedTransaction 与裸 BEGIN 等价；
+      // 统一用协调器（与 ledger.transaction 一致，消除"同文件两轨"疑惑）。
+      withSharedTransaction(this.db, () => {
         this.db.exec(`ALTER TABLE arena_freezes RENAME TO arena_freezes_old`);
         this.db.exec(`CREATE TABLE arena_freezes (
           task_id TEXT NOT NULL, agent TEXT NOT NULL, amount REAL NOT NULL, created_ts INTEGER NOT NULL,
@@ -59,11 +60,7 @@ export class SqliteLedger implements Ledger {
         this.db.exec(`INSERT OR IGNORE INTO arena_freezes (task_id, agent, amount, created_ts)
           SELECT task_id, agent, amount, created_ts FROM arena_freezes_old`);
         this.db.exec(`DROP TABLE arena_freezes_old`);
-        this.db.exec("COMMIT");
-      } catch (e) {
-        this.db.exec("ROLLBACK");
-        throw e;
-      }
+      });
     }
   }
   private now(): number { return Date.now(); }
