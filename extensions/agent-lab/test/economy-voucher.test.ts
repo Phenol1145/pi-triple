@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { SqliteStore } from "../src/store/store.ts";
 import { SqliteLedger } from "../src/arena/ledger.ts";
 import { SqliteVoucher, VOUCHER_PHYSICAL_ANCHOR } from "../src/economy/voucher-port.ts";
+import { EconomyEventBus } from "../src/economy/economy-events.ts";
 import type { EndowmentPolicy } from "../src/arena/types.ts";
 import type { ModelInfo } from "../src/types.ts";
 
@@ -175,4 +176,54 @@ test("⑥ burnHistory: traceId precise filter and sinceTs", () => {
 
   // kind isolation
   assert.equal(v.burnHistory("a", "time").length, 0);
+});
+
+// ── Task 3: buy_voucher 事件发射（投影对账基源——跨层挂空闭合）──────
+test("⑦ buy emits currency.buy_voucher to injected eventBus (kind/agentId/units/creditCost)", () => {
+  const { store, ledger } = mk();
+  const events = new EconomyEventBus();
+  const v = new SqliteVoucher({ db: store.raw, ledger, rates: { creditPerUnit: RATES }, eventBus: events });
+  ledger.ensureEndowed("a", model("m/a"));
+  v.buy("a", "llm", 5); // cost = 5 × 10 = 50
+  const evs = events.drain();
+  assert.equal(evs.length, 1);
+  const e = evs[0];
+  assert.equal(e.kind, "currency.buy_voucher");
+  assert.equal(e.data.agentId, "a");
+  assert.equal(e.data.kind, "llm");
+  assert.equal(e.data.units, 5);
+  assert.equal(e.data.creditCost, 50);
+  // 投影契约字段（projections.ts 读取 cost）——双发同值闭合两方契约
+  assert.equal(e.data.cost, 50);
+  assert.ok(typeof e.ts === "number");
+});
+
+test("⑦b failed buy (insufficient credit) emits no event (emit inside tx)", () => {
+  const { store, ledger } = mk();
+  const events = new EconomyEventBus();
+  const v = new SqliteVoucher({ db: store.raw, ledger, rates: { creditPerUnit: RATES }, eventBus: events });
+  ledger.ensureEndowed("a", model("m/a")); // 1000 credits; 500 llm units cost 5000
+  assert.throws(() => v.buy("a", "llm", 500), /insufficient/i);
+  assert.equal(events.size, 0, "失败 buy 无事件（事件发射在事务内末尾——回滚一致）");
+});
+
+test("⑦c buy event persisted in economy_events (bus db 与 voucher 同 db → 同事务落库)", () => {
+  const { store, ledger } = mk();
+  const events = new EconomyEventBus(store.raw);
+  const v = new SqliteVoucher({ db: store.raw, ledger, rates: { creditPerUnit: RATES }, eventBus: events });
+  ledger.ensureEndowed("a", model("m/a"));
+  v.buy("a", "llm", 5);
+  const replayed = events.replayAll();
+  assert.equal(replayed.length, 1);
+  assert.equal(replayed[0].kind, "currency.buy_voucher");
+  assert.equal(replayed[0].data.cost, 50);
+  assert.equal(replayed[0].data.creditCost, 50);
+});
+
+test("⑦d buy without eventBus stays silent (backward compatible)", () => {
+  const { store, ledger } = mk();
+  const v = new SqliteVoucher({ db: store.raw, ledger, rates: { creditPerUnit: RATES } });
+  ledger.ensureEndowed("a", model("m/a"));
+  assert.doesNotThrow(() => v.buy("a", "llm", 5));
+  assert.equal(v.balance("a", "llm"), 5);
 });

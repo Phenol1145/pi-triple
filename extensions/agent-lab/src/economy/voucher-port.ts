@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { withSharedTransaction } from "./tx-utils.ts";
+import type { EconomyEventBus } from "./economy-events.ts";
 
 export type VoucherKind = "llm" | "time" | "compute";
 export type BurnCause = { traceId: string; transitionSeq: number } | { periodic: "memory-storage" };
@@ -62,12 +63,14 @@ export class SqliteVoucher implements VoucherPort {
   private ledger: LedgerOps;
   private rates: Record<VoucherKind, number>;
   private poolId: string;
+  private eventBus?: EconomyEventBus;
 
-  constructor(deps: { db: DatabaseSync; ledger: LedgerOps; rates: { creditPerUnit: Record<VoucherKind, number> }; poolId?: string }) {
+  constructor(deps: { db: DatabaseSync; ledger: LedgerOps; rates: { creditPerUnit: Record<VoucherKind, number> }; poolId?: string; eventBus?: EconomyEventBus }) {
     this.db = deps.db;
     this.ledger = deps.ledger;
     this.rates = deps.rates.creditPerUnit;
     this.poolId = deps.poolId ?? "central-pool";
+    this.eventBus = deps.eventBus;
     this.db.exec(VOUCHER_SCHEMA);
   }
 
@@ -90,6 +93,10 @@ export class SqliteVoucher implements VoucherPort {
       this.db.prepare(
         `INSERT INTO voucher_batches (agent_id, kind, units, credit_per_unit, ts) VALUES (?, ?, ?, ?, ?)`,
       ).run(agentId, kind, units, this.rates[kind], Date.now());
+      // Task 3 发射点：事务内末尾发射（同事务崩溃一致——事件 INSERT 与 buy 状态原子提交/回滚）。
+      // data 双发同值 cost/creditCost：cost 为投影契约字段（projections.ts 读取），
+      // creditCost 为计划/测试断言字段（协调者裁决命名）——见 task-3-report 适配说明。
+      this.eventBus?.emit({ kind: "currency.buy_voucher", data: { agentId, kind, units, cost, creditCost: cost } });
     });
   }
 

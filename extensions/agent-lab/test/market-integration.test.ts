@@ -78,7 +78,9 @@ function mkEnv(): Env {
   ensureCentralPool(ledger);
   const store = new MarketStore(db);
   const events = new EconomyEventBus(db);
-  const voucher = new SqliteVoucher({ db, ledger, rates: { creditPerUnit: RATES }, poolId: CENTRAL_POOL_ID });
+  // Task 3 接线：eventBus 注入 SqliteVoucher——buy 在事务内发射 currency.buy_voucher，
+  // 投影对账基源不依赖测试手工补发（跨层挂空闭合）。
+  const voucher = new SqliteVoucher({ db, ledger, rates: { creditPerUnit: RATES }, poolId: CENTRAL_POOL_ID, eventBus: events });
   const repo = new CoreRepository(db);
   const org = new SqliteOrgMembership(db);
   const taskTypes = new SqliteTaskTypeRegistry(db);
@@ -156,11 +158,9 @@ test("1. 完整市场闭环：发布→5 竞价→选择→调减→执行→5 �
       },
     })
   );
-  // a1 预购凭证（llm 3 units @2 = 6 credit）——执行阶段燃烧 2 units → FIFO creditCost 4
+  // a1 预购凭证（llm 3 units @2 = 6 credit）——执行阶段燃烧 2 units → FIFO creditCost 4。
+  // Task 3 闭合：buy 自身在事务内发射 currency.buy_voucher（投影基源真实事件）。
   h.voucher.buy("a1", "llm", 3);
-  // 适配说明：SqliteVoucher.buy 不发射 currency.buy_voucher（agent-lab 无发射点——PTL arena
-  // 层职责；本任务文件范围外）。投影基源需要该事件——测试侧按事件形状补发射（报告记录）。
-  h.events.emit({ kind: "currency.buy_voucher", data: { agentId: "a1", kind: "llm", units: 3, cost: 6 } });
 
   const res = await runner.runMarket({ typeId: "code", publisherId: "pub1", maxStake: 20, odds: 3, brief: "write tests" });
   assert.equal(res.status, "settled");
