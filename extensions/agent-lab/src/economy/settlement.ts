@@ -41,6 +41,8 @@ export interface SettlementPlan {
   reviewerSettles: Map<string, number>; // settle_i = stake_r×(O_r−1)×(2a_i−1)
   reviewerEloDeltas: Map<string, { global: number; domain: number }>;
   taxTotal: number; // max(0,settle)×rate + Σmax(0,settle_i)×rate
+  taxRate: number; // 本任务税率（Task 9 经验沉淀：税后 settle 计算需要——与 effects 划付一致）
+  groundTruthScore?: number; // 校准锚点（Task 9 经验沉淀：校准 mode 标记 + outcome=groundTruthScore 需要）
   negativeFlow: { from: string; to: "publisher" | "central-pool"; amount: number } | null;
   majorError: boolean;
 }
@@ -172,6 +174,8 @@ export function planSettlement(args: PlanSettlementArgs): SettlementPlan {
     reviewerSettles,
     reviewerEloDeltas,
     taxTotal,
+    taxRate,
+    groundTruthScore: args.groundTruthScore,
     negativeFlow,
     majorError,
   };
