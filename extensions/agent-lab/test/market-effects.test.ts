@@ -226,8 +226,8 @@ test("apply_settlement：majorError → −stake 执行者冻结直付 publisher
   assert.equal(r.ok, true);
   // 执行者冻结返还 30 + 直付 15 给 publisher → a1 = 1000 − 30 + 30 − 15 = 985
   assert.equal(m.ledger.balance("a1"), 1000 - 15);
-  // publisher：escrow 86 解冻回 + 收到 15 直付 = 1000 − 96 + 86 + 15
-  assert.equal(m.ledger.balance("pub1"), 1000 - 96 + 86 + 15);
+  // publisher：1000 −96(persist) +10(adjust 解冻) +86(escrow 全额解冻) +15(直付) = 1015
+  assert.equal(m.ledger.balance("pub1"), 1000 - 96 + 10 + 86 - 10 + 15);
   assert.equal(frozenOf(m.ledger, "pub1"), 0);
   const evt = m.events.drain().find((e) => e.kind === "economy.settle");
   assert.equal((evt!.data as { to: string }).to, "pub1");

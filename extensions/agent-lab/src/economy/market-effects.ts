@@ -255,9 +255,10 @@ function applySettlement(deps: MarketEffectsDeps, args: Record<string, unknown>)
         applyElo(deps, reviewerId, delta.global);
       }
     }
+    // 4) 任务状态置 settled——与资金划付同事务（reviewer minor：状态与资金原子）。
+    deps.store.updateTask(taskId, { status: "settled", settledAt: Date.now() });
   });
 
-  deps.store.updateTask(taskId, { status: "settled", settledAt: Date.now() });
   return { ok: true };
 }
 
