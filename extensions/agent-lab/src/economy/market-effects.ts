@@ -48,6 +48,19 @@ function escrowParamsOf(task: MarketTask): EscrowParams {
   };
 }
 
+/**
+ * 校准 escrow 参数（spec M-R5 stake_cal=0）：执行者 stake 项池内自抵省略——
+ * escrow = 评审项(N×stakeR×(O_r−1)) + voucherAllowance，无 maxStake×(O−1) 项。
+ * 合成执行者不 bid（无外部 stake 可托管）；发布方冻结仅覆盖评审支付与凭证补偿。
+ */
+function escrowParamsOfTask(task: MarketTask): EscrowParams {
+  const p = escrowParamsOf(task);
+  if (task.isCalibration === true) {
+    p.maxStake = 0; // stake_cal=0
+  }
+  return p;
+}
+
 function taskOf(store: MarketStore, taskId: string): MarketTask {
   const task = store.getTask(taskId);
   if (!task) {
@@ -100,7 +113,8 @@ function persistTask(deps: MarketEffectsDeps, args: Record<string, unknown>): { 
       return true; // 已存在 → skip
     }
     // 发布托管：escrow_max 冻结（余额不足抛错——整体回滚，任务行不落库）。
-    freezeEscrowMax(deps.ledger, publisherId, taskId, escrowParamsOf(task));
+    // 校准任务经 escrowParamsOfTask——stake_cal=0（无执行者 stake 项）。
+    freezeEscrowMax(deps.ledger, publisherId, taskId, escrowParamsOfTask(task));
     return false;
   });
   if (frozen) {
@@ -108,7 +122,7 @@ function persistTask(deps: MarketEffectsDeps, args: Record<string, unknown>): { 
   }
   deps.events.emit({
     kind: "economy.escrow_freeze",
-    data: { taskId, publisherId, amount: escrowMax(escrowParamsOf(task)) },
+    data: { taskId, publisherId, amount: escrowMax(escrowParamsOfTask(task)) },
     isCalibration: isCalibrationOf(task),
   });
   return { ok: true, skipped: false };
@@ -129,7 +143,8 @@ function adjustEscrowEffect(deps: MarketEffectsDeps, args: Record<string, unknow
 
   deps.ledger.transaction(() => {
     // 调减：escrowMax → escrowActual(winnerStake)，解冻差额回 publisher。
-    adjustEscrow(deps.ledger, task.publisherId, taskId, escrowParamsOf(task), winnerStake);
+    // 校准任务 stake_cal=0（合成执行者无 stake 项——与 persist 冻结口径一致）。
+    adjustEscrow(deps.ledger, task.publisherId, taskId, escrowParamsOfTask(task), winnerStake);
     // 未中标者 bid 解冻（各回各账）；中标者冻结保留至结算。
     for (const bid of bids) {
       if (bid.bidderId !== winnerId) {
@@ -142,8 +157,8 @@ function adjustEscrowEffect(deps: MarketEffectsDeps, args: Record<string, unknow
     kind: "economy.escrow_adjust",
     data: {
       taskId,
-      from: escrowMax(escrowParamsOf(task)),
-      to: escrowActual(escrowParamsOf(task), winnerStake),
+      from: escrowMax(escrowParamsOfTask(task)),
+      to: escrowActual(escrowParamsOfTask(task), winnerStake),
     },
     isCalibration: isCalibrationOf(task),
   });
@@ -180,7 +195,7 @@ function applySettlement(deps: MarketEffectsDeps, args: Record<string, unknown>)
   const plan = (args.plan ?? {}) as SettlementPlan;
   const winnerId = String(args.winnerId ?? task.winnerId ?? "");
   const rate = Number(args.taxRate ?? deps.taxRate ?? 0.05);
-  const escrow = escrowParamsOf(task);
+  const escrow = escrowParamsOfTask(task);
 
   deps.ledger.transaction(() => {
     // 0) publisher escrow 全额解冻（预押资金回账——后续支付从其中扣减）。

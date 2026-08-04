@@ -9,6 +9,7 @@ import { EloFormulaRegistry, SelectionFormulaRegistry, ELO_DEFAULTS, taskRatingF
 import type { TaskTypeRegistry } from "./task-types.ts";
 import { computeConsensus, planSettlement, DEFAULT_TAX_RATE, type ReviewInput } from "./settlement.ts";
 import { selectReviewers, reviewShortlist, type ReviewRoundDeps } from "./review-round.ts";
+import type { CalibrationPool, CalibrationTask } from "./calibration.ts";
 import { randomUUID } from "node:crypto";
 
 /** 本地 CodeFn 类型（与 PTL code-registry.ts 同形）。 */
@@ -26,11 +27,6 @@ export interface CodeRegistry {
   register(name: string, fn: CodeFn): void;
 }
 
-/** 校准任务池占位（Task 6 替换为真实 CalibrationPool）。 */
-export interface CalibrationPlaceholder {
-  draw(rng: () => number): { taskId: string; brief: string; groundTruth: string; groundTruthScore: number } | undefined;
-}
-
 /** agent 信息查询——shortlist/select 需要从 agentId 解析 accepts 与 elo。 */
 export interface AgentLookup {
   (agentId: string): { accepts?: string[]; eloGlobal?: number; eloByDomain?: Record<string, number> } | undefined;
@@ -45,7 +41,8 @@ export interface MarketFnsDeps {
   taskTypes: TaskTypeRegistry;
   calibrationRate: number;
   rng?: () => number;
-  calibration?: CalibrationPlaceholder;
+  /** 校准任务池（Task 6：真实 CalibrationPool 替换 Task 2 占位——announce 校准分支 draw 取任务）。 */
+  calibration?: CalibrationPool;
   agentLookup?: AgentLookup;
 }
 
@@ -139,7 +136,7 @@ function announce(
   const rng = deps.rng ?? Math.random;
   const rngHitCalibration = rng() < deps.calibrationRate;
 
-  let cal: { taskId: string; brief: string; groundTruth: string; groundTruthScore: number } | undefined;
+  let cal: CalibrationTask | undefined;
   if (rngHitCalibration) {
     cal = deps.calibration?.draw(rng);
   }
@@ -163,7 +160,8 @@ function announce(
     status: "open",
     createdAt: Date.now(),
     isCalibration,
-    groundTruth: cal?.groundTruth,
+    // CalibrationTask.groundTruthArtifact → MarketTask.groundTruth（锚定参考物引用）。
+    groundTruth: cal?.groundTruthArtifact,
   };
 
   deps.store.createTask(task);

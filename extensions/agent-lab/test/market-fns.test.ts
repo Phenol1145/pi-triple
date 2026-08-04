@@ -174,11 +174,12 @@ test("announce：常规任务（rng=0.99 不触发校准）→ 新 taskId + stat
 // ── announce 校准触发 ───────────────────────────────────────────────
 test("announce：校准触发（rng=0.05 < 0.10）→ 从校准任务池取 + isCalibration true", () => {
   const db = new DatabaseSync(":memory:");
+  // Task 6：真实 CalibrationPool 形状（CalibrationTask.groundTruthArtifact）。
   const calibration = {
     draw: (_rng: () => number) => ({
       taskId: "cal-task-1",
       brief: "calibration brief",
-      groundTruth: "gt-artifact-ref",
+      groundTruthArtifact: "gt-artifact-ref",
       groundTruthScore: 0.9,
     }),
   };
