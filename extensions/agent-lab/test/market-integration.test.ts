@@ -27,6 +27,7 @@ import { ensureCentralPool, CENTRAL_POOL_ID } from "../src/economy/central-pool.
 import { CoreRepository } from "../src/core/storage/repository.ts";
 import type { AgentInstanceRecord } from "../src/core/contracts.ts";
 import { MarketRunner, type MarketRunnerDeps } from "../src/economy/market-runner.ts";
+import { emitBurn } from "../src/economy/market-effects.ts";
 import { projectEconomy } from "../src/economy/projections.ts";
 
 // ── helpers ──────────────────────────────────────────────────────
@@ -470,5 +471,47 @@ test("7. resume：collect_bids 后崩溃 → 新 runner 实例重启 → 快照/
   const again = await runner2.resumeMarket(taskId);
   assert.equal(again.status, "settled");
   assert.equal(h.events.drain().length, 0);
+  h.db.close();
+});
+
+// ── 8. emitBurn 凭证幂等（Task 2——resume 窄窗双燃闭合）────────────
+// 崩溃窗口：emitBurn 之后、updateTask(executing) 之前崩溃 → task.status 仍是 awarded →
+// resume 重放 execute → 同 traceId（taskId）再次 emitBurn。业务键 = (agentId, kind, traceId)。
+test("8. emitBurn 幂等：同 (agentId, kind, traceId) 二次调用跳过（不重复燃/不发事件）；异 traceId/异 kind/periodic 正常", () => {
+  const h = mkEnv();
+  addAgent(h, "x1", { balance: 100 });
+  h.voucher.buy("x1", "llm", 6); // 6 units @2 = 12 credit（FIFO creditCost = 2/unit）
+  h.voucher.buy("x1", "time", 3);
+  const deps = { events: h.events, voucher: h.voucher };
+
+  // 首次燃烧（cause traceId=task-t1）→ 燃 2 units，burnHistory 1 条，事件 1 发
+  emitBurn(deps, "x1", "llm", 2, { traceId: "task-t1", transitionSeq: 1 });
+  assert.equal(h.voucher.balance("x1", "llm"), 4);
+  let burns = h.voucher.burnHistory("x1", "llm");
+  assert.equal(burns.length, 1);
+  assert.equal(burns[0]!.creditCost, 4, "FIFO 历史成本");
+  assert.equal(drainByKind(h, "currency.burn").length, 1);
+
+  // resume 重放：同 traceId 二次 emitBurn → 幂等跳过（不重复燃、不发新事件）
+  emitBurn(deps, "x1", "llm", 2, { traceId: "task-t1", transitionSeq: 1 });
+  assert.equal(h.voucher.balance("x1", "llm"), 4, "不重复燃");
+  burns = h.voucher.burnHistory("x1", "llm");
+  assert.equal(burns.length, 1, "burnHistory 仅 1 条（非 2）");
+  assert.equal(drainByKind(h, "currency.burn").length, 0, "不发新 burn 事件（resume 语义——该 burn 已发生）");
+
+  // 不同 traceId（另一任务）→ 正常各燃
+  emitBurn(deps, "x1", "llm", 2, { traceId: "task-t2", transitionSeq: 1 });
+  assert.equal(h.voucher.balance("x1", "llm"), 2);
+  assert.equal(h.voucher.burnHistory("x1", "llm").length, 2);
+
+  // 同 traceId 不同 kind → 正常燃烧（业务键含 kind）
+  emitBurn(deps, "x1", "time", 1, { traceId: "task-t1", transitionSeq: 1 });
+  assert.equal(h.voucher.burnHistory("x1", "time").length, 1);
+
+  // periodic 形态（无 traceId）→ 不查幂等，每次正常燃烧
+  emitBurn(deps, "x1", "time", 1, { periodic: "memory-storage" });
+  emitBurn(deps, "x1", "time", 1, { periodic: "memory-storage" });
+  assert.equal(h.voucher.burnHistory("x1", "time").length, 3);
+  assert.equal(h.voucher.balance("x1", "time"), 0, "买 3 燃 3（1 task-t1 + 2 periodic）");
   h.db.close();
 });

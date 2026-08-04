@@ -300,6 +300,14 @@ function applyElo(deps: MarketEffectsDeps, agentId: string, deltaGlobal: number)
 
 /** 便捷：凭证燃烧（执行/评审阶段的消耗由 workloop 自身发生——此处为事件化入口）。 */
 export function emitBurn(deps: { events: EconomyEventBus; voucher: VoucherPort }, agentId: string, kind: "llm" | "time" | "compute", units: number, cause: BurnCause): void {
+  // Task 2 裁决：凭证燃烧业务键幂等 = (agentId, kind, traceId)——一个 traceId（taskId）一次
+  // 执行只燃一次。resume 窄窗（emitBurn 后、updateTask(executing) 前崩溃）重放 execute 会以
+  // 同 traceId 再次 emitBurn → 已燃跳过：不重复燃、不发新 burn 事件（resume 语义——该 burn
+  // 已发生，事件在首次已发射）。periodic 形态无 traceId → 不查幂等（每次正常燃烧）。
+  if ("traceId" in cause) {
+    const existing = deps.voucher.burnHistory(agentId, kind, { traceId: cause.traceId });
+    if (existing.length > 0) return;
+  }
   // Task 11（Task 8 审查遗留）：事件补 creditCost（FIFO 历史成本）——burnHistory 追加序
   // 取本次燃烧记录（burn 前置位计数，燃烧后末条 = 本次）。投影 currency.burn 的 burned
   // 口径 = creditCost（与真实账本一致），不再缺省 0。
