@@ -11,6 +11,8 @@ export interface RegistryEntry {
   extraArgs?: string[];
   startedAt: number;
   pid?: number | null;
+  /** 本会话正在使用的纸带 id（resume 直记；fresh 启动后探测）——restore 精确恢复依据 */
+  sessionId?: string;
 }
 
 export interface SessionRegistry {

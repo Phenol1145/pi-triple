@@ -7,6 +7,7 @@
  */
 import type { CommandResult } from "../commands.js";
 import { execStop } from "../commands.js";
+import type { SessionRecord } from "../session/session-provider.js";
 import {
   listAllSessions, resolveSession, operateSession,
 } from "../session/session-store.js";
@@ -123,6 +124,17 @@ export function execSessionTree(args: string[]): CommandResult {
 
 // ─── resume（仅 pi 纸带会话可恢复）────────────────────────────
 
+/** resume 前置校验（纯函数，可测）：非 pi → NOT_SUPPORTED；运行中 → ALREADY_RUNNING（防双写者） */
+export function assertResumable(r: SessionRecord): CommandResult | null {
+  if (r.workloop !== "pi") {
+    return { ok: false, message: "", error: { code: "NOT_SUPPORTED", message: `会话类型（${r.workloop}）不支持 resume——只有纸带（pi 会话）可恢复` } };
+  }
+  if (r.status === "running") {
+    return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${r.id.slice(0, 8)}… 正在运行，请直接接入：pit attach <name>` } };
+  }
+  return null;
+}
+
 export async function execSessionResume(id: string, args: string[]): Promise<CommandResult> {
   const { flags } = parseFlags(args);
   const r = resolveSession(id);
@@ -130,9 +142,8 @@ export async function execSessionResume(id: string, args: string[]): Promise<Com
     return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在` } };
   }
   const rec = r.record;
-  if (rec.workloop !== "pi") {
-    return { ok: false, message: "", error: { code: "NOT_SUPPORTED", message: `会话类型（${rec.workloop}）不支持 resume——只有纸带（pi 会话）可恢复` } };
-  }
+  const guard = assertResumable(rec);
+  if (guard) return guard;
   const cfg = loadConfig();
   const tpl = cfg.templates[rec.templateId] ?? {};
   const { buildPiLaunch } = await import("../launcher.js");
@@ -153,9 +164,20 @@ export async function execSessionResume(id: string, args: string[]): Promise<Com
     ...(workspaceCwd ? { workspaceCwd } : {}),
   });
   const name = flags.name || `${getTemplateAlias(rec.templateId, cfg)}-${Date.now().toString(36)}`;
-  const { startPitSession } = await import("../tmux.js");
+  const { startPitSession, getPanePid } = await import("../tmux.js");
+  const { markStarted } = await import("../session-registry.js");
+  const { resolveDataDir } = await import("../config.js");
   const result = startPitSession(launch, name, true);
   if (result.status === 0) {
+    markStarted({
+      name,
+      templateId: rec.templateId,
+      model: tpl.model, provider: tpl.provider, thinking: tpl.thinking,
+      extraArgs: [],
+      startedAt: Date.now(),
+      pid: getPanePid(result.session),
+      sessionId: rec.id, // 记录纸带 → restore 可精确恢复
+    }, resolveDataDir(cfg));
     return { ok: true, message: `✅ 已后台恢复会话 ${rec.id.slice(0, 8)}…\n接入: pit attach ${name}`, data: { name } };
   }
   return { ok: false, message: "", error: { code: "START_FAILED", message: `启动失败: ${result.stderr}` } };
