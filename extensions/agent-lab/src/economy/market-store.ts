@@ -52,6 +52,13 @@ CREATE TABLE IF NOT EXISTS economy_bids (
   stake REAL NOT NULL,
   PRIMARY KEY (task_id, bidder_id)
 );
+
+CREATE TABLE IF NOT EXISTS economy_review_refunds (
+  task_id TEXT NOT NULL,
+  round INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (task_id, round)
+);
 `;
 
 export class MarketStore {
@@ -202,5 +209,13 @@ export class MarketStore {
       `SELECT bidder_id, stake FROM economy_bids WHERE task_id = ? ORDER BY stake DESC, bidder_id ASC`
     ).all(taskId) as Array<{ bidder_id: string; stake: number }>;
     return rows.map((r) => ({ bidderId: r.bidder_id, stake: r.stake }));
+  }
+
+  /** 标记 review_refund 幂等键（taskId+round）。返回 true=新标记，false=已存在。 */
+  markReviewRefund(taskId: string, round: number): boolean {
+    const result = this.db.prepare(
+      `INSERT OR IGNORE INTO economy_review_refunds (task_id, round, created_at) VALUES (?, ?, ?)`
+    ).run(taskId, round, Date.now());
+    return (result.changes ?? 0) > 0;
   }
 }

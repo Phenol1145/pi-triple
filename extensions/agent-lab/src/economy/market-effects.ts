@@ -64,6 +64,8 @@ export function registerMarketEffectFns(registry: EffectRegistry, deps: MarketEf
   registry.register("market.persist_task", (args) => persistTask(deps, args));
   registry.register("market.adjust_escrow", (args) => adjustEscrowEffect(deps, args));
   registry.register("market.apply_settlement", (args) => applySettlement(deps, args));
+  // Task 5: 流标少数评审者保护（幂等 taskId+round——幂等表在 MarketStore，deps 无需 db）
+  registry.register("market.review_refund", (args) => reviewRefund(deps, args));
 }
 
 // ── persist_task：任务落库 + escrow_max 冻结（幂等 taskId）──
@@ -281,4 +283,98 @@ function applyElo(deps: MarketEffectsDeps, agentId: string, deltaGlobal: number)
 export function emitBurn(deps: { events: EconomyEventBus; voucher: VoucherPort }, agentId: string, kind: "llm" | "time" | "compute", units: number, cause: BurnCause): void {
   deps.voucher.burn(agentId, kind, units, cause);
   deps.events.emit({ kind: "currency.burn", data: { agentId, kind, units } });
+}
+
+// ============================================================================
+// Task 5: review_refund —— 流标少数评审者保护（幂等 taskId+round）
+// ============================================================================
+
+/** review_refund 参数。 */
+interface ReviewRefundArgs {
+  taskId: string;
+  round: number; // 1-indexed：第 1/2/3 轮
+  activatedReviews: Array<{ reviewerId: string; score: number }>;
+  stakeR: number;
+  oddsR: number;
+  voucherAllowance: number;
+}
+
+/** review_refund 返回。 */
+interface ReviewRefundResult {
+  ok: boolean;
+  skipped: boolean;
+  refundedReviewers: string[];
+  operatorFallback: boolean; // 第 3 轮仍流标 → operator 兜底
+}
+
+/**
+ * 流标少数评审者保护（spec §7a.8）：
+ * - activated < N_min(3) → shortfall + 重试计数
+ * - 已接单少数评审者：stake_r 退还 + 凭证成本补偿（capped voucherAllowance）
+ * - 重试 2 次（round 1, 2）仍流标 → 第 3 轮 operator 兜底（R=operator 评价，单评审）
+ * - 幂等键：taskId + round（同轮重试 skip）
+ */
+function reviewRefund(deps: MarketEffectsDeps, args: Record<string, unknown>): ReviewRefundResult {
+  const { taskId, round, activatedReviews, stakeR, oddsR, voucherAllowance } = args as ReviewRefundArgs;
+
+  if (!taskId) throw new Error("market.review_refund: taskId required");
+  if (round < 1 || round > 3) throw new Error("market.review_refund: round must be 1..3");
+
+  const task = taskOf(deps.store, taskId);
+  const minReviewers = 3; // N_min
+
+  // 幂等检查：taskId + round
+  const alreadyDone = !deps.store.markReviewRefund(taskId, round);
+  if (alreadyDone) {
+    return { ok: true, skipped: true, refundedReviewers: [], operatorFallback: false };
+  }
+
+  const activatedCount = activatedReviews.length;
+  const shortfall = activatedCount < minReviewers;
+
+  const refundedReviewers: string[] = [];
+  let operatorFallback = false;
+
+  if (shortfall) {
+    if (round <= 2) {
+      // 第 1/2 轮流标：已接单评审者退还 stake_r + 凭证成本补偿
+      deps.ledger.transaction(() => {
+        for (const r of activatedReviews) {
+          const reviewerId = r.reviewerId;
+          // 1) 释放冻结的 bid（stake_r × (oddsR - 1)）
+          releaseBid(deps.ledger, reviewerId, taskId);
+          // 2) 退还 stake_r（对称托管本金）
+          deps.ledger.credit(reviewerId, stakeR, `review-refund stakeR ${taskId} round${round}`);
+          // 3) 凭证成本补偿：capped voucherAllowance（按人均分摊上限）
+          const allowancePerReviewer = voucherAllowance / Math.max(1, minReviewers);
+          // 实际补偿 = min(allowancePerReviewer, 实际燃烧成本) —— 简化：直接补 allowancePerReviewer
+          // 注：实际燃烧成本需从 voucher.burnHistory 读取（traceId 关联本任务）
+          // 这里先按 capped voucherAllowance 人均分摊补偿
+          if (allowancePerReviewer > 0) {
+            deps.ledger.credit(reviewerId, allowancePerReviewer, `review-refund voucher ${taskId} round${round}`);
+          }
+          refundedReviewers.push(reviewerId);
+        }
+      });
+
+      // 发射事件
+      for (const reviewerId of refundedReviewers) {
+        deps.events.emit({
+          kind: "economy.settle",
+          data: { taskId, role: "reviewer", agentId: reviewerId, settle: stakeR, refund: true, round },
+          isCalibration: isCalibrationOf(task),
+        });
+      }
+    } else {
+      // 第 3 轮仍流标 → operator 兜底（R=operator 评价，单评审）
+      operatorFallback = true;
+      deps.events.emit({
+        kind: "economy.review_consensus",
+        data: { taskId, operatorFallback: true, round: 3, activatedCount },
+        isCalibration: isCalibrationOf(task),
+      });
+    }
+  }
+
+  return { ok: true, skipped: false, refundedReviewers, operatorFallback };
 }

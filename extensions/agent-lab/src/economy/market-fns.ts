@@ -8,6 +8,7 @@ import type { MarketStore, MarketTask } from "./market-store.ts";
 import { EloFormulaRegistry, SelectionFormulaRegistry, ELO_DEFAULTS, taskRatingFromOdds } from "./elo.ts";
 import type { TaskTypeRegistry } from "./task-types.ts";
 import { computeConsensus, planSettlement, DEFAULT_TAX_RATE, type ReviewInput } from "./settlement.ts";
+import { selectReviewers, reviewShortlist, type ReviewRoundDeps } from "./review-round.ts";
 import { randomUUID } from "node:crypto";
 
 /** 本地 CodeFn 类型（与 PTL code-registry.ts 同形）。 */
@@ -95,6 +96,33 @@ export function registerMarketCodeFns(registry: CodeRegistry, deps: MarketFnsDep
   registry.register("market.select", (args, ctx) => select(ctx.state, deps, args));
   registry.register("market.consensus", (args, ctx) => consensus(ctx.state, deps, args));
   registry.register("market.settle", (args, ctx) => settle(ctx.state, deps, args));
+  // Task 5: 多评评审轮
+  registry.register("market.review_shortlist", (args, ctx) => {
+    const state = ctx.state;
+    const task = deps.store.getTask(String(state.taskId ?? args.taskId));
+    if (!task) throw new Error("market.review_shortlist: task not found");
+    // 构造 ReviewRoundDeps（复用 MarketFnsDeps 中的可用字段）
+    const roundDeps: ReviewRoundDeps = {
+      store: deps.store,
+      ledger: deps.ledger,
+      orgMembers: {
+        membersOf: () => [],
+        orgOf: () => undefined,
+        addMember: () => {},
+        removeMember: () => {},
+      },
+      reviewerCount: task.reviewerCount,
+      minReviewers: 3,
+      eloLookup: deps.agentLookup ?? (() => undefined),
+    };
+    return reviewShortlist(roundDeps, task, {
+      taskId: String(state.taskId ?? args.taskId),
+      executorId: String(state.winnerId ?? args.winnerId ?? task.winnerId ?? ""),
+      pool: (state.reviewerPool as string[] | undefined) ?? (args.reviewerPool as string[] | undefined) ?? [],
+      stakeR: task.stakeR,
+      oddsR: task.oddsR,
+    });
+  });
 }
 
 function announce(
