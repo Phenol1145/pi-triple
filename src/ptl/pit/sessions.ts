@@ -17,6 +17,8 @@ import {
   startPitSession,
   getPanePid,
   validateSessionName,
+  listPitPanesDetailed,
+  type PitPaneInfo,
 } from "../tmux.js";
 import { loadRegistry, markStarted } from "../session-registry.js";
 import { scanSessionFiles, pickRestoreTape, isTapeLive, newestTapeId } from "../session/pi-scan.js";
@@ -316,6 +318,8 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
   }
 
   const { buildPiLaunch } = await import("../launcher.js");
+  // tmux panes 快照只取一次（isTapeLive 默认参数会每次重新 spawn tmux 查询，N 个 target 产生 2×N 次子进程调用）
+  const panes: Map<string, PitPaneInfo> = hasTmux() ? listPitPanesDetailed() : new Map();
   let ok = 0;
   let failed = 0;
   for (const { name, entry } of targets) {
@@ -330,7 +334,7 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
       let warning: string | undefined;
       if (flags["new"] !== "true") {
         const files = scanSessionFiles(config);
-        const r = pickRestoreTape(files, entry, (id) => isTapeLive(id));
+        const r = pickRestoreTape(files, entry, (id) => isTapeLive(id, panes));
         resumeSession = r.resumeSession;
         warning = r.warning;
       }
