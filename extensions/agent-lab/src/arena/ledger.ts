@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { ModelInfo } from "../types.ts";
 import type { AgentId, ArenaTask, CreditTx, EndowmentPolicy, Ledger, MarketTaskRow } from "./types.ts";
-import { withSharedTransaction } from "../economy/tx-utils.ts";
+import { withSharedTransaction } from "../core/tx-utils.ts";
 
 const ARENA_SCHEMA = `
 CREATE TABLE IF NOT EXISTS credits (

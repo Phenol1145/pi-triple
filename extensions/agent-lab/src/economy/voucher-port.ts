@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { withSharedTransaction } from "./tx-utils.ts";
+import { withSharedTransaction } from "../core/tx-utils.ts";
 import type { EconomyEventBus } from "./economy-events.ts";
 
 export type VoucherKind = "llm" | "time" | "compute";
