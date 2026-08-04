@@ -29,7 +29,7 @@
 |---|---|---|
 | `core/` | LabCore/contracts/storage/control-plane/definitions/tx-utils/agent-spec | 核心契约与存储抽象，零场景 |
 | `arena/` | ledger（账本）/bid-board/policies/types/agent-id/model-caller | 经济账本基座（被 economy 复用），通用 |
-| `economy/` | market-runner/market-fns/market-effects/settlement/escrow/central-pool/elo/voucher-port/calibration/org/review-round/projections/experience/economy-events/task-types/market-store/tx-utils | **通用市场经济引擎**——`grep` 实证零构造痕迹（无具体任务/agent 硬编码）；RESERVED_IDS（central-pool/calibration-executor/operator）是机制常量非场景 |
+| `economy/` | market-runner/market-fns/market-effects/settlement/escrow/central-pool/elo/voucher-port/calibration/org/review-round/projections/experience/economy-events/task-types/market-store/tx-utils | **通用市场经济引擎**——`grep` 实证零构造痕迹（无具体任务/agent 硬编码）；RESERVED_IDS（central-pool/calibration-executor——**operator 不在其中**，仅为普通 agent）是机制常量非场景 |
 | `memory/` | entry/pipeline/dsp/ebnf/rules/store/watermark/public-domain/comms/audit-chain/dialects/sdk | L3 语义记忆引擎，通用 |
 | `assembly/` | assembler/agent-runtime/memory-host/ledger-port/comms-bridge/public-bootstrap/rule-bootstrap | Agent 装配引擎（fresh/fork），通用 |
 | `workloop/` | runner/machine/contracts/checkpoints/state-store/registry/instrumented-model-port/context/machine-runtime | 执行循环框架（契约/引擎） |
