@@ -3,7 +3,7 @@ import type { FallbackTarget } from "../core/contracts.ts";
 import type { StandardAgentError } from "../workloop/contracts.ts";
 import { WorkLoopRunner } from "../workloop/runner.ts";
 import { SchedulerRegistry } from "./registry.ts";
-import { MARKET_SCHEDULER_DEFINITION_ID, WEIGHTED_SCORER_DEFINITION_ID } from "../schedulers/names.ts";
+import { MARKET_SCHEDULER_DEFINITION_ID, WEIGHTED_SCORER_DEFINITION_ID } from "./names.ts";
 import type { SchedulingResult, SettleOutcome } from "./contracts.ts";
 import {
   type DispatchAttempt,
