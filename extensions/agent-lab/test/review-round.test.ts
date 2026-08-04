@@ -11,7 +11,7 @@ import { SqliteVoucher, type VoucherPort } from "../src/economy/voucher-port.ts"
 import { CoreRepository } from "../src/core/storage/repository.ts";
 import type { AgentInstanceRecord } from "../src/core/contracts.ts";
 import { EconomyEventBus } from "../src/economy/economy-events.ts";
-import { selectReviewers, type ReviewRoundDeps, type ReviewRoundResult } from "../src/economy/review-round.ts";
+import { selectReviewers, reviewShortlist, type ReviewRoundDeps, type ReviewRoundResult } from "../src/economy/review-round.ts";
 import { SqliteTaskTypeRegistry, type TaskType } from "../src/economy/task-types.ts";
 import {
   EloFormulaRegistry,
@@ -211,14 +211,15 @@ function setupReviewPool(db: DatabaseSync, poolSize: number = 10): string[] {
 test("selectReviewers：10 候选 → 互斥过滤（执行者+同组织 2 人排除）→ elo 降序前 5", () => {
   const db = new DatabaseSync(":memory:");
   const pool = setupReviewPool(db, 10);
-  // 执行者 = reviewer-1（elo 最低），同组织 = reviewer-2, reviewer-3
-  const executorId = "reviewer-1";
-  const orgMembers = ["reviewer-2", "reviewer-3"];
+  // 执行者 = reviewer-10（elo 最高 1600），同组织 = reviewer-9, reviewer-8（elo 1590/1580）
+  // ——全部处于高 elo 端：若互斥过滤失效，它们必入选；过滤生效则被排除（I1 真实驱动）
+  const executorId = "reviewer-10";
+  const orgMembers = ["reviewer-9", "reviewer-8"];
 
   // OrgMembership 最小实现（Task 6 前空实现接口，测试用内存假实现）
   const orgMembersImpl = {
     membersOf: (orgId: string) => (orgId === "org-1" ? orgMembers : []),
-    orgOf: (agentId: string) => (orgMembers.includes(agentId) ? "org-1" : undefined),
+    orgOf: (agentId: string) => (orgMembers.includes(agentId) || agentId === executorId ? "org-1" : undefined),
     addMember: () => {},
     removeMember: () => {},
   };
@@ -250,13 +251,55 @@ test("selectReviewers：10 候选 → 互斥过滤（执行者+同组织 2 人�
   };
 
   const selected = selectReviewers(deps, task, executorId, pool);
-  // 应排除 executor-1、reviewer-2、reviewer-3，剩余 7 人中 elo 降序取前 5
-  // pool = [reviewer-1...reviewer-10]，elo 域分 1510...1600 递增
-  // 排除后剩余 reviewer-4(1540) 到 reviewer-10(1600)
-  // 降序：reviewer-10(1600), reviewer-9(1590), reviewer-8(1580), reviewer-7(1570), reviewer-6(1560)
-  assert.deepEqual(selected, ["reviewer-10", "reviewer-9", "reviewer-8", "reviewer-7", "reviewer-6"]);
+  // 排除 executor-10、reviewer-9、reviewer-8（最高 3 个 elo）→ 剩余 reviewer-1..7
+  // 降序取前 5：reviewer-7(1570), reviewer-6(1560), reviewer-5(1550), reviewer-4(1540), reviewer-3(1530)
+  assert.deepEqual(selected, ["reviewer-7", "reviewer-6", "reviewer-5", "reviewer-4", "reviewer-3"]);
   assert.equal(selected.length, 5);
+  assert.ok(!selected.includes(executorId));
+  assert.ok(!selected.includes("reviewer-9"));
+  assert.ok(!selected.includes("reviewer-8"));
 
+  db.close();
+});
+
+// ============================================================================
+// Test 2.5: reviewShortlist 静默排除余额不足评审者（I2——真实驱动）
+// ============================================================================
+test("reviewShortlist：余额不足评审者被静默排除（不入选激活列表）", () => {
+  const db = new DatabaseSync(":memory:");
+  const ledger = new SqliteLedger(db, { initialCredits: () => 1000 });
+  const mstore = new MarketStore(db);
+  const pool = ["r-rich", "r-poor"];
+  // r-rich 余额充足；r-poor 初始 1000 但扣到 5（< stake_r×(O_r−1)=10）
+  ledger.ensureEndowed("r-rich", { id: "r-rich", provider: "p", name: "r-rich", accessRoute: "free" });
+  ledger.ensureEndowed("r-poor", { id: "r-poor", provider: "p", name: "r-poor", accessRoute: "free" });
+  ledger.debit("r-poor", 995, "spent"); // balance 5 < 10
+
+  const task = { ...baseTask(), taskId: "task-silent", stakeR: 10, oddsR: 2, reviewerCount: 2 };
+  mstore.createTask(task as never);
+
+  const deps: ReviewRoundDeps = {
+    store: mstore,
+    ledger,
+    orgMembers: { membersOf: () => [], orgOf: () => undefined, addMember: () => {}, removeMember: () => {} },
+    reviewerCount: 2,
+    minReviewers: 3,
+    eloLookup: () => ({ eloGlobal: 1500 }),
+  };
+
+  const result = reviewShortlist(deps, task as never, {
+    taskId: "task-silent",
+    executorId: "executor",
+    pool,
+    stakeR: 10,
+    oddsR: 2,
+  });
+  // r-poor 冻结失败被静默排除；r-rich 入选且冻结 10
+  assert.deepEqual(result.reviewers, ["r-rich"]);
+  const row = db.prepare(`SELECT frozen FROM credits WHERE agent = ?`).get("r-rich") as { frozen: number };
+  assert.equal(row.frozen, 10);
+  const poor = db.prepare(`SELECT frozen FROM credits WHERE agent = ?`).get("r-poor") as { frozen: number };
+  assert.equal(poor.frozen, 0);
   db.close();
 });
 
@@ -451,7 +494,8 @@ test("重试 2 次仍流标 → operator 兜底标记（R=operator 评价，单�
     makeCtx({})
   );
   assert.equal(r3.operatorFallback, true);
-  assert.equal(r3.refundedReviewers.length, 0); // 第 3 轮不退款，标记 operator 兜底
+  // 第 3 轮释放冻结（I5）但不付补偿——refundedReviewers 含已释放者，但无 stake_r 退款
+  assert.deepEqual(r3.refundedReviewers, ["r1"]); // 冻结已释放（I5 修复）
 
   db.close();
 });

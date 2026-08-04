@@ -323,34 +323,37 @@ function reviewRefund(deps: MarketEffectsDeps, args: Record<string, unknown>): R
   const task = taskOf(deps.store, taskId);
   const minReviewers = 3; // N_min
 
-  // 幂等检查：taskId + round
-  const alreadyDone = !deps.store.markReviewRefund(taskId, round);
-  if (alreadyDone) {
-    return { ok: true, skipped: true, refundedReviewers: [], operatorFallback: false };
-  }
-
   const activatedCount = activatedReviews.length;
   const shortfall = activatedCount < minReviewers;
 
   const refundedReviewers: string[] = [];
   let operatorFallback = false;
+  let skipped = false;
 
   if (shortfall) {
     if (round <= 2) {
-      // 第 1/2 轮流标：已接单评审者退还 stake_r + 凭证成本补偿
+      // 第 1/2 轮流标：已接单评审者退还 stake_r + 凭证成本补偿。
+      // 资金守恒（协调者裁决——修复 I3）：补偿从 publisher escrow 出（escrow 含
+      // 评审项 N×stake_r×(O_r−1) + voucherAllowance——正是为流标准备的资金），
+      // debit publisher + credit 评审者，不凭空造币。幂等标记与资金同事务（I4）。
       deps.ledger.transaction(() => {
+        // 幂等标记：与退款同事务——中途失败则整体回滚，重试可重新退款。
+        const isNew = deps.store.markReviewRefund(taskId, round);
+        if (!isNew) {
+          skipped = true; // 已退款（事务内 skip）
+          return;
+        }
         for (const r of activatedReviews) {
           const reviewerId = r.reviewerId;
-          // 1) 释放冻结的 bid（stake_r × (oddsR - 1)）
+          // 1) 释放冻结的 bid（stake_r × (oddsR - 1)——自己的押金返还）
           releaseBid(deps.ledger, reviewerId, taskId);
-          // 2) 退还 stake_r（对称托管本金）
+          // 2) 退还 stake_r（对称托管本金）——从 publisher escrow 出
+          deps.ledger.debit(task.publisherId, stakeR, `review-refund stakeR ${taskId} round${round}`);
           deps.ledger.credit(reviewerId, stakeR, `review-refund stakeR ${taskId} round${round}`);
-          // 3) 凭证成本补偿：capped voucherAllowance（按人均分摊上限）
+          // 3) 凭证成本补偿：capped voucherAllowance（按人均分摊上限）——从 publisher escrow 出
           const allowancePerReviewer = voucherAllowance / Math.max(1, minReviewers);
-          // 实际补偿 = min(allowancePerReviewer, 实际燃烧成本) —— 简化：直接补 allowancePerReviewer
-          // 注：实际燃烧成本需从 voucher.burnHistory 读取（traceId 关联本任务）
-          // 这里先按 capped voucherAllowance 人均分摊补偿
           if (allowancePerReviewer > 0) {
+            deps.ledger.debit(task.publisherId, allowancePerReviewer, `review-refund voucher ${taskId} round${round}`);
             deps.ledger.credit(reviewerId, allowancePerReviewer, `review-refund voucher ${taskId} round${round}`);
           }
           refundedReviewers.push(reviewerId);
@@ -366,7 +369,19 @@ function reviewRefund(deps: MarketEffectsDeps, args: Record<string, unknown>): R
         });
       }
     } else {
-      // 第 3 轮仍流标 → operator 兜底（R=operator 评价，单评审）
+      // 第 3 轮仍流标 → operator 兜底（R=operator 评价，单评审）。
+      // 已接单评审者的冻结释放（I5——不 stranded）：退还冻结 + 不计补偿（兜底轮无评审产出）。
+      deps.ledger.transaction(() => {
+        const isNew = deps.store.markReviewRefund(taskId, round);
+        if (!isNew) {
+          skipped = true;
+          return;
+        }
+        for (const r of activatedReviews) {
+          releaseBid(deps.ledger, r.reviewerId, taskId);
+          refundedReviewers.push(r.reviewerId);
+        }
+      });
       operatorFallback = true;
       deps.events.emit({
         kind: "economy.review_consensus",
@@ -376,5 +391,5 @@ function reviewRefund(deps: MarketEffectsDeps, args: Record<string, unknown>): R
     }
   }
 
-  return { ok: true, skipped: false, refundedReviewers, operatorFallback };
+  return { ok: true, skipped, refundedReviewers, operatorFallback };
 }
