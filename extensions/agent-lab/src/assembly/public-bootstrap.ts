@@ -53,7 +53,18 @@ export class PublicDomainBootstrap {
         kind: "rule",
         anchors: ["system.rules"],
         ruleRef: AXIOM_RULE_ID,
-        content: "experience = word ;",
+        // 行式 7 字段序列（与 fact 种子同构）：kind|scene|agentId|action|outcome|reward|evaluationMode
+        // 对齐 economy/experience.ts experienceToLine——经验沉淀真实过 pipeline 校验（D3）。
+        content: [
+          `experience = kind, "|", scene, "|", agentId, "|", action, "|", outcome, "|", reward, "|", evaluationMode ;`,
+          `kind = word ;`,
+          `scene = word ;`,
+          `agentId = word ;`,
+          `action = word ;`,
+          `outcome = number | "-" ;`,
+          `reward = number | "-" ;`,
+          `evaluationMode = word ;`,
+        ].join("\n"),
         status: "official",
       }),
       createEntry({

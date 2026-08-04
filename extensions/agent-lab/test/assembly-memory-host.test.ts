@@ -167,17 +167,17 @@ test("markdown dialect forces draft status (draft-only); precheck failure still 
     f.host.attachSdk(sdk);
     const mem = sdk.memory!;
 
-    // 通过 EBNF（experience = word）但非 markdown 结构 → warning + 强制 draft
-    const r = mem.write({ idempotencyKey: "k-m1", kind: "experience", anchors: ["x"], content: "hello", ruleRef: "rule:experience" });
+    // 通过 EBNF（rule:experience 行式 7 字段）但非 markdown 结构 → warning + 强制 draft
+    const r = mem.write({ idempotencyKey: "k-m1", kind: "experience", anchors: ["x"], content: "execution|s|a|execute|0.9|22.8|-", ruleRef: "rule:experience" });
     assert.equal((r as { ok: boolean }).ok, true);
     assert.ok((r as { warning?: string }).warning?.startsWith("dialect precheck failed:"));
     assert.equal(f.host.store.get((r as { entry: MemoryEntry }).entry.id)!.status, "draft");
 
-    // markdown 结构内容 → 预检通过（无 warning），仍强制 draft
+    // markdown 结构内容 → grammar 先行校验（rule:experience 行式 7 字段）失败（markdown 非行式）→ 落 draft；
+    // （D3 裁决：grammar 先于 dialect precheck——markdown 内容在新 grammar 下恒 grammar 失败，原"预检通过"分支不可达）
     const r2 = mem.write({ idempotencyKey: "k-m2", kind: "experience", anchors: ["x"], content: "## note\nhello", ruleRef: "rule:experience" });
-    assert.equal((r2 as { warning?: string }).warning, undefined);
-    assert.equal((r2 as { ok: boolean }).ok, true);
-    assert.equal(f.host.store.get((r2 as { entry: MemoryEntry }).entry.id)!.status, "draft");
+    assert.equal((r2 as { ok: boolean }).ok, false, "markdown 内容过不了 rule:experience 行式 grammar");
+    assert.ok(f.host.store.get((r2 as { draft: MemoryEntry }).draft!.id)!.status === "draft", "失败落 draft");
   } finally {
     f.cleanup();
   }
