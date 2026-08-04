@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { ModelInfo } from "../types.ts";
 import type { AgentId, ArenaTask, CreditTx, EndowmentPolicy, Ledger, MarketTaskRow } from "./types.ts";
+import { withSharedTransaction } from "../economy/tx-utils.ts";
 
 const ARENA_SCHEMA = `
 CREATE TABLE IF NOT EXISTS credits (
@@ -24,7 +25,6 @@ CREATE TABLE IF NOT EXISTS arena_freezes (
 export class SqliteLedger implements Ledger {
   private db: DatabaseSync;
   private endowment: EndowmentPolicy;
-  private _inTransaction = false;
   constructor(db: DatabaseSync, endowment: EndowmentPolicy, resolveAgentId?: (v: string) => string | undefined) {
     this.db = db;
     this.endowment = endowment;
@@ -125,25 +125,10 @@ export class SqliteLedger implements Ledger {
   }
   /**
    * 复用版事务包装：已在事务中则直接执行（嵌套复用）；否则 BEGIN/COMMIT/ROLLBACK。
-   * 供市场结算 effect 的整体原子性使用（Task 4 协调者裁决——repository.ts 的
-   * transaction() 是防嵌套抛错版，此处需要复用版）。
+   * 与 SqliteVoucher（buy/burn）共享同一 db 的事务状态——市场结算 effect 的整体原子性用。
    */
   transaction<T>(fn: () => T): T {
-    if (this._inTransaction) {
-      return fn();
-    }
-    this._inTransaction = true;
-    this.db.exec("BEGIN IMMEDIATE");
-    try {
-      const result = fn();
-      this.db.exec("COMMIT");
-      return result;
-    } catch (e) {
-      this.db.exec("ROLLBACK");
-      throw e;
-    } finally {
-      this._inTransaction = false;
-    }
+    return withSharedTransaction(this.db, fn);
   }
   /**
    * 借记但不夹紧到 [0, balance]：允许负余额。用于池/系统内部资金路径（central-pool 等）。

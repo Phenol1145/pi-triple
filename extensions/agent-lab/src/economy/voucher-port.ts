@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { withSharedTransaction } from "./tx-utils.ts";
 
 export type VoucherKind = "llm" | "time" | "compute";
 export type BurnCause = { traceId: string; transitionSeq: number } | { periodic: "memory-storage" };
@@ -73,8 +74,7 @@ export class SqliteVoucher implements VoucherPort {
   buy(agentId: string, kind: VoucherKind, units: number): void {
     if (units <= 0) throw new Error("units must be positive");
     const cost = units * this.rates[kind];
-    this.db.exec("BEGIN IMMEDIATE");
-    try {
+    withSharedTransaction(this.db, () => {
       // credit 预检：SqliteLedger.debit 夹紧不抛错（欠额静默扣到 0），凭证层必须显式拒绝（spec C1）。
       const row = this.db.prepare(`SELECT balance FROM credits WHERE agent = ?`).get(agentId) as { balance: number } | undefined;
       const balance = row?.balance ?? 0;
@@ -90,11 +90,7 @@ export class SqliteVoucher implements VoucherPort {
       this.db.prepare(
         `INSERT INTO voucher_batches (agent_id, kind, units, credit_per_unit, ts) VALUES (?, ?, ?, ?, ?)`,
       ).run(agentId, kind, units, this.rates[kind], Date.now());
-      this.db.exec("COMMIT");
-    } catch (e) {
-      this.db.exec("ROLLBACK");
-      throw e;
-    }
+    });
   }
 
   balance(agentId: string, kind: VoucherKind): number {
@@ -104,8 +100,7 @@ export class SqliteVoucher implements VoucherPort {
 
   burn(agentId: string, kind: VoucherKind, units: number, cause: BurnCause): void {
     if (units <= 0) throw new Error("units must be positive");
-    this.db.exec("BEGIN IMMEDIATE");
-    try {
+    withSharedTransaction(this.db, () => {
       const balRow = this.db.prepare(`SELECT units FROM voucher_balances WHERE agent_id = ? AND kind = ?`).get(agentId, kind) as { units: number } | undefined;
       const bal = balRow?.units ?? 0;
       if (bal < units) {
@@ -132,11 +127,7 @@ export class SqliteVoucher implements VoucherPort {
       this.db.prepare(
         `INSERT INTO voucher_burns (agent_id, kind, units, credit_cost, cause_json, ts) VALUES (?, ?, ?, ?, ?, ?)`,
       ).run(agentId, kind, units, creditCost, JSON.stringify(cause), Date.now());
-      this.db.exec("COMMIT");
-    } catch (e) {
-      this.db.exec("ROLLBACK");
-      throw e;
-    }
+    });
   }
 
   burnHistory(agentId: string, kind: VoucherKind, filter?: { traceId?: string; sinceTs?: number }): BurnRecord[] {

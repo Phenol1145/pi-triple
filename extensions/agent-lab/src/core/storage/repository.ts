@@ -474,6 +474,17 @@ export class CoreRepository {
     };
   }
 
+  /**
+   * elo 双写（spec §3.2 结算双写——global + byDomain）：直接更新既有 agent 的 elo 列。
+   * 用于市场结算 effect（apply_settlement）落库。agent 不存在 → no-op（返回 false）。
+   */
+  updateElo(agentId: string, elo: { global: number; byDomain: Record<string, number> }): boolean {
+    const res = this.db
+      .prepare(`UPDATE lab_agent_instances SET elo_global = ?, elo_by_domain = ? WHERE id = ?`)
+      .run(elo.global, JSON.stringify(elo.byDomain), agentId);
+    return res.changes > 0;
+  }
+
   insertRoutingBinding(
     schedulerInstanceId: string,
     binding: SchedulerInstanceDraftSpec["routingBindings"][number],
