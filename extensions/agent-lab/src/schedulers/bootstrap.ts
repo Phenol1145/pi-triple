@@ -7,9 +7,9 @@ import type { FallbackTarget } from "../core/contracts.ts";
 import {
   weightedScorerDefinition,
   createWeightedScorer,
-  modelToAgentCreateSpec,
   type WeightedScorerParameters,
 } from "./weighted-scorer.ts";
+import { modelToAgentCreateSpec } from "../core/agent-spec.ts";
 import { ARENA_DEFINITION, ARENA_DEFAULT_PARAMETERS } from "./arena-definition.ts";
 import { createArenaSchedulerImplementation } from "./arena-scheduler.ts";
 import { findOrCreateAgentByModel } from "../arena/agent-id.ts";

@@ -1,6 +1,6 @@
 import type { ModelInfo } from "../types.ts";
 import type { LabCore } from "../core/contracts.ts";
-import { modelToAgentCreateSpec } from "../schedulers/weighted-scorer.ts";
+import { modelToAgentCreateSpec } from "../core/agent-spec.ts";
 
 /**
  * 按 model 查找或创建 AgentInstance（按 model 幂等，返回稳定 UUID）。

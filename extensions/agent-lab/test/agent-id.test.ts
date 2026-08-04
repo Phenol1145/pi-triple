@@ -54,7 +54,7 @@ test("findOrCreateAgentByModel: sourceTemplateId 记录", () => {
 });
 
 test("modelToAgentCreateSpec 返回 UUID（非 derived）", async () => {
-  const { modelToAgentCreateSpec } = await import("../src/schedulers/weighted-scorer.ts");
+  const { modelToAgentCreateSpec } = await import("../src/core/agent-spec.ts");
   const spec = modelToAgentCreateSpec(model("openai/gpt-4o"), "arena");
   assert.match(spec.id, /^[0-9a-f-]{36}$/, "id 应为 UUID 格式");
   assert.ok(!spec.id.startsWith("agent-"), "不应为 derived 格式开头");

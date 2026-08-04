@@ -1,8 +1,6 @@
 import type {
   SchedulerDefinition,
-  AgentDefinition,
   ValidationResult,
-  AgentCreateSpec,
 } from "../core/contracts.ts";
 import type {
   SchedulerImplementation,
@@ -257,43 +255,8 @@ export interface WeightedScorerPorts {
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-function providerPrefix(modelId: string): string {
-  const slash = modelId.indexOf("/");
-  return slash >= 0 ? modelId.slice(0, slash) : "unknown";
-}
-
-export function modelToAgentDefinition(model: ModelInfo): AgentDefinition {
-  return {
-    standard: {
-      name: model.id,
-      capabilities: [],
-      executionKind: "model-candidate",
-      labels: { provider: providerPrefix(model.id) },
-    },
-    workLoop: {
-      id: "pi-default-loop",
-      version: "1.0.0",
-      config: {
-        cwd: process.cwd(),
-        contextMode: "fresh",
-        model: model.id,
-      },
-    },
-    custom: { model: structuredClone(model) },
-  };
-}
-
-import { randomUUID } from "node:crypto";
-
-export function modelToAgentCreateSpec(
-  model: ModelInfo,
-  _idNamespace?: string,
-): AgentCreateSpec {
-  return {
-    id: randomUUID(),
-    definition: modelToAgentDefinition(model),
-  };
-}
+import { modelToAgentCreateSpec, modelToAgentDefinition } from "../core/agent-spec.ts";
+export { modelToAgentCreateSpec, modelToAgentDefinition };
 
 /**
  * Build a minimal `LabConfig` from a `WeightedScorerParameters` object.
