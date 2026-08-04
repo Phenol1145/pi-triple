@@ -26,7 +26,7 @@
 | A | pit-flow 运行时扩展（code 节点 + metrics） | ✅ 已合并 | 2026-08-02-workflow-runtime-extension-design.md | feat/flow-runtime-extension |
 | B | 记忆系统（L3 语义记忆 + 语言体系 + 公域/审核链/通讯） | ✅ 已合并 | 2026-08-02-memory-system-design.md | feat/memory-system |
 | C | 装配层（Agent Assembly） | ✅ 已合并 | 2026-08-02-agent-assembly-design.md | feat/agent-assembly |
-| D | **经济层**（多货币/汇率/elo/嵌套市场/竞价 workflow 化/货币循环观测） | **spec 定稿（5 轮评审收敛）** | 2026-08-03-economy-layer-design.md | （待建） |
+| D | **经济层**（多货币/汇率/elo/嵌套市场/竞价 workflow 化/货币循环观测） | ✅ **已合并 + 真实 LLM 冒烟跑通**（D1 基础设施 + D2 市场闭环 + D3 硬化 + D4 收敛+冒烟） | 2026-08-03-economy-layer-design.md | feat/economy-*（已合并删除） |
 
 ## 已确认设计决策（跨子项目）
 
@@ -52,7 +52,7 @@
 - 规则冲突 = 装配时审核（默认值候补）+ 发轫时审核；参数调整 = 规则版本更新（审核等同修改）
 - LedgerPort 抽象 + SqliteLedger 默认；debit 余额预检抛错（钱 fail-fast）
 
-### 经济层（D，设计决策已确认——2026-08-03 brainstorm）
+### 经济层（D，设计决策已确认 + **已实施 D1-D4**——2026-08-03 brainstorm / 2026-08-04 收官）
 
 - **范围**：完整经济语义一次做（Q1-B）+ 保留优化器（汇率修正/elo K/税率/odds 参数 = tunable）+ **elo 计算抽象化接口**（注册表模式）
 - **市场运行时**：**市场即 workflow**（Q2-A）——竞价→执行→结算全流程 = flow.json 图；code 节点 = 选择/结算确定性内核；**嵌套市场 = 子图节点**
@@ -63,6 +63,40 @@
 - **任务类型注册表**（用户约束）：**信息传递 vs 任务发布制度性分离**（灰色经济不封锁，体制只保障市场内交易的 elo/结算/税收/保护）；任务类型**开放注册**（kind 哲学同构——行业自我生长）；**任务发布强制带已注册类型**（市场拒收未注册类型）；类型注册 = **elo 赛道自动创建**；agent 承接声明 = 进入赛道
 - **结算传导**：**垫付制**（Q7-B）——组织垫付结算成员（debit 抛错 = 组织违约事件：成员 stake 退还无收益 + 组织 elo 受损 + 审计可见）；组织利润 = settle_org − Σsettle_member − 税；余额耗尽 = 市场自然出局；成员烧自己凭证（凭证 v1 不可转让）
 - **观测与沉淀**（Q8）：货币事件全量进事件流（mint/burn/exchange/consume/transfer/tax/settle）+ 投影报表（发行量/流速 ↔ 物理资源对账）；**结算事件驱动记忆沉淀**（执行经验 + 竞价经验含未中标）
+
+### 经济层实施成果（D1-D4，已合并 + 真实冒烟跑通——2026-08-04）
+
+从 spec（5 轮对抗评审收敛）→ SDD 实施（27 任务）→ 真实 LLM 端到端验证，全链路闭环。规模：**39 commits / 17 economy 模块（3232 行）/ 34 经济测试文件 / 全仓 1636 pass（2 基线失败非本工作引入）**。
+
+**四阶段交付**：
+
+| 阶段 | 核心 | 亮点 |
+|---|---|---|
+| **D1 基础设施** | 凭证/elo/escrow/中央池/事件/效果幂等/流式节点/子图/双向托管 | 最终 adversary review 抓出协调者 ruling 方向错误并**反转**（幂等记录与 saveState 顺序） |
+| **D2 市场闭环** | 市场 fns/结算中位数共识/多评评审轮/校准/组织垫付/观测投影/经验沉淀/C 接线包/runner+bench | **共享事务协调器**（WeakMap 嵌套复用）破解资金守恒；子代理 6 次挂起→协调者接管 Task 4 |
+| **D3 硬化** | 经验 ruleRef/resume 凭证幂等/buy_voucher 发射/negativeFlow 硬化 | 行式管道 grammar 对齐记忆语法体系；业务键幂等 |
+| **D4 收敛+冒烟** | 双字段收敛/negativeFlow 移除/真实 LLM 冒烟 | **DeepSeek 真实生成 twoSum 进入市场闭环**，8/8 PASS、守恒 Δ=0 |
+
+**核心架构（17 模块，`src/economy/`）**：
+
+- **货币循环**：`voucher-port`（物理锚定凭证 FIFO 成本）+ `central-pool`（池）+ `elo`（双注册表）
+- **市场机制**：`market-fns`（announce/shortlist/select）+ `settlement`（中位数共识/评审结算/对称课税/负流不对称/校准锚定）+ `review-round`（互斥/纯 elo 序/流标阶梯）+ `market-effects`（persist/adjust_escrow/apply_settlement）
+- **生态角色**：`calibration`（合成执行者/ground truth）+ `org`（垫付先本后息/违约链）+ `experience`（四类经验→记忆沉淀）
+- **观测**：`economy-events`（15 类事件流）+ `projections`（发行量/对账/elo 分布/评审准确性/校准偏差榜）
+- **引擎**：`market-runner`（§5.1 全链编排 + checkpoint resume）
+- **横切**：`escrow`（两阶段+bid 对称冻结）+ `tx-utils`（共享事务协调器）
+
+**关键工程决策（沉淀的方法论）**：
+
+1. **共享事务协调器**：ledger/voucher 各方法内部 BEGIN IMMEDIATE → 经 `withSharedTransaction`（WeakMap\<db\>）外层开内层复用——既保原子性又解嵌套冲突。
+2. **效果幂等契约**：崩溃于 saveState 与 appendEffectRecords 之间 → 无记录 → 重执行 at-least-once；fn 按业务键幂等（凭证燃烧 traceId/任务 id/退款 taskId+round）。
+3. **资金守恒不变式**：escrow 全额解冻回 publisher→付 gross→收 net 税入池；负 settle 冻结返还+余额扣回+credit 对方——代数可验证。
+4. **校准不可辨识**：`isCalibration` 仅系统侧（评审者视角与普通任务同构）；ground truth 评定。
+5. **对齐既有体系**：经验沉淀走记忆系统行式管道 grammar（`rule:experience` 7 字段）而非旁路——一致性优先。
+
+**实机验证**：`SMOKE_LLM=1 node --experimental-strip-types extensions/agent-lab/examples/market-smoke.ts`（1 任务闭环，execute 真实 DeepSeek、bid/review 规则桩——最小额度；runbook：`docs/superpowers/runbooks/2026-08-04-market-smoke.md`）。
+
+**实施计划归档**：`plans/2026-08-03-economy-infrastructure.md`（D1）/ `2026-08-04-economy-market-closure.md`（D2）/ `2026-08-04-economy-hardening.md`（D3）/ `2026-08-04-economy-convergence.md`（D4）。
 
 ## D 接线包（C 移交 + 最终评审 rulings）
 
@@ -81,6 +115,8 @@
 - 目录规整（D 完成后统一）：`optimizer/` vs `optimizers/`、`scheduler/` vs `schedulers/`、`workloop/` vs `workloops/`（框架 vs 实现的命名重复，语义不同但易混）；`store/`（2 文件）、`experiment/`（1 文件）小目录
 - pth 2 unhandled errors（历史性，pre-existing）
 - N-I9 迁移已落地（memory_spec/endowment 列）——**PTH 服务真实 repository 消费路径需验证**（D 或独立任务）
+- **经济层后续（D5 候选）**：组织资本指引（M-1 双重冻结装配指引）/ 经验沉淀真实消费（agent 学习闭环）/ 扩展冒烟（bid·review LLM、组织·校准场景）/ PTL 生产 spawnAgent 接线
+- **D2 遗留**：elo 域完整化 / spawnAgent body 语义 / 重投更新语义
 
 ## 执行方法论（已验证有效的模式）
 
