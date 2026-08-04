@@ -22,6 +22,9 @@ function frozenOf(ledger: SqliteLedger, agent: string): number {
     .prepare(`SELECT frozen FROM credits WHERE agent = ?`).get(agent);
   return row?.frozen ?? 0;
 }
+function closeTo(actual: number, expected: number, eps = 1e-9, msg?: string): void {
+  assert.ok(Math.abs(actual - expected) <= eps, `${msg ?? "value"} expected ${actual} ≈ ${expected} (±${eps})`);
+}
 function model(id: string): ModelInfo { return { id, provider: id.split("/")[0], name: id, accessRoute: "free" }; }
 function mk() {
   const store = new SqliteStore(":memory:");
@@ -268,6 +271,106 @@ test("apply_settlement：评审者负 settle → 入中央池", () => {
   assert.equal(m.ledger.balance("r1"), 1000 - 8);
   // 池 = 8(负 settle) + 税(24×0.05 + 10×0.05 = 1.7) = 9.7
   assert.ok(Math.abs(m.ledger.balance(CENTRAL_POOL_ID) - 9.7) < 1e-9);
+  const evt = m.events.drain().find((e) => e.kind === "economy.settle" && (e.data as { role: string }).role === "reviewer");
+  assert.equal((evt!.data as { to: string }).to, CENTRAL_POOL_ID);
+});
+
+// ── 5b. 多负流：2 评审者负 settle → reviewerSettles 全量路由（防 negativeFlow 单槽误用）──
+test("apply_settlement：多负流（2 评审者负 settle）→ reviewerSettles 全量路由（negativeFlow 单槽仅展示）", () => {
+  const m = mk();
+  const { reg, taskId } = setupTask(m);
+  m.ledger.ensureEndowed("a1", model("a1"));
+  m.ledger.ensureEndowed("r1", model("r1")); m.ledger.ensureEndowed("r2", model("r2"));
+  m.ledger.ensureEndowed("r3", model("r3")); m.ledger.ensureEndowed("r4", model("r4"));
+  m.ledger.freeze("a1", 30, taskId);
+  m.ledger.freeze("r1", 10, taskId); m.ledger.freeze("r2", 10, taskId);
+  m.ledger.freeze("r3", 10, taskId); m.ledger.freeze("r4", 10, taskId);
+  m.mstore.updateTask(taskId, { status: "awarded", winnerId: "a1", winnerStake: 15 });
+  m.ledger.adjustFreeze("pub1", taskId, 86);
+
+  // reviews=[0,0.1,0.9,0.95] → R=上中位数 0.9；r1 a=0.1→−8、r2 a=0.2→−6（双负流）、
+  // r3 a=1→10、r4 a=0.95→9；executor c=0.9 → 24
+  const reviews: ReviewInput[] = [
+    { reviewerId: "r1", score: 0 }, { reviewerId: "r2", score: 0.1 },
+    { reviewerId: "r3", score: 0.9 }, { reviewerId: "r4", score: 0.95 },
+  ];
+  const elo = new EloFormulaRegistry();
+  elo.register(simpleElo);
+  const plan = planSettlement({
+    task: m.mstore.getTask(taskId)!,
+    winnerId: "a1", winnerStake: 15, reviews,
+    eloFn: elo.get("simple-elo"), taxRate: 0.05,
+    executorElo: { global: 1500, byDomain: {} },
+    reviewerElos: new Map([
+      ["r1", { global: 1500, byDomain: {} }], ["r2", { global: 1500, byDomain: {} }],
+      ["r3", { global: 1500, byDomain: {} }], ["r4", { global: 1500, byDomain: {} }],
+    ]),
+    taskRating: taskRatingFromOdds(3),
+  });
+  assert.equal(plan.reviewerSettles.get("r1"), -8);
+  closeTo(plan.reviewerSettles.get("r2")!, -6);
+  // 单槽契约（D3 裁决 A）：negativeFlow 只代表最负者（amount=8，非全量 14）——仅展示用
+  assert.equal(plan.negativeFlow!.from, "r1");
+  assert.equal(plan.negativeFlow!.to, "central-pool");
+  closeTo(plan.negativeFlow!.amount, 8);
+
+  const r = reg.call("market.apply_settlement", { taskId, plan, winnerId: "a1" }) as { ok: boolean };
+  assert.equal(r.ok, true);
+  // 两个负流各自扣回：r1/r2 冻结 10 返还 → 各扣 8/6 入池（全量路由，非单槽）
+  closeTo(m.ledger.balance("r1"), 1000 - 8);
+  closeTo(m.ledger.balance("r2"), 1000 - 6);
+  // 正 settle 评审者：r3 冻结返还 + 净 9.5；r4 冻结返还 + 净 8.55
+  closeTo(m.ledger.balance("r3"), 1000 - 10 + 10 + 9.5);
+  closeTo(m.ledger.balance("r4"), 1000 - 10 + 10 + 8.55);
+  // 池 = 8+6(负 settle) + 税(24×0.05 + 10×0.05 + 9×0.05 = 2.15) = 16.15
+  assert.ok(Math.abs(m.ledger.balance(CENTRAL_POOL_ID) - 16.15) < 1e-9);
+  // 两个评审者负 settle 事件都发出（非单槽）
+  const negEvts = m.events.drain().filter(
+    (e) => e.kind === "economy.settle" && (e.data as { role: string }).role === "reviewer" && (e.data as { settle: number }).settle < 0
+  );
+  assert.equal(negEvts.length, 2);
+});
+
+// ── 5c. 执行者负 settle + 评审者负 settle 并存：负流槽被执行者占用时评审者负流仍全量入池 ──
+test("apply_settlement：执行者负 settle + 评审者负 settle 并存 → 评审者负流仍全量入池（negativeFlow 非路由源）", () => {
+  const m = mk();
+  const { reg, taskId } = setupTask(m);
+  m.ledger.ensureEndowed("a1", model("a1"));
+  m.ledger.ensureEndowed("r1", model("r1")); m.ledger.ensureEndowed("r2", model("r2"));
+  m.ledger.freeze("a1", 30, taskId);
+  m.ledger.freeze("r1", 10, taskId); m.ledger.freeze("r2", 10, taskId);
+  m.mstore.updateTask(taskId, { status: "awarded", winnerId: "a1", winnerStake: 15 });
+  m.ledger.adjustFreeze("pub1", taskId, 86);
+
+  // majorError + reviews=[0,0.9]：executor settle=−15（负流槽=执行者→publisher）；
+  // r1 score=0 → a=0.1 → settle=−8（评审者负流）；r2 score=0.9 → a=1 → settle=10
+  const reviews: ReviewInput[] = [{ reviewerId: "r1", score: 0 }, { reviewerId: "r2", score: 0.9 }];
+  const elo = new EloFormulaRegistry();
+  elo.register(simpleElo);
+  const plan = planSettlement({
+    task: m.mstore.getTask(taskId)!,
+    winnerId: "a1", winnerStake: 15, reviews,
+    majorError: true,
+    eloFn: elo.get("simple-elo"), taxRate: 0.05,
+    executorElo: { global: 1500, byDomain: {} },
+    reviewerElos: new Map([
+      ["r1", { global: 1500, byDomain: {} }], ["r2", { global: 1500, byDomain: {} }],
+    ]),
+    taskRating: taskRatingFromOdds(3),
+  });
+  assert.deepEqual(plan.negativeFlow, { from: "a1", to: "publisher", amount: 15 });
+  closeTo(plan.reviewerSettles.get("r1")!, -8);
+
+  const r = reg.call("market.apply_settlement", { taskId, plan, winnerId: "a1" }) as { ok: boolean };
+  assert.equal(r.ok, true);
+  // 执行者负 settle：冻结返还 30 + 直付 15 → a1 = 985
+  assert.equal(m.ledger.balance("a1"), 1000 - 15);
+  // publisher：1000 −96(persist) +10(adjust) +86(escrow 解冻) +15(直付) −10(r2 gross) = 1005
+  assert.equal(m.ledger.balance("pub1"), 1000 - 96 + 10 + 86 + 15 - 10);
+  // 评审者负流 MUST 入池（不能被负流槽=executor→publisher 带偏/漏掉）
+  closeTo(m.ledger.balance("r1"), 1000 - 8);
+  // 池 = 8(负 settle) + 税(10×0.05=0.5) = 8.5
+  assert.ok(Math.abs(m.ledger.balance(CENTRAL_POOL_ID) - 8.5) < 1e-9);
   const evt = m.events.drain().find((e) => e.kind === "economy.settle" && (e.data as { role: string }).role === "reviewer");
   assert.equal((evt!.data as { to: string }).to, CENTRAL_POOL_ID);
 });

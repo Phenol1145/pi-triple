@@ -249,6 +249,29 @@ test("评审者结算：stake_r=10,O_r=2,a=0.8 → 10×1×0.6=6；a<0.5 → 负 
   closeTo(plan.negativeFlow!.amount, 2);
 });
 
+// ── 5b. 多负流单槽契约（D3 裁决 A）：negativeFlow 只代表最负者（非全量；明细全量在 reviewerSettles）──
+test("多负流：2 评审者负 settle → negativeFlow 单槽=最负者（amount 非全量——仅展示用，effect 路由源是 reviewerSettles）", () => {
+  // reviews=[0,0.1,0.9,0.95] → R=上中位数 0.9；r1 a=0.1→−8、r2 a=0.2→−6（双负流）、
+  // r3 a=1→10、r4 a=0.95→9；executor c=0.9 → 24
+  const reviews: ReviewInput[] = [
+    { reviewerId: "r1", score: 0 }, { reviewerId: "r2", score: 0.1 },
+    { reviewerId: "r3", score: 0.9 }, { reviewerId: "r4", score: 0.95 },
+  ];
+  const plan = planSettlement(standardArgs(makeTask(), reviews));
+
+  assert.equal(plan.R, 0.9);
+  closeTo(plan.reviewerSettles.get("r1")!, -8);
+  closeTo(plan.reviewerSettles.get("r2")!, -6);
+  // 单槽契约：amount=最负者 8（非全量 14）——仅展示用
+  assert.equal(plan.negativeFlow!.from, "r1");
+  assert.equal(plan.negativeFlow!.to, "central-pool");
+  closeTo(plan.negativeFlow!.amount, 8);
+  assert.notEqual(plan.negativeFlow!.amount, 14);
+  // 明细全量在 reviewerSettles（effect 侧据此路由——负流总额 = 14）
+  const negTotal = Array.from(plan.reviewerSettles.values()).reduce((acc, s) => acc + (s < 0 ? -s : 0), 0);
+  closeTo(negTotal, 14);
+});
+
 // ── 6. 对称课税（负的不课）─────────────────────────────────────────
 test("对称课税：settle=12 + settle_i=6,−2 → tax=(12+6)×0.05=0.9（负的不课）", () => {
   // 数值钉死场景：executor c=0.7 → 12；评审 r1 a=0.8 → 6、r2 a=0.4 → −2。

@@ -238,6 +238,10 @@ function applySettlement(deps: MarketEffectsDeps, args: Record<string, unknown>)
     }
 
     // 2) 评审者结算（正 → publisher 付；负 → 评审者冻结扣入池）。
+    // 契约硬化（D3 裁决 A）：评审者负流 MUST 从此处 reviewerSettles 全量迭代路由——
+    // negativeFlow 单槽仅展示用（多负流时 amount=最负者，非全量；执行者负 settle 时
+    // 槽被 publisher 占用，评审者负流仍须入池），MUST NOT 用 negativeFlow 路由。
+    let reviewerNegativeRouted = 0;
     for (const [reviewerId, settleI] of plan.reviewerSettles ?? new Map<string, number>()) {
       if (settleI > 0) {
         // 冻结返还 + publisher 付 gross，评审者收 net，税入池。
@@ -261,12 +265,24 @@ function applySettlement(deps: MarketEffectsDeps, args: Record<string, unknown>)
         releaseBid(deps.ledger, reviewerId, taskId);
         deps.ledger.debit(reviewerId, -settleI, `reviewer-negative ${taskId}`);
         poolCredit(deps.ledger, -settleI, `reviewer-negative ${taskId}`);
+        reviewerNegativeRouted += -settleI;
         deps.events.emit({
           kind: "economy.settle",
           data: { taskId, role: "reviewer", agentId: reviewerId, settle: settleI, to: CENTRAL_POOL_ID },
           isCalibration: isCalibrationOf(task),
         });
       }
+    }
+    // 防御断言（裁决 A）：独立重算 reviewerSettles 全量负额并与路由额比对——若未来
+    // 误用 negativeFlow 单槽路由评审者负流（漏流或错付方向），此处偏离即抛错拦截。
+    let reviewerNegativeTotal = 0;
+    for (const [, settleI] of plan.reviewerSettles ?? new Map<string, number>()) {
+      if (settleI < 0) reviewerNegativeTotal += -settleI;
+    }
+    if (Math.abs(reviewerNegativeRouted - reviewerNegativeTotal) > 1e-9) {
+      throw new Error(
+        "market.apply_settlement: reviewer negative flows MUST route from reviewerSettles (negativeFlow is display-only single slot)"
+      );
     }
 
     // 3) elo 双写（repository 可用时——global + byDomain 当前近似 global；域由 D2 完整化）。
