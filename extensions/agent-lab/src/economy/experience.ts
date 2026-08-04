@@ -10,13 +10,17 @@
 //      （MemoryPipeline.write 同形注入；v1 接线 = MemoryHost.pipeline.write 逐条）。
 //
 // 沉淀语义（v1）：
-//   - 每条经验写为 kind:"experience" 的记忆条目：content = 经验 JSON（结构化可回读），
-//     anchors = [taskId, scene, agentId]（多锚点检索）；
+//   - 每条经验写为 kind:"experience" 的记忆条目：content = 行式管道格式
+//     （`${kind}|${scene}|${agentId}|${action}|${outcome}|${reward}|${evaluationMode ?? "-"}`——
+//     对齐 validateAgainstGrammar 行式语义，非 JSON），anchors = [taskId, scene, agentId]
+//     （多锚点检索）；
+//   - ruleRef = "rule:experience"（对齐公域种子 public-bootstrap——落正式区的前提是
+//     公域 grammar 接受行式 content；现状缺口：种子 "experience = word ;" 的 word 原子
+//     恰消费一字段，多字段行报 "第 N 项多余"——grammar 扩展属公域侧任务，见报告疑虑）
 //   - idempotencyKey = `${kind}:${taskId}:${agentId}`（防重——重放不重复；同一
 //     (kind, taskId, agentId) 至多一条）；
 //   - 规则化闭环（L3 语义记忆规则化 → 发轫 → 审核链 → write-back）由记忆系统既有
-//     管道消费——v1 只负责把经验送入管道（规则化 grammar 校验对 experience 的适配
-//     属记忆域 Task 10 装配范畴，此处不发明 ruleRef）。
+//     管道消费——v1 只负责把经验送入管道（ruleRef 已对齐公域 rule:experience 种子）。
 //
 // 数值语义（与 market-effects 划付一致）：
 //   - execution.reward = settle 税后 = settle − max(0, settle)×taxRate（负收益不课）；
@@ -124,8 +128,10 @@ export function orgDefaultExperiences(args: { orgId: string; members: string[]; 
 /**
  * 沉淀入口：经验 → 记忆域沉淀管道（MemoryPipeline.write 同形 sink 注入——
  * v1 接线 = MemoryHost.pipeline）。逐条写入：
- *   kind: "experience"；content = 经验 JSON；anchors = [taskId, scene, agentId]；
- *   idempotencyKey = `${kind}:${taskId}:${agentId}`（防重）。
+ *   kind: "experience"；content = 行式管道格式（对齐公域 rule:experience 行式语义）；
+ *   ruleRef = "rule:experience"（对齐公域种子；注意：公域 grammar 现为单字段 word，
+ *   多字段行式需公域侧扩展后才会过 pipeline 校验——现状缺口见报告疑虑）；
+ *   anchors = [taskId, scene, agentId]；idempotencyKey = `${kind}:${taskId}:${agentId}`（防重）。
  */
 export function sedimentExperiences(
   sink: { write: ExperienceWrite },
@@ -135,8 +141,29 @@ export function sedimentExperiences(
     sink.write({
       idempotencyKey: `${exp.kind}:${args.taskId}:${exp.agentId}`,
       kind: "experience",
-      content: JSON.stringify(exp),
+      ruleRef: "rule:experience", // ← 对齐公域 rule:experience 种子（public-bootstrap）——落正式区需公域 grammar 接受行式（现状缺口见报告）
+      content: experienceToLine(exp), // ← 行式管道格式（validateAgainstGrammar 行式语义——非 JSON）
       anchors: [args.taskId, exp.scene, exp.agentId],
     });
   }
+}
+
+/**
+ * 经验 → 行式管道格式单行（对齐公域 rule:experience 行式语义；字段以 "|" 分隔）：
+ * `${kind}|${scene}|${agentId}|${action}|${outcome}|${reward}|${evaluationMode ?? "-"}`
+ * 各字段本身不含 "|"（kind/action 字面量、scene/agentId 系统生成 id——裁决：断言不含）；
+ * 字段缺省（bidding 无 reward、org_default 无 action/outcome/reward、evaluationMode）→ "-" 占位。
+ */
+function experienceToLine(exp: SettlementExperience): string {
+  const e = exp as SettlementExperience & { action?: string; outcome?: string | number; reward?: number; evaluationMode?: string };
+  const parts = [
+    exp.kind,
+    exp.scene,
+    exp.agentId,
+    e.action ?? "-",
+    e.outcome === undefined ? "-" : String(e.outcome),
+    e.reward === undefined ? "-" : String(e.reward),
+    e.evaluationMode ?? "-",
+  ];
+  return parts.join("|");
 }

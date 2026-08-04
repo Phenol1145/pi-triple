@@ -220,11 +220,16 @@ test("1. 完整市场闭环：发布→5 竞价→选择→调减→执行→5 �
 
   // ── 经验沉淀（execution/bidding/review——settle 侧三类）──
   assert.equal(written.length, 11, "1 execution + 5 bidding + 5 review");
-  const exps = written.map((w) => JSON.parse(w.content) as { kind: string });
+  // Task 1 适配：content 已改行式管道格式（`${kind}|${scene}|${agentId}|${action}|${outcome}|${reward}|${evaluationMode ?? "-"}`）
+  // —— 原 JSON.parse 断言随旧格式失效（brief 未列本消费点；为保全绿最小适配，kind=字段0/action=字段3/outcome=字段4）
+  const exps = written.map((w) => {
+    const f = w.content.split("|");
+    return { kind: f[0]!, action: f[3]!, outcome: f[4]! };
+  });
   assert.equal(exps.filter((x) => x.kind === "execution").length, 1);
   assert.equal(exps.filter((x) => x.kind === "bidding").length, 5);
   assert.equal(exps.filter((x) => x.kind === "review").length, 5);
-  const bidding = exps.find((x) => x.kind === "bidding" && (x as { outcome?: string }).outcome === "won") as { kind: string; outcome: string; action: string };
+  const bidding = exps.find((x) => x.kind === "bidding" && x.outcome === "won")!;
   assert.equal(bidding.action, "bid:15");
 
   // ── 投影与真实账本交叉核对（Task 11 必修）──

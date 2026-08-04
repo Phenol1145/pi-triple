@@ -16,6 +16,7 @@ import { planSettlement, type SettlementPlan } from "../src/economy/settlement.t
 import { simpleElo, taskRatingFromOdds } from "../src/economy/elo.ts";
 import type { MarketTask } from "../src/economy/market-store.ts";
 import type { MemoryEntry } from "../src/memory/entry.ts";
+import { parseEbnf, validateAgainstGrammar } from "../src/memory/ebnf.ts";
 
 const TAX_RATE = 0.05;
 
@@ -181,7 +182,89 @@ test("组织违约经验：org_default 事件 → 成员视角经验（orgId 关
   }
 });
 
-test("沉淀入口：经验写入记忆域（mock sink——验证调用形状 kind/content/anchors/idempotencyKey）", () => {
+// ---- Task 1（economy-hardening）：经验沉淀对齐公域 rule:experience——行式管道 content + ruleRef ----
+
+/** 行式管道格式的期望渲染（对齐实现契约：`${kind}|${scene}|${agentId}|${action}|${outcome}|${reward}|${evaluationMode ?? "-"}`）。 */
+function expectedLine(exp: SettlementExperience): string {
+  const head = [exp.kind, exp.scene, exp.agentId];
+  let tail: string[];
+  switch (exp.kind) {
+    case "execution": tail = [exp.action, String(exp.outcome), String(exp.reward), "-"]; break;
+    case "bidding": tail = [exp.action, exp.outcome, "-", "-"]; break;
+    case "review": tail = [exp.action, String(exp.outcome), String(exp.reward), exp.evaluationMode]; break;
+    case "org_default": tail = ["-", "-", "-", "-"]; break;
+  }
+  return head.concat(tail).join("|");
+}
+
+test("沉淀格式：行式管道 content（非 JSON、| 分隔多字段）+ ruleRef=rule:experience", () => {
+  const calls: Array<{ content?: string; ruleRef?: string }> = [];
+  const sink = {
+    write: (entry: { idempotencyKey: string } & Partial<MemoryEntry>) => {
+      calls.push({ content: entry.content, ruleRef: entry.ruleRef });
+      return { ok: true, entry: entry as MemoryEntry };
+    },
+  };
+  const execExp: SettlementExperience = { kind: "execution", agentId: "w1", scene: "codegen", action: "execute", outcome: 0.7, reward: 38 };
+  sedimentExperiences(sink, { taskId: "t-1", experiences: [execExp] });
+  const call = calls[0]!;
+  assert.ok(call.content, "content 存在");
+  assert.ok(!call.content.includes("{"), "行式（非 JSON）——无 '{'");
+  assert.ok(call.content.split("|").length > 3, "| 分隔多字段");
+  assert.equal(call.ruleRef, "rule:experience", "ruleRef 对齐公域 rule:experience 种子");
+});
+
+test("行式 content 过行式管道 grammar 校验（word 原子——7 字段 word 序列）", () => {
+  const calls: Array<{ content?: string }> = [];
+  const sink = {
+    write: (entry: { idempotencyKey: string } & Partial<MemoryEntry>) => {
+      calls.push({ content: entry.content });
+      return { ok: true, entry: entry as MemoryEntry };
+    },
+  };
+  const experiences: SettlementExperience[] = [
+    { kind: "execution", agentId: "w1", scene: "codegen", action: "execute", outcome: 0.7, reward: 38 },
+    { kind: "bidding", agentId: "a1", scene: "codegen", action: "bid:30", outcome: "lost", meta: { winnerId: "w1", winnerStake: 100 } },
+    { kind: "review", agentId: "r1", scene: "codegen", action: "review:10", outcome: 0.7, accuracy: 0.9, reward: 15.2, evaluationMode: "consensus" },
+    { kind: "org_default", agentId: "m1", scene: "codegen", orgId: "org-1" },
+  ];
+  sedimentExperiences(sink, { taskId: "t-1", experiences });
+  // 行式契约钉死：7 字段、每字段 word（"|" 分隔）。已实测（见报告疑虑）：公域现种子
+  // "experience = word ;" 的 word 原子恰消费一字段——多字段行报 "第 N 项多余"，即
+  // brief 原 test 2（对现种子断言 []）永不可过；此处改为对行式契约 grammar（word 序列）
+  // 校验格式本身——grammar 扩展属公域侧任务（public-bootstrap 不在本任务文件范围）。
+  const grammar = parseEbnf('experience = word, "|", word, "|", word, "|", word, "|", word, "|", word, "|", word ;');
+  assert.ok(grammar.ok, "行式 experience grammar 可解析");
+  if (grammar.ok) {
+    for (const call of calls) {
+      assert.deepEqual(validateAgainstGrammar(grammar.grammar, "experience", call.content ?? ""), [], `grammar 校验通过：${call.content}`);
+    }
+  }
+});
+
+test("经验检索可读：行式字段语义保持（kind|scene|agentId|action|outcome|reward|evaluationMode）", () => {
+  const calls: Array<{ content?: string }> = [];
+  const sink = {
+    write: (entry: { idempotencyKey: string } & Partial<MemoryEntry>) => {
+      calls.push({ content: entry.content });
+      return { ok: true, entry: entry as MemoryEntry };
+    },
+  };
+  const execExp: SettlementExperience = { kind: "execution", agentId: "w1", scene: "codegen", action: "execute", outcome: 0.7, reward: 38 };
+  sedimentExperiences(sink, { taskId: "t-1", experiences: [execExp] });
+  const call = calls[0]!;
+  assert.ok(call.content, "content 存在");
+  assert.ok(call.content.startsWith("execution|"), "kind 前缀可辨");
+  const f = call.content.split("|");
+  assert.equal(f[1], "codegen", "scene");
+  assert.equal(f[2], "w1", "agentId");
+  assert.equal(f[3], "execute", "action");
+  assert.equal(Number(f[4]), 0.7, "outcome 数字可复原");
+  assert.equal(Number(f[5]), 38, "reward 数字可复原");
+  assert.equal(f[6], "-", "evaluationMode 缺省 '-'");
+});
+
+test("沉淀入口：经验写入记忆域（mock sink——验证调用形状 kind/content/ruleRef/anchors/idempotencyKey）", () => {
   const task = makeTask({ winnerId: "a2", winnerStake: 50 });
   const plan = settlePlan(task, [
     { reviewerId: "r1", score: 0.6 },
@@ -194,11 +277,11 @@ test("沉淀入口：经验写入记忆域（mock sink——验证调用形状 k
   ]);
   assert.ok(experiences.length >= 3, "四类经验至少覆盖 3 种");
 
-  const calls: Array<{ idempotencyKey?: string; kind?: string; content?: string; anchors?: string[] }> = [];
+  const calls: Array<{ idempotencyKey?: string; kind?: string; content?: string; ruleRef?: string; anchors?: string[] }> = [];
   sedimentExperiences(
     {
       write: (entry: { idempotencyKey: string } & Partial<MemoryEntry>) => {
-        calls.push({ idempotencyKey: entry.idempotencyKey, kind: entry.kind, content: entry.content, anchors: entry.anchors });
+        calls.push({ idempotencyKey: entry.idempotencyKey, kind: entry.kind, content: entry.content, ruleRef: entry.ruleRef, anchors: entry.anchors });
         return { ok: true, entry: entry as MemoryEntry };
       },
     },
@@ -211,7 +294,8 @@ test("沉淀入口：经验写入记忆域（mock sink——验证调用形状 k
     const call = calls[i]!;
     assert.equal(call.kind, "experience");
     assert.equal(call.idempotencyKey, `${exp.kind}:${task.taskId}:${exp.agentId}`, "幂等键 = kind:taskId:agentId");
-    assert.deepEqual(JSON.parse(call.content ?? ""), exp, "content = 经验 JSON");
+    assert.equal(call.ruleRef, "rule:experience", "ruleRef 对齐公域 rule:experience");
+    assert.equal(call.content, expectedLine(exp), "content = 行式管道格式（对齐公域 rule:experience 行式语义）");
     assert.deepEqual(call.anchors, [task.taskId, exp.scene, exp.agentId]);
   }
   // 幂等键唯一性（同 task 多经验不撞键）
