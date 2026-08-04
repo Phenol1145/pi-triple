@@ -13,7 +13,9 @@ describe("pi-provider 注册", () => {
 
   it("capabilities 为全量纸带操作", () => {
     registerPiSessionProvider();
-    expect(resolveSession("__none__")).toBeNull();
+    const none = resolveSession("__none__");
+    expect(none.ok).toBe(false);
+    if (!none.ok) expect(none.reason).toBe("not_found");
     // 操作分派在 Task 3 测试覆盖；这里验证不存在的会话错误
     const r = operateSession("fork", "__none__", {});
     expect(r.error?.code).toBe("SESSION_NOT_FOUND");
