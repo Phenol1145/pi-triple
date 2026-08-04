@@ -19,7 +19,7 @@ import {
   validateSessionName,
 } from "../tmux.js";
 import { loadRegistry, markStarted } from "../session-registry.js";
-import { scanSessionFiles } from "../session/pi-scan.js";
+import { scanSessionFiles, pickRestoreTape, isTapeLive, newestTapeId } from "../session/pi-scan.js";
 import { resolveTemplateAndMigrate, resolveOrFail } from "./onboard.js";
 
 /**
@@ -134,10 +134,12 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
       process.exit(1);
     }
     const pid = getPanePid(session);
+    const now = Date.now();
     markStarted({
       name, templateId,
       model: templateConfig.model, provider: templateConfig.provider, thinking: templateConfig.thinking,
-      extraArgs: piPassthrough, startedAt: Date.now(), pid,
+      extraArgs: piPassthrough, startedAt: now, pid,
+      sessionId: newestTapeId(templateId, now - 5000, scanSessionFiles(config)),
     }, resolveDataDir(config));
     console.log(`  会话: ${name} · 模板: ${alias} · 切换到新会话…`);
     spawnSync("tmux", ["switch-client", "-t", `=${session}`], { stdio: "inherit" });
@@ -156,10 +158,12 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
     console.log("  排查: pit pi --template " + alias + "  （前台模式查看启动错误）");
     process.exit(1);
   }
+  const now = Date.now();
   markStarted({
     name, templateId,
     model: templateConfig.model, provider: templateConfig.provider, thinking: templateConfig.thinking,
-    extraArgs: piPassthrough, startedAt: Date.now(), pid,
+    extraArgs: piPassthrough, startedAt: now, pid,
+    sessionId: newestTapeId(templateId, now - 5000, scanSessionFiles(config)),
   }, resolveDataDir(config));
 
   console.log(`  会话: ${name} · 模板: ${alias} · Ctrl+B d 脱离（会话保持运行）`);
@@ -224,10 +228,12 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
       process.exit(1);
     }
     const pid = getPanePid(result.session);
+    const now = Date.now();
     markStarted({
       name, templateId,
       model: templateConfig.model, provider: templateConfig.provider, thinking: templateConfig.thinking,
-      extraArgs: passthrough, startedAt: Date.now(), pid,
+      extraArgs: passthrough, startedAt: now, pid,
+      sessionId: newestTapeId(templateId, now - 5000, scanSessionFiles(config)),
     }, resolveDataDir(config));
     console.log(`  \x1b[32m✅ 后台会话已启动\x1b[0m`);
     console.log(`  名称: ${name} · 模板: ${alias} (${templateId.slice(0, 8)}…) · 工作区: ${launch.cwd}`);
@@ -321,13 +327,14 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
     }
     try {
       let resumeSession: string | undefined;
+      let warning: string | undefined;
       if (flags["new"] !== "true") {
         const files = scanSessionFiles(config);
-        const latest = files
-          .filter((f) => f.templateId === entry.templateId)
-          .sort((a, b) => b.modified - a.modified)[0];
-        resumeSession = latest?.id;
+        const r = pickRestoreTape(files, entry, (id) => isTapeLive(id));
+        resumeSession = r.resumeSession;
+        warning = r.warning;
       }
+      if (warning) console.log(`  ⚠️  ${name}: ${warning}`);
       const launch = await buildPiLaunch(entry.templateId, {
         provider: entry.provider,
         model: entry.model,

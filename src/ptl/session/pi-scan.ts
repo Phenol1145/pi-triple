@@ -4,7 +4,7 @@ import path from "node:path";
 import type { SessionRecord } from "./session-provider.js";
 import { listPitSessions, listPitPanesDetailed, hasTmux, formatAge, type PitSession, type PitPaneInfo } from "../tmux.js";
 import { classifySession } from "../session-state.js";
-import { pitHome } from "../config.js";
+import { pitHome, loadConfig } from "../config.js";
 
 export interface PiSessionFile {
   id: string;
@@ -99,6 +99,39 @@ export function toSessionRecords(files: PiSessionFile[]): SessionRecord[] {
       detail,
     };
   });
+}
+
+/** 纸带 id 是否正被运行中的 pi 写入（pane 名 pit-<id8> 或当前命令含完整 id） */
+export function isTapeLive(id: string, panes: Map<string, PitPaneInfo> = hasTmux() ? listPitPanesDetailed() : new Map()): boolean {
+  return [...panes.keys()].some((n) => n === `pit-${id.slice(0, 8)}` || panes.get(n)?.currentCommand?.includes(id));
+}
+
+/** 模板内 sinceMs 之后修改过的最新纸带 id（fresh 启动后探测本会话的 tape） */
+export function newestTapeId(templateId: string, sinceMs: number, files: PiSessionFile[] = scanSessionFiles(loadConfig())): string | undefined {
+  return files
+    .filter((f) => f.templateId === templateId && f.modified >= sinceMs)
+    .sort((a, b) => b.modified - a.modified)[0]?.id;
+}
+
+/** restore 纸带选择：注册表 sessionId 优先（存在且未被占用）→ 模板最新 → 无 */
+export function pickRestoreTape(
+  files: PiSessionFile[],
+  entry: { templateId: string; sessionId?: string },
+  isLive: (id: string) => boolean,
+): { resumeSession?: string; warning?: string } {
+  const tplFiles = files.filter((f) => f.templateId === entry.templateId);
+  if (entry.sessionId) {
+    if (tplFiles.some((f) => f.id === entry.sessionId)) {
+      if (isLive(entry.sessionId)) {
+        return { warning: `纸带 ${entry.sessionId.slice(0, 8)}… 正在其他会话运行，本次全新启动` };
+      }
+      return { resumeSession: entry.sessionId };
+    }
+  }
+  const latest = [...tplFiles].sort((a, b) => b.modified - a.modified)[0];
+  if (!latest) return {};
+  if (isLive(latest.id)) return { warning: `模板最新纸带 ${latest.id.slice(0, 8)}… 正在运行，本次全新启动` };
+  return { resumeSession: latest.id };
 }
 
 /** 事件节点列表（branch 选择用） */
