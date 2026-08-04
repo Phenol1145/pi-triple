@@ -19,11 +19,15 @@
 //      AgentInstanceRecord 类型未含——见报告适配说明）
 //   6. new AgentRuntime(...)（attachSdk 延迟到首次 run，由 AgentRuntime 负责）
 // 失败清理：步骤 3/4/5/6 任一失败 → rmSync 记忆域目录 + created===true 时 ledger.removeAccount
-//   （LedgerPort 无 removeAccount——经 adapter impl 访问，T2 裁决模式；attempt-local：仅本调用创建的账户）
+//   （C 接线包项 9：removeAccount 已提进 LedgerPort 接口——不再经 adapter impl 暗门；
+//   attempt-local：仅本调用创建的账户）
 //
 // 对 brief deps 的增补（超集，均可选，报告说明）：
 //   - idGen?: () => string —— agentId 生成器（brief 钉死"装配器生成 UUID"；测试注入确定性）
 //   - checkpointStore?: CheckpointStore —— T7 ruling：无参 resume latest 需要真实 CheckpointStore
+//   - bridge?: CommsBridge —— comms 桥注入（项 4/5/6；缺省 comms 配置时构造于 agentDir/comms）
+//   - identityMap?: IdentityMap —— 身份权威源注入（项 6；缺省构造于 <workDir>/identity/）
+//   - comms.delivery? —— 输入配置（项 5：装配强制覆写为 auto，spec 契约⑥ agent↔agent 不可 manual）
 import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -32,7 +36,7 @@ import type { DefinitionRegistry } from "../core/definitions/registry.ts";
 import type { WorkLoopRunner } from "../workloop/runner.ts";
 import type { CheckpointStore } from "../workloop/checkpoints.ts";
 import type { CommsTransport } from "../memory/comms.ts";
-import { CommsChannel } from "../memory/comms.ts";
+import { CommsChannel, IdentityMap } from "../memory/comms.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { DEFAULT_MARKET_CONFIG } from "../config.ts";
 import type { LedgerPort } from "./ledger-port.ts";
@@ -40,9 +44,10 @@ import { RESERVED_IDS } from "../economy/central-pool.ts";
 import type { RuleBootstrap } from "./rule-bootstrap.ts";
 import { MemoryHost } from "./memory-host.ts";
 import { AgentRuntime } from "./agent-runtime.ts";
+import { CommsBridge } from "./comms-bridge.ts";
 import { validateAgainstSchema } from "./json-schema-min.ts";
 import type { AgentRef, AssembleOptions, MemorySpec } from "./types.ts";
-import { ASSEMBLY_DIR, PUBLIC_DOMAIN_DIR, ROUND_SENTINEL, validateMemorySpec } from "./types.ts";
+import { ASSEMBLY_DIR, IDENTITY_DIR, PUBLIC_DOMAIN_DIR, ROUND_SENTINEL, validateMemorySpec } from "./types.ts";
 
 export interface AgentAssemblerDeps {
   registry: DefinitionRegistry;
@@ -51,12 +56,16 @@ export interface AgentAssemblerDeps {
   ruleBootstrap: RuleBootstrap;
   runner: WorkLoopRunner;
   workDir: string;                       // <root>
-  comms?: { transport: CommsTransport; identity: { agentId: string; tenantId: string; sessionId: string } };
+  comms?: { transport: CommsTransport; identity: { agentId: string; tenantId: string; sessionId: string }; delivery?: "auto" | "manual" | "hybrid" };
   now?: () => number;
   /** 增补（见文件头）：agentId 生成器（缺省 randomUUID）。 */
   idGen?: () => string;
   /** 增补（见文件头）：真实 CheckpointStore（T7 ruling：resume 无参 latest）。 */
   checkpointStore?: CheckpointStore;
+  /** C 接线包（plan Task 10）：comms 桥注入（缺省：comms 配置时构造于 agentDir/comms；测试注入 spy）。 */
+  bridge?: CommsBridge;
+  /** C 接线包：IdentityMap 注入（缺省：构造于 <workDir>/identity/——权威源，spec 契约⑨）。 */
+  identityMap?: IdentityMap;
 }
 
 /** 装配记录 = AgentInstanceRecord 结构超集（memorySpec/endowment；brief step 5 字段）。 */
@@ -102,8 +111,8 @@ class Assembler implements AgentAssembler {
       }
     }
 
-    // ── 2b. 注册预检（幂等冲突 oracle；agentId 由装配器生成 UUID）──
-    const agentId = this.idGen();
+    // ── 2b. 注册预检（幂等冲突 oracle；agentId = 显式指定（项 8）或装配器派生 UUID）──
+    const agentId = opts.agentId ?? this.idGen();
     if (this.deps.agentStore.getAgent(agentId)) {
       throw new Error(`agent already registered: ${agentId}`);
     }
@@ -146,7 +155,28 @@ class Assembler implements AgentAssembler {
         spec: memorySpec ?? {},
         ...(this.deps.now !== undefined ? { now: this.deps.now } : {}),
         ...(comms !== undefined ? { comms } : {}),
+        // C 接线包项 2：seqProvider 注入——runner.currentSeqOf（in-flight 转移序号）
+        // 为 MemoryHost 水位/revive 的 seq 来源（特性检测：旧 mock runner 无该方法时缺省 0）
+        ...(typeof this.deps.runner.currentSeqOf === "function"
+          ? { seqProvider: (): number => this.deps.runner.currentSeqOf(agentId) }
+          : {}),
       });
+
+      // C 接线包项 5/6：comms 装配产物——IdentityMap（权威源，注册 agentId → tenant/session）
+      // + CommsBridge（收件缓冲；delivery 强制 auto 覆写配置——spec 契约⑥ agent↔agent 不可 manual）
+      let bridge: CommsBridge | undefined;
+      if (comms && this.deps.comms) {
+        const identityMap = this.deps.identityMap ?? new IdentityMap(path.join(this.deps.workDir, IDENTITY_DIR));
+        bridge = this.deps.bridge ?? new CommsBridge({
+          inboxDir: path.join(agentDir, "comms"),
+          channel: comms,
+          identityMap,
+          delivery: "auto", // 强制 auto（覆写 comms.delivery 输入配置）
+        });
+        bridge.registerIdentity(agentId, this.deps.comms.identity.tenantId, this.deps.comms.identity.sessionId);
+        // 契约⑨ 刷新回调注册（session_start 刷新通知出口；下游消费者 = Task 12 pit-communicate 接线）
+        bridge.registerSessionRefresh((_refreshAgentId, _sessionId) => {});
+      }
 
       // ── 4. 开户（续跑幂等；!created → 续跑信号，注册预检已保证未注册 → 继续）──
       created = this.deps.ledger.open(agentId, endowment.K).created;
@@ -174,13 +204,13 @@ class Assembler implements AgentAssembler {
         ledger: this.deps.ledger,
         ...(this.deps.idGen !== undefined ? { idGen: this.deps.idGen } : {}),
         ...(this.deps.checkpointStore !== undefined ? { checkpointStore: this.deps.checkpointStore } : {}),
+        ...(bridge !== undefined ? { bridge } : {}),
       });
     } catch (err) {
-      // 失败清理：记忆域目录 + 本调用创建的账户（attempt-local）
+      // 失败清理：记忆域目录 + 本调用创建的账户（attempt-local；项 9：经 LedgerPort 接口）
       rmSync(agentDir, { recursive: true, force: true });
       if (created) {
-        const impl = (this.deps.ledger as { impl?: { removeAccount(id: string): void } }).impl;
-        impl?.removeAccount(agentId);
+        this.deps.ledger.removeAccount(agentId);
       }
       throw err;
     }

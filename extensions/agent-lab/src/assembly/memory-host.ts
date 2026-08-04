@@ -87,7 +87,7 @@ export class MemoryHost {
       ...(deps.now !== undefined ? { now: deps.now } : {}),
     });
     this.watermark = new WatermarkManager(this.store);
-    this.dsp = new DspBuilder(this.store, this.watermark, { dir: deps.workDir });
+    this.dsp = new DspBuilder(this.store, this.watermark, { dir: deps.workDir, pubDir: deps.pubDir });
     this.comms = deps.comms;
   }
 
@@ -151,11 +151,12 @@ export class MemoryHost {
     return swept;
   }
 
-  /** 周期清扫（缺省 60s）；返回停止函数（AgentRuntime.dispose 用）。 */
+  /** 周期清扫（缺省 60s）；返回停止函数（AgentRuntime.dispose 用）。unref：定时器不阻进程退出（契约③/C 接线包项 10）。 */
   startSweeper(intervalMs: number = SWEEPER_DEFAULT_INTERVAL_MS): () => void {
     const timer = setInterval(() => {
       this.sweepDrafts();
     }, intervalMs);
+    timer.unref(); // 不阻进程退出（测试断言 mock unref）
     return () => clearInterval(timer);
   }
 

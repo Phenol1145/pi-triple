@@ -68,7 +68,7 @@ function mockRuleBootstrap(): { rb: RuleBootstrap; calls: string[] } {
   return { rb, calls };
 }
 
-/** mock ledger：open 返回可配置 created；impl.removeAccount 记录调用（T2 裁决：经 impl 访问）。 */
+/** mock ledger：open 返回可配置 created；removeAccount 记录调用（C 接线包项 9：已提进 LedgerPort 接口）。 */
 function mockLedger(openResult: { created: boolean }) {
   const openCalls: Array<[string, number]> = [];
   const removeAccountCalls: string[] = [];
@@ -82,12 +82,10 @@ function mockLedger(openResult: { created: boolean }) {
     debit: (): void => {},
     freeze: (): void => {},
     unfreeze: (): void => {},
-    impl: {
-      removeAccount: (id: string): void => {
-        removeAccountCalls.push(id);
-      },
+    removeAccount: (id: string): void => {
+      removeAccountCalls.push(id);
     },
-  } as unknown as LedgerPort & { impl: { removeAccount(id: string): void } };
+  } as unknown as LedgerPort;
   return { ledger, openCalls, removeAccountCalls };
 }
 

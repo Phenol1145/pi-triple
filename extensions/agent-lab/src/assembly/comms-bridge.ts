@@ -37,16 +37,28 @@ export class CommsBridge {
   private readonly channel: CommsChannel;
   private readonly identityMap: IdentityMap;
   private readonly capacity: number;
+  /**
+   * delivery 模式（spec 契约⑥：pit-communicate 桥 agent↔agent 强制 auto——不可走 manual
+   * 人工门）。装配器构造时恒传 "auto"（覆写输入配置）；直接构造缺省 "auto"。
+   */
+  readonly delivery: "auto" | "manual" | "hybrid";
   /** 本实例已并入纸带的 msgId（去重源 1；重启丢失 → 通道去重表兜底）。 */
   private mergedMsgIds = new Set<string>();
   /** session_start 刷新回调（契约⑨）。 */
   private sessionRefreshCbs: Array<(agentId: string, sessionId: string) => void> = [];
 
-  constructor(deps: { inboxDir: string; channel: CommsChannel; identityMap: IdentityMap; capacity?: number }) {
+  constructor(deps: {
+    inboxDir: string;
+    channel: CommsChannel;
+    identityMap: IdentityMap;
+    capacity?: number;
+    delivery?: "auto" | "manual" | "hybrid";
+  }) {
     this.inboxPath = join(deps.inboxDir, INBOX_FILE);
     this.channel = deps.channel;
     this.identityMap = deps.identityMap;
     this.capacity = deps.capacity ?? 100; // 默认 100（spec 契约⑥）
+    this.delivery = deps.delivery ?? "auto";
     if (this.capacity < 1) {
       throw new Error(`comms inbox capacity must be >= 1 (got ${this.capacity})`);
     }

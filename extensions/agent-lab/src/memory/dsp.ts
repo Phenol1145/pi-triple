@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { MemoryEntry } from "./entry.ts";
 import type { MemoryStore } from "./store.ts";
 import type { WatermarkManager } from "./watermark.ts";
+import { PublicDomainStore } from "./public-domain.ts";
 
 /**
  * DSP 集成（spec §7 / 计划 Task 11）。
@@ -35,6 +36,13 @@ import type { WatermarkManager } from "./watermark.ts";
  *
  * 注：快照目录经 opts.dir 注入（store 不暴露其内部 dir，且本任务只允许改
  * dsp.ts 与测试两个文件）；未配置 dir 时快照仅会话内存态（不落盘）。
+ *
+ * 记忆入口区两段拼接（装配 spec §2.5 "DSP 公域区交付项" / C 接线包项 7）：
+ *   记忆入口区 = 私域段（水位过滤）+ 公域段（直接可见）两段拼接；
+ *   顺序：私域段在前、公域段在后；同 id 公域条目被私域优先去重。
+ *   公域段经 opts.pubDir 注入（MemoryHost 装配时传入 <root>/public-domain/）；
+ *   未配置 pubDir → 单段（既有行为，零变更）。私域段检索源：realtime = 新鲜检索
+ *   （store.retrieve 排除 draft）；snapshot(seq) = visibleVersions(seq)（水位过滤）。
  */
 export interface DspInput {
   state: unknown;                    // 控制状态（投影源）
@@ -56,14 +64,14 @@ const DEFAULT_RESTORE_BYTES = 16384;
 export class DspBuilder {
   private store: MemoryStore;
   private watermark: WatermarkManager;
-  private opts: { maxRealtimeBytes?: number; maxRestoreBytes?: number; dir?: string };
+  private opts: { maxRealtimeBytes?: number; maxRestoreBytes?: number; dir?: string; pubDir?: string };
   /** 最近快照（build restore 模式 / restore() 时更新；无快照 → 防御性回退新鲜检索）。 */
   private lastSnap: DspSnapshot | undefined;
 
   constructor(
     store: MemoryStore,
     watermark: WatermarkManager,
-    opts: { maxRealtimeBytes?: number; maxRestoreBytes?: number; dir?: string } = {},
+    opts: { maxRealtimeBytes?: number; maxRestoreBytes?: number; dir?: string; pubDir?: string } = {},
   ) {
     this.store = store;
     this.watermark = watermark;
@@ -85,7 +93,8 @@ export class DspBuilder {
     } else {
       // v1 简化检索源：全部官方条目（无锚点过滤；锚点过滤留后续优化）。
       // 摘要行含锚点（[api] rate=100），即"锚点命中检索注入"。
-      summary = this.renderMemoryEntries(this.store.retrieve({ excludeDrafts: true }));
+      // 两段拼接（项 7）：私域段（新鲜检索、排除 draft）+ 公域段（official 直接可见）。
+      summary = this.renderMemorySections(this.store.retrieve({ excludeDrafts: true }));
     }
     const candText = this.renderCandidates(input.candidates);
 
@@ -104,7 +113,7 @@ export class DspBuilder {
    * 只含当时可见版本（spec §4.2 与 DSP 快照一致性钉死）。
    */
   snapshot(seq: number, mode: "realtime" | "restore"): DspSnapshot {
-    const text = this.renderMemoryEntries(this.watermark.visibleVersions(seq));
+    const text = this.renderMemorySections(this.watermark.visibleVersions(seq));
     const snap: DspSnapshot = { text, memoryVersion: this.memoryVersion(text), atSeq: seq };
     this.persistSnapshot(seq, snap);
     this.lastSnap = snap;
@@ -134,6 +143,19 @@ export class DspBuilder {
       `budget: ${used}/${max} (remaining ${remaining})`,
       `env: ${JSON.stringify(input.env ?? {})}`,
     ].join("\n");
+  }
+
+  /** 记忆入口区两段拼接（项 7）：私域段在前（渲染行）+ 公域段在后（official；同 id 去重、私域优先）。 */
+  private renderMemorySections(privateEntries: MemoryEntry[]): string {
+    const priv = this.renderMemoryEntries(privateEntries);
+    if (!this.opts.pubDir) return priv; // 无公域配置 → 单段（既有行为）
+    const privIds = new Set(privateEntries.map((e) => e.id));
+    const pubEntries = new PublicDomainStore(this.opts.pubDir)
+      .listOfficialEntries()
+      .filter((e) => !privIds.has(e.id));
+    if (pubEntries.length === 0) return priv;
+    const pub = this.renderMemoryEntries(pubEntries);
+    return priv.length > 0 ? `${priv}\n${pub}` : pub;
   }
 
   /** 记忆入口区检索摘要：每行 `- [锚点] 内容`（锚点即"命中注入"标记）。 */

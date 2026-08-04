@@ -63,6 +63,12 @@ export class WorkLoopRunner {
     (info: { agentInstanceId: string; checkpointId: string; seq: number }) => void
   >();
 
+  /**
+   * SDK 扩展钩子注册表（C 接线包 / spec §10 项 1）：buildSDK 后按注册顺序应用
+   * （装配层 memory.attachSdk 真实挂载点）；返回反注册函数。
+   */
+  private readonly sdkExtensions = new Set<(sdk: WorkLoopSDK) => void>();
+
   /** in-flight seq 注册表（Task 6）：MachineRuntime 构造时注册，run 结束注销 */
   private readonly seqRegistry = new Map<string, number>();
 
@@ -136,6 +142,17 @@ export class WorkLoopRunner {
    */
   currentSeqOf(agentInstanceId: string): number {
     return this.seqRegistry.get(agentInstanceId) ?? 0;
+  }
+
+  /**
+   * SDK 扩展注册（C 接线包项 1）：每次 buildSDK 后按注册顺序应用（装配层经此挂载
+   * memory/comms 到每个新构建的 SDK）。返回反注册函数。
+   */
+  onSdkBuilt(cb: (sdk: WorkLoopSDK) => void): () => void {
+    this.sdkExtensions.add(cb);
+    return () => {
+      this.sdkExtensions.delete(cb);
+    };
   }
 
   // ── Internal execution ───────────────────────────────────────────
@@ -432,7 +449,7 @@ export class WorkLoopRunner {
 
     const storageNs = `agent:${agentInstanceId}:workloop`;
 
-    return {
+    const sdk: WorkLoopSDK = {
       context: createContextOperations(),
 
       model: createInstrumentedModelPort(this.model, {
@@ -523,6 +540,12 @@ export class WorkLoopRunner {
         },
       },
     };
+
+    // C 接线包项 1：SDK 扩展按注册顺序应用（装配层 memory.attachSdk 真实挂载点）
+    for (const ext of this.sdkExtensions) {
+      ext(sdk);
+    }
+    return sdk;
   }
 
   // ── Event helpers ────────────────────────────────────────────────

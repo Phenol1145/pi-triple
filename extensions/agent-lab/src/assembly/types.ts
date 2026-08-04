@@ -18,10 +18,13 @@ export interface AssembleOptions {
   schedulerInstanceId: string;
   endowment?: { K: number; initialFloor: number };
   memory?: MemorySpec;
+  /** C 接线包（plan Task 10 / spec §10 项 8）：可选显式 agentId——指定则用（非派生）；缺省 = 装配器 idGen 派生。 */
+  agentId?: string;
 }
 
 export const ASSEMBLY_DIR = "agents";            // <root>/agents/<agentId>/
 export const PUBLIC_DOMAIN_DIR = "public-domain"; // <root>/public-domain/
+export const IDENTITY_DIR = "identity";          // <root>/identity/（IdentityMap 权威源，spec 契约⑨）
 export const ROUND_SENTINEL = "";                // createdAtRoundId 哨兵
 
 const ALLOWED_DIALECTS = ["json", "xml", "markdown"] as const;

@@ -14,6 +14,8 @@ export interface LedgerPort {
   debit(agentId: string, amount: number, reason: string): void;   // 余额不足 → 抛错
   freeze(agentId: string, amount: number, reason: string): void;  // reason → taskId 派生键 `freeze:<agentId>:<reason>`；余额不足/false → 抛错
   unfreeze(agentId: string, reason: string): void;                // 整笔解冻
+  /** C 接线包（plan Task 10 项 9）：删账（装配失败回滚用，attempt-local：仅删本调用创建账户）。不存在 → no-op。 */
+  removeAccount(agentId: string): void;
 }
 
 export class SqliteLedgerAdapter implements LedgerPort {
@@ -71,5 +73,10 @@ export class SqliteLedgerAdapter implements LedgerPort {
     const taskId = `freeze:${agentId}:${reason}`;
     this.impl.unfreeze(agentId, taskId); // 整笔解冻；无冻结行 → 幂等 no-op
     this.frozenAmounts.delete(taskId);
+  }
+
+  /** 删账（credits 行删除；不存在 → no-op——SqliteLedger.removeAccount 语义）。 */
+  removeAccount(agentId: string): void {
+    this.impl.removeAccount(agentId);
   }
 }
