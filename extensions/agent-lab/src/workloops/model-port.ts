@@ -46,17 +46,6 @@
  * non-standard provider that omits usage), we derive cost from the
  * model's catalog pricing (`Model.cost`) and tag `source: "derived"`.
  *
- * ## Error handling
- *
- * When pi-ai `complete()` returns `stopReason: "error"` or a non-empty
- * `errorMessage`, the inner port **throws** so that the instrumented
- * wrapper emits `model.failed` (not `model.completed`).
- *
- * ## Fail-open telemetry
- *
- * Telemetry calls in `createInstrumentedModelPort` are wrapped in try/catch
- * so that event-emit failures never escape to crash the enclosing work-loop.
- *
  * @module model-port
  */
 
@@ -67,103 +56,20 @@ import type {
   ModelPort,
   ToolPort,
   ArtifactPort,
-  WorkLoopTelemetry,
   WorkContext,
   WorkMessage,
   StandardAgentOutput,
 } from "../workloop/contracts.ts";
 
-// ── Instrumented model port ─────────────────────────────────────────
-
-export interface ModelRequestedPayload {
-  strategyId?: string;
-}
-
-export interface ModelCompletedMetrics {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: number;
-  durationMs: number;
-  /** Where the usage data came from. */
-  source: "observed" | "derived";
-}
-
-export interface ModelFailedPayload {
-  code: string;
-  message: string;
-}
-
-/**
- * Wrap a ModelPort so that every `complete()` call emits standard
- * instrumentation events through the given telemetry channel.
- *
- * Emitted events:
- * - `model.requested` — before the inner complete() call
- * - `model.completed` — on success, with usage + timing metrics
- * - `model.failed`    — on error, with code + message
- *
- * All telemetry emissions are fail-open: a thrown emit does **not**
- * propagate to the caller.
- */
-export function createInstrumentedModelPort(
-  inner: ModelPort,
-  telemetry: WorkLoopTelemetry,
-): ModelPort {
-  return {
-    async complete(
-      context: WorkContext,
-      options?: Record<string, unknown>,
-    ): Promise<{ message: WorkMessage; usage?: StandardAgentOutput["usage"] }> {
-      // emit model.requested (fail-open)
-      const requestedPayload: Record<string, unknown> = {};
-      if (options?.strategyId) {
-        requestedPayload.strategyId = options.strategyId;
-      }
-      safelyEmit(telemetry, "model.requested", requestedPayload);
-
-      const startedAt = Date.now();
-
-      try {
-        const result = await inner.complete(context, options);
-
-        const durationMs = Date.now() - startedAt;
-
-        // assemble usage metrics from result.usage if present
-        const usage = result.usage;
-        const source: "observed" | "derived" =
-          usage != null ? "observed" : "derived";
-
-        const metrics: ModelCompletedMetrics = {
-          input: usage?.input ?? 0,
-          output: usage?.output ?? 0,
-          cacheRead: usage?.cacheRead ?? 0,
-          cacheWrite: usage?.cacheWrite ?? 0,
-          cost: usage?.cost ?? 0,
-          durationMs,
-          source,
-        };
-
-        // Annotate usage with source so downstream consumers (e.g.
-        // managed-loop usage aggregation) can detect derived estimates
-        // without peeking at telemetry metrics.
-        if (result.usage) {
-          (result.usage as Record<string, unknown>)._source = source;
-        }
-
-        safelyEmit(telemetry, "model.completed", {}, metrics);
-        return result;
-      } catch (err) {
-        const code = err instanceof Error ? (err as Error & { code?: string }).code ?? "model-error" : "model-error";
-        const message = err instanceof Error ? err.message : String(err);
-
-        safelyEmit(telemetry, "model.failed", { code, message } satisfies ModelFailedPayload);
-        throw err;
-      }
-    },
-  };
-}
+// createInstrumentedModelPort + its payload types now live in the
+// framework layer (workloop/instrumented-model-port.ts) — re-exported
+// here so deep imports from workloops/model-port keep resolving.
+export { createInstrumentedModelPort } from "../workloop/instrumented-model-port.ts";
+export type {
+  ModelRequestedPayload,
+  ModelCompletedMetrics,
+  ModelFailedPayload,
+} from "../workloop/instrumented-model-port.ts";
 
 // ── PI model port ───────────────────────────────────────────────────
 
@@ -494,19 +400,4 @@ export function createMemoryArtifactPort(): ArtifactPort {
       return entry.value;
     },
   };
-}
-
-// ── Internal helpers ────────────────────────────────────────────────
-
-function safelyEmit(
-  telemetry: WorkLoopTelemetry,
-  eventType: string,
-  payload: unknown,
-  metrics?: Record<string, string | number | boolean | null>,
-): void {
-  try {
-    telemetry.emit(eventType, payload, metrics);
-  } catch {
-    // Fail-open: instrumentation must not crash the work-loop.
-  }
 }

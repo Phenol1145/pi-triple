@@ -7,7 +7,7 @@ import { AgentRuntimeStateStore } from "./state-store.ts";
 import { CheckpointStore } from "./checkpoints.ts";
 import type { CheckpointRecord } from "./checkpoints.ts";
 import { createContextOperations } from "./context.ts";
-import { createInstrumentedModelPort } from "../workloops/model-port.ts";
+import { createInstrumentedModelPort } from "./instrumented-model-port.ts";
 import { MachineRuntime } from "./machine-runtime.ts";
 import type { ResumeState } from "./machine-runtime.ts";
 import type {
