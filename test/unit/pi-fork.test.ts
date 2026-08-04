@@ -113,6 +113,49 @@ describe("pi-fork", () => {
     expect(forkSessionAtNode(src, { at: "zzz" }).error?.code).toBe("NODE_NOT_FOUND");
   });
 
+  it("fork 容忍纸带损坏行：跳过坏行、其余事件照常复制", () => {
+    writeSession("a.jsonl", [H1, E1, "this-is-not-json{{{", E2]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = forkSession(src, {});
+    expect(r.ok).toBe(true);
+    const content = fs.readFileSync((r.data as { file: string }).file, "utf-8").trim().split("\n");
+    const ids = content.slice(1).map((l) => JSON.parse(l) as any).map((e) => e.id);
+    expect(ids).toEqual(["e1", "e2"]);
+  });
+
+  it("fork 容错消息：1 行坏数据 → message 含（跳过 1 行损坏数据）", () => {
+    writeSession("a.jsonl", [H1, E1, "this-is-not-json{{{", E2]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = forkSession(src, {});
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("（跳过 1 行损坏数据）");
+  });
+
+  it("clone 容错消息：2 行坏数据 → skipped 计数准确（跳过 2 行）", () => {
+    writeSession("a.jsonl", [H1, E1, "bad{{{", "also-bad", E2]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = cloneSession(src, {});
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("（跳过 2 行损坏数据）");
+  });
+
+  it("transfer 容错消息：跳过行警告接入 message，且源删除语义不变", () => {
+    writeSession("a.jsonl", [H1, E1, "this-is-not-json{{{", E2]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = transferSession(src, { templateId: "t2" });
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("（跳过 1 行损坏数据）");
+    expect(fs.existsSync(src.file)).toBe(false); // 警告不改变转移语义：源仍删除
+  });
+
+  it("branch 容错消息：forkSessionAtNode 的 message 也接入跳过警告", () => {
+    writeSession("a.jsonl", [H1, E1, "this-is-not-json{{{", E2]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = forkSessionAtNode(src, { at: "e2" });
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("（跳过 1 行损坏数据）");
+  });
+
   it("branch compaction 完整性：firstKeptEntryId 引用不在主线时调整（保留 compaction + 警告）", () => {
     // 主线 e1→e6(compaction, firstKeptEntryId=e2)→e2→e3；node=e3 时 e2 在主线内 → 完整
     writeSession("a.jsonl", [H1, E1, E6, E2, E3]);
@@ -122,5 +165,31 @@ describe("pi-fork", () => {
     const entries = fs.readFileSync((r.data as { file: string }).file, "utf-8").trim().split("\n").slice(1).map((l) => JSON.parse(l) as any);
     expect(entries.some((e) => e.type === "compaction")).toBe(true);
     expect(entries.some((e) => e.id === "e2")).toBe(true); // firstKeptEntryId 目标在主线内
+  });
+
+  it("transfer 运行中的会话：拒绝且源文件不动", () => {
+    writeSession("a.jsonl", [H1, E1]);
+    const src = scanSessionFiles(root)[0]!;
+    const r = transferSession(src, { templateId: "t2" }, true);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe("ALREADY_RUNNING");
+    expect(fs.existsSync(src.file)).toBe(true);
+    expect(fs.readdirSync(path.join(root, "sessions", "t2"))).toHaveLength(0);
+  });
+
+  it("transfer 成功后子会话 parentSession 重链到新路径", () => {
+    const srcFile = writeSession("a.jsonl", [H1, E1]);
+    // 子会话：同模板，parentSession 指向源文件
+    const childHeader = H1.replace(
+      '"id":"aaaaaaaa-1111-4111-8111-111111111111"',
+      `"id":"bbbbbbbb-2222-4222-8222-222222222222","parentSession":"${srcFile}"`,
+    );
+    writeSession("child.jsonl", [childHeader, E1]);
+    const src = scanSessionFiles(root).find((f) => f.id === "aaaaaaaa-1111-4111-8111-111111111111")!;
+    const r = transferSession(src, { templateId: "t2" }, false);
+    expect(r.ok).toBe(true);
+    const dest = (r.data as { file: string }).file;
+    const child = scanSessionFiles(root).find((f) => f.id === "bbbbbbbb-2222-4222-8222-222222222222")!;
+    expect(child.parentSession).toBe(dest);
   });
 });

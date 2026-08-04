@@ -7,12 +7,12 @@ import {
 import { uuidv7 } from "../../src/ptl/session/uuidv7.js";
 import type { SessionProvider, TraceProvider } from "../../src/ptl/session/session-provider.js";
 
-function makeProvider(workloop: string, caps: string[]): SessionProvider {
+function makeProvider(workloop: string, caps: string[], id: string = "aaaaaaaa-1111-4111-8111-111111111111"): SessionProvider {
   return {
     workloop,
     capabilities: caps,
     list: () => [
-      { id: "aaaaaaaa-1111-4111-8111-111111111111", kind: "session", workloop, templateId: "t1", templateAlias: "tpl-a", status: "stopped", timestamp: "2026-07-01T00:00:00.000Z", summary: `sess-${workloop}`, detail: {} },
+      { id, kind: "session" as const, workloop, templateId: "t1", templateAlias: "tpl-a", status: "stopped", timestamp: "2026-07-01T00:00:00.000Z", summary: `sess-${workloop}`, detail: {} },
     ],
     show: (r) => `show:${r.id}`,
     fork: (r) => ({ ok: true, message: `forked:${r.id}` }),
@@ -37,10 +37,25 @@ describe("session-store", () => {
   it("resolveSession 支持完整 UUID 与唯一前缀", () => {
     registerSessionProvider(makeProvider("pi", []));
     const full = resolveSession("aaaaaaaa-1111-4111-8111-111111111111");
-    expect(full?.id).toBe("aaaaaaaa-1111-4111-8111-111111111111");
+    expect(full.ok).toBe(true);
+    if (full.ok) expect(full.record.id).toBe("aaaaaaaa-1111-4111-8111-111111111111");
     const prefix = resolveSession("aaaaaaaa-1111");
-    expect(prefix?.id).toBe("aaaaaaaa-1111-4111-8111-111111111111");
-    expect(resolveSession("zzzz")).toBeNull();
+    expect(prefix.ok).toBe(true);
+    const none = resolveSession("zzzz");
+    expect(none.ok).toBe(false);
+    if (!none.ok) expect(none.reason).toBe("not_found");
+  });
+
+  it("resolveSession 前缀多命中返回 ambiguous + 候选", () => {
+    registerSessionProvider(makeProvider("pi", [], "aaaaaaaa-1111-4111-8111-111111111111"));
+    // 适配：registerSessionProvider 按 workloop 幂等，同 workloop 第二个 provider 不会注册，故用不同 workloop 构造两个共享前缀的会话
+    registerSessionProvider(makeProvider("bidding", [], "aaaaaaaa-2222-4222-8222-222222222222"));
+    const r = resolveSession("aaaaaaaa");
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toBe("ambiguous");
+      expect(r.candidates).toHaveLength(2);
+    }
   });
 
   it("operateSession 分发到 provider；capabilities 外操作返回 NOT_SUPPORTED", () => {

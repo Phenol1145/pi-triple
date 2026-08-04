@@ -10,3 +10,4 @@ dist/
 *.zip
 pi-triple.json
 .DS_Store
+.worktrees/

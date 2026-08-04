@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { scanSessionFiles, parseSessionHeader, toSessionRecords, listNodes } from "../../src/ptl/session/pi-scan.js";
+import { scanSessionFiles, parseSessionHeader, toSessionRecords, listNodes, isTapeLive, newestTapeId, pickRestoreTape } from "../../src/ptl/session/pi-scan.js";
 import type { PiTripleConfig } from "../../src/ptl/config.js";
 
 // toSessionRecords 依赖 tmux 运行态：mock tmux 模块（保留 formatAge 真实实现），无真实 tmux 依赖
@@ -55,6 +55,43 @@ describe("pi-scan", () => {
     expect(nodes.length).toBeGreaterThanOrEqual(1);
     expect(nodes[0]!.id).toBe("a1b2c3d4");
     expect(nodes[0]!.summary).toContain("user");
+  });
+
+  it("newestTapeId：since 窗口内最新 mtime 纸带", () => {
+    const now = Date.now();
+    const w2 = path.join(root, "sessions", "t1", "old.jsonl");
+    const w3 = path.join(root, "sessions", "t1", "new.jsonl");
+    fs.writeFileSync(w2, `{"type":"session","version":3,"id":"old","timestamp":"2026-07-28T00:00:00.000Z","cwd":"/w"}\n`);
+    fs.writeFileSync(w3, `{"type":"session","version":3,"id":"new","timestamp":"2026-07-28T00:00:00.000Z","cwd":"/w"}\n`);
+    const old = fs.statSync(w2); fs.utimesSync(w2, old.atime, new Date(now - 60_000));
+    const files = scanSessionFiles(root);
+    expect(newestTapeId("t1", now - 10_000, files)).toBe("new");
+    expect(newestTapeId("t1", now + 10_000, files)).toBeUndefined();
+  });
+
+  it("pickRestoreTape：sessionId 优先；文件已消失回退模板最新", () => {
+    const now = Date.now();
+    fs.writeFileSync(path.join(root, "sessions", "t1", "x.jsonl"), `{"type":"session","version":3,"id":"aaaa","timestamp":"2026-07-28T00:00:00.000Z","cwd":"/w"}\n`);
+    const files = scanSessionFiles(root);
+    expect(pickRestoreTape(files, { templateId: "t1", sessionId: "aaaa" }, () => false).resumeSession).toBe("aaaa");
+    // sessionId 文件不存在 → 回退最新
+    expect(pickRestoreTape(files, { templateId: "t1", sessionId: "gone" }, () => false).resumeSession).toBe("aaaa");
+  });
+
+  it("pickRestoreTape：纸带正被其他会话使用 → 警告且不 resume", () => {
+    fs.writeFileSync(path.join(root, "sessions", "t1", "x.jsonl"), `{"type":"session","version":3,"id":"aaaa","timestamp":"2026-07-28T00:00:00.000Z","cwd":"/w"}\n`);
+    const files = scanSessionFiles(root);
+    const r = pickRestoreTape(files, { templateId: "t1", sessionId: "aaaa" }, () => true);
+    expect(r.resumeSession).toBeUndefined();
+    expect(r.warning).toBeTruthy();
+  });
+
+  it("isTapeLive：pane 名 pit-<id8> 或 currentCommand 含完整 id", () => {
+    const panes = new Map<string, any>([
+      ["pit-aaaaaaaa", { pid: 123, currentCommand: "pi --session aaaaaaaa-1111-4111-8111-111111111111" }],
+    ]);
+    expect(isTapeLive("aaaaaaaa-1111-4111-8111-111111111111", panes)).toBe(true);
+    expect(isTapeLive("bbbbbbbb-2222-4222-8222-222222222222", panes)).toBe(false);
   });
 });
 

@@ -24,9 +24,9 @@ export function execTraceLs(args: string[]): CommandResult {
 
 export function execTraceShow(id: string): CommandResult {
   const r = resolveTrace(id);
-  if (!r) return { ok: false, message: "", error: { code: "TRACE_NOT_FOUND", message: `追踪 "${id}" 不存在（pit trace ls 查看）` } };
-  const detail = Object.entries(r.detail).map(([k, v]) => `  ${k}: ${v}`).join("\n");
-  return { ok: true, message: `  追踪 ${r.id}\n  ${r.summary}\n${detail}` };
+  if (!r.ok) return { ok: false, message: "", error: { code: "TRACE_NOT_FOUND", message: `轨迹 "${id}" 不存在` } };
+  const detail = Object.entries(r.record.detail).map(([k, v]) => `  ${k}: ${v}`).join("\n");
+  return { ok: true, message: `  追踪 ${r.record.id}\n  ${r.record.summary}\n${detail}` };
 }
 
 export function execTraceTimeline(agentId: string): CommandResult {

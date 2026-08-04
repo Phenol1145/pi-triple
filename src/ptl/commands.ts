@@ -29,6 +29,7 @@ import {
 } from "./tmux.js";
 import { loadRegistry, markStarted, markStopped } from "./session-registry.js";
 import { classifySession, isPidAlive } from "./session-state.js";
+import { scanSessionFiles, newestTapeId } from "./session/pi-scan.js";
 
 
 // ─── Types ───────────────────────────────────────────────────
@@ -357,6 +358,7 @@ export async function execStartBg(
       extraArgs,
       startedAt: Date.now(),
       pid,
+      sessionId: newestTapeId(templateId, Date.now() - 5000, scanSessionFiles(config)),
     }, resolveDataDir(config));
     return {
       ok: true,

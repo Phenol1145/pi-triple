@@ -40,7 +40,7 @@ function clone(r: SessionRecord, opts: ForkOpts): CommandResult {
 
 function transfer(r: SessionRecord, opts: TransferOpts): CommandResult {
   const hit = requireSessionFile(r.id);
-  return hit.ok ? transferSession(hit.file, opts) : hit.error;
+  return hit.ok ? transferSession(hit.file, opts, r.status === "running") : hit.error;
 }
 
 function branch(r: SessionRecord, opts: BranchOpts): CommandResult {

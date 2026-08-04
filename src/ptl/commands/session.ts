@@ -7,6 +7,7 @@
  */
 import type { CommandResult } from "../commands.js";
 import { execStop } from "../commands.js";
+import type { SessionRecord } from "../session/session-provider.js";
 import {
   listAllSessions, resolveSession, operateSession,
 } from "../session/session-store.js";
@@ -54,9 +55,12 @@ export function execSessionLs(args: string[]): CommandResult {
 
 export function execSessionShow(id: string): CommandResult {
   const r = resolveSession(id);
-  if (!r) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话 "${id}" 不存在（pit session ls 查看）` } };
-  const detail = Object.entries(r.detail).map(([k, v]) => `  ${k}: ${v}`).join("\n");
-  return { ok: true, message: `  会话 ${r.id}\n  状态: ${r.summary}\n${detail}` };
+  if (!r.ok) {
+    return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在（pit session ls 查看）` } };
+  }
+  const rec = r.record;
+  const detail = Object.entries(rec.detail).map(([k, v]) => `  ${k}: ${v}`).join("\n");
+  return { ok: true, message: `  会话 ${rec.id}\n  状态: ${rec.summary}\n${detail}` };
 }
 
 // ─── fork / clone / transfer（委托 operateSession）────────────
@@ -90,8 +94,11 @@ export function execSessionBranch(id: string, args: string[]): CommandResult {
   if (!flags.at && flags["list-nodes"] !== "true") {
     return { ok: false, message: "", error: { code: "USAGE", message: "用法: pit session branch <id> --at <nodeId> [--template <tpl>]\n  列出节点: pit session branch <id> --list-nodes" } };
   }
-  const record = resolveSession(id);
-  if (!record) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话 "${id}" 不存在` } };
+  const r = resolveSession(id);
+  if (!r.ok) {
+    return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在` } };
+  }
+  const record = r.record;
   if (flags["list-nodes"] === "true") {
     const file = listNodesFor(record.id);
     if (!file) return { ok: false, message: "", error: { code: "NODE_NOT_FOUND", message: "无法读取会话节点" } };
@@ -117,37 +124,61 @@ export function execSessionTree(args: string[]): CommandResult {
 
 // ─── resume（仅 pi 纸带会话可恢复）────────────────────────────
 
-export async function execSessionResume(id: string, args: string[]): Promise<CommandResult> {
-  const { flags } = parseFlags(args);
-  const r = resolveSession(id);
-  if (!r) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话 "${id}" 不存在` } };
+/** resume 前置校验（纯函数，可测）：非 pi → NOT_SUPPORTED；运行中 → ALREADY_RUNNING（防双写者） */
+export function assertResumable(r: SessionRecord): CommandResult | null {
   if (r.workloop !== "pi") {
     return { ok: false, message: "", error: { code: "NOT_SUPPORTED", message: `会话类型（${r.workloop}）不支持 resume——只有纸带（pi 会话）可恢复` } };
   }
+  if (r.status === "running") {
+    return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${r.id.slice(0, 8)}… 正在运行，请直接接入：pit attach <name>` } };
+  }
+  return null;
+}
+
+export async function execSessionResume(id: string, args: string[]): Promise<CommandResult> {
+  const { flags } = parseFlags(args);
+  const r = resolveSession(id);
+  if (!r.ok) {
+    return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在` } };
+  }
+  const rec = r.record;
+  const guard = assertResumable(rec);
+  if (guard) return guard;
   const cfg = loadConfig();
-  const tpl = cfg.templates[r.templateId] ?? {};
+  const tpl = cfg.templates[rec.templateId] ?? {};
   const { buildPiLaunch } = await import("../launcher.js");
   // 会话 cwd 跟随纸带原 cwd（避免 pi 将纸带判为跨项目会话而弹 fork 询问）
   const { parseSessionHeader, scanSessionFiles } = await import("../session/pi-scan.js");
   let workspaceCwd: string | undefined;
   try {
-    const f = scanSessionFiles(cfg).find((x) => x.id === r.id);
+    const f = scanSessionFiles(cfg).find((x) => x.id === rec.id);
     if (f) {
       const first = (await (await import("node:fs/promises")).readFile(f.file, "utf-8")).split("\n", 1)[0] ?? "";
       const h = parseSessionHeader(first);
       if (h?.cwd) workspaceCwd = h.cwd;
     }
   } catch { /* 读不到则用模板 workspace 兜底 */ }
-  const launch = await buildPiLaunch(r.templateId, {
+  const launch = await buildPiLaunch(rec.templateId, {
     provider: tpl.provider, model: tpl.model, thinking: tpl.thinking, tools: tpl.tools, excludeTools: tpl.excludeTools,
-    resumeSession: r.id,
+    resumeSession: rec.id,
     ...(workspaceCwd ? { workspaceCwd } : {}),
   });
-  const name = flags.name || `${getTemplateAlias(r.templateId, cfg)}-${Date.now().toString(36)}`;
-  const { startPitSession } = await import("../tmux.js");
+  const name = flags.name || `${getTemplateAlias(rec.templateId, cfg)}-${Date.now().toString(36)}`;
+  const { startPitSession, getPanePid } = await import("../tmux.js");
+  const { markStarted } = await import("../session-registry.js");
+  const { resolveDataDir } = await import("../config.js");
   const result = startPitSession(launch, name, true);
   if (result.status === 0) {
-    return { ok: true, message: `✅ 已后台恢复会话 ${r.id.slice(0, 8)}…\n接入: pit attach ${name}`, data: { name } };
+    markStarted({
+      name,
+      templateId: rec.templateId,
+      model: tpl.model, provider: tpl.provider, thinking: tpl.thinking,
+      extraArgs: [],
+      startedAt: Date.now(),
+      pid: getPanePid(result.session),
+      sessionId: rec.id, // 记录纸带 → restore 可精确恢复
+    }, resolveDataDir(cfg));
+    return { ok: true, message: `✅ 已后台恢复会话 ${rec.id.slice(0, 8)}…\n接入: pit attach ${name}`, data: { name } };
   }
   return { ok: false, message: "", error: { code: "START_FAILED", message: `启动失败: ${result.stderr}` } };
 }
