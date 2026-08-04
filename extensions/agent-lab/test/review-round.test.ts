@@ -429,6 +429,10 @@ test("流标：激活 2 < 3 → shortfall + 重试计数 + 已接单 2 人退还
     assert.equal(balance, 1112, `${r} 余额应为 1112`);
   }
 
+  // I3 资金守恒：pub-1 被扣 (stakeR 10 + allowance 2) × 2 人 = 24（补偿从 escrow 出，非凭空）
+  // pub-1：初始 1000 + credit 1000 = 2000，退款后 = 1976
+  assert.equal(ledger.balance("pub-1"), 1976, "publisher 应被扣 24（退款资金守恒）");
+
   db.close();
 });
 
@@ -469,6 +473,11 @@ test("重试 2 次仍流标 → operator 兜底标记（R=operator 评价，单�
   };
   effectsDeps.store.createTask(task);
 
+  // 真实冻结 r1（I5 真驱动：第 3 轮必须释放这笔冻结——原断言对无冻结者恒过）
+  freezeBid(ledger, "r1", task.taskId, task.stakeR, task.oddsR); // frozen 10
+  const frozenBefore = db.prepare(`SELECT frozen FROM credits WHERE agent = ?`).get("r1") as { frozen: number };
+  assert.equal(frozenBefore.frozen, 10);
+
   const reviewRefundFn = effectsRegistry.resolve("market.review_refund");
   assert.ok(reviewRefundFn);
 
@@ -496,6 +505,9 @@ test("重试 2 次仍流标 → operator 兜底标记（R=operator 评价，单�
   assert.equal(r3.operatorFallback, true);
   // 第 3 轮释放冻结（I5）但不付补偿——refundedReviewers 含已释放者，但无 stake_r 退款
   assert.deepEqual(r3.refundedReviewers, ["r1"]); // 冻结已释放（I5 修复）
+  // I5 真断言：r1 冻结已释放（frozen 10 → 0），余额恢复冻结额
+  const frozenAfter = db.prepare(`SELECT frozen FROM credits WHERE agent = ?`).get("r1") as { frozen: number };
+  assert.equal(frozenAfter.frozen, 0, "第 3 轮兜底后 r1 冻结应释放（I5）");
 
   db.close();
 });
