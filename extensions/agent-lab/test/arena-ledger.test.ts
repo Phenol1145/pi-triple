@@ -267,3 +267,61 @@ test("unfreeze rolls back on post-BEGIN failure and leaves freeze row intact", (
   assert.ok(freezeRow);
   assert.equal(freezeRow.amount, 300);
 });
+
+// ── Task 4a：复用版 transaction（嵌套复用）──
+test("transaction 嵌套复用：外层事务内再调 transaction 不抛错", () => {
+  const { ledger } = mk();
+  ledger.ensureEndowed("m/a", model("m/a")); // 1000
+  const result = ledger.transaction(() => {
+    ledger.credit("m/a", 50, "outer");
+    const inner = ledger.transaction(() => {
+      ledger.credit("m/a", 25, "inner");
+      return "inner-ok";
+    });
+    return { inner };
+  });
+  assert.equal(result.inner, "inner-ok");
+  assert.equal(ledger.balance("m/a"), 1075);
+});
+
+test("transaction 嵌套复用：debitUnclamped/freeze 在外层事务内正常", () => {
+  const { ledger } = mk();
+  ledger.ensureEndowed("m/a", model("m/a")); // 1000
+  ledger.transaction(() => {
+    ledger.debitUnclamped("m/a", 100, "unclamped-in-tx");
+    const ok = ledger.freeze("m/a", 200, "t1");
+    assert.equal(ok, true);
+  });
+  assert.equal(ledger.balance("m/a"), 700);
+  assert.equal(ledger.unfreeze("m/a", "t1"), 200);
+  assert.equal(ledger.balance("m/a"), 900);
+});
+
+test("transaction 外层异常 → ROLLBACK 全部", () => {
+  const { ledger } = mk();
+  ledger.ensureEndowed("m/a", model("m/a")); // 1000
+  assert.throws(() =>
+    ledger.transaction(() => {
+      ledger.credit("m/a", 500, "will-rollback");
+      throw new Error("boom");
+    }),
+    /boom/,
+  );
+  assert.equal(ledger.balance("m/a"), 1000);
+});
+
+test("transaction 嵌套内异常 → 内外均回滚", () => {
+  const { ledger } = mk();
+  ledger.ensureEndowed("m/a", model("m/a")); // 1000
+  assert.throws(() =>
+    ledger.transaction(() => {
+      ledger.credit("m/a", 100, "outer-partial");
+      ledger.transaction(() => {
+        ledger.credit("m/a", 200, "inner-partial");
+        throw new Error("inner-boom");
+      });
+    }),
+    /inner-boom/,
+  );
+  assert.equal(ledger.balance("m/a"), 1000);
+});

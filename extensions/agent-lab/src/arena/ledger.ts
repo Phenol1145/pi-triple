@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS arena_freezes (
 export class SqliteLedger implements Ledger {
   private db: DatabaseSync;
   private endowment: EndowmentPolicy;
+  private _inTransaction = false;
   constructor(db: DatabaseSync, endowment: EndowmentPolicy, resolveAgentId?: (v: string) => string | undefined) {
     this.db = db;
     this.endowment = endowment;
@@ -123,20 +124,37 @@ export class SqliteLedger implements Ledger {
     this.recordTx(a, -actual, reason, taskId, round, templateId);
   }
   /**
+   * 复用版事务包装：已在事务中则直接执行（嵌套复用）；否则 BEGIN/COMMIT/ROLLBACK。
+   * 供市场结算 effect 的整体原子性使用（Task 4 协调者裁决——repository.ts 的
+   * transaction() 是防嵌套抛错版，此处需要复用版）。
+   */
+  transaction<T>(fn: () => T): T {
+    if (this._inTransaction) {
+      return fn();
+    }
+    this._inTransaction = true;
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const result = fn();
+      this.db.exec("COMMIT");
+      return result;
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    } finally {
+      this._inTransaction = false;
+    }
+  }
+  /**
    * 借记但不夹紧到 [0, balance]：允许负余额。用于池/系统内部资金路径（central-pool 等）。
    * 单事务包裹；金额可以为任意非负数（调用方校验）。
    */
   debitUnclamped(a: AgentId, amt: number, reason: string, taskId?: string, round?: number, templateId?: string): void {
-    this.db.exec("BEGIN IMMEDIATE");
-    try {
+    this.transaction(() => {
       this.ensureRow(a, templateId);
       this.db.prepare(`UPDATE credits SET balance = balance - ?, updated_ts = ? WHERE agent = ?`).run(amt, this.now(), a);
       this.recordTx(a, -amt, reason, taskId, round, templateId);
-      this.db.exec("COMMIT");
-    } catch (e) {
-      this.db.exec("ROLLBACK");
-      throw e;
-    }
+    });
   }
   /**
    * 冻结指定账户的信用额以锁定任务 stake。
@@ -145,49 +163,43 @@ export class SqliteLedger implements Ledger {
    */
   freeze(a: AgentId, amt: number, taskId: string): boolean {
     this.ensureRow(a);
-    this.db.exec("BEGIN IMMEDIATE");
     try {
-      // INSERT OR IGNORE: idempotent — if the same taskId is already frozen, skip the atomic guard.
-      const ins = this.db.prepare(`INSERT OR IGNORE INTO arena_freezes (task_id, agent, amount, created_ts) VALUES (?, ?, ?, ?)`);
-      const insResult = ins.run(taskId, a, amt, this.now());
-      if (insResult.changes === 0) {
-        this.db.exec("COMMIT");
-        return true; // already frozen, idempotent success
-      }
-      // Atomic guard: only deduct if balance is sufficient.
-      const upd = this.db.prepare(`UPDATE credits SET balance = balance - ?, frozen = frozen + ?, updated_ts = ? WHERE agent = ? AND balance >= ?`);
-      const updResult = upd.run(amt, amt, this.now(), a, amt);
-      if (updResult.changes === 0) {
-        // Insufficient balance — roll back the entire transaction (including the INSERT).
-        this.db.exec("ROLLBACK");
+      return this.transaction(() => {
+        // INSERT OR IGNORE: idempotent — if the same taskId is already frozen, skip the atomic guard.
+        const ins = this.db.prepare(`INSERT OR IGNORE INTO arena_freezes (task_id, agent, amount, created_ts) VALUES (?, ?, ?, ?)`);
+        const insResult = ins.run(taskId, a, amt, this.now());
+        if (insResult.changes === 0) {
+          return true; // already frozen, idempotent success
+        }
+        // Atomic guard: only deduct if balance is sufficient.
+        const upd = this.db.prepare(`UPDATE credits SET balance = balance - ?, frozen = frozen + ?, updated_ts = ? WHERE agent = ? AND balance >= ?`);
+        const updResult = upd.run(amt, amt, this.now(), a, amt);
+        if (updResult.changes === 0) {
+          // Insufficient balance — throw triggers ROLLBACK (incl. the INSERT), caught below → false.
+          throw Object.assign(new Error("freeze: insufficient balance"), { insufficientBalance: true });
+        }
+        return true;
+      });
+    } catch (e) {
+      if ((e as { insufficientBalance?: boolean }).insufficientBalance) {
         return false;
       }
-      this.db.exec("COMMIT");
-      return true;
-    } catch (e) {
-      this.db.exec("ROLLBACK");
       throw e;
     }
   }
   unfreeze(a: AgentId, taskId: string): number {
     // 单事务包裹（M-R4-3）：SELECT→UPDATE→DELETE 原子，崩溃/异常不产生部分状态。
-    this.db.exec("BEGIN IMMEDIATE");
-    try {
+    return this.transaction(() => {
       const freezeRow = this.db.prepare(`SELECT amount FROM arena_freezes WHERE task_id = ? AND agent = ?`).get(taskId, a) as { amount: number } | undefined;
       if (!freezeRow) {
-        this.db.exec("COMMIT");
         return 0; // idempotent: no freeze row
       }
       const amt = freezeRow.amount;
       // Unfreeze: add back to balance, subtract from frozen (clamped ≥ 0).
       this.db.prepare(`UPDATE credits SET balance = balance + ?, frozen = MAX(frozen - ?, 0), updated_ts = ? WHERE agent = ?`).run(amt, amt, this.now(), a);
       this.db.prepare(`DELETE FROM arena_freezes WHERE task_id = ? AND agent = ?`).run(taskId, a);
-      this.db.exec("COMMIT");
       return amt;
-    } catch (e) {
-      this.db.exec("ROLLBACK");
-      throw e;
-    }
+    });
   }
   /**
    * 将已有的冻结额原子调整为 newAmount（ Task 9 escrow 两阶段用）。
@@ -195,16 +207,13 @@ export class SqliteLedger implements Ledger {
    * 不存在冻结行或余额不足以追加时抛错。
    */
   adjustFreeze(a: AgentId, taskId: string, newAmount: number): number {
-    this.db.exec("BEGIN IMMEDIATE");
-    try {
+    return this.transaction(() => {
       const row = this.db.prepare(`SELECT amount FROM arena_freezes WHERE task_id = ? AND agent = ?`).get(taskId, a) as { amount: number } | undefined;
       if (!row) {
-        this.db.exec("ROLLBACK");
         throw new Error(`adjustFreeze: no freeze row for agent=${a} task=${taskId}`);
       }
       const oldAmount = row.amount;
       if (newAmount === oldAmount) {
-        this.db.exec("COMMIT");
         return 0;
       }
       if (newAmount > oldAmount) {
@@ -212,22 +221,16 @@ export class SqliteLedger implements Ledger {
         const upd = this.db.prepare(`UPDATE credits SET balance = balance - ?, frozen = frozen + ?, updated_ts = ? WHERE agent = ? AND balance >= ?`);
         const updResult = upd.run(extra, extra, this.now(), a, extra);
         if (updResult.changes === 0) {
-          this.db.exec("ROLLBACK");
           throw new Error(`adjustFreeze: insufficient balance to increase freeze for agent=${a} task=${taskId}`);
         }
         this.db.prepare(`UPDATE arena_freezes SET amount = ? WHERE task_id = ? AND agent = ?`).run(newAmount, taskId, a);
-        this.db.exec("COMMIT");
         return -extra;
       }
       const delta = oldAmount - newAmount;
       this.db.prepare(`UPDATE credits SET balance = balance + ?, frozen = MAX(frozen - ?, 0), updated_ts = ? WHERE agent = ?`).run(delta, delta, this.now(), a);
       this.db.prepare(`UPDATE arena_freezes SET amount = ? WHERE task_id = ? AND agent = ?`).run(newAmount, taskId, a);
-      this.db.exec("COMMIT");
       return delta;
-    } catch (e) {
-      this.db.exec("ROLLBACK");
-      throw e;
-    }
+    });
   }
   leaderboard(): { agent: AgentId; balance: number }[] {
     const rows = this.db.prepare(`SELECT agent, balance FROM credits ORDER BY balance DESC, agent ASC`).all() as { agent: string; balance: number }[];
