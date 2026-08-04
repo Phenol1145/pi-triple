@@ -36,6 +36,14 @@ export class CalibrationPool {
     const idx = Math.min(this.tasks.length - 1, Math.floor(rng() * this.tasks.length));
     return this.tasks[idx];
   }
+
+  /**
+   * 按 taskId 取回校准任务（只读）。Task 11 集成需要：announce 只返回
+   * { taskId, isCalibration }，不暴露 groundTruthScore——runner/结算侧按 taskId 回查。
+   */
+  find(taskId: string): CalibrationTask | undefined {
+    return this.tasks.find((t) => t.taskId === taskId);
+  }
 }
 
 /**

@@ -106,18 +106,22 @@ function persistTask(deps: MarketEffectsDeps, args: Record<string, unknown>): { 
   };
   if (args.groundTruth !== undefined) task.groundTruth = String(args.groundTruth);
 
-  // 幂等：任务已存在 → skip（不重复冻结 escrow）。
-  // 原子性：createTask + freezeEscrowMax 整体事务（余额不足抛错 → 任务行回滚不落库）。
-  const frozen = deps.ledger.transaction(() => {
-    if (!deps.store.createTask(task)) {
-      return true; // 已存在 → skip
-    }
-    // 发布托管：escrow_max 冻结（余额不足抛错——整体回滚，任务行不落库）。
+  // 幂等：任务已存在且冻结已应用 → skip（不重复冻结 escrow）。
+  // Task 11 集成适配（plan §5.1 图——persist_task 才是"任务落库 + escrow_max 冻结"节点）：
+  // announce（Task 2 code fn）自带 createTask 预建任务行——行已存在时不能整体 skip，
+  // 否则 escrow 永不冻结（组合缺口）。freeze 本身幂等（ledger.freeze INSERT OR IGNORE——
+  // 同 (taskId, agent) 重复冻结不重复扣款），故行存在但冻结缺失（announce 路径）时补冻结，
+  // 行+冻结均已存在（重试）时 freeze 返回 true 不扣款 → skipped 语义保持。
+  // 原子性：createTask + freezeEscrowMax 整体事务（余额不足抛错 → 新任务行回滚不落库；
+  // announce 预建行场景行保留——发布拒绝的孤儿行由调用方清理，见 runner 报告）。
+  const created = deps.ledger.transaction(() => {
+    const inserted = deps.store.createTask(task);
+    // 发布托管：escrow_max 冻结（余额不足抛错——整体回滚，新任务行不落库）。
     // 校准任务经 escrowParamsOfTask——stake_cal=0（无执行者 stake 项）。
     freezeEscrowMax(deps.ledger, publisherId, taskId, escrowParamsOfTask(task));
-    return false;
+    return inserted;
   });
-  if (frozen) {
+  if (!created) {
     return { ok: true, skipped: true };
   }
   deps.events.emit({
@@ -296,8 +300,15 @@ function applyElo(deps: MarketEffectsDeps, agentId: string, deltaGlobal: number)
 
 /** 便捷：凭证燃烧（执行/评审阶段的消耗由 workloop 自身发生——此处为事件化入口）。 */
 export function emitBurn(deps: { events: EconomyEventBus; voucher: VoucherPort }, agentId: string, kind: "llm" | "time" | "compute", units: number, cause: BurnCause): void {
+  // Task 11（Task 8 审查遗留）：事件补 creditCost（FIFO 历史成本）——burnHistory 追加序
+  // 取本次燃烧记录（burn 前置位计数，燃烧后末条 = 本次）。投影 currency.burn 的 burned
+  // 口径 = creditCost（与真实账本一致），不再缺省 0。
+  const before = deps.voucher.burnHistory(agentId, kind).length;
   deps.voucher.burn(agentId, kind, units, cause);
-  deps.events.emit({ kind: "currency.burn", data: { agentId, kind, units } });
+  const after = deps.voucher.burnHistory(agentId, kind);
+  const rec = after[before];
+  const creditCost = rec ? rec.creditCost : 0;
+  deps.events.emit({ kind: "currency.burn", data: { agentId, kind, units, creditCost } });
 }
 
 // ============================================================================
