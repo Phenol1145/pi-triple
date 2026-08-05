@@ -24,8 +24,8 @@ describe("resolveTuiPanel", () => {
 });
 
 describe("HUB_COMMANDS", () => {
-  it("含 submit/run/programs/dev/request/requests/respond", () => {
-    expect(HUB_COMMANDS).toEqual(["submit", "run", "programs", "dev", "request", "requests", "respond"]);
+  it("含 submit/run/programs/dev/request/requests/respond/observe", () => {
+    expect(HUB_COMMANDS).toEqual(["submit", "run", "programs", "dev", "request", "requests", "respond", "observe"]);
   });
 });
 
@@ -99,6 +99,7 @@ describe("cmdHub", () => {
       request: async (...a: unknown[]) => { calls.push(["request", a]); },
       requests: async (...a: unknown[]) => { calls.push(["requests", a]); },
       respond: async (...a: unknown[]) => { calls.push(["respond", a]); },
+      observe: async (...a: unknown[]) => { calls.push(["observe", a]); },
     };
     return { calls, h };
   }
@@ -154,6 +155,21 @@ describe("cmdHub", () => {
     expect(calls[0][0]).toBe("respond");
     expect(calls[0][1][0]).toEqual(["req-1", "./my-agent"]);
     expect(calls[0][1][1]).toEqual({});
+  });
+
+  it("hub observe sessions --json → handlers.observe(passthrough, flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("observe", ["sessions"], { json: "true" }, h);
+    expect(calls[0][0]).toBe("observe");
+    expect(calls[0][1][0]).toEqual(["sessions"]);
+    expect(calls[0][1][1]).toEqual({ json: "true" });
+  });
+
+  it("hub observe trace <id> → handlers.observe(passthrough, flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("observe", ["trace", "s-1"], {}, h);
+    expect(calls[0][0]).toBe("observe");
+    expect(calls[0][1][0]).toEqual(["trace", "s-1"]);
   });
 
   it("hub（无子命令）→ 打印帮助，不调用任何 handler", async () => {

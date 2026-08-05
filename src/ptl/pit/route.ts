@@ -15,6 +15,7 @@ import { cmdPrograms } from "../bridge/programs.js";
 import { cmdDev } from "../bridge/dev.js";
 import { cmdHubRequest, cmdHubRequests } from "../bridge/request.js";
 import { cmdHubRespond } from "../bridge/respond.js";
+import { cmdHubObserve } from "../bridge/observe.js";
 import { printNamespaceHelp } from "./main.js";
 
 // ─── TUI ───────────────────────────────────────────────────
@@ -31,7 +32,7 @@ export function resolveTuiPanel(subcommand: string | undefined): TuiPanel {
 
 // ─── hub ───────────────────────────────────────────────────
 
-export const HUB_COMMANDS = ["submit", "run", "programs", "dev", "request", "requests", "respond"] as const;
+export const HUB_COMMANDS = ["submit", "run", "programs", "dev", "request", "requests", "respond", "observe"] as const;
 export type HubCommand = (typeof HUB_COMMANDS)[number];
 
 // ─── deprecated（clean break：旧命令仅提示迁移）────────────────
@@ -118,6 +119,7 @@ export type HubHandlers = {
   request: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
   requests: (flags: Record<string, string>) => Promise<void>;
   respond: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  observe: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
 };
 
 export const defaultHubHandlers: HubHandlers = {
@@ -128,6 +130,7 @@ export const defaultHubHandlers: HubHandlers = {
   request: cmdHubRequest,
   requests: cmdHubRequests,
   respond: cmdHubRespond,
+  observe: cmdHubObserve,
 };
 
 /** pit hub <submit|run|programs|dev> — 分发到 bridge 命令；无/未知子命令打印命名空间帮助。 */
@@ -158,6 +161,9 @@ export async function cmdHub(
       break;
     case "respond":
       await handlers.respond(passthrough, flags);
+      break;
+    case "observe":
+      await handlers.observe(passthrough, flags);
       break;
     default:
       printNamespaceHelp("hub");

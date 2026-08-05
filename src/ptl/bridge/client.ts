@@ -30,6 +30,39 @@ export interface ProgramEntry {
   updatedAt: string;
 }
 
+/** 观测会话 meta（F/WP4 Task 21——与 pth storage/types 的 SessionMeta 同构，本地镜像类型防跨层 import） */
+export interface ObserveSession {
+  version: number;
+  sessionId: string;
+  tenantId: string;
+  project: string;
+  model: string;
+  thinkingLevel: string;
+  status: string;
+  entryCount: number;
+  lastEntrySeq: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** trace 时间线条目（F/WP4 Task 21） */
+export interface ObserveTraceEntry {
+  seq: number;
+  id: string;
+  parentId: string | null;
+  role: string;
+  content: Array<{ type: string; text?: string; [key: string]: unknown }>;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
+export interface ObserveTrace {
+  sessionId: string;
+  tenantId: string;
+  project: string;
+  entries: ObserveTraceEntry[];
+}
+
 /** fallback_requests 条目（F/WP4 Task 20） */
 export interface FallbackRequestEntry {
   requestId: string;
@@ -144,6 +177,50 @@ export class PthClient {
       await this.throwError(res, "创建回退请求失败");
     }
     return (await res.json()) as FallbackRequestEntry;
+  }
+
+  /** 观测：会话列表（F/WP4 Task 21——Redis 会话痕迹） */
+  async listObserveSessions(): Promise<ObserveSession[]> {
+    const res = await this.request("/api/v1/observe/sessions", {
+      headers: this.headers(),
+    });
+    if (!res.ok) {
+      await this.throwError(res, "获取观测会话列表失败");
+    }
+    return (await res.json()) as ObserveSession[];
+  }
+
+  /** 观测：会话详情（meta） */
+  async getObserveSession(id: string): Promise<ObserveSession> {
+    const res = await this.request(`/api/v1/observe/sessions/${encodeURIComponent(id)}`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) {
+      await this.throwError(res, "获取观测会话详情失败");
+    }
+    return (await res.json()) as ObserveSession;
+  }
+
+  /** 观测：trace 时间线（全部 entry） */
+  async getObserveTrace(id: string): Promise<ObserveTrace> {
+    const res = await this.request(`/api/v1/observe/trace/${encodeURIComponent(id)}`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) {
+      await this.throwError(res, "获取 trace 失败");
+    }
+    return (await res.json()) as ObserveTrace;
+  }
+
+  /** 观测：事件查询（EventLog 代理——WP5 Task 28 交付，当前 501） */
+  async getObserveEvents(): Promise<unknown> {
+    const res = await this.request("/api/v1/observe/events", {
+      headers: this.headers(),
+    });
+    if (!res.ok) {
+      await this.throwError(res, "获取事件失败");
+    }
+    return await res.json();
   }
 
   /** 回退请求列表（F/WP4 Task 20——open 优先） */
