@@ -9,6 +9,8 @@ import { buildPiLaunch } from "../launcher.js";
 import { startPitSession } from "../tmux.js";
 import { loadConfig, getTemplateAlias, resolveDataDir } from "../config.js";
 import { configureTmuxServer, tmuxSessionName } from "../tmux.js";
+import { WorkspaceManager } from "../../shared/workspace/manager.js";
+import { detectPlatform } from "../../shared/platform/index.js";
 import fs from "node:fs";
 
 /** pit agent run <template> <task> [--workspace temp|main] */
@@ -37,9 +39,15 @@ export async function cmdAgentRun(flags: Record<string, string>, passthrough: st
   // Agent instance UUID
   const agentId = randomUUID();
 
-  // Workspace: agents/<agentId>/{temp,main}
+  // Workspace: agents/<agentId>/{temp,main}（路径推导走 WorkspaceManager 单点——F/WP2 Task 7）
   const dataDir = resolveDataDir(config);
-  const agentDir = path.join(dataDir, "workspaces", "agents", agentId);
+  const workspaceMgr = new WorkspaceManager(
+    detectPlatform(),
+    path.join(dataDir, "workspaces"),
+    path.join(dataDir, "platform"),
+    path.join(dataDir, "tenants"),
+  );
+  const agentDir = workspaceMgr.getCwd("agents", agentId); // <base>/agents/<agentId>
   const cwd = flags.workspace === "main"
     ? path.join(agentDir, "main")
     : path.join(agentDir, "temp");
@@ -82,7 +90,13 @@ export async function cmdAgentRun(flags: Record<string, string>, passthrough: st
 export function cmdAgentClean(flags: Record<string, string>, passthrough: string[]): void {
   const config = loadConfig();
   const dataDir = resolveDataDir(config);
-  const agentsDir = path.join(dataDir, "workspaces", "agents");
+  const workspaceMgr = new WorkspaceManager(
+    detectPlatform(),
+    path.join(dataDir, "workspaces"),
+    path.join(dataDir, "platform"),
+    path.join(dataDir, "tenants"),
+  );
+  const agentsDir = workspaceMgr.getTenantWorkspaceRoot("agents");
 
   if (flags.all === "true") {
     // Clean all agents' temp

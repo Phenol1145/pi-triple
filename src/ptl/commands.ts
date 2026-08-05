@@ -30,6 +30,8 @@ import {
 import { loadRegistry, markStarted, markStopped } from "./session-registry.js";
 import { classifySession, isPidAlive } from "./session-state.js";
 import { scanSessionFiles, newestTapeId } from "./session/pi-scan.js";
+import { WorkspaceManager } from "../shared/workspace/manager.js";
+import { detectPlatform } from "../shared/platform/index.js";
 
 
 // ─── Types ───────────────────────────────────────────────────
@@ -167,9 +169,16 @@ export async function execTemplateRm(input: string): Promise<CommandResult> {
     };
   }
 
-  // Cascade delete
-  const dirs = ["pi-config", "sessions", "workspaces", "mailbox"]
+  // Cascade delete（workspaces 路径推导走 WorkspaceManager 单点——F/WP2 Task 7）
+  const workspaceMgr = new WorkspaceManager(
+    detectPlatform(),
+    path.join(dataDir, "workspaces"),
+    path.join(dataDir, "platform"),
+    path.join(dataDir, "tenants"),
+  );
+  const dirs = ["pi-config", "sessions", "mailbox"]
     .map((sub) => path.join(dataDir, sub, id))
+    .concat([workspaceMgr.getTenantWorkspaceRoot(id)])
     .filter((d) => fs.existsSync(d));
 
   const deleted: string[] = [];

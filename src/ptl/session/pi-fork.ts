@@ -10,6 +10,8 @@ import { scanSessionFiles } from "./pi-scan.js";
 import { uuidv7 } from "./uuidv7.js";
 import type { ForkOpts, BranchOpts, TransferOpts } from "./session-provider.js";
 import { resolveTemplateId, loadConfig } from "../config.js";
+import { WorkspaceManager } from "../../shared/workspace/manager.js";
+import { detectPlatform } from "../../shared/platform/index.js";
 
 interface SessionHeader {
   type: string;
@@ -46,6 +48,16 @@ function dataDirOf(source: PiSessionFile): string {
   return path.dirname(path.dirname(path.dirname(source.file)));
 }
 
+/** 目标模板工作区 cwd：<dataDir>/workspaces/<templateId>/default（路径推导走 WorkspaceManager 单点——F/WP2 Task 7） */
+function workspaceCwdOf(dataDir: string, templateId: string): string {
+  return new WorkspaceManager(
+    detectPlatform(),
+    path.join(dataDir, "workspaces"),
+    path.join(dataDir, "platform"),
+    path.join(dataDir, "tenants"),
+  ).getCwd(templateId, "default");
+}
+
 type TargetResult =
   | { ok: true; templateId: string; cwd: string; dir: string }
   | { ok: false; error: CommandResult };
@@ -80,7 +92,7 @@ function resolveTarget(source: PiSessionFile, opts: ForkOpts | TransferOpts): Ta
   fs.mkdirSync(dir, { recursive: true });
   const cwd = templateId === source.templateId
     ? source.cwd
-    : path.join(dataDirOf(source), "workspaces", templateId, "default");
+    : workspaceCwdOf(dataDirOf(source), templateId);
   return { ok: true, templateId, cwd, dir };
 }
 
