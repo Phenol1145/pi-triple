@@ -104,7 +104,7 @@
 - Modify: `src/shared/sdk-adapter/index.ts`（如需要透传 sessionDir 参数）
 - Test: `test/unit/agent-engine-session-persist.test.ts`（新建）
 
-- [ ] **Step 1: 按 S1 结论接线**——`SessionManager.create(cwd, sessionsDir/<tenantId>/<sessionId>/)`——**必须显式传 sessionDir**（评审实证：create 默认落 `~/.pi/agent/sessions/`，不传则落错卷）
+- [ ] **Step 1: 按 S1 结论接线**——`SessionManager.create(cwd, sessionsDir/<tenantId>/<sessionId>/)`——**必须显式传 sessionDir**（S1：默认落 `~/.pi/agent/sessions/`，且按 tenant 组织+可控清理）；sessions 卷路径经 config/env 注入；**懒落盘认知**（S1：首个 assistant message 才写盘——纯 user 消息窗口内 meta.entryCount 与磁盘不一致，以已落盘条数为准或接受窗口）
 - [ ] **Step 2: 测试**——创建会话→prompt（mock SDK 或最小真实会话）→会话目录 JSONL 落盘断言
 - [ ] **Step 3: 全绿** `npx vitest run test/unit/agent-engine-session-persist.test.ts` + PTL 基线
 - [ ] **Step 4: commit** `feat(pth): 会话外置①——SDK 持久化 SessionManager 接线 sessions 卷（F/WP2）`
@@ -127,7 +127,7 @@
 - Modify: `src/pth/core/agent-engine.ts`（:319 空 stub 实现化）
 - Test: `test/unit/agent-engine-recover.test.ts`（新建）
 
-- [ ] **Step 1: recoverAll 实现**——扫 Redis `pool:*` → 逐会话 revive（S1 结论的 SDK 恢复 API）→ 状态置 idle + `recovered-from-crash` 标记（原 busy 的）；失败会话标记 unrecoverable+审计
+- [ ] **Step 1: recoverAll 实现**——扫 Redis `pool:*` → 逐会话 revive（S1：`open(sessionFile, sessionDir, cwdOverride)` 精确恢复或 `continueRecent`；恢复实例传 `createAgentSession({sessionManager})`）→ 状态置 idle + `recovered-from-crash` 标记（原 busy 的一律标记 interrupted——S1：从最后完整 message 边界重建）；失败会话标记 unrecoverable+审计；恢复校验=buildSessionContext().messages.length vs meta.entryCount（S1）；**lastEntrySeq 改 lastEntryId 或废弃 seq 游标**（S1：SDK 无 seq 概念）
 - [ ] **Step 2: 竞态防护（二轮评审 Important 1）**——核实 main.ts 启动顺序（评审实证：main.ts:75 已 `await engine.recoverAll()` 先于 listen——若已先 recover 后 listen，Epoch 判定为冗余并文档化移除；若存在并发窗则 Redis Epoch：`INCR pool:epoch`+recoverAll 期间新请求拒绝）；Epoch 与锁过期重建的交互（若保留需设计）
 - [ ] **Step 3: 恢复清理（spec §3.1 第 5 条）**——workflow 锁过期重建/refCount 归零重计/pending dispatch 丢弃+审计标记（不重放）/stale busy→idle
 - [ ] **Step 4: 测试**——制造崩溃现场（写入池元状态+会话目录后杀进程语义）→ recoverAll → 断言恢复结果与清理结果
@@ -187,7 +187,7 @@
 - Modify: `src/pth/core/agent-engine.ts`（工具配置接线）
 - Test: `test/unit/sandbox-bash-forward.test.ts`（新建）
 
-- [ ] **Step 1: 按 S2 结论实现转发**——排除内建 bash+注册**同名 bash** custom tool（对外接口名统一为 bash——二轮评审硬约束）；转发客户端（HTTP→sandbox /exec，共享密钥，SSE 流式回传）
+- [ ] **Step 1: 按 S2 结论实现转发**——**仅 `customTools` 注册同名 bash**（S2：注册表后写覆盖即替换；**禁用 excludeTools+同名**——会让 bash 整体消失）；转发客户端（HTTP→sandbox /exec，共享密钥，SSE 流式回传）；**流式/持久化自管或复用 `session.executeBash/recordBashResult`**（S2：custom bash 走标准 tool_result+onUpdate，内建的 bashExecution 语义需显式复用）；adapter 显式透传 customTools
 - [ ] **Step 2: 错误语义**——sandbox 不可达→类型化错误 `sandbox-unavailable`（不静默）；超时→`sandbox-timeout`
 - [ ] **Step 3: 测试**——mock sandbox 服务→断言转发/错误/流式
 - [ ] **Step 4: commit** `feat(pth): bash 工具全量转发 sandbox（统一接口名+类型化错误，F/WP3）`
@@ -340,8 +340,9 @@
 - Modify: `src/pth/core/agent-engine.ts`（常驻会话的 ResourceLoader/extensionFactories 接线——按 S3 结论）
 - Modify: `docker-compose.yaml`（agent-lab 扩展目录卷/symlink——若 S3 选路径 a）
 
-- [ ] **Step 1: 按 S3 结论接线**（路径 a symlink 或路径 b extensionFactories）；`AGENT_LAB_DB_PATH` env 注入会话
-- [ ] **Step 2: 验证**——常驻会话内 /lab 命令可用、SchedulerRunner.dispatch 可调（最小真实 dispatch 冒烟）
+- [ ] **Step 1: 按 S3 结论接线（路径 b=extensionFactories 为主）**——agent-engine 构造 loader 后补 `await resourceLoader.reload()`（S3 关键缺口：不调则扩展加载数为 0）；sdk-adapter 增 `bindExtensions`（emit session_start——agent-lab pi.on(session_start) 依赖）；常驻会话用 `extensionFactories` 注入 agent-lab + `noExtensions:true`（防用户 agentDir 扩展泄漏）；dispose 前显式 emit session_shutdown（关 DB 防句柄泄漏）；评估跨会话复用 loader/store（S3：factory 每会话执行一次的 DB 句柄叠加）
+- [ ] **Step 2: env 注入**——`AGENT_LAB_DB_PATH`/`AGENT_LAB_CONFIG_DIR`/`PI_AGENT_INSTANCE_ID` 在 createSession 前设 process.env（S3：load 期同步读取）
+- [ ] **Step 2: 验证**——常驻会话内 agent-lab 加载断言（reload 后扩展数>0）+ SchedulerRunner.dispatch 可调（最小真实 dispatch 冒烟）+ session_start/shutdown 钩子触发断言
 - [ ] **Step 3: commit** `feat(pth): agent-lab 扩展加载进常驻系统会话（S3 路径落地，F/WP5）`
 
 ## Task 25: scheduled_jobs 表 + 定时触发器
@@ -408,11 +409,11 @@
 
 ---
 
-## Spike 结论（执行时填写）
+## Spike 结论（已执行 2026-08-05）
 
-- S1（SDK revive）：
-- S2（SDK bash 拦截）：
-- S3（SDK 扩展加载）：
+- **S1（SDK revive）：可行（含受限）**。API=`create(cwd, sessionDir?)`/`continueRecent(cwd, sessionDir?)`/`open(path, sessionDir, cwdOverride)`；恢复实例直接传 `createAgentSession({sessionManager})`。**懒落盘**（首个 assistant message 才写盘——纯 user 消息+崩溃丢该轮，接受）；**SDK 无 seq 概念**（PTH 的 lastEntrySeq 是平台侧 Redis 游标，与 SDK 解耦——对齐改 lastEntryId 或 JSONL 为唯一事实源）；恢复=从最后完整 message 边界重建（in-flight 不持久化）。**Task 4/6 调整**：create 显式传 sessionDir（按 tenant 组织）；recoverAll 的 busy 会话一律标记 interrupted；恢复校验=buildSessionContext().messages.length vs meta.entryCount；lastEntrySeq→lastEntryId 或废弃。
+- **S2（SDK bash 拦截）：可行**。`customTools` 注册同名 bash 即覆盖（注册表后写覆盖）；**陷阱：`excludeTools`+custom 同名会让 bash 整体消失（禁用该写法）**；`noTools:"builtin"`+custom bash=内建全关 custom 保留 ✓；行为差异：内建 bash 的 bashExecution 消息/streaming 在 custom 下走标准 tool_result+onUpdate——拦截层自管流式/持久化或复用 `session.executeBash/recordBashResult`。**Task 11 调整**：仅 customTools 同名注册（不用 excludeTools）；adapter 显式透传 customTools。
+- **S3（SDK 扩展加载）：两路径均可行，推荐 b（extensionFactories）**。**关键缺口：pth 当前不调 `loader.reload()`→扩展加载数为 0**（sdk.js 只在自建 loader 时代调 reload）；**`session_start` 不触发**（sdk-adapter 从不调 bindExtensions——agent-lab 的 pi.on(session_start) 永不执行）；**`session_shutdown` 不触发**（dispose 不发——SQLite 句柄泄漏）。**Task 23/24 调整**：agent-engine 补 `await resourceLoader.reload()`；sdk-adapter 增 `bindExtensions`（emit session_start）；常驻会话用 `extensionFactories` 注入 agent-lab + `noExtensions:true`（防用户 agentDir 扩展泄漏）；dispose 前显式 emit session_shutdown（关 DB）；评估跨会话复用 loader/store（factory 每会话执行一次的 DB 句柄叠加问题）；config-io 实际路径=extensions/agent-lab/src/config-io.ts:15-29。
 
 ## 附录 B：S3 失败时的备用任务（选项 B——pth 直接 import agent-lab）
 
