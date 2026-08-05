@@ -1,0 +1,42 @@
+# ---- Builder stage ----
+FROM node:22-slim AS builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json tsconfig.json ./
+RUN npm ci
+
+COPY src/ ./src/
+RUN npx tsc
+
+# ---- Runtime stage ----
+# sandbox：隔离命令执行容器。安全边界：
+#   - 非 root（USER node）
+#   - egress 锁定：compose 仅挂 internal 网络（本镜像不暴露任何出网路径；curl 仅供 healthcheck 内网探测）
+#   - 共享密钥经 compose env 注入（SANDBOX_SHARED_SECRET），不镜像硬编码
+#   - bash 安装说明（F/WP3 Task 10 适配）：exec API 字符串 cmd 以 `bash -lc` 执行
+#     （pth bash 工具转发 shell 命令字符串需要 bash 语义；slim 基础镜像仅含 sh）
+FROM node:22-slim
+
+RUN apt-get update && apt-get install -y curl bash && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENV DATA_DIR=/data
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/dist ./dist
+
+# 工作区共享卷（compose：workspaces → /data/workspaces，与 pth 同卷同路径——Task 12 约定）
+RUN mkdir -p /data/workspaces && chown -R node:node /data/workspaces /app
+
+USER node
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["node", "dist/sandbox/main.js"]
