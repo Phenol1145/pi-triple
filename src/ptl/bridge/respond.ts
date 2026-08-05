@@ -53,7 +53,12 @@ export async function cmdHubRespond(passthrough: string[], _flags: Record<string
       requestId,
     );
     console.log(`  \x1b[32m✅ 已提交为 v${result.version}\x1b[0m  (${(result.bytes / 1024).toFixed(1)} KB)`);
-    console.log(`  \x1b[32m✅ 回退请求 ${requestId} 已闭合\x1b[0m`);
+    if (result.closeWarning) {
+      // 评审 WP4-R1 I-2 修复：闭合失败不再无条件宣称成功
+      console.log(`  \x1b[33m⚠️ 构件已保存，但回退请求闭合失败: ${result.closeWarning}\x1b[0m`);
+    } else if (result.closedRequest) {
+      console.log(`  \x1b[32m✅ 回退请求 ${result.closedRequest} 已闭合\x1b[0m`);
+    }
   } catch (err: any) {
     console.log(`  \x1b[31m❌ 提交失败: ${err.message}\x1b[0m`);
     process.exit(1);

@@ -18,6 +18,9 @@ export interface SubmitResponse {
   name: string;
   version: number;
   bytes: number;
+  /** respond 关联闭合信息（评审 WP4-R1 I-2：PTL 需感知闭合结果，不得无条件宣称成功） */
+  closedRequest?: string;
+  closeWarning?: string;
 }
 
 /** Programs 列表条目 */
