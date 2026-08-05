@@ -79,6 +79,8 @@ export type ModelRuntimeInstance = Awaited<ReturnType<typeof SdkModelRuntime.cre
 
 // ─── SessionManager 透传 ──────────────────────────────────────
 export const SessionManager = SdkSessionManager;
+/** SessionManager 实例类型（SDK 构造器 private，供类型标注用） */
+export type SessionManager = SdkSessionManager;
 
 // ─── 版本信息 ─────────────────────────────────────────────────
 export const SDK_ADAPTER_VERSION = "1.0.0";
