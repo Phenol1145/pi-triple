@@ -1,8 +1,8 @@
 # F 阶段架构设计：容器化 / PTL 架构更新 / 联邦触发机制
 
-**版本**：v0.2（草案——首轮对抗性评审修订）
-**状态**：设计草案，待评审收敛
-**日期**：2026-08-05（v0.2 修订）
+**版本**：v0.2（评审通过版——首轮对抗性评审修订后收敛）
+**状态**：✅ **已实施**（2026-08-05 F 阶段完成——WP1-WP5 全部落地；见 runbook `docs/superpowers/runbooks/2026-08-05-containerized-federation.md`）
+**日期**：2026-08-05（v0.2 修订 + 实施完成）
 **前置**：`docs/superpowers/specs/2026-08-05-federation-skeleton-design.md`（联邦骨架 v1.0——概念锚点）、`docs/pth/architecture.md`、`docs/ptl/architecture.md`、`extensions/agent-lab/docs/framework-vs-construction.md`
 **输入裁决**（2026-08-05 用户确认）：①单实例优先+会话外置设计（多副本列为演进路径）+工作区分离；②**所有代码执行全部沙箱化**（唯一 sandbox 容器）；自修改=沙箱内跑 PTL 调试；③PTL 保持本机 tmux 工具+hub 渐进扩展为完整联邦交互层；④定时/事件=架构+框架层最小实现。**首轮评审后补充裁决**：⑤legalAuth=声明式（仅登记+审计，不拦截）；⑥回退请求=手动建单先行（自动触发留 E）；⑦sandbox 不持 LLM 密钥（自修改调试按需临时注入）；⑧定时/事件接线=**常驻系统会话承载**（选项 C——agent-lab 零适配，system-governor 实例化雏形；SDK 会话扩展加载 spike 兜底退 pth 直接 import）。
 
