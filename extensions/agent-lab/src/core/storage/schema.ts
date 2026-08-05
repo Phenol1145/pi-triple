@@ -119,4 +119,25 @@ CREATE TABLE IF NOT EXISTS lab_proposals (
   promoted_round_id TEXT,
   created_at INTEGER NOT NULL
 );
+
+-- F/WP5 §6.1: 定时触发任务表（含 tenantId——多租户共享 DB 的租户隔离）。
+-- 注意：表名按 spec/plan 逐字为 scheduled_jobs（偏离 lab_* 前缀惯例——spec 为契约）。
+CREATE TABLE IF NOT EXISTS scheduled_jobs (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  task_type TEXT NOT NULL,
+  schedule_kind TEXT NOT NULL CHECK(schedule_kind IN ('cron', 'at', 'interval')),
+  schedule_spec TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('active', 'paused', 'done', 'cancelled')),
+  next_fire_at INTEGER NOT NULL,
+  last_fire_at INTEGER,
+  fire_count INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT NOT NULL,
+  legal_ref TEXT,
+  created_ts INTEGER NOT NULL,
+  updated_ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_due ON scheduled_jobs(status, next_fire_at);
+CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_tenant ON scheduled_jobs(tenant_id, id);
 `;
