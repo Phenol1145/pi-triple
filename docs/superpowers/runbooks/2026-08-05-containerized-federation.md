@@ -215,6 +215,8 @@ docker compose down && docker compose up -d         # 构件/会话/agent-dir �
 
 **定位**：提供给 PTL（外接工具环境）与用户（开发/学习研究）共用——sandbox=运行产物中间态，dev=开发/成品保留。非开源工具（kimiim-cli/obsidian 等 Mach-O）保留本机。
 
+> 📖 **新工具迁移指南**：把新工具放进 dev 的完整流程（放置决策树/临时 vs 永久安装/wrapper/密钥/产物流向/坑）见 `docs/superpowers/dev-container-tool-guide.md`。
+
 ### 启动 / 使用
 
 ```bash
