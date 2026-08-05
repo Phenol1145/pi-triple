@@ -420,3 +420,15 @@
 - B1：pth package 依赖声明 agent-lab 框架层（core/scheduler——不含 pi 扩展胶水层）；分层例外文档化（framework-vs-construction.md 修订——平台层可引框架层纯模块）
 - B2：timed-trigger/订阅派发器改为 pth 进程内直接实例化（无常驻会话——RESERVED 机制保留用于其他用途或删除）
 - B3：其余 Task（25-28）不变（触发源换成 pth 直接调用）
+
+---
+
+## 附录 C：模型路由事故记录（2026-08-05）
+
+**现象**：SDD 执行中 subagent 间歇性跑偏到 OpenRouter 免费模型（ling-3.0-flash/gemma-4/nemotron），指定模型（deepseek/deepseek-v4-flash）被替换；免费额度（50/天）耗尽后 429 中断（WP1 Task 3 执行中途失败）。
+
+**根因**：agent-lab interceptor（`src/interceptor/register.ts:21-47`）注册 `tool_call` 钩子拦截所有 subagent 调用；租户级配置 `scheduler.enabled=true`（`~/.pi-triple/data/pi-config/<tenant>/agent-lab/config.json`）使 WeightedScorer 从 arena 池（lab_agent_instances 表 default-weighted-scorer 实例，15 个模型含多个免费模型）选模型并改写 `input.model`。间歇性=scorer apply/skip 分支。
+
+**处置（用户裁决 2026-08-05）**：暂时全局关闭该钩子——`scheduler.enabled=false`（租户 config.json 已改 + `/lab config scheduler.enabled false` 运行时生效）。arena 推荐实验路径保留代码，仅关闭生产会话的模型改写。
+
+**教训**：SDD 派发后应抽查 meta.json 的 `model`/`attemptedModels` 字段确认实际执行模型（本次 ling/gemma 完成的 spike/Task 1-2 质量事后验证过关——实证产物真实、代码正确）。
