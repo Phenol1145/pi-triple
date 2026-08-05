@@ -21,7 +21,8 @@
     "pth:start": "node dist/pth/main.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "monitor": "node tools/docker-monitor/server.js"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "^0.82.1",
