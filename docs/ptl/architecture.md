@@ -132,6 +132,8 @@ pit start --template local
 
 详见 `src/ptl/shared-layer.ts`。
 
+> ⚠️ 注意：`ensureTemplateLinks` 在每次启动时补链——共享层条目 = 全模板全局，删 symlink 会复活，按模板排除需移出共享层。新建/挂载/卸载技能与扩展的操作规范见 [创作指南](./authoring.md)。
+
 ## ~/.pi-triple 数据布局
 
 ```

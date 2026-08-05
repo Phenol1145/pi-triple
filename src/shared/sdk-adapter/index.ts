@@ -124,5 +124,14 @@ export type SessionManager = SdkSessionManager;
 // ─── 版本信息 ─────────────────────────────────────────────────
 export const SDK_ADAPTER_VERSION = "1.0.0";
 
-/** 记录当前适配的 SDK 版本范围（与 package.json 保持一致） */
+/**
+ * 记录当前适配的 SDK 版本范围（与 package.json 保持一致）。
+ *
+ * SDK 升级检查清单：
+ *   1. 适配层 API 变更 → 修本文件 + 跑测试（已知边界）
+ *   2. 文档约定复检 → diff 新旧版 docs/skills.md "Locations" 段与
+ *      docs/extensions.md "Extension Locations" 段；有变化则同步更新
+ *      docs/ptl/authoring.md（技能/扩展放置规范）
+ *   3. pit doctor + pit shared status 验证挂载链路
+ */
 export const SDK_COMPAT_RANGE = "^0.82.1";

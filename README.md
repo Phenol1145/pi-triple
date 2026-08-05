@@ -9,7 +9,7 @@
 | **运行时** | pi 进程 × tmux | AgentEngine + Redis + BullMQ |
 | **适用** | 本地工作站 · 交互式调试 · 个人/小组 | 服务器部署 · 程序化 API · 集中治理 |
 | **来源** | `src/ptl/` | `src/pth/` |
-| **文档** | [PTL 架构](./docs/ptl/architecture.md) | [PTH 架构](./docs/pth/architecture.md) |
+| **文档** | [PTL 架构](./docs/ptl/architecture.md) · [创作指南](./docs/ptl/authoring.md) | [PTH 架构](./docs/pth/architecture.md) |
 
 > **SDK 兼容性**：所有 pi SDK 调用通过 `src/shared/sdk-adapter/` 适配层隔离。升级 SDK 时只需修改适配层 + 跑测试，业务代码不受影响。当前适配 `@earendil-works/pi-coding-agent@^0.82.1`。
 
@@ -55,7 +55,7 @@ pit tui lab                    # 模型调试 TUI
 | `pit doctor` / `pit onboard` | 环境诊断 / 首次导引 |
 | `pit install --shared <pkg>` | 安装共享扩展 |
 
-详见 [PTL 架构](./docs/ptl/architecture.md)。
+详见 [PTL 架构](./docs/ptl/architecture.md)。新建技能/扩展的放置与挂载规范见 [创作指南](./docs/ptl/authoring.md)。
 
 ## PTH 服务器模式
 
