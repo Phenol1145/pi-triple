@@ -315,7 +315,11 @@ export class SubscriptionDispatcher {
         eventType: "subscription.dispatch.failed",
         schemaVersion: "1",
         timestamp: this.nowFn(),
-        identity: { traceId: event.identity.traceId },
+        identity: {
+        traceId: event.identity.traceId,
+        // 评审 WP5-R2 I-1：订阅派发审计带租户归属（继承来源事件/subscription）
+        ...(event.identity.tenantId ?? sub?.tenantId ? { tenantId: event.identity.tenantId ?? sub?.tenantId } : {}),
+      },
         payload: {
           eventId: event.eventId,
           subscriptionId: sub?.id,
@@ -340,7 +344,11 @@ export class SubscriptionDispatcher {
         eventType,
         schemaVersion: "1",
         timestamp: this.nowFn(),
-        identity: { traceId: event.identity.traceId },
+        identity: {
+        traceId: event.identity.traceId,
+        // 评审 WP5-R2 I-1：订阅派发审计带租户归属（继承来源事件/subscription）
+        ...(event.identity.tenantId ?? sub?.tenantId ? { tenantId: event.identity.tenantId ?? sub?.tenantId } : {}),
+      },
         payload,
       });
     } catch {

@@ -149,6 +149,7 @@ export class EventLog {
 
   query(filter: {
     traceId?: string;
+    tenantId?: string;
     eventType?: string;
     schedulerInstanceId?: string;
     since?: number;
@@ -163,6 +164,11 @@ export class EventLog {
     if (filter.traceId) {
       conditions.push("trace_id = ?");
       params.push(filter.traceId);
+    }
+    if (filter.tenantId) {
+      // 评审 WP5-R2 I-1：跨租户事件隔离——按 identity_json 的 tenantId 过滤
+      conditions.push("json_extract(identity_json, '$.tenantId') = ?");
+      params.push(filter.tenantId);
     }
     if (filter.eventType) {
       conditions.push("event_type = ?");

@@ -194,7 +194,11 @@ export function wireSystemEvents(deps: SystemEventsDeps): SystemEventsHandle {
       eventType: raw.eventType,
       schemaVersion: "1",
       timestamp: typeof raw.receivedAt === "number" ? raw.receivedAt : nowFn(),
-      identity: { traceId: `external:${eventId}` },
+      identity: {
+        traceId: `external:${eventId}`,
+        // 评审 WP5-R2 I-1：外部事件带租户归属（webhook 层已绑定 req.auth.tenantId）
+        ...(typeof raw.tenantId === "string" ? { tenantId: raw.tenantId } : {}),
+      },
       payload: (raw.payload ?? {}) as Record<string, unknown>,
     };
     const core = await ensureWired();
@@ -227,6 +231,7 @@ export function wireSystemEvents(deps: SystemEventsDeps): SystemEventsHandle {
       try {
         const filter = (raw?.filter ?? {}) as {
           eventType?: string;
+          tenantId?: string;
           since?: number;
           until?: number;
           limit?: number;

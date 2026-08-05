@@ -544,7 +544,11 @@ export class TimedTrigger {
         eventType,
         schemaVersion: "1",
         timestamp: now,
-        identity: { traceId: `scheduled:${job.id}:${job.fireCount + 1}` },
+        identity: {
+          traceId: `scheduled:${job.id}:${job.fireCount + 1}`,
+          // 评审 WP5-R2 I-1：定时事件带租户归属（job.tenantId）
+          ...(job.tenantId ? { tenantId: job.tenantId } : {}),
+        },
         payload,
       });
     } catch {

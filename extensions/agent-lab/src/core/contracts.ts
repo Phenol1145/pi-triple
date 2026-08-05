@@ -180,6 +180,7 @@ export interface LabEvent<TPayload = unknown> {
   sequence?: number;
   identity: {
     traceId: string;
+    tenantId?: string; // 租户归属（评审 WP5-R2 I-1：跨租户事件隔离——observe 查询按此过滤）
     sessionId?: string;
     dispatchId?: string;
     executionId?: string;
