@@ -19,6 +19,7 @@ import {
 // Re-export ResourceLoader + Skill for PTH program support
 import type { ResourceLoader, Skill } from "@earendil-works/pi-coding-agent";
 export type { ResourceLoader, Skill };
+export type { InlineExtension } from "@earendil-works/pi-coding-agent";
 export { SdkDefaultResourceLoader as DefaultResourceLoader };
 
 // ─── 事件类型常量 ─────────────────────────────────────────────
@@ -43,6 +44,22 @@ export interface PlatformAgentSession {
   abort(): Promise<void>;
   subscribe(callback: (event: SdkEvent) => void): () => void;
   dispose(): void;
+  /**
+   * 绑定扩展运行时并 emit session_start（S3 缺口 2——agent-lab 的 pi.on(session_start) 依赖）。
+   * 参考 print-mode 的 bindExtensions 调用：{ mode, commandContextActions, onError }。
+   */
+  bindExtensions(bindings?: PlatformExtensionBindings): Promise<void>;
+  /**
+   * 显式 emit session_shutdown 后 dispose（S3 缺口 3——agent-lab 的 pi.on(session_shutdown) 关 DB 防句柄泄漏）。
+   * 实证：SDK AgentSession.dispose() 不发 session_shutdown（仅 reload() 路径发）——调用方必须显式触发。
+   */
+  shutdown(): Promise<void>;
+}
+
+/** 扩展绑定最小面（mode + onError；UI/命令动作留给 print 模式默认） */
+export interface PlatformExtensionBindings {
+  mode?: "tui" | "rpc" | "json" | "print";
+  onError?: (error: unknown) => void;
 }
 
 /** SDK 事件的标准化视图 */
@@ -67,6 +84,23 @@ export async function createSession(
     abort: () => session.abort(),
     subscribe: (cb: (event: SdkEvent) => void) => session.subscribe(cb as any),
     dispose: () => session.dispose(),
+    bindExtensions: async (bindings) => {
+      await session.bindExtensions({
+        mode: bindings?.mode ?? "print",
+        onError: bindings?.onError as any,
+      });
+    },
+    shutdown: async () => {
+      try {
+        // S3 缺口 3：dispose 前显式 emit session_shutdown（agent-lab 关 DB）。
+        // 无处理器/旧 SDK 缺方法时静默降级为仅 dispose。
+        if (session.hasExtensionHandlers?.("session_shutdown")) {
+          await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+        }
+      } finally {
+        session.dispose();
+      }
+    },
   };
   return { session: adapted };
 }
