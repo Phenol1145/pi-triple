@@ -1,0 +1,9 @@
+node_modules
+.git
+data
+tmp
+docs
+test
+extensions/*/node_modules
+.pi-subagents
+.superpowers
