@@ -27,6 +27,9 @@ services:
     #   - agent 能力在 /data/agent-dir 持久化
     #   - 会话在 /data/sessions 持久化（WP2 后可恢复）
     #   - 认证不失效（Redis appendonly + 凭据外置）
+    # Redis capacity monitoring runbook:
+    #   - used_memory > 80% maxmemory → human intervention required
+    #   - Metrics exposed at /metrics as pi_redis_used_memory_bytes / pi_redis_max_memory_bytes
     depends_on:
       redis:
         condition: service_healthy
@@ -38,7 +41,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy noeviction
     volumes:
       - redis-data:/data
     healthcheck:
