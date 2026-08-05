@@ -7,20 +7,23 @@
 # ─────────────────────────────────────────────────────────────
 FROM quay.io/jupyter/minimal-notebook:python-3.13
 
-# ── 1) 系统工具（apt）──
+# ── 1) 系统工具（apt——root）──
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git-lfs gh jq curl wget tmux vim ripgrep sqlite3 ffmpeg tesseract-ocr z3 \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs install --system
 
-# ── 2) Node（nvm——多版本管理）──
+# ── 2) Node（nvm——多版本管理，jovyan 用户装——家目录属主正确）──
+USER jovyan
 ENV NVM_DIR=/home/jovyan/.nvm
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash \
-    && . "$NVM_DIR/nvm.sh" && nvm install --lts && nvm alias default 'lts/*'
-ENV PATH=/home/jovyan/.nvm/versions/node/$(ls /home/jovyan/.nvm/versions/node | head -1)/bin:$PATH
+    && . "$NVM_DIR/nvm.sh" && nvm install --lts && nvm alias default 'lts/*' \
+    && ln -sf "$NVM_DIR/versions/node/$(ls $NVM_DIR/versions/node | head -1)" "$NVM_DIR/current"
+ENV PATH=/home/jovyan/.nvm/current/bin:$PATH
 
-# ── 3) Go（官方 tarball——ARM 架构，构建时需出网）──
+# ── 3) Go（官方 tarball——root 装 /usr/local/go，构建时需出网）──
+USER root
 ARG GO_VERSION=1.24.2
 RUN ARCH=$(uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/') \
     && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" \
@@ -29,24 +32,28 @@ ENV PATH=/usr/local/go/bin:$PATH
 ENV GOPATH=/home/jovyan/go
 ENV PATH=/home/jovyan/go/bin:$PATH
 
-# ── 4) Rust（rustup）──
+# ── 4) Rust（rustup——jovyan 用户装）──
+USER jovyan
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH=/home/jovyan/.cargo/bin:$PATH
 
-# ── 5) uv（多 Python 版本管理）──
+# ── 5) uv（多 Python 版本管理——jovyan 用户装）──
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH=/home/jovyan/.local/bin:$PATH
 
-# ── 6) 数据科学常用包（conda base env——容器内，不碰宿主）──
+# ── 6) 数据科学常用包（conda base env——root 写 /opt/conda）──
+USER root
 RUN mamba install -y -c conda-forge \
         pandas numpy matplotlib seaborn scikit-learn scipy \
     && mamba clean -ai
 
 # ── 7) PTL 外接工具（开源集——用户裁决：非开源保留本机）──
 #   yt-dlp（PyPI）/ agent-reach（GitHub Panniantong）/ instsci（GitHub rimagination）
+#   pip → /opt/conda（root）；uv tool → ~/.local/share/uv（jovyan——分两层）
 RUN pip install --no-cache-dir yt-dlp \
-    && pip install --no-cache-dir "agent-reach @ git+https://github.com/Panniantong/agent-reach@main" \
-    && uv tool install instsci
+    && pip install --no-cache-dir "agent-reach @ git+https://github.com/Panniantong/agent-reach@main"
+USER jovyan
+RUN uv tool install "instsci @ git+https://github.com/rimagination/instsci"
 
 # ── 8) 成品保留区 + 工作区目录 ──
 USER root

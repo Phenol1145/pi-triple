@@ -102,6 +102,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    # 修复命名卷属主漂移：卷首次挂载时 .local/.nvm 等可能 root 属主（Docker 卷复制不总保留），
+    # 启动前 chown 归 jovyan（root 只跑 chown，随后降级回 jovyan 启动 jupyter——jupyter 拒绝 root；
+    # su 显式 PATH 避免 sudo secure_path 丢 conda）
+    user: "0:0"
+    entrypoint: [
+      "/bin/bash", "-lc",
+      "mkdir -p /home/jovyan/go && chown -R jovyan:users /home/jovyan/.local /home/jovyan/.nvm /home/jovyan/.cargo /home/jovyan/.rustup /home/jovyan/go /data/artifacts /data/workspaces && exec su jovyan -s /bin/bash -c 'export PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin:/home/jovyan/.local/bin:/home/jovyan/.nvm/current/bin:/usr/local/go/bin:/home/jovyan/.cargo/bin; start-notebook.sh'"
+    ]
     ports:
       - "127.0.0.1:8888:8888"        # jupyter（仅本机）——WeKnora searxng 也占 8888，冲突时改 JUPYTER_PORT
     volumes:
