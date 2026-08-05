@@ -208,3 +208,46 @@ docker compose start sandbox && sleep 10 && curl -sf localhost:3000/health  # �
 # 5. 持久化
 docker compose down && docker compose up -d         # 构件/会话/agent-dir 不丢；recoverAll 审计
 ```
+
+---
+
+## 10. dev 容器（G 阶段——多语言开发工作区）
+
+**定位**：提供给 PTL（外接工具环境）与用户（开发/学习研究）共用——sandbox=运行产物中间态，dev=开发/成品保留。非开源工具（kimiim-cli/obsidian 等 Mach-O）保留本机。
+
+### 启动 / 使用
+
+```bash
+docker compose up -d dev          # 启动（首次构建 ~5-10min，镜像 ~1.5G）
+docker compose logs dev | grep token   # 取 jupyter token（未固定 JUPYTER_TOKEN 时）
+open http://127.0.0.1:8888        # jupyter lab 访问（仅本机）
+docker compose exec dev bash      # 进容器（多语言/工具）
+```
+
+### 内置环境
+
+- Python 3.13（conda base）+ uv（多版本：`uv python install 3.12`）
+- Node 24（nvm——`nvm install <ver>` 多版本）+ Go 1.24 + Rust（cargo）
+- 数据科学包：pandas/numpy/matplotlib/seaborn/sklearn/scipy
+- PTL 开源工具：agent-reach / yt-dlp / instsci（**本机 wrapper 同名命令转发**——`~/.local/bin/{agent-reach,yt-dlp,instsci}` 已建，PTL 无感调用容器内工具；`bash tools/dev/gen-dev-wrapper.sh` 可重新生成/卸载提示）
+
+### 挂载
+
+| 路径 | 说明 |
+|---|---|
+| /works/ai-teach-jupyter 等 5 项目 | 宿主项目读写挂载 |
+| /home/jovyan（dev-home 卷） | conda env/nvm/uv 缓存持久化 |
+| /data/artifacts（dev-artifacts 卷） | 成品保留区 |
+| ~/.agents（只读） | agent-reach skill/配置（含凭据——用户自行挂载） |
+
+### 密钥
+
+**不注入**（用户裁决）——需要时 `docker exec -e DEEPSEEK_API_KEY=... dev bash` 临时给。
+
+### 端口冲突
+
+jupyter 8888 与 WeKnora searxng 冲突时：改 `JUPYTER_PORT=8889`（compose 注释）。
+
+### 监控
+
+`docker-monitor`（本机 `http://localhost:9090`）实时看 dev 及全部容器状态（CPU/内存/网络/健康）。
