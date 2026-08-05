@@ -7,11 +7,26 @@ services:
       - workspaces:/data/workspaces
       - platform:/data/platform
       - tenants:/data/tenants
+      - components:/data/components
+      - agent-dir:/data/agent-dir
+      - sessions:/data/sessions
+      - agent-lab:/data/agent-lab
     environment:
       - REDIS_URL=redis://redis:6379
       - PI_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - PI_OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - LOG_LEVEL=info
+      - PI_CODING_AGENT_DIR=/data/agent-dir
+      - AGENT_LAB_DB_PATH=/data/agent-lab/agent-lab.db
+      - DATA_DIR=/data
+    # programs→components v1 direct switch + startup alert:
+    # compose detects old programs dir on startup and logs WARN
+    # prompting manual migration (code-side migration is Task 17).
+    # Persistence invariant verification checklist (compose down && up):
+    #   - 构件在 /data/components 持久化
+    #   - agent 能力在 /data/agent-dir 持久化
+    #   - 会话在 /data/sessions 持久化（WP2 后可恢复）
+    #   - 认证不失效（Redis appendonly + 凭据外置）
     depends_on:
       redis:
         condition: service_healthy
@@ -36,4 +51,8 @@ volumes:
   workspaces:
   platform:
   tenants:
+  components:
+  agent-dir:
+  sessions:
+  agent-lab:
   redis-data:
