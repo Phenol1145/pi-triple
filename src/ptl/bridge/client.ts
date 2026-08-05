@@ -101,6 +101,21 @@ export class PthClient {
     return h;
   }
 
+  /** WS 握手认证 token（hub debug 用，F/WP4 Task 22） */
+  get authToken(): string {
+    return this.token;
+  }
+
+  /**
+   * hub debug WebSocket 地址（F/WP4 Task 22）：http→ws 换算 + /ws/debug 路径。
+   * 目标非 sandbox 时带 ?sessionId=（指定调试会话标识）。
+   */
+  debugUrl(sessionId?: string): string {
+    const base = this.url.replace(/^http/, "ws");
+    const q = sessionId && sessionId !== "sandbox" ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+    return `${base}/ws/debug${q}`;
+  }
+
   /** 统一请求：网络层错误翻译为可操作提示（连接拒绝/DNS/超时等） */
   private async request(path: string, init: RequestInit): Promise<Response> {
     try {

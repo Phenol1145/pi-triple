@@ -24,8 +24,8 @@ describe("resolveTuiPanel", () => {
 });
 
 describe("HUB_COMMANDS", () => {
-  it("含 submit/run/programs/dev/request/requests/respond/observe", () => {
-    expect(HUB_COMMANDS).toEqual(["submit", "run", "programs", "dev", "request", "requests", "respond", "observe"]);
+  it("含 submit/run/programs/dev/request/requests/respond/observe/debug", () => {
+    expect(HUB_COMMANDS).toEqual(["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug"]);
   });
 });
 
@@ -100,6 +100,7 @@ describe("cmdHub", () => {
       requests: async (...a: unknown[]) => { calls.push(["requests", a]); },
       respond: async (...a: unknown[]) => { calls.push(["respond", a]); },
       observe: async (...a: unknown[]) => { calls.push(["observe", a]); },
+      debug: async (...a: unknown[]) => { calls.push(["debug", a]); },
     };
     return { calls, h };
   }
@@ -170,6 +171,21 @@ describe("cmdHub", () => {
     await cmdHub("observe", ["trace", "s-1"], {}, h);
     expect(calls[0][0]).toBe("observe");
     expect(calls[0][1][0]).toEqual(["trace", "s-1"]);
+  });
+
+  it("hub debug sandbox → handlers.debug(passthrough, flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("debug", ["sandbox"], {}, h);
+    expect(calls[0][0]).toBe("debug");
+    expect(calls[0][1][0]).toEqual(["sandbox"]);
+    expect(calls[0][1][1]).toEqual({});
+  });
+
+  it("hub debug <sessionId> → handlers.debug(passthrough, flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("debug", ["sess-abc"], {}, h);
+    expect(calls[0][0]).toBe("debug");
+    expect(calls[0][1][0]).toEqual(["sess-abc"]);
   });
 
   it("hub（无子命令）→ 打印帮助，不调用任何 handler", async () => {
