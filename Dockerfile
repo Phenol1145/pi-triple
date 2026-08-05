@@ -24,7 +24,9 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 
 COPY config/ ./config/
-COPY scripts/ ./scripts/
+# F/WP2 Task 8: supervisor.sh（A/B rebuild）从镜像移除（.rebuild-request 机制废弃，spec §3.4）；
+# drain.sh 保留（优雅停机辅助）。
+COPY scripts/drain.sh ./scripts/
 RUN chmod +x scripts/*.sh
 
 RUN mkdir -p /data/components /data/agent-dir /data/sessions /data/agent-lab /data/workspaces /data/platform /data/tenants && \
