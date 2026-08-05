@@ -36,6 +36,9 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      # F/WP3 Task 11：pth 的 bash 工具依赖 sandbox 就绪（转发 /exec）
+      sandbox:
+        condition: service_healthy
     # pth 需访问 sandbox（bash 转发）→ 双网络：default（出网调 LLM）+ sandbox-internal（内网锁）
     networks:
       - default
