@@ -22,6 +22,11 @@ export type { ResourceLoader, Skill };
 export type { InlineExtension } from "@earendil-works/pi-coding-agent";
 export { SdkDefaultResourceLoader as DefaultResourceLoader };
 
+// F/WP5 Task 27：常驻会话共享事件总线（pi.events 即此实例——见 agent-engine
+// buildSystemSession 传入 DefaultResourceLoader options.eventBus）。pth 主进程
+// emit、agent-lab（常驻会话内扩展）经 pi.events.on 订阅——零引用转发通道。
+export { createEventBus, type EventBus, type EventBusController } from "@earendil-works/pi-coding-agent";
+
 // ─── 事件类型常量 ─────────────────────────────────────────────
 /** pi SDK 事件类型名。SDK 升级后若改名，只需改这里。 */
 export const SDK_EVENTS = {
