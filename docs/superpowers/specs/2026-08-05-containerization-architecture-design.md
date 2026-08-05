@@ -244,7 +244,7 @@ ComponentManifest = {
 
 ### 6.5 workloop 续跑（可复用基础）
 
-workloop checkpoint/resume 能力已存在——定时/事件触发的 dispatch 若指向 checkpoint 恢复（payload 携带 checkpointId），即得"到点续跑/事件续跑"。** DispatchRequest 是否已有 checkpointId 字段未核**——并入 WP5 小 spike（勿仅声明）。
+workloop checkpoint/resume 能力已存在——定时/事件触发的 dispatch 若指向 checkpoint 恢复（payload 携带 checkpointId），即得"到点续跑/事件续跑"。**已核实（WP5 Task 28d）**：`DispatchRequest`（agent-lab scheduler/runner-types.ts）**无 `checkpointId` 字段**——checkpoint 续跑需走 payload 携带（subscription-task 模板 / task JSON 透传）或后续扩展字段；**不新增字段**（避免超范围——证据：runner-types.ts DispatchRequest 接口仅含 traceId/dispatchId/schedulerInstanceId/role/task/taskCategory/labels/caller/mode/signal/settlementRef）。
 
 ---
 

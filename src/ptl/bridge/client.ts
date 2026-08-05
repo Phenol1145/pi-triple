@@ -63,6 +63,23 @@ export interface ObserveTrace {
   entries: ObserveTraceEntry[];
 }
 
+/** 观测事件条目（F/WP5 Task 28b——EventLog 结构子集，经常驻会话通道透传） */
+export interface ObserveEventEntry {
+  eventId: string;
+  eventType: string;
+  timestamp: number;
+  sequence?: number;
+  identity: { traceId: string };
+  payload: unknown;
+}
+
+/** 观测事件查询结果（/api/v1/observe/events） */
+export interface ObserveEventsResult {
+  tenantId: string;
+  count: number;
+  events: ObserveEventEntry[];
+}
+
 /** fallback_requests 条目（F/WP4 Task 20） */
 export interface FallbackRequestEntry {
   requestId: string;
@@ -227,15 +244,21 @@ export class PthClient {
     return (await res.json()) as ObserveTrace;
   }
 
-  /** 观测：事件查询（EventLog 代理——WP5 Task 28 交付，当前 501） */
-  async getObserveEvents(): Promise<unknown> {
-    const res = await this.request("/api/v1/observe/events", {
+  /** 观测：事件查询（EventLog 代理——常驻会话通道查询，F/WP5 Task 28b） */
+  async getObserveEvents(filter?: { eventType?: string; since?: number; until?: number; limit?: number }): Promise<ObserveEventsResult> {
+    const qs = new URLSearchParams();
+    if (filter?.eventType) qs.set("eventType", filter.eventType);
+    if (filter?.since !== undefined) qs.set("since", String(filter.since));
+    if (filter?.until !== undefined) qs.set("until", String(filter.until));
+    if (filter?.limit !== undefined) qs.set("limit", String(filter.limit));
+    const q = qs.toString();
+    const res = await this.request(`/api/v1/observe/events${q ? `?${q}` : ""}`, {
       headers: this.headers(),
     });
     if (!res.ok) {
       await this.throwError(res, "获取事件失败");
     }
-    return await res.json();
+    return (await res.json()) as ObserveEventsResult;
   }
 
   /** 回退请求列表（F/WP4 Task 20——open 优先） */

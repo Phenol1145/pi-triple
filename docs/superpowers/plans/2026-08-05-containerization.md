@@ -386,12 +386,12 @@
 - Modify: `extensions/agent-lab/src/commands/register.ts`（/lab schedule add/ls/pause/resume/rm）
 - Test: `extensions/agent-lab/test/scheduled-integration.test.ts`（新建）+ `test/unit/f-wp5-integration.test.ts`
 
-- [ ] **Step 1: /lab schedule 命令**（常驻会话内扩展命令）
-- [ ] **Step 2: hub observe 集成**——scheduled_jobs/subscriptions 只读可见（Task 21 路由扩展）
-- [ ] **Step 3: DispatchRequest checkpointId 核实**（spec §6.5 小 spike——有则文档化"到点续跑"可用，无则标注后续）
-- [ ] **Step 4: 集成测试**——建定时 job→到点 dispatch（时间压缩：interval=秒级）→审计事件断言；外部 webhook→订阅触发断言
-- [ ] **Step 5: 全绿**（agent-lab 1636 基线+新增+PTL 基线）
-- [ ] **Step 6: commit** `feat(agent-lab,pth): /lab schedule 管理面+WP5 集成验证（F/WP5）`
+- [x] **Step 1: /lab schedule 命令**（常驻会话内扩展命令）
+- [x] **Step 2: hub observe 集成**——scheduled_jobs/subscriptions 只读可见（Task 21 路由扩展）
+- [x] **Step 3: DispatchRequest checkpointId 核实**（spec §6.5 小 spike——**已核实结论：`DispatchRequest`（scheduler/runner-types.ts）无 `checkpointId` 字段**；checkpoint 续跑需走 payload 携带（subscription-task 模板/task JSON 透传）或后续扩展——**不新增字段**（避免超范围，已标注 spec §6.5））
+- [x] **Step 4: 集成测试**——建定时 job→到点 dispatch（时间压缩：interval=秒级）→审计事件断言；外部 webhook→订阅触发断言
+- [x] **Step 5: 全绿**（agent-lab 1636 基线+新增+PTL 基线）
+- [x] **Step 6: commit** `feat(agent-lab,pth): /lab schedule 管理面+WP5 集成验证（F/WP5）`
 
 ---
 

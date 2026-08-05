@@ -111,24 +111,36 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
     }
 
     // what === "events"
+    const filter: { eventType?: string; limit?: number } = {};
+    const typeIdx = passthrough.indexOf("--eventType");
+    if (typeIdx >= 0 && passthrough[typeIdx + 1]) filter.eventType = passthrough[typeIdx + 1];
+    const limitIdx = passthrough.indexOf("--limit");
+    if (limitIdx >= 0) {
+      const n = Number(passthrough[limitIdx + 1]);
+      if (Number.isInteger(n) && n > 0) filter.limit = n;
+    }
+    const result = await client.getObserveEvents(filter);
     if (flags.json) {
-      console.log(JSON.stringify({ deferred: true, note: "EventLog query depends on WP5 Task 23/24; delivered with Task 28" }));
+      console.log(JSON.stringify(result, null, 2));
       return;
     }
     printBanner();
-    console.log("  \x1b[1m事件查询\x1b[0m");
+    console.log("  \x1b[1m事件查询（常驻会话 EventLog 代理）\x1b[0m");
     console.log("");
-    console.log("  \x1b[33m⚠ EventLog 查询子项经常驻系统会话代理（依赖 WP5 Task 23/24），\x1b[0m");
-    console.log("  \x1b[33m  拆分为 WP5 收尾时交付（并入 Task 28 验收）。\x1b[0m");
-    console.log("  Redis 会话痕迹已先行交付: pit hub observe sessions / session <id> / trace <id>");
-    console.log("");
-    // 仍尝试请求——服务器 501 时透出其返回的说明
-    try {
-      await client.getObserveEvents();
-    } catch (err: any) {
-      console.log(`  \x1b[2m${err.message}\x1b[0m`);
-      console.log("");
+    if (result.count === 0) {
+      console.log("  暂无事件。");
+    } else {
+      console.log(`  \x1b[2m${String("EVENT_ID").slice(0, 14).padEnd(14)}${String("TIME").padEnd(17)}${String("TYPE").padEnd(34)}  ${String("TRACE").slice(0, 12)}\x1b[0m`);
+      for (const e of result.events) {
+        const ts = new Date(e.timestamp).toISOString().replace("T", " ").slice(0, 16);
+        const id = e.eventId.slice(0, 14).padEnd(14);
+        const type = e.eventType.slice(0, 34).padEnd(34);
+        const trace = (e.identity?.traceId ?? "").slice(0, 12);
+        console.log(`  \x1b[1m${id}\x1b[0m${ts}${type}  ${trace}`);
+      }
+      console.log(`\n  共 ${result.count} 条事件。`);
     }
+    console.log("");
   } catch (err: any) {
     console.log(`\x1b[31m❌ 观测失败: ${err.message}\x1b[0m`);
     process.exit(1);
