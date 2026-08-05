@@ -18,19 +18,49 @@ RUN npx tsc
 #     （pth bash 工具转发 shell 命令字符串需要 bash 语义；slim 基础镜像仅含 sh）
 FROM node:22-slim
 
-RUN apt-get update && apt-get install -y curl bash && rm -rf /var/lib/apt/lists/*
+# F/WP3 Task 14：curl（healthcheck）/ bash（exec API 字符串命令）已装；tmux（调试入口 + pit-control
+# 扩展的会话管理）；git（pi 自修改模式工作流依赖 git 状态/提交）。
+RUN apt-get update && apt-get install -y curl bash tmux git && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 ENV DATA_DIR=/data
 
 COPY package.json package-lock.json ./
+# F/WP3 Task 14 注：build 阶段可联网（npm registry）；运行时内网锁（internal 网络无外部出口）。
+# pi 可执行（@earendil-works/pi-coding-agent 的 bin → node_modules/.bin/pi）随 --omit=dev 装入，
+# 无需额外 npm i。
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 
+# ---- F/WP3 Task 14：内嵌 pi + PTL（自修改模式）----
+# pi 可执行 + PTL（dist/ptl）稳定 PATH 入口：
+#   /usr/local/bin/pi  →  node_modules/@earendil-works/pi-coding-agent/dist/cli.js
+#   /usr/local/bin/pit →  dist/ptl/pit.js（package.json bin 对应；shebang 已由 tsc 保留）
+# 镜像不持 LLM 密钥（用户裁决）：需要自修改会话时按需临时注入 env（见
+# scripts/sandbox-debug-entry.sh 头注释的 docker exec -e 操作流），用完即撤。
+RUN ln -sf /app/node_modules/@earendil-works/pi-coding-agent/dist/cli.js /usr/local/bin/pi && \
+    ln -sf /app/dist/ptl/pit.js /usr/local/bin/pit && \
+    chmod +x /usr/local/bin/pi /usr/local/bin/pit
+
+# PTL 扩展：pit-communicate / pit-control（TS 源——pi loader 原生加载 .ts；依赖 ../_shared）。
+# 拷入 PI_CODING_AGENT_DIR=<agentDir>/extensions/，pi 按 agentDir/extensions 自动发现。
+# agentDir 走镜像内 /data/agent-dir（sandbox 不挂 agent-dir 卷——与 pth 隔离）。
+COPY extensions/_shared /data/agent-dir/extensions/_shared/
+COPY extensions/pit-communicate /data/agent-dir/extensions/pit-communicate/
+COPY extensions/pit-control /data/agent-dir/extensions/pit-control/
+
+# F/WP3 Task 14 调试入口：启动 pi / PTL 会话（tmux）——详见脚本头注释。
+COPY scripts/sandbox-debug-entry.sh /usr/local/bin/sandbox-debug-entry.sh
+RUN chmod +x /usr/local/bin/sandbox-debug-entry.sh
+
+ENV PI_CODING_AGENT_DIR=/data/agent-dir
+# PTL 在 sandbox 内联 pth（sandbox-internal 网络：pth 服务名可解析；hub observe/上传自修改构件）
+ENV PLATFORM_URL=http://pi-platform:3000
+
 # 工作区共享卷（compose：workspaces → /data/workspaces，与 pth 同卷同路径——Task 12 约定）
-RUN mkdir -p /data/workspaces && chown -R node:node /data/workspaces /app
+RUN mkdir -p /data/workspaces /data/agent-dir && chown -R node:node /data/workspaces /data/agent-dir /app
 
 USER node
 
