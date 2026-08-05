@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { CORE_SCHEMA } from "../storage/schema.ts";
 import type { LabEvent } from "../contracts.ts";
 
@@ -22,10 +22,26 @@ function contentHash(event: LabEvent): string {
 
 export class EventLog {
   private readonly db: DatabaseSync;
+  private readonly appendHooks: Array<(event: LabEvent) => void> = [];
+  private notifying = false;
 
   constructor(db: DatabaseSync) {
     this.db = db;
     this.db.exec(CORE_SCHEMA);
+  }
+
+  /**
+   * append 旁路通知（F/WP5 §6.2——订阅派发器接线点）。
+   * 不改变 append-only 语义：hook 仅在新事件插入成功后同步触发；
+   * hook 抛错仅记日志+审计（评审 I4），不阻断 append 主路径。
+   * 返回注销函数。
+   */
+  onAppended(hook: (event: LabEvent) => void): () => void {
+    this.appendHooks.push(hook);
+    return () => {
+      const i = this.appendHooks.indexOf(hook);
+      if (i >= 0) this.appendHooks.splice(i, 1);
+    };
   }
 
   append(event: LabEvent): "inserted" | "duplicate" {
@@ -61,7 +77,41 @@ export class EventLog {
       hash,
     );
 
+    this.notifyAppended(event);
+
     return "inserted";
+  }
+
+  private notifyAppended(event: LabEvent): void {
+    if (this.notifying) return; // 审计事件不再递归通知
+    this.notifying = true;
+    try {
+      for (const hook of [...this.appendHooks]) {
+        try {
+          hook(event);
+        } catch (err) {
+          // 评审 I4: hook 异常仅记日志+审计，不阻断 append 主路径
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(
+            `event-log: subscription notify hook failed (event=${event.eventId}): ${message}`,
+          );
+          try {
+            this.append({
+              eventId: `subscription.notify.failed:${event.eventId}:${randomUUID().slice(0, 8)}`,
+              eventType: "subscription.notify.failed",
+              schemaVersion: "1",
+              timestamp: Date.now(),
+              identity: { traceId: event.identity.traceId },
+              payload: { eventId: event.eventId, error: message },
+            });
+          } catch {
+            // 审计失败也忽略——主路径不变量优先
+          }
+        }
+      }
+    } finally {
+      this.notifying = false;
+    }
   }
 
   get(eventId: string): LabEvent | undefined {

@@ -140,4 +140,18 @@ CREATE TABLE IF NOT EXISTS scheduled_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_due ON scheduled_jobs(status, next_fire_at);
 CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_tenant ON scheduled_jobs(tenant_id, id);
+
+-- F/WP5 §6.2: 事件订阅表（含 tenantId——多租户共享 DB 的租户隔离）。
+CREATE TABLE IF NOT EXISTS event_subscriptions (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  event_pattern_json TEXT NOT NULL,
+  task_type TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('active', 'paused', 'cancelled')),
+  created_by TEXT NOT NULL,
+  created_ts INTEGER NOT NULL,
+  updated_ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_event_subscriptions_tenant ON event_subscriptions(tenant_id, id);
 `;
