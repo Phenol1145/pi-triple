@@ -4,7 +4,7 @@
 
 **Goal:** 将联邦骨架 v1.0 落成可运行的部署与运行架构——pth 容器生产可用（会话可恢复/数据不丢/构建可复现）、代码执行全沙箱化（唯一 sandbox 容器）、hub 扩展为完整联邦交互层（构件泛化/空位绑定/回退请求/观测/调试）、定时与事件触发机制（常驻系统会话承载）。
 
-**Architecture:** 依据 `docs/superpowers/specs/2026-08-05-containerization-architecture-design.md`（v0.2，评审通过版）。技术栈惯例：**pth/ptl 侧（`src/`）`.js` + vitest（`test/unit/`）；agent-lab 侧（`extensions/agent-lab/`）`.ts` + node:test；零新增依赖**。基线：PTL 717/717 + agent-lab 1636 pass/2 pre-existing。
+**Architecture:** 依据 `docs/superpowers/specs/2026-08-05-containerization-architecture-design.md`（v0.2，评审通过版）。技术栈惯例：**pth/ptl 侧测试 `.test.ts` + vitest（`test/unit/`，vitest.config.ts include 仅认 `.test.ts`——评审实证）；agent-lab 侧 `.test.ts` + node:test；零新增依赖**。基线：PTL 717/717 + agent-lab 1636 pass/2 pre-existing。
 
 **用户裁决（不可推翻）**：单实例+会话外置（多副本=演进）/代码执行全沙箱化/PTL 保持 tmux+hub 渐进扩展/定时事件=常驻系统会话承载（选项 C）/legalAuth 声明式/手动建单先行/sandbox 不持 LLM 密钥/BullMQ 不引入。
 
@@ -20,7 +20,7 @@
 - 新建: `/tmp/f-spikes/s1-sdk-revive.ts`（临时验证脚本，不入库）
 - 参考: `node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.d.ts`、`src/shared/sdk-adapter/index.ts`、`src/pth/core/agent-engine.ts:115`
 
-- [ ] **Step 1: 能力清单核实**——`SessionManager.create(cwd, sessionDir)` / `continueSession` 的确切签名与语义（读 `.d.ts` + 必要处读实现）；确认 JSONL 落盘结构与恢复入口
+- [ ] **Step 1: 能力清单核实**——`SessionManager.create(cwd, sessionDir?)` / `continueRecent(cwd, sessionDir?)` / `open(path, sessionDir, cwdOverride)` 的确切签名与语义（评审实证：`continueSession` 不存在）（读 `.d.ts` + 必要处读实现）；确认 JSONL 落盘结构与恢复入口
 - [ ] **Step 2: 最小验证**——脚本建会话（持久化 SessionManager）→ prompt 一轮 → 模拟进程退出 → 新进程 revive → 验证上下文完整（历史消息在）
 - [ ] **Step 3: 边界记录**——in-flight 状态/tool 调用中态/model fallback 在 revive 后的行为；checkpointSeq 对齐方式
 - [ ] **Step 4: 产出结论**（写本 plan 下方"Spike 结论"节）：可行/受限/不可行 + WP2 设计调整点
@@ -52,7 +52,7 @@
 - [ ] **Step 1: 路径 a 验证**——agentDir/extensions/ 下 symlink 一个最小测试扩展（注册一个 marker 命令）→ pth 方式创建 SDK 会话（DefaultResourceLoader）→ 验证扩展被加载
 - [ ] **Step 2: 路径 b 验证**——`extensionFactories: [inlineExtension]` 编程注入同 marker → 验证加载
 - [ ] **Step 3: agent-lab 适配评估**——agent-lab/index.ts 的入口依赖（pi.on 钩子/命令注册/SDK 版本）在 pth SDK 会话环境的兼容性；DB 路径（AGENT_LAB_DB_PATH env）注入点
-- [ ] **Step 4: 产出结论**：路径 a/b 哪个可行（或皆可）→ WP5 选定；皆不可 → 退选项 B（pth 直接 import agent-lab 框架层——plan 附录 B 备用任务）
+- [ ] **Step 4: 产出结论**：路径 a/b 哪个可行（或皆可）→ WP5 选定；皆不可 → 退选项 B（pth 直接 import agent-lab 框架层——plan 附录 B 备用任务）。**决策门（评审 I2）**：结论填写本 plan 下方 Spike 结论节后，按规则分流——`a 或 b 可行 → Task 23-28 正常执行；皆不可 → Task 23/24 替换为附录 B1-B2（Task 23  RESERVED 机制保留用于观察/降级用途或删除——执行时裁决并文档化），Task 25-28 按 B3 调整（触发源=pth 直接调用）`
 
 **验收**：WP5 扩展加载路径确定。
 
@@ -70,7 +70,7 @@
 - [ ] **Step 2: CMD 修正**——`CMD ["node", "dist/pth/main.js"]`（评审新发现：与 package.json bin 一致）
 - [ ] **Step 3: 非 root**——`USER node`（node:22-slim 内置用户）+ 卷目录属主调整
 - [ ] **Step 4: .dockerignore**——node_modules/.git/data/tmp/docs/test
-- [ ] **Step 5: 实证 `docker build` 成功 + 容器启动 /health 200**（本机 docker 实跑——若本机无 docker，改为静态审查+CI 标注）
+- [ ] **Step 5: 实证 `docker build` 成功 + 容器启动 /health 200**（本机 docker 实跑——若本机无 docker，改静态审查：**checklist**=①builder/runtime 阶段依赖分离②tsc 在 builder 阶段执行③CMD=dist/pth/main.js④USER node⑤.dockerignore 覆盖 node_modules/.git/data；+CI 标注待跑）
 - [ ] **Step 6: commit** `fix(pth): Dockerfile 多阶段构建+非 root+CMD 修正 dist/pth/main.js（F/WP1）`
 
 ## Task 2: 卷完备 + env 接线
@@ -78,7 +78,7 @@
 **Files:**
 - Modify: `docker-compose.yaml`
 
-- [ ] **Step 1: 新增 4 卷**——`components`（/data/components）/`agent-dir`（/data/agent-dir）/`sessions`（/data/sessions）/`agent-lab`（/data/agent-lab）；programs 目录迁入 components（兼容：启动时检测旧 programs 目录并迁移——或声明 v1 直接切换无迁移，评审后定）
+- [ ] **Step 1: 新增 4 卷**——`components`（/data/components）/`agent-dir`（/data/agent-dir）/`sessions`（/data/sessions）/`agent-lab`（/data/agent-lab）；programs 目录迁入 components——**裁决（评审 N4/Open Q3）：v1 直接切换+启动告警**（检测到旧 programs 目录存在时打 warn 日志提示人工迁移，不做自动迁移）
 - [ ] **Step 2: env 接线**——`PI_CODING_AGENT_DIR=/data/agent-dir`、`AGENT_LAB_DB_PATH=/data/agent-lab/agent-lab.db`、`DATA_DIR=/data`
 - [ ] **Step 3: 持久化不变量验证清单**（文档化进 compose 注释）：`docker compose down && up` 后——构件在/agent 能力在/会话可恢复（WP2 后）/认证不失效
 - [ ] **Step 4: commit** `fix(pth): compose 卷完备（components/agent-dir/sessions/agent-lab）+ env 接线（F/WP1）`
@@ -102,11 +102,11 @@
 **Files:**
 - Modify: `src/pth/core/agent-engine.ts`（:115 替换 inMemory）
 - Modify: `src/shared/sdk-adapter/index.ts`（如需要透传 sessionDir 参数）
-- Test: `test/unit/agent-engine-session-persist.test.js`（新建）
+- Test: `test/unit/agent-engine-session-persist.test.ts`（新建）
 
-- [ ] **Step 1: 按 S1 结论接线**——`SessionManager.create(cwd, sessionsDir/<tenantId>/<sessionId>/)`（或 S1 确定的 API）；sessions 卷路径经 config/env 注入
+- [ ] **Step 1: 按 S1 结论接线**——`SessionManager.create(cwd, sessionsDir/<tenantId>/<sessionId>/)`——**必须显式传 sessionDir**（评审实证：create 默认落 `~/.pi/agent/sessions/`，不传则落错卷）
 - [ ] **Step 2: 测试**——创建会话→prompt（mock SDK 或最小真实会话）→会话目录 JSONL 落盘断言
-- [ ] **Step 3: 全绿** `npx vitest run test/unit/agent-engine-session-persist.test.js` + PTL 基线
+- [ ] **Step 3: 全绿** `npx vitest run test/unit/agent-engine-session-persist.test.ts` + PTL 基线
 - [ ] **Step 4: commit** `feat(pth): 会话外置①——SDK 持久化 SessionManager 接线 sessions 卷（F/WP2）`
 
 ## Task 5: 池元状态入 Redis
@@ -114,7 +114,7 @@
 **Files:**
 - Modify: `src/pth/core/session-pool.ts`（PoolSession→Redis 双写/读穿透）
 - Modify: `src/pth/storage/redis-session-store.ts`（复用其 key 模式或新增 pool:* 键）
-- Test: `test/unit/session-pool-redis.test.js`（新建）
+- Test: `test/unit/session-pool-redis.test.ts`（新建）
 
 - [ ] **Step 1: PoolSession 字段 Redis 化**——`pool:{sid}:meta` JSON；状态迁移（busy/idle/refCount/lastCheckpointSeq/model）双写 Redis；内存 Map 降级为缓存（读穿透+写直通）
 - [ ] **Step 2: recoverableIndex 死代码裁决**——启用（恢复索引）或删除（recoverAll 直扫 pool:* 键）——实现时二选一并文档化
@@ -125,10 +125,10 @@
 
 **Files:**
 - Modify: `src/pth/core/agent-engine.ts`（:319 空 stub 实现化）
-- Test: `test/unit/agent-engine-recover.test.js`（新建）
+- Test: `test/unit/agent-engine-recover.test.ts`（新建）
 
 - [ ] **Step 1: recoverAll 实现**——扫 Redis `pool:*` → 逐会话 revive（S1 结论的 SDK 恢复 API）→ 状态置 idle + `recovered-from-crash` 标记（原 busy 的）；失败会话标记 unrecoverable+审计
-- [ ] **Step 2: 竞态防护（二轮评审 Important 1）**——Redis Epoch：`INCR pool:epoch` 启动时执行；recoverAll 期间新请求排队/拒绝（启动窗）；recoverAll 完成后才 listen HTTP（main.ts 启动顺序调整——先 recover 后 listen）
+- [ ] **Step 2: 竞态防护（二轮评审 Important 1）**——核实 main.ts 启动顺序（评审实证：main.ts:75 已 `await engine.recoverAll()` 先于 listen——若已先 recover 后 listen，Epoch 判定为冗余并文档化移除；若存在并发窗则 Redis Epoch：`INCR pool:epoch`+recoverAll 期间新请求拒绝）；Epoch 与锁过期重建的交互（若保留需设计）
 - [ ] **Step 3: 恢复清理（spec §3.1 第 5 条）**——workflow 锁过期重建/refCount 归零重计/pending dispatch 丢弃+审计标记（不重放）/stale busy→idle
 - [ ] **Step 4: 测试**——制造崩溃现场（写入池元状态+会话目录后杀进程语义）→ recoverAll → 断言恢复结果与清理结果
 - [ ] **Step 5: commit** `feat(pth): 会话外置③——recoverAll 实现+Epoch 竞态防护+恢复清理（F/WP2）`
@@ -136,8 +136,8 @@
 ## Task 7: 工作区分离
 
 **Files:**
-- Modify: `src/pth/workspace/manager.ts`
-- Test: `test/unit/workspace-manager.test.js`（新建或扩充）
+- Modify: `src/shared/workspace/manager.ts`（评审实证：在 shared/ 下，非 pth/workspace/）
+- Test: `test/unit/workspace-manager.test.ts`（新建或扩充）
 
 - [ ] **Step 1: 层级固化**——`workspaces/<tenantId>/<projectId>/`；program-run 延续 `program-run-<sessionId>`；路径推导单点（manager 提供 resolve 方法，消费方不得自拼）
 - [ ] **Step 2: 清理策略**——program-run-* 随 evict/destroy 清理（现状 programRunDirs 机制延续+挂卷后验证）；sessions 卷目录随 destroy 清理
@@ -147,7 +147,7 @@
 ## Task 8: HotReloader 注入修复（L1 热更闭环）
 
 **Files:**
-- Modify: `src/pth/platform/hot-reloader.ts`（:26-38）
+- Modify: `src/pth/self-modify/hot-reloader.ts`（handleChange :51-79——“只校验不注入”实际位置，评审实证）
 - Modify: `src/pth/core/agent-engine.ts`（ResourceLoader 接线）
 
 - [ ] **Step 1: 修复"只校验不注入"**——platform 卷 skills/prompts/config 变更校验通过后 → 注入后续会话的 ResourceLoader（agent-dir 卷为基准，platform 卷为覆盖层）
@@ -157,7 +157,7 @@
 ## Task 9: WP2 集成验证
 
 **Files:**
-- Test: `test/unit/f-wp2-integration.test.js`（新建）
+- Test: `test/unit/f-wp2-integration.test.ts`（新建）
 
 - [ ] **Step 1: 持久化不变量端到端**——会话创建→prompt→模拟重启（新 engine 实例+同 Redis/卷）→recoverAll→会话可用（prompt 续跑）
 - [ ] **Step 2: 全绿**（新增测试+PTL 717 基线）
@@ -172,7 +172,7 @@
 **Files:**
 - Create: `Dockerfile.sandbox`、`src/sandbox/main.js`、`src/sandbox/exec-api.js`
 - Modify: `docker-compose.yaml`（sandbox 服务）
-- Test: `test/unit/sandbox-exec-api.test.js`（新建）
+- Test: `test/unit/sandbox-exec-api.test.ts`（新建）
 
 - [ ] **Step 1: 执行 API**——`POST /exec {cmd, cwd, env, timeout}`→`{stdout, stderr, exitCode}`；流式 SSE `GET /exec/:id/stream`；**共享密钥认证**（Authorization header，compose env 注入）；cwd 白名单（必须在 /data/workspaces/ 下）；超时强杀；非 root
 - [ ] **Step 2: 健康检查**——`GET /health`；compose `healthcheck` + pth `depends_on: service_healthy`
@@ -185,7 +185,7 @@
 **Files:**
 - Modify: `src/shared/sdk-adapter/index.ts`（或新建 `src/pth/tools/sandbox-bash.ts`）
 - Modify: `src/pth/core/agent-engine.ts`（工具配置接线）
-- Test: `test/unit/sandbox-bash-forward.test.js`（新建）
+- Test: `test/unit/sandbox-bash-forward.test.ts`（新建）
 
 - [ ] **Step 1: 按 S2 结论实现转发**——排除内建 bash+注册**同名 bash** custom tool（对外接口名统一为 bash——二轮评审硬约束）；转发客户端（HTTP→sandbox /exec，共享密钥，SSE 流式回传）
 - [ ] **Step 2: 错误语义**——sandbox 不可达→类型化错误 `sandbox-unavailable`（不静默）；超时→`sandbox-timeout`
@@ -196,7 +196,7 @@
 
 **Files:**
 - Modify: `docker-compose.yaml`（pth 与 sandbox 同挂 workspaces 卷）
-- Modify: `src/pth/workspace/manager.ts`（容器内路径约定 /data/workspaces/）
+- Modify: `src/shared/workspace/manager.ts`（容器内路径约定 /data/workspaces/）
 
 - [ ] **Step 1: 双容器同卷**——pth:/data/workspaces = sandbox:/data/workspaces（路径语义一致——转发 cwd 无需映射）
 - [ ] **Step 2: 测试**——pth 写文件→sandbox exec 可读断言（compose 集成测试或 mock）
@@ -205,9 +205,9 @@
 ## Task 13: sandbox 失效降级
 
 **Files:**
-- Modify: `src/pth/self/routes-self.ts`（health 联动）
+- Modify: `src/pth/gateway/routes-self.ts`（health 联动——评审实证：在 gateway/ 下，非 self/）
 - Modify: `src/pth/tools/sandbox-bash.ts`（degraded 状态）
-- Test: `test/unit/sandbox-degraded.test.js`（新建）
+- Test: `test/unit/sandbox-degraded.test.ts`（新建）
 
 - [ ] **Step 1: 失效检测**——转发失败计数→连续 N 次（N=3 默认）置 degraded；`/health` 联动 unhealthy；审计事件
 - [ ] **Step 2: 恢复**——sandbox 健康恢复→自动清除 degraded（定期探活）
@@ -227,7 +227,7 @@
 ## Task 15: WP3 集成验证
 
 **Files:**
-- Test: `test/unit/f-wp3-integration.test.js`（新建）
+- Test: `test/unit/f-wp3-integration.test.ts`（新建）
 
 - [ ] **Step 1: 端到端**——pth 会话 bash 调用→sandbox 执行→结果回传（mock 或 compose 实跑）；sandbox 挂掉→degraded；恢复→正常
 - [ ] **Step 2: 全绿**；**Step 3: commit** `test(pth): WP3 集成验证——代码执行全沙箱化（F/WP3）`
@@ -240,7 +240,7 @@
 
 **Files:**
 - Modify: `src/ptl/bridge/manifest.ts`（ProgramManifest→ComponentManifest+type 分派校验）
-- Test: `test/unit/bridge-manifest.test.js`（扩充）
+- Test: `test/unit/bridge-manifest.test.ts`（扩充）
 
 - [ ] **Step 1: ComponentManifest**——`type: agent-program|scheduler|optimizer|memory-pack|skeleton-update`；payload 类型相关；原 ProgramManifest 字段归入 agent-program 分支（**完全等价映射**——二轮评审 Minor：避免两套存储逻辑）
 - [ ] **Step 2: 分派校验器**——按 type 校验 payload（agent-program 走原 validateManifest 逻辑；其余类型最小校验——name/type 合法，payload 结构骨架）
@@ -252,7 +252,7 @@
 **Files:**
 - Modify: `src/pth/programs/store.ts`→泛化（或新建 `src/pth/components/store.ts` 复用其模式）
 - Modify: `src/pth/gateway/routes-programs.ts`（API 扩展/兼容别名）
-- Test: `test/unit/components-store.test.js`（新建）
+- Test: `test/unit/components-store.test.ts`（新建）
 
 - [ ] **Step 1: 存储泛化**——`components` 卷 `<tenantId>/<type>/<name>/<version>/`；Redis 版本指针/原子 INCR/GC 沿用 ProgramStore 模式；agent-program 类型与旧 programs 路径的兼容映射（读侧双查或一次性迁移脚本——实现时定）
 - [ ] **Step 2: API**——`POST /api/v1/components`；`/api/v1/programs` 保留为 agent-program 兼容别名
@@ -264,10 +264,10 @@
 **Files:**
 - Modify: `src/pth/components/store.ts`（绑定登记）
 - Modify: `src/pth/components/slot-binding.ts`（新建——生效逻辑）
-- Test: `test/unit/slot-binding.test.js`（新建）
+- Test: `test/unit/slot-binding.test.ts`（新建）
 
 - [ ] **Step 1: 绑定登记**——上传携带 targetSlot → `slot:{slotId}:binding` Redis 键+审计事件
-- [ ] **Step 2: 生效语义**——登记校验（字段良构 O(1)——spec：部署=登记，语义求值推迟）；scheduler/optimizer 类构件→注册进框架层 registry（经 WP5 常驻会话代理调用）；agent-program→可装配常驻标记
+- [ ] **Step 2: 生效语义**——登记校验（字段良构 O(1)——spec：部署=登记，语义求值推迟）；scheduler/optimizer 类构件→注册进框架层 registry（**依赖标注（评审 I1）**：经常驻会话代理调用——依赖 Task 23/24；WP5 前交付降级版=仅绑定登记+审计，registry 接线子项并入 Task 28）；agent-program→可装配常驻标记
 - [ ] **Step 3: 测试**——绑定/生效/无 targetSlot 仅存储断言
 - [ ] **Step 4: commit** `feat(pth): targetSlot 空位绑定生效——登记语义+registry 接线（F/WP4）`
 
@@ -286,7 +286,7 @@
 - Create: `src/pth/fallback/requests.ts`（Redis 队列）
 - Modify: `src/pth/gateway/`（路由：POST /api/v1/fallback-requests、GET 列表、POST /:id/close）
 - Create: `src/ptl/bridge/request.ts`、`src/ptl/bridge/respond.ts`（pit hub request/requests/respond）
-- Test: `test/unit/fallback-requests.test.js`（新建）
+- Test: `test/unit/fallback-requests.test.ts`（新建）
 
 - [ ] **Step 1: pth 队列**——`fallback_requests` Redis 结构 `{requestId, slotHint, description, urgency, createdAt, status(open|closed), closedBy?}`
 - [ ] **Step 2: 手动建单**——`POST /api/v1/fallback-requests`（自动生产者留 E——spec §5.4）
@@ -299,9 +299,9 @@
 **Files:**
 - Modify: `src/pth/gateway/`（只读路由：sessions/trace/events）
 - Create: `src/ptl/bridge/observe.ts`（pit hub observe）
-- Test: `test/unit/hub-observe.test.js`（新建）
+- Test: `test/unit/hub-observe.test.ts`（新建）
 
-- [ ] **Step 1: pth 只读路由**——`GET /api/v1/observe/sessions|sessions/:id|trace/:id|events`；EventLog 查询经**常驻系统会话代理**（pth 主进程不直读 agent-lab DB——spec §6.0；WP5 前可用 Redis 会话痕迹先行）
+- [ ] **Step 1: pth 只读路由**——`GET /api/v1/observe/sessions|sessions/:id|trace/:id|events`；**依赖标注（评审 I1）**：会话/trace 用 Redis 会话痕迹（WP5 前先行交付）；**EventLog 查询子项经常驻系统会话代理——依赖 Task 23/24，拆分为 WP5 收尾时交付（并入 Task 28 验收）**，本子项不在本 Task 验收范围
 - [ ] **Step 2: PTL 命令**——`pit hub observe <what>`（print/json 双模式）
 - [ ] **Step 3: 测试**——路由+权限（Bearer+tenant 隔离）断言
 - [ ] **Step 4: commit** `feat(pth,ptl): hub observe——远程会话/trace/事件观测（F/WP4）`
@@ -311,9 +311,9 @@
 **Files:**
 - Create: `src/pth/gateway/routes-debug.ts`（WebSocket 接入 sandbox 调试会话）
 - Create: `src/ptl/bridge/debug.ts`（pit hub debug）
-- Test: `test/unit/hub-debug.test.js`（新建）
+- Test: `test/unit/hub-debug.test.ts`（新建）
 
-- [ ] **Step 1: WebSocket 交互通道**——pth 网关 ↔ sandbox 调试会话（Task 14 入口）；双向输入输出（vs hub run 的 SSE 单向）
+- [ ] **Step 1: WebSocket 交互通道**——pth 网关 ↔ sandbox 调试会话（Task 14 入口）；双向输入输出（vs hub run 的 SSE 单向）；**先核实现有 `/ws` 路由用途（server.ts:39 已有 WS 路由——评审 N3：复用现有 WS 注册新增 /ws/debug 子路径，避免冲突）**
 - [ ] **Step 2: 接入控制**——Bearer+role 校验；会话审计
 - [ ] **Step 3: 测试**——WS 握手/双向回显/权限拒绝断言（mock sandbox）
 - [ ] **Step 4: commit** `feat(pth,ptl): hub debug——WebSocket 交互式接入 sandbox 调试区（F/WP4）`
@@ -327,7 +327,7 @@
 **Files:**
 - Modify: `src/pth/core/session-pool.ts`（RESERVED 标记+evict 豁免）
 - Modify: `src/pth/core/agent-engine.ts`（常驻会话创建/recoverAll 优先/watchdog 重建）
-- Test: `test/unit/reserved-session.test.js`（新建）
+- Test: `test/unit/reserved-session.test.ts`（新建）
 
 - [ ] **Step 1: RESERVED 标记**——池新状态/标记；evict 豁免（evictLRU 跳过）；recoverAll 优先恢复
 - [ ] **Step 2: watchdog 重建**——常驻会话崩溃检测（health 探测/错误事件）→自动重建（**轻量状态化**——二轮评审 Important 3：常驻会话不持大状态，EventLog 查询按需，无大缓存）；重建次数审计
@@ -351,7 +351,7 @@
 - Create: `extensions/agent-lab/src/scheduler/timed-trigger.ts`
 - Test: `extensions/agent-lab/test/timed-trigger.test.ts`（新建，node:test）
 
-- [ ] **Step 1: 表结构**——`{id, tenantId, taskType, scheduleKind(cron|at|interval), scheduleSpec, payload, status, nextFireAt, lastFireAt, fireCount, createdBy}`；cron 解析**零新增依赖**（手写最小 cron 解析——分/时/日/月/周 5 段，或 interval/at 先行 cron 后置——实现时裁决并文档化）
+- [ ] **Step 1: 表结构**——`{id, tenantId, taskType, scheduleKind(cron|at|interval), scheduleSpec, payload, status, nextFireAt, lastFireAt, fireCount, createdBy, legalRef?}`（legalRef 与 Task 19 legalAuth 呼应——评审 I5）；cron 解析**零新增依赖**（手写最小 cron 解析——分/时/日/月/周 5 段，**或 interval/at 先行 cron 后置**——实现时裁决；若后置：验收不含 cron 用例并显式标注为 spec §6.1 偏差，后续补）
 - [ ] **Step 2: timed-trigger**——常驻会话进程内 unref 定时器扫描到期 job→构造 DispatchRequest→runner.dispatch→更新 nextFireAt/状态；missed-fire 补火一次（重启恢复时）
 - [ ] **Step 3: 测试**——job CRUD/到期触发/nextFireAt 计算/missed-fire/tenantId 隔离断言
 - [ ] **Step 4: commit** `feat(agent-lab): scheduled_jobs+定时触发器（常驻会话承载，含 tenantId，F/WP5）`
@@ -364,7 +364,7 @@
 - Create: `extensions/agent-lab/src/core/events/subscription-dispatcher.ts`
 - Test: `extensions/agent-lab/test/subscription-dispatcher.test.ts`（新建）
 
-- [ ] **Step 1: 表+派发器**——订阅注册表（内存回调）；EventLog append 后同步通知；匹配（eventType+过滤条件）→构造 DispatchRequest→dispatch
+- [ ] **Step 1: 表+派发器**——订阅注册表（内存回调）；EventLog append 后同步通知；匹配（eventType+过滤条件）→构造 DispatchRequest→dispatch；**通知失败语义**：派发器匹配/构造异常仅记日志+审计事件，**不阻断 append 主路径**（append-only 不变量优先——评审 I4）
 - [ ] **Step 2: 测试**——订阅/匹配/派发/tenantId 隔离/append-only 语义不变断言
 - [ ] **Step 3: commit** `feat(agent-lab): event_subscriptions+订阅派发器（EventLog 旁路，F/WP5）`
 
@@ -372,7 +372,7 @@
 
 **Files:**
 - Modify: `src/pth/gateway/`（POST /api/v1/events 路由）
-- Test: `test/unit/events-webhook.test.js`（新建）
+- Test: `test/unit/events-webhook.test.ts`（新建）
 
 - [ ] **Step 1: webhook 路由**——`{eventType, payload, source}`→转发常驻系统会话（pi.events emit 或 EventLog 写入——实现时定并文档化）→触发订阅派发
 - [ ] **Step 2: 权限+审计**——Bearer+tenant 归属；事件落审计
@@ -383,7 +383,7 @@
 
 **Files:**
 - Modify: `extensions/agent-lab/src/commands/register.ts`（/lab schedule add/ls/pause/resume/rm）
-- Test: `extensions/agent-lab/test/scheduled-integration.test.ts`（新建）+ `test/unit/f-wp5-integration.test.js`
+- Test: `extensions/agent-lab/test/scheduled-integration.test.ts`（新建）+ `test/unit/f-wp5-integration.test.ts`
 
 - [ ] **Step 1: /lab schedule 命令**（常驻会话内扩展命令）
 - [ ] **Step 2: hub observe 集成**——scheduled_jobs/subscriptions 只读可见（Task 21 路由扩展）
