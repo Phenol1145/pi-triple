@@ -22,6 +22,12 @@ import {
   type SchedulerSelectResultLike,
 } from "./render-scheduler.ts";
 import {
+  renderScheduleList,
+  renderScheduleJobCreated,
+  renderScheduleAction,
+  type ScheduledJobView,
+} from "./render-schedule.ts";
+import {
   renderOptimizerList,
   renderOptimizerRun,
   renderOptimizerProposals,
@@ -80,6 +86,12 @@ export {
   type ExperimentStatusResult,
   type ExperimentCompareResult,
 };
+export {
+  renderScheduleList,
+  renderScheduleJobCreated,
+  renderScheduleAction,
+  type ScheduledJobView,
+} from "./render-schedule.ts";
 
 interface Deps {
   store: Store;
@@ -99,12 +111,14 @@ interface Deps {
   optimizerFacade?: OptimizerFacade;
   experimentFacade?: ExperimentFacade;
   runMigration?: (dryRun: boolean) => MigrationReport;
+  /** /lab schedule 管理面（F/WP5 Task 28a——常驻会话内扩展命令） */
+  scheduledJobs?: () => import("../scheduler/timed-trigger.ts").ScheduledJobsStore | undefined;
 }
 
 // ── Command registration ────────────────────────────────────────────
 
 export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
-  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, getSchedulerUuid, arenaSmoke, bench, captureCommandContext, executeDispatch, optimizerFacade, experimentFacade, runMigration } = deps;
+  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, getSchedulerUuid, arenaSmoke, bench, captureCommandContext, executeDispatch, optimizerFacade, experimentFacade, runMigration, scheduledJobs } = deps;
 
   const aggsFor = (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a]));
 
@@ -568,10 +582,103 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
         } catch (err) {
           ctx.ui.notify(`Migration failed: ${(err as Error).message}`, "error");
         }
+      } else if (cmd === "schedule") {
+        const sub = argv[1];
+        const store0 = scheduledJobs?.();
+        if (!store0) {
+          ctx.ui.notify("定时任务管理不可用——常驻会话未接线 ScheduledJobsStore", "error");
+          return;
+        }
+        // tenant 解析：--tenant <id>，缺省 = PI_TEMPLATE env（沿用 stats 惯例）
+        const tenantIdx = argv.indexOf("--tenant");
+        const tenantId = tenantIdx >= 0 ? argv[tenantIdx + 1] : process.env.PI_TEMPLATE ?? "system";
+        const toView = (j: import("../scheduler/timed-trigger.ts").ScheduledJob): ScheduledJobView => ({
+          id: j.id,
+          tenantId: j.tenantId,
+          taskType: j.taskType,
+          scheduleKind: j.scheduleKind,
+          scheduleSpec: j.scheduleSpec,
+          status: j.status,
+          nextFireAt: j.nextFireAt,
+          lastFireAt: j.lastFireAt,
+          fireCount: j.fireCount,
+          createdBy: j.createdBy,
+          legalRef: j.legalRef,
+        });
+        if (sub === "add") {
+          const taskType = argv[2];
+          const kind = argv[3];
+          const spec = argv[4];
+          if (!taskType || !kind || !spec) {
+            ctx.ui.notify("用法: /lab schedule add <taskType> <interval|at|cron> <spec> [payloadJson] [--tenant <id>]", "error");
+            return;
+          }
+          let payload: unknown = {};
+          const payloadRaw = argv[5] && !argv[5].startsWith("--") ? argv[5] : undefined;
+          if (payloadRaw) {
+            try {
+              payload = JSON.parse(payloadRaw);
+            } catch {
+              ctx.ui.notify("payload 必须是合法 JSON", "error");
+              return;
+            }
+          }
+          const { computeNextFireAt } = await import("../scheduler/timed-trigger.ts");
+          let nextFireAt: number;
+          try {
+            nextFireAt = computeNextFireAt(kind as any, spec, Date.now());
+          } catch (err) {
+            ctx.ui.notify(`调度表达式无效: ${(err as Error).message}`, "error");
+            return;
+          }
+          try {
+            const job = store0.create({
+              id: `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              tenantId,
+              taskType,
+              scheduleKind: kind as any,
+              scheduleSpec: spec,
+              payload,
+              status: "active",
+              nextFireAt,
+              createdBy: "lab-schedule",
+            });
+            ctx.ui.notify(renderScheduleJobCreated(toView(job)), "info");
+          } catch (err) {
+            ctx.ui.notify(`创建失败: ${(err as Error).message}`, "error");
+          }
+        } else if (sub === "ls") {
+          try {
+            const jobs = store0.list({ tenantId });
+            ctx.ui.notify(renderScheduleList(jobs.map(toView)), "info");
+          } catch (err) {
+            ctx.ui.notify(`查询失败: ${(err as Error).message}`, "error");
+          }
+        } else if (sub === "pause" || sub === "resume" || sub === "rm") {
+          const id = argv[2];
+          if (!id) {
+            ctx.ui.notify(`用法: /lab schedule ${sub} <jobId>`, "error");
+            return;
+          }
+          const job = store0.get(id);
+          if (!job) {
+            ctx.ui.notify(`未找到定时任务 ${id}`, "error");
+            return;
+          }
+          if (sub === "rm") {
+            store0.remove(id);
+            ctx.ui.notify(renderScheduleAction("已删除", id), "info");
+            return;
+          }
+          store0.update(id, { status: sub === "pause" ? "paused" : "active" });
+          ctx.ui.notify(renderScheduleAction(sub === "pause" ? "已暂停" : "已恢复", id), "info");
+        } else {
+          ctx.ui.notify("用法: /lab schedule <add|ls|pause|resume|rm> [args] [--tenant <id>]", "info");
+        }
       } else if (cmd === "doctor") {
         ctx.ui.notify(`Agent Lab 状态:\n候选模型: ${catalog.candidates().length}\n目录新鲜: ${catalog.isFresh}\n角色数: ${store.listRoles().length}\nautoApply: ${cfg.autoApply}`, "info");
       } else {
-        ctx.ui.notify("用法: /lab <recommend|stats|models|log|pin|unpin|config|mode|migrate|market|scheduler|optimizer|experiment|doctor> ...\n  stats [role] [--global] [--tenant <alias|uuid>]", "info");
+        ctx.ui.notify("用法: /lab <recommend|stats|models|log|pin|unpin|config|mode|migrate|market|scheduler|schedule|optimizer|experiment|doctor> ...\n  stats [role] [--global] [--tenant <alias|uuid>]", "info");
       }
     },
   });

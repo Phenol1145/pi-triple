@@ -9,6 +9,8 @@ import { join } from "node:path";
 import { registerTelemetry, createSettleDispatch } from "./src/telemetry/register.ts";
 import { registerInterceptor } from "./src/interceptor/register.ts";
 import { registerCommands } from "./src/commands/register.ts";
+import { wireSystemEvents } from "./src/federation/system-events.ts";
+import { ScheduledJobsStore } from "./src/scheduler/timed-trigger.ts";
 import { findOrCreateAgentByModel, ensureSessionAgent } from "./src/arena/agent-id.ts";
 import { SqliteLedger } from "./src/arena/ledger.ts";
 import { EndowmentPolicyV1 } from "./src/arena/policies.ts";
@@ -179,6 +181,29 @@ export default async function (pi: ExtensionAPI) {
   // The tool_call handler below still captures ctx.events as a fallback if pi.events
   // is somehow undefined here.
   let delegationBus: EventBus | undefined = pi.events;
+
+  // ── F/WP5 Task 27/28：常驻会话系统事件接线（外部事件→订阅派发 / observe RPC /
+  //     component-bound 框架层 registry）。与 pth 主进程经共享 EventBus（pi.events ===
+  //     pth systemEventBus）零引用互通；schedulerCore 惰性就绪后 start() 完成接线。
+  const systemEvents = wireSystemEvents({
+    pi,
+    ensureCore: async () => {
+      // 惰性初始化 scheduler runtime（与 arenaSmoke/bench 同一模式）
+      schedulerRuntimeFactory();
+      if (bootstrapPromise) { try { await bootstrapPromise; } catch { /* fail-open */ } }
+      return schedulerCore;
+    },
+    getRunner: () => schedulerRuntime,
+    db: sharedStore.raw,
+  });
+  // 常驻会话（system-* 实例）就绪即接线定时触发器/订阅派发器；非 system 会话不启动
+  //（wireSystemEvents 订阅仍在，但无 core 时 fail-open 不阻断）。
+  pi.on("session_start", async () => {
+    if (process.env.PI_AGENT_INSTANCE_ID?.startsWith("system-")) {
+      await systemEvents.start().catch(() => {});
+    }
+  });
+  pi.on("session_shutdown", () => { try { systemEvents.dispose(); } catch { /* ignore */ } });
   const schedulerRuntimeFactory = (): SchedulerRuntimeLike | undefined => {
     if (!runtimeInitAttempted) {
       runtimeInitAttempted = true;
@@ -899,6 +924,7 @@ export default async function (pi: ExtensionAPI) {
       }
     },
     executeDispatch,
+    scheduledJobs: () => new ScheduledJobsStore(sharedStore.raw),
     runMigration: (dryRun: boolean) => {
       const ensureArenaBinding = () => {
         // Force the lazy bootstrap before checking — running /lab migrate
