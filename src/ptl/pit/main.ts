@@ -55,6 +55,9 @@ const HELP_GROUPS: HelpGroup[] = [
       ["hub run <name> [k=v…]", "远端运行程序"],
       ["hub programs", "列出已提交程序"],
       ["hub dev <dir>", "本地调试程序"],
+      ["hub request <desc> --slot <s>", "创建回退请求（手动建单）"],
+      ["hub requests", "列出回退请求（open 优先）"],
+      ["hub respond <id> <dir>", "构建构件闭合回退请求"],
     ],
   },
   {
@@ -118,6 +121,9 @@ const NAMESPACE_HELP: Record<string, Array<[string, string]>> = {
     ["hub run <name> [k=v…]", "远端运行程序"],
     ["hub programs", "列出已提交程序"],
     ["hub dev <dir>", "本地调试程序"],
+    ["hub request <desc> --slot <s>", "创建回退请求（手动建单）"],
+    ["hub requests", "列出回退请求（open 优先）"],
+    ["hub respond <id> <dir>", "构建构件闭合回退请求"],
   ],
   template: [
     ["template ls", "列出模板（别名 + UUID）"],
@@ -186,7 +192,7 @@ const COMMAND_HELP: Record<string, { usage: string; desc: string; flags?: Array<
     examples: ["pit start", "pit start --template dev", "pit start --bg --name coding"],
   },
   tui: { usage: "pit tui [dashboard|lab]", desc: "打开可视化 TUI 面板（默认 dashboard）" },
-  hub: { usage: "pit hub <submit|run|programs|dev>", desc: "PTH 远端程序管理" },
+  hub: { usage: "pit hub <submit|run|programs|dev|request|requests|respond>", desc: "PTH 远端程序管理 + 回退请求通道" },
   onboard: { usage: "pit onboard", desc: "首次导引向导：环境检查→配置→模板→验证" },
   doctor: { usage: "pit doctor", desc: "完整健康检查 + 交互修复" },
 };

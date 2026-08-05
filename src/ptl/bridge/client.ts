@@ -5,7 +5,7 @@
  * 错误区分：401 token 无效 / 404 PTH 版本过旧 / 其他网络错误。
  */
 import { loadConfig, getConfigValue } from "../config.js";
-import { type ProgramManifest } from "./manifest.js";
+import { type ProgramManifest, type ComponentManifest } from "./manifest.js";
 
 /** SSE 事件 */
 export interface SSEEvent {
@@ -25,6 +25,18 @@ export interface ProgramEntry {
   name: string;
   latestVersion: number;
   updatedAt: string;
+}
+
+/** fallback_requests 条目（F/WP4 Task 20） */
+export interface FallbackRequestEntry {
+  requestId: string;
+  slotHint?: string;
+  description: string;
+  urgency: string;
+  createdAt: string;
+  status: "open" | "closed";
+  closedBy?: string;
+  closedAt?: string;
 }
 
 export class PthClient {
@@ -85,6 +97,61 @@ export class PthClient {
     }
 
     return (await res.json()) as SubmitResponse;
+  }
+
+  /** 提交构件（F/WP4 Task 17/20）：components API；requestId 可选（respond 闭合关联） */
+  async submitComponent(
+    type: ComponentManifest["type"],
+    manifest: ComponentManifest,
+    archive: Buffer,
+    requestId?: string,
+  ): Promise<SubmitResponse> {
+    const body = JSON.stringify({
+      type,
+      manifest,
+      archive: archive.toString("base64"),
+      ...(requestId !== undefined ? { requestId } : {}),
+    });
+
+    const res = await this.request("/api/v1/components", {
+      method: "POST",
+      headers: this.headers(),
+      body,
+    });
+
+    if (!res.ok) {
+      await this.throwError(res, "提交构件失败");
+    }
+
+    return (await res.json()) as SubmitResponse;
+  }
+
+  /** 手动建单（F/WP4 Task 20） */
+  async createFallbackRequest(input: {
+    description: string;
+    slotHint?: string;
+    urgency?: string;
+  }): Promise<FallbackRequestEntry> {
+    const res = await this.request("/api/v1/fallback-requests", {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      await this.throwError(res, "创建回退请求失败");
+    }
+    return (await res.json()) as FallbackRequestEntry;
+  }
+
+  /** 回退请求列表（F/WP4 Task 20——open 优先） */
+  async listFallbackRequests(): Promise<FallbackRequestEntry[]> {
+    const res = await this.request("/api/v1/fallback-requests", {
+      headers: this.headers(),
+    });
+    if (!res.ok) {
+      await this.throwError(res, "获取回退请求列表失败");
+    }
+    return (await res.json()) as FallbackRequestEntry[];
   }
 
   /** 列出程序 */

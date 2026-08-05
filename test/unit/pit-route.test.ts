@@ -24,8 +24,8 @@ describe("resolveTuiPanel", () => {
 });
 
 describe("HUB_COMMANDS", () => {
-  it("含 submit/run/programs/dev", () => {
-    expect(HUB_COMMANDS).toEqual(["submit", "run", "programs", "dev"]);
+  it("含 submit/run/programs/dev/request/requests/respond", () => {
+    expect(HUB_COMMANDS).toEqual(["submit", "run", "programs", "dev", "request", "requests", "respond"]);
   });
 });
 
@@ -96,6 +96,9 @@ describe("cmdHub", () => {
       run: async (...a: unknown[]) => { calls.push(["run", a]); },
       programs: async (...a: unknown[]) => { calls.push(["programs", a]); },
       dev: async (...a: unknown[]) => { calls.push(["dev", a]); },
+      request: async (...a: unknown[]) => { calls.push(["request", a]); },
+      requests: async (...a: unknown[]) => { calls.push(["requests", a]); },
+      respond: async (...a: unknown[]) => { calls.push(["respond", a]); },
     };
     return { calls, h };
   }
@@ -128,6 +131,29 @@ describe("cmdHub", () => {
     await cmdHub("dev", ["my-agent"], {}, h);
     expect(calls[0][0]).toBe("dev");
     expect(calls[0][1][0]).toBe("my-agent");
+  });
+
+  it("hub request <desc> --slot s --urgency high → handlers.request(passthrough, flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("request", ["缺一个审核 agent"], { slot: "slot-a", urgency: "high" }, h);
+    expect(calls[0][0]).toBe("request");
+    expect(calls[0][1][0]).toEqual(["缺一个审核 agent"]);
+    expect(calls[0][1][1]).toEqual({ slot: "slot-a", urgency: "high" });
+  });
+
+  it("hub requests → handlers.requests(flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("requests", [], { json: "true" }, h);
+    expect(calls[0][0]).toBe("requests");
+    expect(calls[0][1][0]).toEqual({ json: "true" });
+  });
+
+  it("hub respond <id> <dir> → handlers.respond(passthrough, flags)", async () => {
+    const { calls, h } = fakeHandlers();
+    await cmdHub("respond", ["req-1", "./my-agent"], {}, h);
+    expect(calls[0][0]).toBe("respond");
+    expect(calls[0][1][0]).toEqual(["req-1", "./my-agent"]);
+    expect(calls[0][1][1]).toEqual({});
   });
 
   it("hub（无子命令）→ 打印帮助，不调用任何 handler", async () => {

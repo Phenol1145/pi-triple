@@ -13,6 +13,8 @@ import { cmdSubmit } from "../bridge/submit.js";
 import { cmdRun } from "../bridge/run.js";
 import { cmdPrograms } from "../bridge/programs.js";
 import { cmdDev } from "../bridge/dev.js";
+import { cmdHubRequest, cmdHubRequests } from "../bridge/request.js";
+import { cmdHubRespond } from "../bridge/respond.js";
 import { printNamespaceHelp } from "./main.js";
 
 // ─── TUI ───────────────────────────────────────────────────
@@ -29,7 +31,7 @@ export function resolveTuiPanel(subcommand: string | undefined): TuiPanel {
 
 // ─── hub ───────────────────────────────────────────────────
 
-export const HUB_COMMANDS = ["submit", "run", "programs", "dev"] as const;
+export const HUB_COMMANDS = ["submit", "run", "programs", "dev", "request", "requests", "respond"] as const;
 export type HubCommand = (typeof HUB_COMMANDS)[number];
 
 // ─── deprecated（clean break：旧命令仅提示迁移）────────────────
@@ -113,6 +115,9 @@ export type HubHandlers = {
   run: (name: string, args: string[], flags: Record<string, string>) => Promise<void>;
   programs: (flags: Record<string, string>) => Promise<void>;
   dev: (dir: string, passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  request: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  requests: (flags: Record<string, string>) => Promise<void>;
+  respond: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
 };
 
 export const defaultHubHandlers: HubHandlers = {
@@ -120,6 +125,9 @@ export const defaultHubHandlers: HubHandlers = {
   run: cmdRun,
   programs: cmdPrograms,
   dev: cmdDev,
+  request: cmdHubRequest,
+  requests: cmdHubRequests,
+  respond: cmdHubRespond,
 };
 
 /** pit hub <submit|run|programs|dev> — 分发到 bridge 命令；无/未知子命令打印命名空间帮助。 */
@@ -141,6 +149,15 @@ export async function cmdHub(
       break;
     case "dev":
       await handlers.dev(passthrough[0] ?? "", passthrough.slice(1), flags);
+      break;
+    case "request":
+      await handlers.request(passthrough, flags);
+      break;
+    case "requests":
+      await handlers.requests(flags);
+      break;
+    case "respond":
+      await handlers.respond(passthrough, flags);
       break;
     default:
       printNamespaceHelp("hub");
