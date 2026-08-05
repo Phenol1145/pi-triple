@@ -19,9 +19,14 @@ services:
       - PI_CODING_AGENT_DIR=/data/agent-dir
       - AGENT_LAB_DB_PATH=/data/agent-lab/agent-lab.db
       - DATA_DIR=/data
-      # F/WP3 Task 11：sandbox 转发客户端 env（共享密钥 compose 注入，非镜像硬编码）
+  # F/WP3 Task 11：sandbox 转发客户端 env（共享密钥 compose 注入，非镜像硬编码）
       - SANDBOX_URL=http://sandbox:8080
       - SANDBOX_SHARED_SECRET=${SANDBOX_SHARED_SECRET:-sandbox-dev-secret}
+    # F/WP3 Task 13：sandbox 失效降级阈值（连续 N 次转发失败置 degraded；默认 3，可 env 覆盖）
+      - SANDBOX_DEGRADED_THRESHOLD=${SANDBOX_DEGRADED_THRESHOLD:-3}
+    # 路径约定统一（F/WP3 Task 12）：pth 侧 WorkspaceManager basePath = <DATA_DIR>/workspaces
+    # = /data/workspaces（DATA_DIR=/data），与 sandbox 侧 cwd 白名单根 workspacesRoot 一致；
+    # 双容器同挂 workspaces 卷同路径 → 转发 cwd 无需任何路径映射（smooth 直通）。
     # programs→components v1 direct switch + startup alert:
     # compose detects old programs dir on startup and logs WARN
     # prompting manual migration (code-side migration is Task 17).
@@ -52,7 +57,9 @@ services:
   # F/WP3 Task 10：唯一代码执行 sandbox。egress 锁定 = 仅 internal 网络（无任何外部出口）；
   # 共享密钥 env 注入；资源限额 CPU/内存；非 root（Dockerfile USER node）。
   # 执行 API：POST /exec / GET /exec/:id/stream（SSE）/ GET /health。
-  # 注：workspaces 共享卷挂载（pth 与 sandbox 同卷同路径 /data/workspaces——Task 12 路径约定）。
+  # 路径约定统一（F/WP3 Task 12）：workspaces 共享卷 = pth:/data/workspaces = sandbox:/data/workspaces
+  # （同卷同路径——转发 cwd 无需映射）；sandbox 侧 cwd 白名单根（exec-api workspacesRoot）默认
+  # /data/workspaces，与 pth 侧 WorkspaceManager basePath（DATA_DIR=/data 时）完全一致。
   sandbox:
     build:
       context: .

@@ -4,6 +4,13 @@ import type { PlatformAdapter } from "../platform/index.js";
 
 const PROJECT_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
+/**
+ * 工作区管理器（F/WP2 Task 7 层级固化）。
+ *
+ * 路径约定（F/WP3 Task 12 统一）：本类 basePath 默认 /data/workspaces（容器内 DATA_DIR=/data
+ * 时与 sandbox 侧 exec-api 的 cwd 白名单根 workspacesRoot 完全一致——双容器同挂 workspaces 卷
+ * 同路径，转发 cwd 无需映射）。消费方不得自行拼装 workspaces/... 路径，一律经本类 resolve/ensure 方法。
+ */
 export class WorkspaceManager {
   constructor(
     private platform: PlatformAdapter,

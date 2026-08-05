@@ -100,6 +100,38 @@ describe("sandbox 执行 API（F/WP3 Task 10）", () => {
     expect(r3.statusCode).toBe(400);
   });
 
+  it("cwd 白名单 realpath（评审 WP3-R1）：卷内 symlink 指向卷外 → 400（防 symlink 逃逸）", async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-outside-"));
+    const link = path.join(wsRoot, "escape-link");
+    fs.symlinkSync(outside, link);
+    try {
+      const res = await app.inject({
+        method: "POST", url: "/exec", headers: authHeaders(),
+        payload: { cmd: "echo x", cwd: link },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("within workspaces root");
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+      fs.unlinkSync(link);
+    }
+  });
+
+  it("cwd 白名单 realpath：卷内合法 symlink（指向卷内目录）→ 200（不误伤）", async () => {
+    const link = path.join(wsRoot, "in-link");
+    fs.symlinkSync(wsDir, link);
+    try {
+      const res = await app.inject({
+        method: "POST", url: "/exec", headers: authHeaders(),
+        payload: { cmd: "echo linked-ok", cwd: link },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().stdout).toContain("linked-ok");
+    } finally {
+      fs.unlinkSync(link);
+    }
+  });
+
   it("超时强杀：timeout=200ms → SIGKILL 进程组 + timedOut=true + exitCode 137", async () => {
     const start = Date.now();
     const res = await app.inject({

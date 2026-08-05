@@ -189,17 +189,36 @@ function runExec(
 }
 
 // ─── 校验 ────────────────────────────────────────────────────────────
+/**
+ * cwd 白名单校验（F/WP3 Task 12，评审 WP3-R1 Important#1）：
+ * 先用 fs.realpathSync 解析 symlink 再 startsWith 白名单根——防 symlink 逃逸：
+ * 卷内 symlink 指向卷外 → realpath 后前缀不匹配 → 拒绝（400）。
+ * 根与 cwd 双侧 realpath（根自身也可能经 symlink 挂载/解析）。
+ */
 function validateCwd(cwdRaw: string | undefined, workspacesRoot: string): string {
   const root = path.resolve(workspacesRoot);
   const cwd = cwdRaw ? path.resolve(cwdRaw) : root;
-  // resolve+startsWith 白名单校验（路径穿越防御）。注：不解析 symlink（残留风险见报告）。
-  if (cwd !== root && !cwd.startsWith(root + path.sep)) {
+  let realRoot: string;
+  try {
+    realRoot = fs.realpathSync(root);
+  } catch {
+    // 根不存在时回退 resolve 结果（容器内卷挂载点必存在；测试显式传根）
+    realRoot = root;
+  }
+  let realCwd: string;
+  try {
+    realCwd = fs.realpathSync(cwd);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(`cwd does not exist: ${cwd}`);
+    }
+    throw new Error(`cwd cannot be resolved: ${cwd}`);
+  }
+  // realpath 后白名单校验（对称：realRoot 亦为 realpath 结果）
+  if (realCwd !== realRoot && !realCwd.startsWith(realRoot + path.sep)) {
     throw new Error(`cwd must be within workspaces root: ${root}`);
   }
-  if (!fs.existsSync(cwd)) {
-    throw new Error(`cwd does not exist: ${cwd}`);
-  }
-  return cwd;
+  return realCwd;
 }
 
 function validateBody(body: unknown, defaultTimeoutMs: number, maxTimeoutMs: number): { cmd: string | string[]; timeoutMs: number } {
