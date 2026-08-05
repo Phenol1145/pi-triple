@@ -242,3 +242,78 @@ describe("targetSlot 空位绑定（F/WP4 Task 18）", () => {
     expect(validateSlotId("slot-a")).toBeNull();
   });
 });
+
+describe("legalAuth 声明式登记（F/WP4 Task 19）", () => {
+  let tmpDir: string;
+  let redis: MockRedis;
+  let store: ComponentStore;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pth-legal-"));
+    redis = new MockRedis();
+    store = new ComponentStore(redis as any, tmpDir, new AuditWriter(redis as any));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("legalAuth 原样落盘：Redis 全量 manifest + 磁盘归档身份文件均含原值（不拦截不校验）", async () => {
+    const auth = "session:gov-42:trace:abc";
+    const mf = agentManifest({ name: "legal-agent", legalAuth: auth });
+    const r = await store.save("t1", mf, agentArchive([{ name: "PROMPT.md", content: "hi" }], mf));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    // Redis 全量 manifest 含 legalAuth
+    const rawManifest = redis.store.get("component:t1:agent-program:legal-agent:1");
+    expect(rawManifest).toBeTruthy();
+    expect(JSON.parse(rawManifest!).legalAuth).toBe(auth);
+
+    // 磁盘 agent.json 原样
+    const onDisk = JSON.parse(fs.readFileSync(path.join(r.value.root, "agent.json"), "utf-8"));
+    expect(onDisk.legalAuth).toBe(auth);
+  });
+
+  it("审计事件 component_upload 含 legalAuth 字段", async () => {
+    const auth = "session:gov-42";
+    const mf = schedulerManifest("legal-sched");
+    await store.save("t1", { ...mf, legalAuth: auth }, schedulerArchive("legal-sched"));
+
+    const events = auditEvents(redis);
+    const upload = events.find((e) => e.action === "component_upload");
+    expect(upload).toBeTruthy();
+    expect(upload!.tenantId).toBe("t1");
+    expect(upload!.details.legalAuth).toBe(auth);
+    expect(upload!.details.type).toBe("scheduler");
+    expect(upload!.details.name).toBe("legal-sched");
+    expect(upload!.details.version).toBe(1);
+  });
+
+  it("legalAuth 仅登记不拦截：无 targetSlot 时不产生绑定键，仅 component_upload 审计", async () => {
+    const auth = "session:gov-42";
+    const mf = schedulerManifest("legal-only");
+    await store.save("t1", { ...mf, legalAuth: auth }, schedulerArchive("legal-only"));
+
+    for (const k of redis.store.keys()) expect(k.startsWith("slot:")).toBe(false);
+    const events = auditEvents(redis);
+    expect(events.filter((e) => e.action === "slot_binding")).toHaveLength(0);
+    expect(events.filter((e) => e.action === "component_upload")).toHaveLength(1);
+  });
+
+  it("targetSlot + legalAuth 同时携带：绑定记录与 slot_binding 审计均含 legalAuth", async () => {
+    const auth = "session:gov-42";
+    const mf = agentManifest({ name: "both", targetSlot: "slot-gov", legalAuth: auth });
+    await store.save("t1", mf, agentArchive([{ name: "PROMPT.md", content: "hi" }], mf));
+
+    const binding = JSON.parse(redis.store.get("slot:slot-gov:binding")!);
+    expect(binding.legalAuth).toBe(auth);
+
+    const events = auditEvents(redis);
+    const slotEv = events.find((e) => e.action === "slot_binding");
+    expect(slotEv!.details.legalAuth).toBe(auth);
+    const uploadEv = events.find((e) => e.action === "component_upload");
+    expect(uploadEv!.details.legalAuth).toBe(auth);
+    expect(uploadEv!.details.targetSlot).toBe("slot-gov");
+  });
+});
