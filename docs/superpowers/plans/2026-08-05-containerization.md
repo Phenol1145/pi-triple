@@ -242,7 +242,7 @@
 - Modify: `src/ptl/bridge/manifest.ts`（ProgramManifest→ComponentManifest+type 分派校验）
 - Test: `test/unit/bridge-manifest.test.ts`（扩充）
 
-- [ ] **Step 1: ComponentManifest**——`type: agent-program|scheduler|optimizer|memory-pack|skeleton-update`；payload 类型相关；原 ProgramManifest 字段归入 agent-program 分支（**完全等价映射**——二轮评审 Minor：避免两套存储逻辑）
+- [ ] **Step 1: ComponentManifest**——`type: agent-program|scheduler|optimizer|memory-pack|skeleton-update`；payload 类型相关；原 ProgramManifest 字段归入 agent-program 分支（**完全等价映射**——二轮评审 Minor：避免两套存储逻辑）；**评审 WP4-R1 Minor#3：非 agent 类型归档身份文件=definition.json（agent.json 契约最小泛化——implementer 自定裁决，写入 spec/plan 备查）**
 - [ ] **Step 2: 分派校验器**——按 type 校验 payload（agent-program 走原 validateManifest 逻辑；其余类型最小校验——name/type 合法，payload 结构骨架）
 - [ ] **Step 3: 测试**——各 type 合法/非法断言+agent-program 兼容断言（旧 agent.json 原样通过）
 - [ ] **Step 4: commit** `feat(ptl): ComponentManifest 泛化——5 类构件+agent-program 等价兼容（F/WP4）`
