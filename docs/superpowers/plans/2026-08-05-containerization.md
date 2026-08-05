@@ -198,7 +198,7 @@
 - Modify: `docker-compose.yaml`（pth 与 sandbox 同挂 workspaces 卷）
 - Modify: `src/shared/workspace/manager.ts`（容器内路径约定 /data/workspaces/）
 
-- [ ] **Step 1: 双容器同卷**——pth:/data/workspaces = sandbox:/data/workspaces（路径语义一致——转发 cwd 无需映射）
+- [ ] **Step 1: 双容器同卷**——pth:/data/workspaces = sandbox:/data/workspaces（路径语义一致——转发 cwd 无需映射）；**评审 WP3-R1 Important#1：cwd 白名单补 `fs.realpath` 后再校验**（symlink 逃逸——workspaces 卷内 symlink 指向卷外可绕过 resolve+startsWith；realpath 校验后拒绝）
 - [ ] **Step 2: 测试**——pth 写文件→sandbox exec 可读断言（compose 集成测试或 mock）
 - [ ] **Step 3: commit** `feat(pth): workspaces 共享卷——pth/sandbox 路径约定统一（F/WP3）`
 
