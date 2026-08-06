@@ -49,11 +49,18 @@ RUN mamba install -y -c conda-forge \
 
 # ── 7) PTL 外接工具（开源集——用户裁决：非开源保留本机）──
 #   yt-dlp（PyPI）/ agent-reach（GitHub Panniantong）/ instsci（GitHub rimagination）
+#   / chatgpt-share（本地单文件脚本——agent-reach 的 ChatGPT 分享会话解码后端）
 #   pip → /opt/conda（root）；uv tool → ~/.local/share/uv（jovyan——分两层）
 RUN pip install --no-cache-dir yt-dlp \
     && pip install --no-cache-dir "agent-reach @ git+https://github.com/Panniantong/agent-reach@main"
 USER jovyan
 RUN uv tool install "instsci @ git+https://github.com/rimagination/instsci"
+# chatgpt-share：单文件纯 stdlib、无用户态状态 → 系统级 /usr/local/bin（root）。
+# 不放 $HOME：dev-home 卷覆盖挂载会遮蔽镜像里的 $HOME 文件；也不涉及属主坑。
+# 注意：重建镜像会重置 agent-reach 的 chatgpt_share 渠道补丁（site-packages 重新 pip 装），
+# 重建后重跑 tools/dev/agent-reach-chatgpt/patch-agent-reach.sh 恢复渠道注册。
+USER root
+COPY --chmod=755 tools/dev/agent-reach-chatgpt/chatgpt-share /usr/local/bin/chatgpt-share
 
 # ── 8) 成品保留区 + 工作区目录 ──
 USER root

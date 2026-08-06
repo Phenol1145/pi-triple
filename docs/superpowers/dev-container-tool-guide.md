@@ -32,7 +32,7 @@
  └─ X 只是宿主已有且无需隔离？ ────────────────→ 宿主机（不动）
 ```
 
-**已迁入 dev 的开源工具**（Dockerfile.dev §7）：`agent-reach`、`yt-dlp`、`instsci`。
+**已迁入 dev 的开源工具**（Dockerfile.dev §7）：`agent-reach`、`yt-dlp`、`instsci`、`chatgpt-share`（单文件脚本，`tools/dev/agent-reach-chatgpt/`，系统级 `/usr/local/bin`）。
 **保留宿主机的非开源工具**（用户裁决）：`kimiim-cli`、`obsidian`（及其 git 同步）、`claude`、`qodercli`。
 
 ---
@@ -89,7 +89,8 @@ curl -s https://pypi.org/pypi/<pkg>/json | head -5
 **Step 3｜重建 + 实证**：
 
 ```bash
-docker build -f Dockerfile.dev -t pi-platform:dev .
+docker compose build dev          # compose 服务未设 image: 字段，实际镜像名是 pi-platform-dev
+ docker build -t pi-platform:dev 会产生孤儿 tag，勿用
 docker compose up -d --force-recreate dev
 docker compose exec dev <tool> --version   # 实证
 ```
@@ -162,6 +163,7 @@ PTH bash 工具 ──转发──→ sandbox 执行（中间态产物落 /data/
 4. **jupyter 拒绝 root**：entrypoint 以 root 跑 chown 后必须降回 jovyan（`su jovyan`）再启动——已在 compose entrypoint 处理。
 5. **非开源二进制别进容器**：Mach-O（kimiim-cli/obsidian/claude/qodercli）在 Linux 容器不可执行——保留宿主机。
 6. **端口冲突**：jupyter 8888 与 WeKnora searxng 冲突时改 `JUPYTER_PORT=8889`。
+7. **wrapper 目标是符号链接**：`gen-dev-wrapper.sh` 用 `cat >` 写 wrapper，若 `~/.local/bin/<tool>` 是软链（如指向工具源码），写入会穿透写坏链接目标。脚本已加保护（先 `rm` 符号链接）；手工写 wrapper 时同样先检查 `ls -la`。
 
 ---
 
