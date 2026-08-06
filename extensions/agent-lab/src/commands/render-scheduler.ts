@@ -104,6 +104,33 @@ export function renderSchedulerSync(addedCount: number): string {
   return `Scheduler sync: added ${addedCount} new agent(s) to the population.`;
 }
 
+export interface SchedulerDispatchResultLike {
+  status: "completed" | "abstained" | "fallback" | "failed";
+  selectedAgentId?: string;
+  model?: string;
+  reason?: string;
+  error?: { code?: string; message?: string; retryable?: boolean };
+  target?: { type?: string; id?: string; errorCode?: string };
+}
+
+/** 简单文本：status + selectedAgentId + reason/error（/lab scheduler dispatch 输出） */
+export function renderSchedulerDispatch(result: SchedulerDispatchResultLike): string {
+  const lines: string[] = [`Scheduler dispatch: ${result.status}`];
+  if (result.status === "completed") {
+    if (result.selectedAgentId) lines.push(`  Agent: ${result.selectedAgentId}`);
+    if (result.model) lines.push(`  Model: ${result.model}`);
+    if (result.reason) lines.push(`  Reason: ${result.reason}`);
+  } else if (result.status === "abstained") {
+    lines.push(`  Reason: ${result.reason ?? "no candidates"}`);
+  } else if (result.status === "fallback") {
+    const target = result.target?.type ?? "unknown";
+    lines.push(`  Fallback target: ${target}${result.target?.id ? ` (${result.target.id})` : ""}`);
+  } else if (result.status === "failed") {
+    lines.push(`  Error: ${result.error?.message ?? result.error?.code ?? "unknown error"}`);
+  }
+  return lines.join("\n");
+}
+
 export function renderSchedulerEvents(events: LabEvent[], limit: number): string {
   if (events.length === 0) {
     return `No scheduler events found (limit=${limit}).`;

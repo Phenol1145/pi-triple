@@ -1,4 +1,5 @@
 import type { LabConfig } from "../types.ts";
+import type { SchedulingStrategy } from "../scheduler/strategy.ts";
 
 // ── Runtime contract (matches SchedulerRunner.dispatch from Task 2) ──
 
@@ -12,6 +13,10 @@ export interface SchedulerRuntimeLike {
     taskCategory?: string;
     labels?: Record<string, string>;
     caller?: string;
+    /** 显式调度策略（照 runner-types DispatchRequest.strategy） */
+    strategy?: SchedulingStrategy;
+    /** direct 模式指定执行 agent（照 runner-types DispatchRequest.agentId） */
+    agentId?: string;
     mode: "select" | "execute";
     signal?: AbortSignal;
     settlementRef?: string;

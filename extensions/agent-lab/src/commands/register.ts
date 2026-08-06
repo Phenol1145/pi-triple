@@ -11,6 +11,7 @@ import type { LabEvent } from "../core/contracts.ts";
 import type { MigrationReport } from "../migrate.ts";
 import { renderMigrationReport } from "../migrate.ts";
 import { DEFAULT_WEIGHTED_SCORER_NAME } from "../schedulers/names.ts";
+import type { SchedulingStrategy } from "../scheduler/strategy.ts";
 import type { OptimizerFacade } from "./render-optimizer.ts";
 import type { ExperimentFacade } from "./render-experiment.ts";
 import {
@@ -18,6 +19,7 @@ import {
   renderSchedulerSelect,
   renderSchedulerSync,
   renderSchedulerEvents,
+  renderSchedulerDispatch,
   type SchedulerStatusInput,
   type SchedulerSelectResultLike,
 } from "./render-scheduler.ts";
@@ -58,6 +60,7 @@ export {
   renderSchedulerSelect,
   renderSchedulerSync,
   renderSchedulerEvents,
+  renderSchedulerDispatch,
   type SchedulerStatusInput,
   type SchedulerSelectResultLike,
 };
@@ -116,6 +119,41 @@ interface Deps {
 }
 
 // ── Command registration ────────────────────────────────────────────
+
+// ── /lab scheduler dispatch 参数解析（纯函数，导出供测试） ─────────────
+
+export interface DispatchArgs {
+  role: string;
+  task: string;
+  strategy?: SchedulingStrategy;
+  agentId?: string;
+}
+
+export type DispatchArgsParse =
+  | { ok: true; args: DispatchArgs }
+  | { ok: false; error: string };
+
+/**
+ * 解析 `scheduler dispatch <role> <task...> --strategy <s> [--agent <id>]`。
+ * task 为 role 之后、第一个 `--` 参数之前的所有段以空格拼接（可含空格）。
+ */
+export function parseDispatchArgs(argv: string[]): DispatchArgsParse {
+  const role = argv[2];
+  const rest = argv.slice(3);
+  const flagIdx = rest.findIndex((a) => a.startsWith("--"));
+  const task = (flagIdx >= 0 ? rest.slice(0, flagIdx) : rest).join(" ").trim();
+  if (!role || !task) {
+    return { ok: false, error: "用法: /lab scheduler dispatch <role> <task...> --strategy direct|weighted|market [--agent <id>]" };
+  }
+  const strategyIdx = argv.indexOf("--strategy");
+  const strategy = strategyIdx >= 0 ? argv[strategyIdx + 1] : undefined;
+  const agentIdx = argv.indexOf("--agent");
+  const agentId = agentIdx >= 0 ? argv[agentIdx + 1] : undefined;
+  if (strategy === "direct" && !agentId) {
+    return { ok: false, error: "strategy=direct 需要 --agent <id>" };
+  }
+  return { ok: true, args: { role, task, strategy: strategy as SchedulingStrategy | undefined, agentId } };
+}
 
 export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
   const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, getSchedulerUuid, arenaSmoke, bench, captureCommandContext, executeDispatch, optimizerFacade, experimentFacade, runMigration, scheduledJobs } = deps;
@@ -351,6 +389,24 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
           } catch (err) {
             ctx.ui.notify(`Scheduler select failed: ${(err as Error).message}`, "error");
           }
+        } else if (sub === "dispatch") {
+          const parsed = parseDispatchArgs(argv);
+          if (!parsed.ok) { ctx.ui.notify(parsed.error, "error"); return; }
+          const rt = schedulerRuntime?.();
+          if (!rt) { ctx.ui.notify("Scheduler runtime unavailable — enable with /lab config scheduler.enabled true", "error"); return; }
+          try {
+            const result = await rt.dispatch({
+              traceId: `cmd-dispatch-${Date.now()}`,
+              role: parsed.args.role,
+              task: parsed.args.task,
+              strategy: parsed.args.strategy,
+              agentId: parsed.args.agentId,
+              mode: "execute",
+            });
+            ctx.ui.notify(renderSchedulerDispatch(result), "info");
+          } catch (err) {
+            ctx.ui.notify(`Scheduler dispatch failed: ${(err as Error).message}`, "error");
+          }
         } else if (sub === "sync") {
           if (!syncSchedulerAgents) {
             ctx.ui.notify("Scheduler sync unavailable — enable scheduler first with /lab config scheduler.enabled true", "error");
@@ -378,7 +434,7 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
             ctx.ui.notify(`Scheduler events query failed: ${(err as Error).message}`, "error");
           }
         } else {
-          ctx.ui.notify("用法: /lab scheduler <status|select|sync|events> [args]", "info");
+          ctx.ui.notify("用法: /lab scheduler <status|select|dispatch|sync|events> [args]", "info");
         }
       } else if (cmd === "optimizer") {
         const sub = argv[1];
