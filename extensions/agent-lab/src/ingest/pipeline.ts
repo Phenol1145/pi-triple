@@ -1,6 +1,6 @@
 // 摄入管道（spec §4）：源扫描 → 指针条目（create/update/skip）。
 // 机械、确定性、幂等——不经 agent；文档层进入记忆系统的唯一接口。
-// 增量判定：内容相等 ⟺ 无变更（内容由 SourceDoc 确定性构造）。
+// 增量判定：源文档 contentHash 相同 ⟺ 无变更（idempotencyKey 携带全量哈希，spec §4）。
 
 import { createHash } from "node:crypto";
 import type { MemoryPipeline } from "../memory/pipeline.ts";
@@ -48,7 +48,7 @@ export class IngestPipeline {
       const id = pointerEntryId(doc.relPath);
       const content = buildPointerContent(doc);
       const existing = this.deps.store.get(id);
-      if (existing && existing.content === content) { summary.skipped++; continue; }
+      if (existing && existing.idempotencyKey === `ingest:${doc.relPath}:${doc.contentHash}`) { summary.skipped++; continue; }
       const r = this.deps.memPipeline.write({
         id,
         kind: "fact",
@@ -57,6 +57,9 @@ export class IngestPipeline {
         ruleRef: this.deps.ruleId,
         status: "official",
         idempotencyKey: `ingest:${doc.relPath}:${doc.contentHash}`,
+        // spec §4：hash 不同写新版本——store.write 仅按内容差异递增版本，
+        // 正文变更（派生内容不变）时须显式携带下一版本号。
+        ...(existing ? { meta: { version: existing.meta.version + 1 } } : {}),
       });
       if (!r.ok) throw new Error(`ingest ${doc.relPath} failed: ${r.errors.join("; ")}`);
       if (existing) summary.updated++; else summary.created++;
