@@ -1,6 +1,7 @@
 import type { StandardAgentError, StandardAgentOutput } from "../workloop/contracts.ts";
 import type { FallbackTarget } from "../core/contracts.ts";
 import type { SchedulingMode } from "./contracts.ts";
+import type { SchedulingStrategy } from "./strategy.ts";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -51,6 +52,8 @@ export interface DispatchRequest {
   labels?: Record<string, string>;
   caller?: string;
   mode?: SchedulingMode;
+  /** 显式调度策略（缺省走 resolveStrategy 自动路由） */
+  strategy?: SchedulingStrategy;
   signal?: AbortSignal;
   settlementRef?: string;
 }

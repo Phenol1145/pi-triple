@@ -11,6 +11,8 @@ import type {
 
 export type SchedulingMode = "select" | "execute";
 
+export type { SchedulingStrategy } from "./strategy.ts";
+
 export interface SchedulingInput {
   traceId: string;
   dispatchId: string;
