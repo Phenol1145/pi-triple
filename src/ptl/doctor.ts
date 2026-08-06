@@ -14,6 +14,8 @@ import fs from "node:fs";
 import path from "node:path";
 import net from "node:net";
 import * as readline from "node:readline";
+import { checkTemplateAgentsMd } from "./doctor-agents.js";
+import { loadConfig, resolveDataDir } from "./config.js";
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -348,6 +350,19 @@ export async function runDoctorStructured(mode: "full" | "quick" = "full"): Prom
       ok: result.status === "ok" || result.status === "warn",
       message: result.message,
       fixable: result.status === "fail",
+    });
+  }
+
+  // 模板 AGENTS.md 认知注入检查（pi 原生机制，逐模板一条）
+  const config = loadConfig();
+  const dataDir = resolveDataDir(config);
+  for (const [templateId, tpl] of Object.entries(config.templates)) {
+    const agentsCheck = checkTemplateAgentsMd(path.join(dataDir, "pi-config", templateId));
+    checks.push({
+      name: `AGENTS.md (${templateId.slice(0, 8)}…)`,
+      ok: agentsCheck.ok,
+      message: agentsCheck.ok ? `模板「${tpl.alias}」已就绪` : (agentsCheck.detail ?? "AGENTS.md 异常"),
+      fixable: !agentsCheck.ok,
     });
   }
 
