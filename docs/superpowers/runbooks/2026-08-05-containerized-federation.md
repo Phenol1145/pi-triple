@@ -190,19 +190,19 @@ docker compose ps                                    # 全 healthy
 curl -sf localhost:3000/health
 
 # 2. 构件闭环
-pit hub submit examples/pr-review/                   # agent-program 上传
+pit hub submit examples/echo-agent/                  # agent-program 上传——需含 agent.json 的程序目录（examples/pr-review/ 缺 agent.json，勿用）
 pit hub programs                                     # 可见
 pit hub request "缺一个 X" --slot slot-a            # 建回退请求
 pit hub requests                                    # open 可见
-pit hub respond <id> examples/pr-review/             # 上传+闭合（slot-a 绑定）
+pit hub respond <id> examples/echo-agent/            # 上传+闭合（slot-a 绑定；respond 目录同样需含 agent.json）
 
 # 3. 定时/事件
 /lab schedule add --taskType <t> --interval 60 ...   # 秒级 interval 验证到点 dispatch
-pit hub observe events                              # 事件可见（scheduled.fire）
+pit hub observe events                              # 事件可见（scheduled.fire）；前置：pth 常驻系统会话需可解析模型（provider 配置），模型不可解析时 502
 
 # 4. sandbox
 pit hub run <name>                                  # 会话内 bash 调用走 sandbox（日志/观测确认）
-docker compose stop sandbox && curl -sf localhost:3000/health  # 503 + degraded
+docker compose stop sandbox && curl -sf localhost:3000/health  # 注意：degraded 仅在 sandbox /exec dispatch（bash 转发）连续失败时触发，单纯 curl /health 不会拉高计数
 docker compose start sandbox && sleep 10 && curl -sf localhost:3000/health  # 恢复 200
 
 # 5. 持久化
