@@ -25,12 +25,35 @@ root 模板（原 local）= 唯一保留扩展的控制面
 
 ### 扩展能力可替换性分类（P3 迁移的分类依据）
 
-| 类别 | 例子 | CLI 可平替？ | 替代路径 |
-|---|---|---|---|
-| 工具类（agent 主动调用） | openrouter、ustc-pan、agent_lab、notebook_*、place_bid | ✅ 直接 | CLI + 技能 |
-| 命令/UI 类 | /control、/flow、/health、/lab、questionnaire | ✅ agent 化后甚至更简单 | pit CLI --json；agent 不需要富 UI |
-| 进程内 hook 类 | pit-providers（401/403 密钥切换，after_provider_response） | ❌ 进程外不可拦截 | localhost provider proxy 管 keypool（P3 专项） |
-| 实时推送/遥测类 | pit-communicate 投递、agent-lab 遥测注入 | ⚠️ 降级可行 | 轮询 CLI（信箱已有落盘）/ sidecar |
+| 类别 | 例子 | 迁移目标路径 |
+|---|---|---|
+| 工具类（agent 主动调用） | openrouter、ustc-pan、agent_lab、notebook_*、place_bid | **(b) CLI 后端适配壳**（默认）；低风险组合型工具可走 (c) |
+| 命令/UI 类 | /control、/flow、/health、/lab、questionnaire | pit CLI --json（agent 化后不需要富 UI） |
+| 进程内 hook 类 | pit-providers（401/403 密钥切换，after_provider_response） | localhost provider proxy 管 keypool（P3 专项），或永久留 root |
+| 实时推送/遥测类 | pit-communicate 投递、agent-lab 遥测注入 | 轮询 CLI（信箱已有落盘）/ sidecar，接受延迟降级 |
+
+### 1.1 扩展替换的三条路线
+
+```
+(a) 进程内扩展      逻辑在 pi 内                      ← 现状
+(b) CLI 后端适配壳  壳只声明 schema + spawn CLI + 回传结构化结果 ⭐ P3 默认
+(c) 裸 CLI + 技能   agent 自己拼 bash，技能指路        ← P1 试点验证下限
+```
+
+**pi 支撑面**（已查证，SDK 0.82.x）：
+- `pi.registerTool()`：一等公民，TypeBox schema，支持动态注册/`setActiveTools` 启停；
+- 无内置 MCP（官方明言），但可用一个通用桥扩展把 MCP server 工具批量 registerTool
+  （环境已有现成 server：`bl mcp`、obsidian-mcp、instsci-mcp）；
+- 运行时**真校验**：`validateToolArguments`（prepareArguments → Convert/coercion →
+  Compile Check → 失败抛错回给模型重试）。(b) 与原生工具强制力平权。
+
+**schema 表达力结论**：结构约束（嵌套/union/enum/正则/范围/递归 + Unsafe 逃生舱）
+几乎无上限且运行时强制；但模型侧执行力度随 provider 波动（高级关键字可能被忽略），
+且跨字段语义约束表达不了——后者下沉到 shim/CLI 校验，闭环一致。**实践准则：
+schema 适度扁平 + 封闭集用 enum，语义规则下沉 CLI。**
+
+因此“扩展退场”准确表述为**业务逻辑退出扩展**：扩展机制降级为平台托管的薄驱动层
+（shim/桥，可自动生成），业务实现全部在 CLI（容器内、任意语言、独立可测）。
 
 ## 2. 四期 Roadmap
 
@@ -38,7 +61,7 @@ root 模板（原 local）= 唯一保留扩展的控制面
 |---|---|---|
 | **P1（本 spec）** | cli-dev 试点模板 + 通用排除机制 + dev-cli/pit-agent 双技能 + local→root 更名 | 见 §3 验收 |
 | **P2** | pit CLI agent 化：`pit commands --json` 机器可读命令目录、稳定错误码、非 TTY 零交互护栏、JSON 覆盖面审计补齐 | agent 在纯 CLI 模板内可完成全部 PTL 操作 |
-| **P3** | 按 §1 分类表逐扩展出迁移方案（CLI 化 / proxy 化 / 保留 root），按模板滚动迁移 knowledge/dev 等 | 非 root 模板 extensions 清零 |
+| **P3** | 按 §1 分类逐扩展迁移，**默认走 (b) 适配化**：CLI 实现 + shim 声明 schema；每个扩展退场须过 **parity 门槛**（功能等价 + 延迟可接受 + 安全面不回退）；(c) 裸 CLI 仅限低风险组合型工具；hook 类不迁（proxy 专项或留 root） | 非 root 模板业务扩展清零（仅剩平台托管 shim） |
 | **P4** | root 定位为控制面模板（唯一保留扩展）；全量验收；扩展机制文档降级为 "root 专属" | roadmap 关闭 |
 
 ## 3. P1 详细规格
@@ -91,10 +114,10 @@ root 模板（原 local）= 唯一保留扩展的控制面
 - `pit template new cli-dev`（UUID 自动生成）。
 - 写入 `.pit-shared-exclude`：
   - `extensions`：排除共享层全部扩展，**仅保留 `pit-providers`（密钥 failover）
-    与 `questionnaire.ts`（交互提问）**；`_shared` 内部库按保留扩展的实际 import
-    决定去留（实施时检查 `pit-providers`/`questionnaire.ts` 是否引用）。
+    与 `questionnaire.ts`（交互提问）**。已查证两者均不 import `_shared`，
+    故 `_shared` 一并排除（最终保留名单 = `pit-providers`、`questionnaire.ts`）。
   - `skills`：`["*"]`（共享层 9 个技能全排除）。
-- 该模板 pi 启动后预期加载：扩展 2（或 3，含 _shared）个 + 模板本地技能 2 个。
+- 该模板 pi 启动后预期加载：扩展 2 个（pit-providers + questionnaire.ts）+ 模板本地技能 2 个。
 
 ### 3.3 模板本地技能（真实目录，不受共享层补链影响）
 
@@ -135,6 +158,9 @@ root 模板（原 local）= 唯一保留扩展的控制面
   grilling、dev-container-tools）由 pi 直接加载，排除机制管不到。P1 接受此残留；
   用户级治理是独立议题。
 - **R2 保留扩展的隐性依赖**：pit-providers/questionnaire.ts 若 import `_shared`
-  或已排除扩展，排除后启动报错。缓解：实施时静态检查 import，测试覆盖启动路径。
+  或已排除扩展，排除后启动报错。已静态检查（两者仅依赖 pi SDK 与 typebox，
+  不引用 `_shared`），测试覆盖启动路径兜底。
 - **R3 容器名耦合**：`docker exec` 依赖 compose 生成的容器名，compose project
   变更会破坏技能文案。缓解：技能内给出 `docker compose ps` 动态探测的兜底命令。
+- **R4 provider schema 执行差异**：(b) 路线的富 schema 在不同 provider 上执行力度
+  不一（P3 阶段风险；P1 不受影响）。缓解：schema 扁平化 + enum 准则（见 §1.1）。
