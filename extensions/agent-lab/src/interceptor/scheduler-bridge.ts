@@ -28,7 +28,8 @@ export type DispatchResult =
   | {
       status: "completed";
       schedulerInstanceId: string;
-      roundId: string;
+      /** direct 短路无优化轮次，roundId 可为空（照 runner-types DispatchResult） */
+      roundId?: string;
       selectedAgentId?: string;
       model?: string;
       output?: unknown;

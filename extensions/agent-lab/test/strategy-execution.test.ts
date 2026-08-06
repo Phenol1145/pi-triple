@@ -9,8 +9,9 @@ import { ControlPlane } from "../src/core/control-plane/service.ts";
 import { SchedulerRegistry } from "../src/scheduler/registry.ts";
 import { SchedulerRunner } from "../src/scheduler/runner.ts";
 import type { LabCore } from "../src/core/create-core.ts";
-import type { SchedulerDefinition } from "../src/core/contracts.ts";
-import type { SchedulingInput } from "../src/scheduler/contracts.ts";
+import type { AgentDefinition, SchedulerDefinition } from "../src/core/contracts.ts";
+import type { SchedulingInput, SettleOutcome } from "../src/scheduler/contracts.ts";
+import type { WorkLoopRunner } from "../src/workloop/runner.ts";
 
 // ── Helpers (same pattern as strategy-dispatch.test.ts) ──────────────
 
@@ -102,9 +103,58 @@ function buildCore(opts?: {
   return { core, db, instanceId };
 }
 
+function defaultAgentDef(): AgentDefinition {
+  return {
+    standard: { name: "test-agent", capabilities: [], executionKind: "workloop", labels: {} },
+    workLoop: { id: "wl-1", version: "1.0.0", config: { model: "test" } },
+    custom: {},
+  };
+}
+
+/**
+ * Mock WorkLoopRunner：记录 run 调用；never=true 时 run 永不 resolve（超时用例）。
+ * run 返回 { status: "completed", output: { standard: { text: "done" } } }。
+ */
+function mockWlRunner(opts?: { never?: boolean }) {
+  const runCalls: unknown[] = [];
+  const runner = {
+    runCalls,
+    run: (req: unknown) => {
+      runCalls.push(req);
+      if (opts?.never) return new Promise(() => {});
+      return Promise.resolve({
+        status: "completed",
+        output: { standard: { text: "done" } },
+        error: undefined,
+        context: {},
+        state: {},
+      });
+    },
+  };
+  return runner;
+}
+
 /** Build runner with a spy scheduler impl that records invocations + captured input. */
-function buildRunner(opts?: { instanceId?: string }) {
+function buildRunner(opts?: {
+  instanceId?: string;
+  /** mock workloop runner（direct+execute 用例注入） */
+  runner?: unknown;
+  /** 预先插入仓库的 agent（direct execute 需要可解析的 agentId） */
+  agents?: Array<{ id: string; definition?: unknown }>;
+}) {
   const { core, db, instanceId } = buildCore(opts);
+  for (const a of opts?.agents ?? []) {
+    core.repository.insertAgent({
+      id: a.id,
+      schedulerInstanceId: instanceId,
+      definition: (a.definition ?? defaultAgentDef()) as AgentDefinition,
+      sourceAgentId: undefined,
+      cloneOperationId: undefined,
+      createdAtRoundId: `${instanceId}:round:0`,
+      status: "ready",
+      createdAt: Date.now(),
+    });
+  }
   const schedulers = new SchedulerRegistry(core.definitions);
   const calls: SchedulingInput[] = [];
   schedulers.register({
@@ -115,7 +165,11 @@ function buildRunner(opts?: { instanceId?: string }) {
       return { status: "completed", selectedAgentId: "agent-1", model: "gpt-4", reason: "ok" };
     },
   });
-  const runner = new SchedulerRunner({ core, schedulers });
+  const runner = new SchedulerRunner({
+    core,
+    schedulers,
+    runner: opts?.runner as WorkLoopRunner | undefined,
+  });
   return { core, db, instanceId, runner, calls };
 }
 
@@ -128,10 +182,14 @@ function sortEvents<T extends { eventId: string }>(events: T[]): T[] {
   });
 }
 
-// ── E1: direct + agentId → 直通 completed，无竞价事件 ────────────────
+// ── E1: direct + mode=execute → 真正执行 workloop，output 透传 ────────
 
-test("E1: dispatch strategy=direct + agentId → completed/selectedAgentId 正确，事件序列无 bidding/market 类，impl.schedule 未被调用", async () => {
-  const { core, db, runner, calls } = buildRunner();
+test("E1: dispatch strategy=direct + mode=execute → 真正执行 workloop（mock wlRunner.run 被调用），output 透传，无竞价事件，impl.schedule 未被调用", async () => {
+  const wl = mockWlRunner();
+  const { core, db, runner, calls } = buildRunner({
+    runner: wl,
+    agents: [{ id: "agent-x" }],
+  });
 
   const result = await runner.dispatch({
     traceId: "e1",
@@ -139,12 +197,19 @@ test("E1: dispatch strategy=direct + agentId → completed/selectedAgentId 正�
     task: "t",
     strategy: "direct",
     agentId: "agent-x",
+    mode: "execute",
     caller: "cli",
   });
 
   assert.equal(result.status, "completed");
   assert.equal(result.selectedAgentId, "agent-x");
   assert.equal(result.schedulerInstanceId, "<direct>");
+  // output 透传回 DispatchResult
+  assert.equal(result.output?.text, "done");
+
+  // 真正执行：mock wlRunner.run 被调用一次，且携带正确 agentInstanceId
+  assert.equal(wl.runCalls.length, 1);
+  assert.equal((wl.runCalls[0] as { agentInstanceId?: string }).agentInstanceId, "agent-x");
 
   // 绕过 bidding：scheduler impl 一次都未被调用
   assert.equal(calls.length, 0);
@@ -168,10 +233,125 @@ test("E1: dispatch strategy=direct + agentId → completed/selectedAgentId 正�
 
   const completed = events.find((e) => e.eventType === "scheduler.completed")!;
   assert.equal(completed.payload.selectedAgentId, "agent-x");
-  assert.equal(completed.payload.reason, "direct assignment");
+  assert.equal(completed.payload.reason, "direct execution");
   // model 未提供：payload 不携带 model 键（EventLog 序列化丢弃 undefined）
   assert.equal(completed.payload.model, undefined);
   assert.equal(completed.identity.schedulerInstanceId, "<direct>");
+
+  db.close();
+});
+
+// ── E4: direct + mode=select → 仅指派不执行 ──────────────────────────
+
+test("E4: dispatch strategy=direct + mode=select → 仅指派不执行（mock wlRunner.run 未被调用），completed/selectedAgentId", async () => {
+  const wl = mockWlRunner();
+  const { core, db, runner, calls } = buildRunner({
+    runner: wl,
+    agents: [{ id: "agent-x" }],
+  });
+
+  const result = await runner.dispatch({
+    traceId: "e4",
+    role: "architect",
+    task: "t",
+    strategy: "direct",
+    agentId: "agent-x",
+    mode: "select",
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.selectedAgentId, "agent-x");
+  assert.equal(result.schedulerInstanceId, "<direct>");
+  assert.equal(result.output, undefined);
+  // 仅指派：workloop 未被调用
+  assert.equal(wl.runCalls.length, 0);
+  assert.equal(calls.length, 0);
+
+  const events = sortEvents(core.events.query({ traceId: "e4" }));
+  assert.deepStrictEqual(events.map((e) => e.eventType), [
+    "scheduling.requested",
+    "scheduler.agent.selected",
+    "scheduler.completed",
+  ]);
+
+  db.close();
+});
+
+// ── E5: direct + mode=execute 执行超时 → failed/execution-timeout ────
+
+test("E5: dispatch strategy=direct + mode=execute 执行超时 → failed/execution-timeout，signal 尽力取消，scheduler.failed 事件", async () => {
+  const wl = mockWlRunner({ never: true });
+  const { core, db, runner } = buildRunner({
+    runner: wl,
+    agents: [{ id: "agent-x" }],
+  });
+  // 真实 AbortSignal 无实例 abort 方法（Node 24），尽力取消只能作用于暴露
+  // abort 的 signal（照 execution-timeout.test.ts 先例用带 abort 的假 signal）
+  const signal = {
+    aborted: false,
+    abort() {
+      (this as { aborted: boolean }).aborted = true;
+    },
+  };
+
+  const result = await runner.dispatch({
+    traceId: "e5",
+    role: "architect",
+    task: "t",
+    strategy: "direct",
+    agentId: "agent-x",
+    mode: "execute",
+    executionTimeoutMs: 50,
+    signal: signal as AbortSignal,
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.standard.code, "execution-timeout");
+  assert.equal(result.error.standard.retryable, true);
+  // 尽力取消：signal.abort 被调用
+  assert.equal(signal.aborted, true);
+  // run 确实被调用（挂起），随后超时
+  assert.equal(wl.runCalls.length, 1);
+
+  const events = sortEvents(core.events.query({ traceId: "e5" }));
+  assert.deepStrictEqual(events.map((e) => e.eventType), [
+    "scheduling.requested",
+    "scheduler.failed",
+  ]);
+
+  db.close();
+});
+
+// ── E6: direct + settlementRef → settle 失败路径 fail-open ──────────
+
+test("E6: direct + settlementRef → settle 失败路径 fail-open（返回 false 不崩溃，<direct> instance 不可解析）", async () => {
+  const { core, db, runner } = buildRunner({ agents: [{ id: "agent-x" }] });
+
+  const result = await runner.dispatch({
+    traceId: "e6",
+    role: "architect",
+    task: "t",
+    strategy: "direct",
+    agentId: "agent-x",
+    mode: "select",
+    settlementRef: "ref-e6",
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.settlementRef, "ref-e6");
+
+  const outcome: SettleOutcome = {
+    completion: 1,
+    majorError: false,
+    tokensIn: 10,
+    tokensOut: 5,
+    cost: 0.01,
+    toolCalls: [],
+    inferenceLatencyMs: 100,
+  };
+  // <direct> 不是可解析 instance → fail-open：返回 false 且不抛异常
+  const settled = await runner.settle("ref-e6", outcome);
+  assert.equal(settled, false);
 
   db.close();
 });

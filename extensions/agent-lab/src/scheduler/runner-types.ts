@@ -57,6 +57,8 @@ export interface DispatchRequest {
   strategy?: SchedulingStrategy;
   /** direct 模式指定执行 agent（strategy==="direct" 时必填） */
   agentId?: string;
+  /** direct execute 模式的执行超时（缺省 DEFAULT_EXECUTION_TIMEOUT_MS，经 agents.run 透传） */
+  executionTimeoutMs?: number;
   signal?: AbortSignal;
   settlementRef?: string;
 }

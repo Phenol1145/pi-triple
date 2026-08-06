@@ -4,7 +4,7 @@ import type { StandardAgentError, StandardAgentOutput } from "../workloop/contra
 import { WorkLoopRunner } from "../workloop/runner.ts";
 import { SchedulerRegistry } from "./registry.ts";
 import { MARKET_SCHEDULER_DEFINITION_ID, WEIGHTED_SCORER_DEFINITION_ID } from "./names.ts";
-import type { SchedulingResult, SettleOutcome } from "./contracts.ts";
+import type { SchedulingResult, SettleOutcome, AgentRunResult } from "./contracts.ts";
 import {
   type DispatchAttempt,
   type DispatchRequest,
@@ -225,12 +225,18 @@ export class SchedulerRunner {
           attempts: [],
         };
       }
-      return this.processCompleted(nextEventId, traceId, dispatchId, {
-        schedulerInstanceId: "<direct>",
-        selectedAgentId: agentId,
-        reason: "direct assignment",
-        settlementRef: request.settlementRef,
-      });
+      // select 模式：仅指派不执行（与 SchedulingMode.select 语义一致）
+      if (mode === "select") {
+        return this.processCompleted(nextEventId, traceId, dispatchId, {
+          schedulerInstanceId: "<direct>",
+          selectedAgentId: agentId,
+          reason: "direct assignment",
+          settlementRef: request.settlementRef,
+        });
+      }
+      // execute 模式：解析 agent 并真正执行（对齐 weighted-scorer/arena-scheduler
+      // 的 execute 路径：agents.run + withTimeout 墙钟超时 + signal 尽力取消）
+      return this.directExecute(agentId, request, dispatchId, nextEventId);
     }
 
     // ── Resolve scheduler instance ────────────────────────────────
@@ -325,6 +331,98 @@ export class SchedulerRunner {
       new Set<string>(),
       0,
     );
+  }
+
+  // ── Direct execute（strategy=direct + mode=execute）────────────────
+
+  private async directExecute(
+    agentId: string,
+    request: DispatchRequest,
+    dispatchId: string,
+    nextEventIdFactory: (eventType: string) => string,
+  ): Promise<DispatchResult> {
+    const { traceId, task, signal } = request;
+
+    // 解析指定 agent：getAgent 按 id 全局单查（agent 可能不属于任何
+    // scheduler instance，listAgents 按 instanceId 过滤无法覆盖）
+    if (!this.core.repository.getAgent(agentId)) {
+      const err: StandardAgentError = {
+        code: "scheduler-error",
+        message: `agent not found: ${agentId}`,
+        retryable: false,
+      };
+      this.emitEvent(
+        nextEventIdFactory("scheduler.failed"),
+        "scheduler.failed",
+        { error: err },
+        undefined,
+        traceId,
+        dispatchId,
+      );
+      return { status: "failed", error: { standard: err }, attempts: [] };
+    }
+
+    // 与 weighted/arena execute 路径共用 runner-sdk 的 agents.run：
+    // withTimeout 墙钟超时 + signal 尽力取消 + 结果 Normalize 全在其中。
+    // instance/round 用 "<direct>" 字面量（无优化轮次，与事件 identity 一致）。
+    const sdk = buildSchedulerSDK(
+      { core: this.core, wlRunner: this.wlRunner, emit: this.emitEvent.bind(this) },
+      "<direct>",
+      "<direct>",
+      traceId,
+      dispatchId,
+      nextEventIdFactory,
+      signal,
+    );
+
+    let runResult: AgentRunResult;
+    try {
+      runResult = await sdk.agents.run(agentId, {
+        task,
+        timeoutMs: request.executionTimeoutMs,
+      });
+    } catch (err) {
+      const stdErr: StandardAgentError = {
+        code: "scheduler-error",
+        message: err instanceof Error ? err.message : String(err),
+        retryable: false,
+      };
+      this.emitEvent(
+        nextEventIdFactory("scheduler.failed"),
+        "scheduler.failed",
+        { error: stdErr },
+        undefined,
+        traceId,
+        dispatchId,
+      );
+      return { status: "failed", error: { standard: stdErr }, attempts: [] };
+    }
+
+    if (runResult.status === "completed") {
+      return this.processCompleted(nextEventIdFactory, traceId, dispatchId, {
+        schedulerInstanceId: "<direct>",
+        selectedAgentId: agentId,
+        output: runResult.output,
+        reason: "direct execution",
+        settlementRef: request.settlementRef,
+      });
+    }
+
+    // run failed（含 execution-timeout）→ failed 结果，error 透传
+    const err: StandardAgentError = {
+      code: runResult.error?.code ?? "scheduler-error",
+      message: runResult.error?.message ?? `agent run ${runResult.status}`,
+      retryable: runResult.error?.retryable ?? false,
+    };
+    this.emitEvent(
+      nextEventIdFactory("scheduler.failed"),
+      "scheduler.failed",
+      { error: err },
+      undefined,
+      traceId,
+      dispatchId,
+    );
+    return { status: "failed", error: { standard: err }, attempts: [] };
   }
 
   // ── Dispatch to a specific instance ───────────────────────────────

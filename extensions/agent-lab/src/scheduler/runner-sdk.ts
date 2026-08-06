@@ -128,9 +128,9 @@ export function buildSchedulerSDK(
           );
         }
 
-        // Find the agent
-        const agents = core.repository.listAgents(schedulerInstanceId);
-        const agent = agents.find((a) => a.id === agentId);
+        // Find the agent — 按 id 全局单查（direct 短路下 agent 可能不属于任何
+        // scheduler instance；listAgents 按 instanceId 过滤无法覆盖）
+        const agent = core.repository.getAgent(agentId);
         if (!agent) {
           throw new Error(`agent not found: ${agentId}`);
         }

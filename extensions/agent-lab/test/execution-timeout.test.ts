@@ -35,6 +35,11 @@ test("agents.run 超时返回 failed + execution-timeout，并尽力 abort signa
           status: "ready",
         },
       ],
+      getAgent: () => ({
+        id: "agent-1",
+        definition: { workLoop: { id: "wl-1", version: "1.0.0", config: { model: "test" } } },
+        status: "ready",
+      }),
     },
     storage: {},
     events: {},
@@ -69,6 +74,11 @@ test("agents.run 正常完成不走超时分支（timeoutMs 透传但未触发�
           status: "ready",
         },
       ],
+      getAgent: () => ({
+        id: "agent-1",
+        definition: { workLoop: { id: "wl-1", version: "1.0.0", config: { model: "test" } } },
+        status: "ready",
+      }),
     },
     storage: {},
     events: {},
