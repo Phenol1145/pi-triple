@@ -362,7 +362,8 @@ export async function runDoctorStructured(mode: "full" | "quick" = "full"): Prom
       name: `AGENTS.md (${templateId.slice(0, 8)}…)`,
       ok: agentsCheck.ok,
       message: agentsCheck.ok ? `模板「${tpl.alias}」已就绪` : (agentsCheck.detail ?? "AGENTS.md 异常"),
-      fixable: !agentsCheck.ok,
+      // AGENTS.md 修复由 template new / launcher 启动补写自动完成，doctor 内无交互修复入口
+      fixable: false,
     });
   }
 
