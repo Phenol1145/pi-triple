@@ -145,14 +145,14 @@ async function dispatchAndCapture(opts: {
 
 // ── Strategy resolution + passthrough ───────────────────────────────
 
-test("S: dispatch 显式 strategy=direct → scheduling.requested payload 与 SchedulingInput 均携带 direct", async () => {
+test("S: dispatch 显式 strategy=market → scheduling.requested payload 与 SchedulingInput 均携带 market", async () => {
   const { eventStrategy, inputStrategy } = await dispatchAndCapture({
     traceId: "s1",
-    request: { traceId: "s1", role: "architect", task: "t", strategy: "direct", caller: "cli" },
+    request: { traceId: "s1", role: "architect", task: "t", strategy: "market", caller: "cli" },
   });
 
-  assert.equal(eventStrategy, "direct");
-  assert.equal(inputStrategy, "direct");
+  assert.equal(eventStrategy, "market");
+  assert.equal(inputStrategy, "market");
 });
 
 test("S2: dispatch 无显式 strategy + caller=timed-trigger → resolveStrategy 解析为 weighted", async () => {

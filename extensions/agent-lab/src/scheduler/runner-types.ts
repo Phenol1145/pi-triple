@@ -16,7 +16,8 @@ export type DispatchResult =
   | {
       status: "completed";
       schedulerInstanceId: string;
-      roundId: string;
+      /** direct 短路（strategy=direct）无优化轮次，roundId 可为空 */
+      roundId?: string;
       selectedAgentId?: string;
       model?: string;
       output?: StandardAgentOutput;
@@ -54,6 +55,8 @@ export interface DispatchRequest {
   mode?: SchedulingMode;
   /** 显式调度策略（缺省走 resolveStrategy 自动路由） */
   strategy?: SchedulingStrategy;
+  /** direct 模式指定执行 agent（strategy==="direct" 时必填） */
+  agentId?: string;
   signal?: AbortSignal;
   settlementRef?: string;
 }

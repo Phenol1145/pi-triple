@@ -1,6 +1,6 @@
 import type { LabCore } from "../core/create-core.ts";
 import type { FallbackTarget } from "../core/contracts.ts";
-import type { StandardAgentError } from "../workloop/contracts.ts";
+import type { StandardAgentError, StandardAgentOutput } from "../workloop/contracts.ts";
 import { WorkLoopRunner } from "../workloop/runner.ts";
 import { SchedulerRegistry } from "./registry.ts";
 import { MARKET_SCHEDULER_DEFINITION_ID, WEIGHTED_SCORER_DEFINITION_ID } from "./names.ts";
@@ -205,6 +205,32 @@ export class SchedulerRunner {
         },
         attempts: [],
       };
+    }
+
+    // ── Direct short-circuit（strategy=direct）──指定 agentId 直通执行，绕过竞价 ──
+    // 不解析 instance / 不调用 impl.schedule；事件序列与 dispatchToInstance 的
+    // completed 路径保持一致（scheduler.agent.selected + scheduler.completed）。
+    if (strategy === "direct") {
+      const agentId = request.agentId;
+      if (!agentId) {
+        return {
+          status: "failed",
+          error: {
+            standard: {
+              code: "scheduler-error",
+              message: "strategy=direct 需要 agentId",
+              retryable: false,
+            },
+          },
+          attempts: [],
+        };
+      }
+      return this.processCompleted(nextEventId, traceId, dispatchId, {
+        schedulerInstanceId: "<direct>",
+        selectedAgentId: agentId,
+        reason: "direct assignment",
+        settlementRef: request.settlementRef,
+      });
     }
 
     // ── Resolve scheduler instance ────────────────────────────────
@@ -494,66 +520,18 @@ export class SchedulerRunner {
     };
 
     if (schedulingResult.status === "completed") {
-      if (schedulingResult.selectedAgentId) {
-        this.emitEvent(
-          nextEventIdFactory("scheduler.agent.selected"),
-          "scheduler.agent.selected",
-          { agentInstanceId: schedulingResult.selectedAgentId },
-          undefined,
-          traceId,
-          dispatchId,
-          instanceId,
-          instance.definition.id,
-          instance.definition.version,
-          effectiveRoundId,
-          schedulingResult.selectedAgentId,
-        );
-      }
-
-      this.emitEvent(
-        nextEventIdFactory("scheduler.completed"),
-        "scheduler.completed",
-        {
-          selectedAgentId: schedulingResult.selectedAgentId,
-          model: schedulingResult.model,
-          reason: schedulingResult.reason,
-        },
-        undefined,
-        traceId,
-        dispatchId,
-        instanceId,
-        instance.definition.id,
-        instance.definition.version,
-        effectiveRoundId,
-      );
-
-      // Record pending settlement if settlementRef is threaded back
-      if (schedulingResult.settlementRef) {
-        if (this.pendingSettlements.size >= SchedulerRunner.MAX_PENDING_SETTLEMENTS) {
-          // FIFO: evict oldest entry
-          const oldest = this.pendingSettlements.keys().next().value;
-          if (oldest !== undefined) {
-            this.pendingSettlements.delete(oldest);
-          }
-        }
-        this.pendingSettlements.set(schedulingResult.settlementRef, {
-          schedulerInstanceId: instanceId,
-          roundId: effectiveRoundId,
-          traceId,
-        });
-      }
-
-      return {
-        status: "completed",
+      return this.processCompleted(nextEventIdFactory, traceId, dispatchId, {
         schedulerInstanceId: instanceId,
+        schedulerDefinitionId: instance.definition.id,
+        schedulerDefinitionVersion: instance.definition.version,
+        optimizationRoundId: effectiveRoundId,
         roundId: effectiveRoundId,
         selectedAgentId: schedulingResult.selectedAgentId,
         model: schedulingResult.model,
         output: schedulingResult.output,
         reason: schedulingResult.reason,
         settlementRef: schedulingResult.settlementRef,
-        attempts: [attempt],
-      };
+      });
     }
 
     if (schedulingResult.status === "abstained") {
@@ -605,6 +583,93 @@ export class SchedulerRunner {
       depth,
       [attempt],
     );
+  }
+
+  // ── Completed 结果处理（impl 路径与 direct 短路共用，保证事件流一致）──
+
+  private processCompleted(
+    nextEventIdFactory: (eventType: string) => string,
+    traceId: string,
+    dispatchId: string,
+    opts: {
+      schedulerInstanceId: string;
+      schedulerDefinitionId?: string;
+      schedulerDefinitionVersion?: string;
+      optimizationRoundId?: string;
+      roundId?: string;
+      selectedAgentId?: string;
+      model?: string;
+      output?: StandardAgentOutput;
+      reason?: string;
+      settlementRef?: string;
+    },
+  ): DispatchResult {
+    const attempt: DispatchAttempt = {
+      schedulerInstanceId: opts.schedulerInstanceId,
+      roundId: opts.roundId,
+      status: "completed",
+    };
+
+    if (opts.selectedAgentId) {
+      this.emitEvent(
+        nextEventIdFactory("scheduler.agent.selected"),
+        "scheduler.agent.selected",
+        { agentInstanceId: opts.selectedAgentId },
+        undefined,
+        traceId,
+        dispatchId,
+        opts.schedulerInstanceId,
+        opts.schedulerDefinitionId,
+        opts.schedulerDefinitionVersion,
+        opts.optimizationRoundId,
+        opts.selectedAgentId,
+      );
+    }
+
+    this.emitEvent(
+      nextEventIdFactory("scheduler.completed"),
+      "scheduler.completed",
+      {
+        selectedAgentId: opts.selectedAgentId,
+        model: opts.model,
+        reason: opts.reason,
+      },
+      undefined,
+      traceId,
+      dispatchId,
+      opts.schedulerInstanceId,
+      opts.schedulerDefinitionId,
+      opts.schedulerDefinitionVersion,
+      opts.optimizationRoundId,
+    );
+
+    // Record pending settlement if settlementRef is threaded back
+    if (opts.settlementRef) {
+      if (this.pendingSettlements.size >= SchedulerRunner.MAX_PENDING_SETTLEMENTS) {
+        // FIFO: evict oldest entry
+        const oldest = this.pendingSettlements.keys().next().value;
+        if (oldest !== undefined) {
+          this.pendingSettlements.delete(oldest);
+        }
+      }
+      this.pendingSettlements.set(opts.settlementRef, {
+        schedulerInstanceId: opts.schedulerInstanceId,
+        roundId: opts.roundId,
+        traceId,
+      });
+    }
+
+    return {
+      status: "completed",
+      schedulerInstanceId: opts.schedulerInstanceId,
+      roundId: opts.roundId,
+      selectedAgentId: opts.selectedAgentId,
+      model: opts.model,
+      output: opts.output,
+      reason: opts.reason,
+      settlementRef: opts.settlementRef,
+      attempts: [attempt],
+    };
   }
 
   // ── Fallback chain ─────────────────────────────────────────────────
