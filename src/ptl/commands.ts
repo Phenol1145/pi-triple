@@ -110,6 +110,11 @@ export async function execTemplateNew(alias?: string): Promise<CommandResult> {
       sharedMsg = "\n  ✅ 已链接共享层";
     }
 
+    // 写入 AGENTS.md 认知注入（pi 原生机制）
+    const { ensureTemplateAgents } = await import("./template-agents.js");
+    const agentsWritten = ensureTemplateAgents(templateDir, id, displayAlias);
+    if (agentsWritten) sharedMsg += "\n  ✅ 已写入 AGENTS.md（PTL 认知注入）";
+
     // Auto-migrate if pi config exists
     let migrated = false;
     if (!fs.existsSync(path.join(templateDir, "settings.json"))) {

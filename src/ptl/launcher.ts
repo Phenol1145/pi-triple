@@ -135,6 +135,13 @@ export async function buildPiLaunch(templateId: string, options: {
   const sharedDir = abs(path.join(dataDir, "shared"));
   ensureTemplateLinks(piConfigDir, sharedDir);
 
+  // ensure template AGENTS.md (PTL identity injection, idempotent)
+  if (fs.existsSync(piConfigDir)) {
+    const { ensureTemplateAgents } = await import("./template-agents.js");
+    const alias = getTemplateAlias(templateId);
+    ensureTemplateAgents(piConfigDir, templateId, alias);
+  }
+
   // session + tenant identity
   const sessionId = randomUUID();
 
