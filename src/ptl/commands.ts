@@ -99,14 +99,20 @@ export async function execTemplateNew(alias?: string): Promise<CommandResult> {
     const id = createTemplate(alias, {}, config);
     const templateDir = path.join(dataDir, "pi-config", id);
 
+    // 显式创建模板目录：共享层缺失时 templateDir 无其他创建者
+    // （linkTemplateToShared 仅在共享层存在时跑，migrate 在其后才执行）——修复 AGENTS.md 写入 ENOENT（Blocker）
+    fs.mkdirSync(templateDir, { recursive: true });
+
     const displayAlias = getTemplateAlias(id, config);
 
     // Check shared layer
     let sharedMsg = "";
+    let sharedLinked = false;
     const sharedDirPath = path.resolve(process.cwd(), config.sharedDir);
     if (fs.existsSync(sharedDirPath)) {
       const { linkTemplateToShared } = await import("./shared-layer.js");
       linkTemplateToShared(templateDir, sharedDirPath);
+      sharedLinked = true;
       sharedMsg = "\n  ✅ 已链接共享层";
     }
 
@@ -130,7 +136,8 @@ export async function execTemplateNew(alias?: string): Promise<CommandResult> {
         id,
         alias: displayAlias,
         migrated,
-        sharedLinked: sharedMsg !== "",
+        sharedLinked,
+        agentsMd: agentsWritten,
       },
     };
   } catch (err: any) {
