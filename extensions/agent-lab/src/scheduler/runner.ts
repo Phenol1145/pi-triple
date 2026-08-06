@@ -11,6 +11,8 @@ import {
   type DispatchResult,
   resolveRoute,
 } from "./runner-types.ts";
+import { resolveStrategy, type StrategyConfig } from "./strategy.ts";
+import type { SchedulingStrategy } from "./strategy.ts";
 import { emitRunnerEvent, buildSchedulerSDK } from "./runner-sdk.ts";
 
 // Re-export dispatch types — public API preserved (consumers like
@@ -29,6 +31,7 @@ export class SchedulerRunner {
   private readonly wlRunner: WorkLoopRunner | undefined;
   private readonly maxFallbackDepth: number;
   private readonly nowFn: () => number;
+  private readonly strategyConfig: StrategyConfig;
   private readonly pendingSettlements = new Map<
     string,
     { schedulerInstanceId: string; roundId?: string; traceId: string }
@@ -41,12 +44,15 @@ export class SchedulerRunner {
     runner?: WorkLoopRunner;
     maxFallbackDepth?: number;
     now?: () => number;
+    /** 调度策略解析配置（defaultStrategy/weightedRoles）；缺省走 { defaultStrategy: "market", weightedRoles: [] } */
+    strategyConfig?: StrategyConfig;
   }) {
     this.core = opts.core;
     this.schedulers = opts.schedulers;
     this.wlRunner = opts.runner;
     this.maxFallbackDepth = opts.maxFallbackDepth ?? 3;
     this.nowFn = opts.now ?? Date.now;
+    this.strategyConfig = opts.strategyConfig ?? { defaultStrategy: "market", weightedRoles: [] };
   }
 
   async settle(taskRef: string, outcome: SettleOutcome): Promise<boolean> {
@@ -158,6 +164,7 @@ export class SchedulerRunner {
       caller,
       mode = "execute",
       signal,
+      strategy: explicitStrategy,
     } = request;
 
     const dispatchId = request.dispatchId ?? `${traceId}:dispatch:${crypto.randomUUID().slice(0, 8)}`;
@@ -167,6 +174,12 @@ export class SchedulerRunner {
 
     const now = this.nowFn();
 
+    // ── Strategy resolution (explicit > labels > caller > whitelist > default) ──
+    const strategy = resolveStrategy(
+      { strategy: explicitStrategy, caller, role, labels },
+      this.strategyConfig,
+    );
+
     // ── scheduling.requested ──────────────────────────────────────
     this.emitEvent(nextEventId("scheduling.requested"), "scheduling.requested", {
       role,
@@ -175,6 +188,7 @@ export class SchedulerRunner {
       labels,
       caller,
       mode,
+      strategy,
       explicitInstanceId: request.schedulerInstanceId,
     }, undefined, traceId, dispatchId);
 
@@ -278,6 +292,7 @@ export class SchedulerRunner {
     return this.dispatchToInstance(
       instanceId,
       request,
+      strategy,
       dispatchId,
       nextEventId,
       now,
@@ -291,6 +306,7 @@ export class SchedulerRunner {
   private async dispatchToInstance(
     instanceId: string,
     request: DispatchRequest,
+    strategy: SchedulingStrategy,
     dispatchId: string,
     nextEventIdFactory: (eventType: string) => string,
     now: number,
@@ -428,6 +444,7 @@ export class SchedulerRunner {
           labels,
           caller,
           mode,
+          strategy,
           signal,
           settlementRef: request.settlementRef,
         },
@@ -458,6 +475,7 @@ export class SchedulerRunner {
       return this.processFallback(
         instance,
         request,
+        strategy,
         dispatchId,
         nextEventIdFactory,
         now,
@@ -579,6 +597,7 @@ export class SchedulerRunner {
     return this.processFallback(
       instance,
       request,
+      strategy,
       dispatchId,
       nextEventIdFactory,
       now,
@@ -593,6 +612,7 @@ export class SchedulerRunner {
   private async processFallback(
     instance: { fallbackChain: FallbackTarget[] },
     request: DispatchRequest,
+    strategy: SchedulingStrategy,
     dispatchId: string,
     nextEventIdFactory: (eventType: string) => string,
     now: number,
@@ -619,6 +639,7 @@ export class SchedulerRunner {
         const result = await this.dispatchToInstance(
           target.id,
           request,
+          strategy,
           dispatchId,
           nextEventIdFactory,
           now,

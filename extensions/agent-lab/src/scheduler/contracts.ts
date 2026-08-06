@@ -22,6 +22,8 @@ export interface SchedulingInput {
   labels?: Record<string, string>;
   caller?: string;
   mode: SchedulingMode;
+  /** 本 dispatch 生效的调度策略（runner 经 resolveStrategy 解析后注入） */
+  strategy?: SchedulingStrategy;
   signal?: AbortSignal;
   settlementRef?: string;
 }

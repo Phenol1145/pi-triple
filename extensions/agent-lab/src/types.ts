@@ -1,3 +1,5 @@
+import type { SchedulingStrategy } from "./scheduler/strategy.ts";
+
 export type AccessRoute = "free" | "direct" | "both";
 
 export interface ModelPricing { in: number; out: number; }
@@ -72,6 +74,10 @@ export interface LabConfig {
 export interface SchedulerConfig {
   enabled?: boolean;
   instanceId?: string;
+  /** 默认调度策略（resolveStrategy 缺省回退值；runner 构造参数注入） */
+  defaultStrategy?: SchedulingStrategy;
+  /** 命中 role 即强制 weighted 策略的白名单 */
+  weightedRoles?: string[];
 }
 
 export type Mode = "classic" | "market";
