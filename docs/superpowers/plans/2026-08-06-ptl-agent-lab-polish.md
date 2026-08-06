@@ -24,7 +24,7 @@
 
 ---
 
-### Task A1: AGENTS.md 模板源文件 + 渲染写入逻辑
+### Task 1: (A部分) AGENTS.md 模板源文件 + 渲染写入逻辑
 
 **Files:**
 - Create: `docs/ptl/templates/AGENTS.md.tpl`
@@ -174,7 +174,7 @@ git commit -m "feat(ptl): AGENTS.md 模板源+渲染写入——pi 原生认知�
 
 ---
 
-### Task A2: 接入 template new + launcher 启动补写
+### Task 2: (A部分) 接入 template new + launcher 启动补写
 
 **Files:**
 - Modify: `src/ptl/commands.ts:91-124`（execTemplateNew）
@@ -182,7 +182,7 @@ git commit -m "feat(ptl): AGENTS.md 模板源+渲染写入——pi 原生认知�
 - Test: `test/integration/` 下新增 `template-agents-integration.test.ts`
 
 **Interfaces:**
-- Consumes: Task A1 的 `ensureTemplateAgents`、`getTemplateAlias`（`src/ptl/config.ts` 已导出）、`linkTemplateToShared`（shared-layer.ts）
+- Consumes: Task 1 的 `ensureTemplateAgents`、`getTemplateAlias`（`src/ptl/config.ts` 已导出）、`linkTemplateToShared`（shared-layer.ts）
 - Produces: 无新导出——行为变更：`pit template new <alias>` 创建模板后立即生成 AGENTS.md；launcher 每次启动对既有模板补写（幂等，内容一致时跳过）
 
 - [ ] **Step 1: 写失败测试（集成）**
@@ -284,7 +284,7 @@ git commit -m "feat(ptl): AGENTS.md 接入 template new + launcher 启动补写�
 
 ---
 
-### Task A3: 验证 AGENTS.md 被 pi 加载 + doctor 检查项
+### Task 3: (A部分) 验证 AGENTS.md 被 pi 加载 + doctor 检查项
 
 **Files:**
 - Modify: `src/ptl/doctor.ts`（doctor 检查项）
@@ -292,7 +292,7 @@ git commit -m "feat(ptl): AGENTS.md 接入 template new + launcher 启动补写�
 - Test: `test/unit/doctor-agents.test.ts`
 
 **Interfaces:**
-- Consumes: Task A1 的 `ensureTemplateAgents`、`AGENTS_TPL_PATH`；`runDoctorStructured`（`src/ptl/doctor.ts` 已导出）
+- Consumes: Task 1 的 `ensureTemplateAgents`、`AGENTS_TPL_PATH`；`runDoctorStructured`（`src/ptl/doctor.ts` 已导出）
 - Produces: doctor 新增检查项 `agentsMd`（结构：`{ ok: boolean; detail?: string }`），报告模板目录 AGENTS.md 是否存在且无占位符残留
 
 - [ ] **Step 1: 写失败测试**
@@ -407,7 +407,7 @@ git commit -m "feat(ptl): doctor 新增 AGENTS.md 认知注入检查项——缺
 
 ---
 
-### Task B1: SchedulingStrategy 类型 + resolver + DispatchRequest 扩展
+### Task 4: (B部分) SchedulingStrategy 类型 + resolver + DispatchRequest 扩展
 
 **Files:**
 - Create: `extensions/agent-lab/src/scheduler/strategy.ts`
@@ -540,7 +540,7 @@ git commit -m "feat(agent-lab): SchedulingStrategy 三模式+解析器——显�
 
 ---
 
-### Task B2: runner 集成 strategy + 事件透传
+### Task 5: (B部分) runner 集成 strategy + 事件透传
 
 **Files:**
 - Modify: `extensions/agent-lab/src/scheduler/runner.ts:151-180`（dispatch 开头解构 + 解析 strategy）
@@ -549,7 +549,7 @@ git commit -m "feat(agent-lab): SchedulingStrategy 三模式+解析器——显�
 - Test: `extensions/agent-lab/test/scheduler-runner.test.ts`（追加用例）或新增 `strategy-dispatch.test.ts`
 
 **Interfaces:**
-- Consumes: Task B1 的 `resolveStrategy`、`SchedulingStrategy`；runner 现有 `this.core.repository` 获取调度器配置
+- Consumes: Task 4 的 `resolveStrategy`、`SchedulingStrategy`；runner 现有 `this.core.repository` 获取调度器配置
 - Produces: `dispatch()` 在 resolveRoute 前解析 strategy 并注入事件与 SchedulingInput；调度器实现可在 `input.strategy` 读到
 
 - [ ] **Step 1: 写失败测试（dispatch 透传 strategy）**
@@ -602,7 +602,7 @@ git commit -m "feat(agent-lab): dispatch 集成 strategy 解析——scheduling.
 
 ---
 
-### Task B3: direct/weighted/market 三策略执行路径
+### Task 6: (B部分) direct/weighted/market 三策略执行路径
 
 **Files:**
 - Modify: `extensions/agent-lab/src/scheduler/runner.ts`（strategy === "direct" 时构造 direct SchedulingResult；strategy 影响 instance 选择）
@@ -610,7 +610,7 @@ git commit -m "feat(agent-lab): dispatch 集成 strategy 解析——scheduling.
 - Test: `extensions/agent-lab/test/strategy-execution.test.ts`
 
 **Interfaces:**
-- Consumes: Task B1/B2；`DispatchRequest.agentId?: string`（direct 模式指定 agent，B 部分 spec B2 的 `--agent`）
+- Consumes: Task 4/5；`DispatchRequest.agentId?: string`（direct 模式指定 agent，B 部分 spec B2 的 `--agent`）
 - Produces: direct 模式：`strategy === "direct"` 时 runner 用 `request.agentId` 直接构造 `SchedulingResult { status: "completed", selectedAgentId }` 并走现有 completed 处理（事件/结算透传），**不调用 impl.schedule**（绕过 bidding）；weighted/market 保持现状（由 resolver 选到的 scheduler instance 决定）
 
 - [ ] **Step 1: 写失败测试**
@@ -659,7 +659,7 @@ git commit -m "feat(agent-lab): direct 策略短路——指定 agentId 直通�
 
 ---
 
-### Task B4: winner 执行墙钟超时 + 命令入口 + 配置
+### Task 7: (B部分) winner 执行墙钟超时 + 命令入口 + 配置
 
 **Files:**
 - Modify: `extensions/agent-lab/src/scheduler/runner-sdk.ts:119-160`（agents.run 包 Promise.race 超时）
@@ -671,7 +671,7 @@ git commit -m "feat(agent-lab): direct 策略短路——指定 agentId 直通�
 - Test: `extensions/agent-lab/test/execution-timeout.test.ts` + `test/scheduler-command.test.ts`（若存在命令测试范式）
 
 **Interfaces:**
-- Consumes: Task B1-B3；`AgentRunRequest.timeoutMs`（contracts 已有字段，runner-sdk 的 runReq 已透传）
+- Consumes: Task 4-6；`AgentRunRequest.timeoutMs`（contracts 已有字段，runner-sdk 的 runReq 已透传）
 - Produces: `agents.run` 带墙钟超时（默认 `DEFAULT_MARKET_CONFIG.execution.timeoutMs = 300_000`，5 分钟）；超时 → `{ status: "failed", error: { code: "execution-timeout", retryable: true } }`；`/lab scheduler dispatch <role> <task> --strategy <s> [--agent <id>]` 命令
 
 - [ ] **Step 1: 写失败测试（超时）**
@@ -797,6 +797,6 @@ A 与 B 完全正交，可并行
 
 ## Self-Review 记录
 
-- **Spec 覆盖**：A 部分 spec §A1（AGENTS.md.tpl）→ Task A1；§A2（渲染接入）→ Task A2；§A3（验证加载/doctor）→ Task A3。B 部分 spec §B1（枚举）→ Task B1；§B2（显式指定）→ Task B1+B4 命令；§B3（resolver）→ Task B1；§B4（超时）→ Task B4；§B5（阻塞预期）→ Task B3+B4；§B6（测试）→ 各任务内嵌。
+- **Spec 覆盖**：A 部分 spec §A1（AGENTS.md.tpl）→ Task 1；§A2（渲染接入）→ Task 2；§A3（验证加载/doctor）→ Task 3。B 部分 spec §B1（枚举）→ Task 4；§B2（显式指定）→ Task 4+7 命令；§B3（resolver）→ Task 4；§B4（超时）→ Task 7；§B5（阻塞预期）→ Task 6+7；§B6（测试）→ 各任务内嵌。
 - **Placeholder 扫描**：无 TBD/TODO；测试代码全部给出（strategy-dispatch 与 strategy-execution 的测试需要读既有 helper 按模式写，已明确指示——这是既有代码复用，非占位）。
 - **类型一致性**：`SchedulingStrategy` 在 B1 定义、B2/B4 引用，命名统一；`withTimeout` 在 B4 定义与使用同任务；`ensureTemplateAgents` A1 定义、A2/A3 引用；`DispatchRequest.strategy/agentId` B1 加字段、B4 命令使用。
