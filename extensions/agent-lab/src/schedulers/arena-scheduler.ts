@@ -336,7 +336,7 @@ export function createArenaSchedulerImplementation(
       // 15. Execute mode: run the task through the winner's WorkLoop
       if (input.mode === "execute") {
         try {
-          const runResult = await sdk.agents.run(winner.agent, { task: input.task });
+          const runResult = await sdk.agents.run(winner.agent, { task: input.task, timeoutMs: params.execution.timeoutMs });
           if (runResult.status === "completed") {
             return {
               status: "completed",

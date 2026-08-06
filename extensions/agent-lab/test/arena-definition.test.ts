@@ -77,6 +77,7 @@ test("ARENA_DEFINITION tunablePaths covers exactly the specified paths", () => {
     "bidding.maxConcurrentBids",
     "bidding.bidTurnBudget",
     "bidding.bidSkill",
+    "execution.timeoutMs",
     "risk.maxStakeRatio",
   ];
   assert.deepEqual([...ARENA_DEFINITION.tunablePaths].sort(), [...expected].sort());
@@ -109,6 +110,7 @@ test("ARENA_DEFAULT_PARAMETERS derives from DEFAULT_MARKET_CONFIG", () => {
   assert.equal(p.bidding.promptTemplate, d.bidding.promptTemplate);
   assert.equal(p.market.maxBidders, d.market.maxBidders);
   assert.equal(p.market.eligibility, d.market.eligibility);
+  assert.equal(p.execution.timeoutMs, d.execution.timeoutMs);
 });
 
 // ── validateArenaParameters: valid defaults ────────────────────────
@@ -241,6 +243,13 @@ test("validateArenaParameters rejects bidding.timeoutMs <= 0", () => {
   const result = validateArenaParameters(params);
   assert.equal(result.ok, false);
   assert.ok(result.issues.some((i) => i.path === "bidding.timeoutMs"));
+});
+
+test("validateArenaParameters rejects execution.timeoutMs <= 0", () => {
+  const params = { ...ARENA_DEFAULT_PARAMETERS, execution: { timeoutMs: 0 } };
+  const result = validateArenaParameters(params);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((i) => i.path === "execution.timeoutMs"));
 });
 
 test("validateArenaParameters accepts valid staleTaskTimeoutMs", () => {

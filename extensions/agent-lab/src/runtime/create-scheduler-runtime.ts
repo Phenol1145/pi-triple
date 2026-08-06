@@ -14,6 +14,7 @@ import { createPiDefaultLoop } from "../workloops/pi-default-loop.ts";
 import { PI_DEFAULT_LOOP_DEFINITION } from "./create-runtime.ts";
 import { createMarketBidLoop } from "../workloops/market-bid-loop.ts";
 import type { WorkLoopDefinition } from "../core/contracts.ts";
+import type { StrategyConfig } from "../scheduler/strategy.ts";
 import type {
   ModelPort,
   ToolPort,
@@ -65,6 +66,8 @@ export interface SchedulerRuntimeOptions {
   model?: ModelPort;
   tools?: ToolPort;
   artifacts?: ArtifactPort;
+  /** LabConfig.scheduler 注入：defaultStrategy/weightedRoles → SchedulerRunner strategyConfig */
+  strategyConfig?: StrategyConfig;
 }
 
 // ── Factory ─────────────────────────────────────────────────────────
@@ -116,6 +119,7 @@ export function createSchedulerRuntime(
         core,
         schedulers,
         // No runner → execute mode agents.run rejects with typed unavailable
+        strategyConfig: options.strategyConfig ?? { defaultStrategy: "market", weightedRoles: [] },
       }),
       workloopRuntime: undefined,
       dispose: () => {
@@ -177,6 +181,7 @@ export function createSchedulerRuntime(
       core,
       schedulers,
       runner: wlRunner,
+      strategyConfig: options.strategyConfig ?? { defaultStrategy: "market", weightedRoles: [] },
     }),
     workloopRuntime,
     dispose: () => adapter.dispose(),

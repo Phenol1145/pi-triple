@@ -213,7 +213,8 @@ export default async function (pi: ExtensionAPI) {
           aggregates: (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a])),
           pinLookup: (role: string) => store.getPin(role),
         };
-        const rt = createSchedulerRuntime(sharedStore.raw, delegationBus ? {
+        const rt = createSchedulerRuntime(sharedStore.raw, {
+          ...(delegationBus ? {
           eventBus: delegationBus,
           // pi-default-loop delegates via eventBus, doesn't use model port.
           // market-bid-loop uses the model port for multi-model bidding.
@@ -235,7 +236,12 @@ export default async function (pi: ExtensionAPI) {
             async put() { return crypto.randomUUID(); },
             async get() { return undefined; },
           },
-        } : {});
+          } : {}),
+          // 遗留接线（Task 7a）：LabConfig.scheduler.defaultStrategy/weightedRoles → SchedulerRunner strategyConfig
+          strategyConfig: cfg.scheduler
+            ? { defaultStrategy: cfg.scheduler.defaultStrategy, weightedRoles: cfg.scheduler.weightedRoles }
+            : undefined,
+        });
         schedulerCore = rt.core;
         capturedWlRunner = rt.workloopRuntime?.runner ?? undefined;
         optimizerRegistry = new OptimizerRegistry(rt.core.definitions, rt.core.repository, rt.core.events);

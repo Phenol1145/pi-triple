@@ -89,6 +89,7 @@ export interface MarketConfig {
   cost: { tokenMult: number; toolMult: number; latencyMult: number; resourceFactor: number; toolWeights: Record<string, number> };
   bidding: { timeoutMs: number; promptTemplate: string; maxCallsPerDispatch: number; minStake: number; engine: "model-caller" | "workloop"; maxConcurrentBids: number; bidTurnBudget: number; bidSkill: string };
   market: { staleTaskTimeoutMs: number; eligibility: string; maxBidders: number; bidderSelector: string; diversityFactor: number };
+  execution: { timeoutMs: number };
   risk: { maxStakeRatio: number };
 }
 

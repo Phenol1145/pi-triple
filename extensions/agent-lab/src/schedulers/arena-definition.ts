@@ -37,6 +37,7 @@ export interface ArenaSchedulerParameters {
     bidderSelector: string;
     diversityFactor: number;
   };
+  execution: { timeoutMs: number };
   risk: { maxStakeRatio: number };
 }
 
@@ -53,6 +54,7 @@ export const ARENA_DEFAULT_PARAMETERS: ArenaSchedulerParameters = {
     maxCallsPerDispatch: DEFAULT_MARKET_CONFIG.bidding.maxCallsPerDispatch,
   },
   market: { ...DEFAULT_MARKET_CONFIG.market },
+  execution: { ...DEFAULT_MARKET_CONFIG.execution },
   risk: { ...DEFAULT_MARKET_CONFIG.risk },
 };
 
@@ -75,6 +77,7 @@ const TUNABLE_PATHS: string[] = [
   "bidding.bidTurnBudget",
   "bidding.bidSkill",
   "market.diversityFactor",
+  "execution.timeoutMs",
   "risk.maxStakeRatio",
 ];
 
@@ -130,6 +133,9 @@ export function arenaParamsToMarketConfig(params: unknown): MarketConfig {
     },
     bidding: { ...ARENA_DEFAULT_PARAMETERS.bidding },
     market: { ...ARENA_DEFAULT_PARAMETERS.market },
+    execution: {
+      timeoutMs: Number((p.execution as Record<string, unknown> | undefined)?.timeoutMs ?? ARENA_DEFAULT_PARAMETERS.execution.timeoutMs),
+    },
     risk: { ...ARENA_DEFAULT_PARAMETERS.risk },
   };
 }
@@ -287,6 +293,17 @@ export function validateArenaParameters(value: unknown): ValidationResult<ArenaS
     }
   }
 
+  // ── execution.timeoutMs（可选：旧实例持久化参数无此字段，缺省回落 300_000）──
+  const execution = obj.execution as Record<string, unknown> | undefined;
+  if (execution !== undefined) {
+    const execTimeoutMs = execution.timeoutMs;
+    if (typeof execTimeoutMs !== "number" || !Number.isFinite(execTimeoutMs)) {
+      issues.push({ path: "execution.timeoutMs", code: "INVALID_TYPE", message: "execution.timeoutMs must be a number" });
+    } else if (execTimeoutMs <= 0) {
+      issues.push({ path: "execution.timeoutMs", code: "OUT_OF_RANGE", message: "execution.timeoutMs must be > 0" });
+    }
+  }
+
   if (issues.length > 0) return { ok: false, issues };
 
   // Build the validated value
@@ -329,6 +346,9 @@ export function validateArenaParameters(value: unknown): ValidationResult<ArenaS
         maxBidders: (market as Record<string, number>).maxBidders,
         bidderSelector: (market as Record<string, string>).bidderSelector ?? "top-balance",
         diversityFactor: (market as Record<string, number>).diversityFactor ?? 0.1,
+      },
+      execution: {
+        timeoutMs: (execution as Record<string, number> | undefined)?.timeoutMs ?? ARENA_DEFAULT_PARAMETERS.execution.timeoutMs,
       },
       risk: {
         maxStakeRatio: (risk as Record<string, number>).maxStakeRatio,
@@ -437,6 +457,13 @@ export const ARENA_DEFINITION: SchedulerDefinition = {
           diversityFactor: { type: "number", minimum: 0 },
         },
         required: ["maxBidders", "eligibility"],
+      },
+      execution: {
+        type: "object",
+        properties: {
+          timeoutMs: { type: "number", minimum: 0 },
+        },
+        required: ["timeoutMs"],
       },
       risk: {
         type: "object",

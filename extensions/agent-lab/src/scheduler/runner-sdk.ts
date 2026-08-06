@@ -2,6 +2,11 @@ import type { LabCore } from "../core/create-core.ts";
 import type { AgentCreateSpec, LabEvent } from "../core/contracts.ts";
 import type { WorkLoopRunner, WorkLoopRunRequest } from "../workloop/runner.ts";
 import type { AgentSnapshot, AgentRunRequest, AgentRunResult, SchedulerSDK } from "./contracts.ts";
+import {
+  withTimeout,
+  isTimeoutFailure,
+  DEFAULT_EXECUTION_TIMEOUT_MS,
+} from "./with-timeout.ts";
 
 // ── Event emission (extracted from SchedulerRunner.emitEvent) ─────────
 
@@ -151,7 +156,23 @@ export function buildSchedulerSDK(
           dispatchId,
         };
 
-        const result = await wlRunner.run(wlRequest);
+        // 墙钟超时：默认 DEFAULT_EXECUTION_TIMEOUT_MS（= DEFAULT_MARKET_CONFIG.execution.timeoutMs，
+        // 经 arena 调度参数 execution.timeoutMs 透传）；超时 → failed(execution-timeout, retryable)。
+        const timeoutMs = runReq.timeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS;
+        const resultOrTimeout = await withTimeout(wlRunner.run(wlRequest), timeoutMs);
+        if (isTimeoutFailure(resultOrTimeout)) {
+          // 尽力取消底层 workloop（signal 可能是外部 AbortSignal，无 abort 则跳过）
+          signal?.abort?.();
+          return {
+            status: "failed",
+            error: {
+              code: "execution-timeout",
+              message: resultOrTimeout.error.message,
+              retryable: true,
+            },
+          };
+        }
+        const result = resultOrTimeout;
 
         // Normalize to AgentRunResult
         return {

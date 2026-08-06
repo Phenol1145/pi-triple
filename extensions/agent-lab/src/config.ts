@@ -7,6 +7,7 @@ export const DEFAULT_MARKET_CONFIG: MarketConfig = {
   cost: { tokenMult: 1.0, toolMult: 1.0, latencyMult: 1.0, resourceFactor: 1.0, toolWeights: { bash: 1.0, edit: 0.8, write: 0.8, read: 0.2 } },
   bidding: { timeoutMs: 10000, promptTemplate: "任务：{prompt}（角色 {role}），难度 {difficulty}，赔率 {odds}。你当前 credits：{balance}。可押不超过可用余额。你押多少 credits 接此任务？只回一个数字。", maxCallsPerDispatch: 6, minStake: 10, engine: "model-caller", maxConcurrentBids: 3, bidTurnBudget: 3, bidSkill: "agent-lab-bidding" },
   market: { staleTaskTimeoutMs: 600000, eligibility: "all", maxBidders: 6, bidderSelector: "top-balance", diversityFactor: 0.1 },
+  execution: { timeoutMs: 300_000 },
   risk: { maxStakeRatio: 0.5 },
 };
 
@@ -55,6 +56,7 @@ function mergeMarket(base: MarketConfig, partial?: MarketConfig): MarketConfig {
     cost: { ...base.cost, ...(partial?.cost ?? {}), toolWeights: { ...base.cost.toolWeights, ...(partial?.cost?.toolWeights ?? {}) } },
     bidding: { ...base.bidding, ...(partial?.bidding ?? {}) },
     market: { ...base.market, ...(partial?.market ?? {}) },
+    execution: { ...base.execution, ...(partial?.execution ?? {}) },
     risk: { ...base.risk, ...(partial?.risk ?? {}) },
   };
 }
