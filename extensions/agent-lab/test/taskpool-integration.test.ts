@@ -55,12 +55,15 @@ test("全链路：模板→publish→认领→派发→提交→完成", async (
 
   // 周期：认领 + 派发（mock 成功）
   let dispatchedTaskId = "";
+  let dispatchedTaskPrefix = "";
   await runSorterCycleOnce({
     engine,
-    dispatch: async (req) => { dispatchedTaskId = req.labels?.taskId ?? ""; return { status: "completed", schedulerInstanceId: "s", attempts: [], selectedAgentId: "agent-a", output: { text: "ok" } } as DispatchResult; },
+    dispatch: async (req) => { dispatchedTaskId = req.labels?.taskId ?? ""; dispatchedTaskPrefix = req.task; return { status: "completed", schedulerInstanceId: "s", attempts: [], selectedAgentId: "agent-a", output: { text: "ok" } } as DispatchResult; },
     intervalMs: 60_000,
   });
   assert.equal(dispatchedTaskId, t.id);
+  // Minor 要求补验：cycle 同时产出人读前缀与机读 labels.taskId（spec §6.3），既测只验后者
+  assert.ok(dispatchedTaskPrefix.startsWith(`[task:${t.id}]`), `派发负载须携带人读前缀 [task:${t.id}]`);
   assert.equal(store.get(t.id)!.status, "claimed");
 
   // agent 会话内 submit（sdk 端口）
@@ -103,6 +106,12 @@ test("全链路：拒绝→回流→无候选升级→requeue 恢复", async () 
   rmSync(dir, { recursive: true, force: true });
 });
 
+// 方法学标注（评审裁决，文档级）：本用例运行于 node 单进程单线程内，`Promise.all([store1.claim(...),
+// store2.claim(...)])` 的两个实参自左向右严格顺序求值（store1 必先完整执行、store2 必后执行），
+// 并非线程/进程级真并发——"并发"之名仅指两个连接先后发起认领，存在方法学局限：测试验证的是
+// 守卫"恰好一个成功"这一单一属性，**无法证伪**竞态行为（如丢失更新/双写）。守卫的原子性由 SQL
+// 单语句条件 UPDATE（status='pending' 守卫 + changes()===1）保证；真竞态探测需多进程/多连接同时
+// 写入同一库文件，在 node 单进程内无法构造，属测试方法学上限，而非实现缺陷。
 test("并发双认领：两个连接同时 claim 同一任务，恰好一个成功（裁决 I9）", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "taskpool-int-"));
   const db1 = new DatabaseSync(path.join(dir, "t.db"));
