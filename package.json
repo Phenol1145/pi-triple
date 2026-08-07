@@ -38,15 +38,18 @@
     "ink": "^5.2.1",
     "ioredis": "^5.4.0",
     "marked": "^15.0.12",
+    "pg": "^8.22.0",
     "pino": "^9.0.0",
     "prom-client": "^15.0.0",
     "react": "^18.3.1",
     "string-width": "^7.2.0"
   },
   "devDependencies": {
+    "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.31",
     "ink-testing-library": "^4.0.0",
+    "testcontainers": "^12.1.0",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
