@@ -83,6 +83,7 @@ test("requeue 清 rejects + 重置计数；reflow 保留 rejects", () => {
   const t = pub(store);
   store.claim("agent-a", t.id);
   store.reject("agent-a", t.id, "r1");
+  store.reflow(t.id); // rejected→pending 仅经 reflow/requeue（spec §5.2），claim 守卫还原 pending-only
   store.claim("agent-a", t.id);
   store.reject("agent-a", t.id, "r2");
   let got = store.get(t.id)!;
@@ -123,9 +124,11 @@ test("escalate 支持 claimed 源态（claims_count≥3 阈值升级，裁决 N1
   const t = pub(store);
   store.claim("agent-a", t.id);
   store.reject("agent-a", t.id, "r1");
+  store.reflow(t.id); // rejected→pending 仅经 reflow/requeue（spec §5.2），claim 守卫还原 pending-only
   store.claim("agent-b", t.id);
   store.reject("agent-b", t.id, "r2");
-  store.claim("agent-c", t.id); // claims_count=3
+  store.reflow(t.id);
+  store.claim("agent-c", t.id); // claims_count=3（reflow 保留 claims_count，N1 升级意图完整保留）
   assert.equal(store.escalate(t.id, "claims-exceeded"), "escalated"); // claimed 源态可升级
   assert.equal(store.get(t.id)!.status, "escalated");
   assert.equal(store.get(t.id)!.claimsCount, 3);

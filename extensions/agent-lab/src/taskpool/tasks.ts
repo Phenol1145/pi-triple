@@ -68,12 +68,11 @@ export class SqliteTaskStore {
 
   claim(agentId: string, taskId: string): OpResult {
     const now = Date.now();
-    // 适配说明（brief 内部不一致，详见报告）：brief 自带测试#5/#7 要求 claim 可从 rejected 源态认领
-    // （agent 拒绝后由他人认领，claims_count 累积至≥3 触发 N1 阈值升级）——实现块只写 pending 导致测试红。
-    // 保留 excludes（rejects[]）不清，与 requeue 清/reflow 留的区分一致。
+    // 守卫 status='pending'（spec §5.3 认领原子性）：claimed 唯一入口 = pending；
+    // rejected→pending 仅经 reflow/requeue（spec §5.2）——rejected 源态不被认领，rejects[] 排除名单语义不破坏。
     const r = this.db.prepare(
       `UPDATE tasks SET status='claimed', claimed_by=?, claimed_at=?, claims_count=claims_count+1
-       WHERE id=? AND status IN ('pending','rejected')`,
+       WHERE id=? AND status='pending'`,
     ).run(agentId, now, taskId);
     if (r.changes === 1) {
       this.emit("task.claimed", { taskId, agentId });
@@ -112,7 +111,9 @@ export class SqliteTaskStore {
     const t = this.get(taskId);
     if (!t) return "not-found";
     if (t.status !== "escalated" && t.status !== "rejected") return "not-requeueable";
-    this.db.prepare(`UPDATE tasks SET status='pending', claimed_by=NULL, claimed_at=NULL, claims_count=0, rejects='[]' WHERE id=? AND status IN ('escalated','rejected')`).run(taskId);
+    // 条件 UPDATE + changes()===1（裁决 I7 TOCTOU）：守卫入 SQL，0 行受影响时不得发事件、不得返回成功
+    const r = this.db.prepare(`UPDATE tasks SET status='pending', claimed_by=NULL, claimed_at=NULL, claims_count=0, rejects='[]' WHERE id=? AND status IN ('escalated','rejected')`).run(taskId);
+    if (r.changes !== 1) return "not-requeueable";
     this.emit("task.requeued", { taskId });
     return "requeued";
   }
@@ -122,7 +123,9 @@ export class SqliteTaskStore {
     const t = this.get(taskId);
     if (!t) return "not-found";
     if (t.status !== "rejected") return "not-rejected";
-    this.db.prepare(`UPDATE tasks SET status='pending', claimed_by=NULL, claimed_at=NULL WHERE id=? AND status='rejected'`).run(taskId);
+    // 条件 UPDATE + changes()===1（裁决 I7 TOCTOU）
+    const r = this.db.prepare(`UPDATE tasks SET status='pending', claimed_by=NULL, claimed_at=NULL WHERE id=? AND status='rejected'`).run(taskId);
+    if (r.changes !== 1) return "not-rejected";
     this.emit("task.reflowed", { taskId });
     return "reflowed";
   }
@@ -133,7 +136,9 @@ export class SqliteTaskStore {
     if (!t) return "not-found";
     // 源态：rejected / pending（无候选升级）/ claimed（claims_count≥3 阈值升级——裁决 N1，调用方保证派发已返回、非在途）
     if (t.status !== "rejected" && t.status !== "pending" && t.status !== "claimed") return "not-escalatable";
-    this.db.prepare(`UPDATE tasks SET status='escalated', claimed_by=NULL, claimed_at=NULL WHERE id=? AND status IN ('rejected','pending','claimed')`).run(taskId);
+    // 条件 UPDATE + changes()===1（裁决 I7 TOCTOU）
+    const r = this.db.prepare(`UPDATE tasks SET status='escalated', claimed_by=NULL, claimed_at=NULL WHERE id=? AND status IN ('rejected','pending','claimed')`).run(taskId);
+    if (r.changes !== 1) return "not-escalatable";
     this.emit("task.escalated", { taskId, reason });
     return "escalated";
   }
