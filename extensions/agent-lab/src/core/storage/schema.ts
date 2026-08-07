@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS lab_agent_instances (
   elo_global REAL,
   elo_by_domain TEXT,
   accepts TEXT,
+  selector_json TEXT,
   created_round_id TEXT NOT NULL,
   status TEXT NOT NULL,
   created_ts INTEGER NOT NULL
@@ -154,4 +155,36 @@ CREATE TABLE IF NOT EXISTS event_subscriptions (
   updated_ts INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_event_subscriptions_tenant ON event_subscriptions(tenant_id, id);
+
+-- 任务池（联邦任务池计划 2026-08-06）：任务模板表——注册可复用任务定义。
+-- 注意：表名按 spec/plan 逐字为 task_templates/tasks（偏离 lab_* 前缀惯例——spec 为契约）。
+CREATE TABLE IF NOT EXISTS task_templates (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  labels TEXT NOT NULL,
+  params TEXT NOT NULL,
+  protocol TEXT NOT NULL,
+  acceptance TEXT NOT NULL,
+  output TEXT NOT NULL,
+  registered_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  template_id TEXT NOT NULL,
+  labels TEXT NOT NULL,
+  text TEXT NOT NULL,
+  params TEXT NOT NULL,
+  status TEXT NOT NULL,
+  claimed_by TEXT,
+  claimed_at INTEGER,
+  claims_count INTEGER NOT NULL DEFAULT 0,
+  rejects TEXT NOT NULL DEFAULT '[]',
+  created_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  completed_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_status_claimed ON tasks(status, claimed_at);
 `;

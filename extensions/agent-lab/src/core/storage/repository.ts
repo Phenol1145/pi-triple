@@ -102,6 +102,13 @@ export class CoreRepository {
         this.db.exec(`ALTER TABLE lab_agent_instances ADD COLUMN ${col} ${colType}`);
       }
     }
+    // selector_json 列（任务池分选器规则，2026-08-06）：JSON { labelPatterns: string[], textPattern?: string }
+    {
+      const cols = this.db.prepare("PRAGMA table_info(lab_agent_instances)").all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === "selector_json")) {
+        this.db.exec("ALTER TABLE lab_agent_instances ADD COLUMN selector_json TEXT");
+      }
+    }
     // model 列就绪后建 UNIQUE 索引（防同 instance 同 model 同 template 重复 agent）。
     // 阶段 3a 联邦统一市场：UNIQUE 加 source_template_id，允许跨模板同 model 的 agent 共存。
     // 不放 CORE_SCHEMA：旧库表已存在但无 model 列，CREATE INDEX 会先于 ALTER 失败。
