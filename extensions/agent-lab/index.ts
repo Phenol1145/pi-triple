@@ -70,7 +70,8 @@ export function createTaskPoolFactory(
     });
     const registry = new SqliteTemplateRegistry(raw);
     registry.register({ ...SEMANTIC_SPLIT_TEMPLATE, createdAt: Date.now() }); // INSERT OR IGNORE 幂等
-    const engine = new SorterEngine(raw, store);
+    // 修复波 B-1：engine 与 store 同源入账——reclaimStale 的 task.stale_reclaim 事件进 EventLog（生产路径）
+    const engine = new SorterEngine(raw, store, (e) => (events ? events.append(e) : "inserted"));
     return { registry, store, engine };
   };
 }

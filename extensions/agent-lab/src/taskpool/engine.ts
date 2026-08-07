@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
+import type { LabEvent } from "../core/contracts.ts";
 import type { SqliteTaskStore, TaskRecord } from "./tasks.ts";
 
 export interface SelectorRule { labelPatterns: string[]; textPattern?: string }
@@ -20,11 +22,14 @@ export interface ReflowThresholds { reflowAgeMs?: number; escalateAgeMs?: number
 export class SorterEngine {
   private readonly db: DatabaseSync;
   private readonly store: SqliteTaskStore;
+  private readonly appendEvent?: (e: LabEvent) => "inserted" | "duplicate";
 
-  // node strip-types 不支持 parameter property → 显式字段赋值
-  constructor(db: DatabaseSync, store: SqliteTaskStore) {
+  // node strip-types 不支持 parameter property → 显式字段赋值。
+  // appendEvent 为可选（修复波 B-1：reclaimStale 事件入口）——既有调用点 new SorterEngine(db, store) 向后兼容。
+  constructor(db: DatabaseSync, store: SqliteTaskStore, appendEvent?: (e: LabEvent) => "inserted" | "duplicate") {
     this.db = db;
     this.store = store;
+    this.appendEvent = appendEvent;
   }
 
   setSelector(agentId: string, sel: SelectorRule | null): void {
@@ -91,13 +96,19 @@ export class SorterEngine {
     return out;
   }
 
-  /** claimed 超时 → pending（保留 claims_count——N3）。 */
+  /** claimed 超时 → pending（保留 claims_count——N3）。计数按实际变更行（changes()===1），非 SELECT 命中行数。
+   *  每次成功回收发 task.stale_reclaim 事件（B-1：spec §5.2 明列该转移须入 EventLog——联邦账本不留 claimed→pending 断层）。 */
   reclaimStale(staleMs: number, now: number = Date.now()): number {
     const rows = this.db.prepare(`SELECT id FROM tasks WHERE status='claimed' AND claimed_at IS NOT NULL AND claimed_at < ?`).all(now - staleMs) as Array<{ id: string }>;
     let n = 0;
     for (const r of rows) {
-      this.db.prepare(`UPDATE tasks SET status='pending', claimed_by=NULL, claimed_at=NULL WHERE id=? AND status='claimed'`).run(r.id);
-      n++;
+      // 条件 UPDATE + changes()===1（同 store 守卫裁决 I7 TOCTOU）：0 行变更 = 状态已被并发转移（已提交/已升级），
+      // 不计数、不发事件——转移痕迹只对真实发生的回收入账。
+      const res = this.db.prepare(`UPDATE tasks SET status='pending', claimed_by=NULL, claimed_at=NULL WHERE id=? AND status='claimed'`).run(r.id);
+      if (res.changes === 1) {
+        n++;
+        this.appendEvent?.({ eventId: randomUUID(), eventType: "task.stale_reclaim", schemaVersion: "1", timestamp: now, identity: { traceId: "taskpool" }, payload: { taskId: r.id } });
+      }
     }
     return n;
   }

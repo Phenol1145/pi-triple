@@ -34,7 +34,8 @@ function fresh() {
   }
   const events: unknown[] = [];
   const store = new SqliteTaskStore({ db, appendEvent: (e) => { events.push(e); return "inserted"; }, traceId: "test" });
-  const engine = new SorterEngine(db, store);
+  // 修复波 B-1：engine 增设可选 appendEvent（构造第 3 参）——测试侧与 store 同源入账，便于断言 stale_reclaim 事件
+  const engine = new SorterEngine(db, store, (e) => { events.push(e); return "inserted"; });
   return { dir, db, store, engine, events };
 }
 
@@ -142,6 +143,41 @@ test("reclaimStale：claimed 超时回 pending 保留 claims_count", () => {
   assert.equal(got.status, "pending");
   assert.equal(got.claimsCount, 3); // 保留计数（N3：stale 产物走 claims_count 阈值路径）
   assert.equal(got.claimedBy, undefined);
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("reclaimStale：成功回收发 task.stale_reclaim 事件（B-1 账本完整性）+ 计数按实际变更行", () => {
+  const { dir, db, store, engine, events } = fresh();
+  const now = 1_700_000_000_000;
+  const t = store.publish(task(["m"], "t"));
+  // 手动制造 claimed 且 claimed_at 陈旧（claims_count 保留语义随附断言）
+  db.prepare(`UPDATE tasks SET status='claimed', claimed_by='agent-x', claimed_at=?, claims_count=2 WHERE id=?`).run(now - 20 * 60_000, t.id);
+  const n = engine.reclaimStale(10 * 60_000, now);
+  assert.equal(n, 1); // 计数按实际变更行（changes()===1），非 SELECT 命中行数
+  const got = store.get(t.id)!;
+  assert.equal(got.status, "pending");
+  assert.equal(got.claimsCount, 2); // stale 回收保留计数
+  const evs = events.filter((e) => (e as { eventType: string }).eventType === "task.stale_reclaim");
+  assert.equal(evs.length, 1);
+  const ev = evs[0] as { eventId: string; eventType: string; schemaVersion: string; timestamp: number; identity: { traceId: string }; payload: { taskId: string } };
+  assert.equal(ev.eventType, "task.stale_reclaim");
+  assert.equal(ev.schemaVersion, "1");
+  assert.equal(ev.timestamp, now);
+  assert.equal(ev.identity.traceId, "taskpool");
+  assert.equal(ev.payload.taskId, t.id);
+  assert.ok(ev.eventId.length > 0, "eventId 为 uuid 型唯一 id");
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("reclaimStale：0 行变更不发事件", () => {
+  const { dir, db, store, engine, events } = fresh();
+  const now = 1_700_000_000_000;
+  store.publish(task(["m"], "t")); // pending + claimed_at NULL → 不命中 SELECT
+  const n = engine.reclaimStale(10 * 60_000, now);
+  assert.equal(n, 0);
+  assert.equal(events.filter((e) => (e as { eventType: string }).eventType === "task.stale_reclaim").length, 0);
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });
