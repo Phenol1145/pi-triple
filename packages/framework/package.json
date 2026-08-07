@@ -2,7 +2,7 @@
   "name": "@pi-triple/framework",
   "version": "0.1.0",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "bin": { "ptl": "./src/pit.ts" }
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": { "ptl": "./dist/pit.js" }
 }
