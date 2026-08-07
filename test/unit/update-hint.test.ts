@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { formatUpdateHint, maybeShowUpdateHint } from "../../extensions/pit-communicate/update-hint.js";
+import { formatUpdateHint, maybeShowUpdateHint } from "@pi-triple/mailbox";
 
 describe("formatUpdateHint", () => {
-  it("pit 有更新 → 提示行", () => {
+  it("ptl 有更新 → 提示行", () => {
     const lines = formatUpdateHint({ pit: "0.2.0", currentPit: "0.1.0" });
     expect(lines.length).toBe(1);
-    expect(lines[0]).toContain("pit 更新可用: v0.2.0（当前 v0.1.0）");
-    expect(lines[0]).toContain("pit update");
+    expect(lines[0]).toContain("ptl 更新可用: v0.2.0（当前 v0.1.0）");
+    expect(lines[0]).toContain("ptl update");
   });
   it("pi SDK 有更新 → 提示行", () => {
     const lines = formatUpdateHint({ piSdk: "0.84.0", currentPiSdk: "0.83.0" });
@@ -28,7 +28,7 @@ describe("maybeShowUpdateHint", () => {
     await maybeShowUpdateHint(ctx as never, { checker: checker as never });
     expect(checker).toHaveBeenCalledTimes(1);
     expect(notify).toHaveBeenCalledTimes(2);
-    expect(notify).toHaveBeenNthCalledWith(1, expect.stringContaining("pit 更新可用"), "warning");
+    expect(notify).toHaveBeenNthCalledWith(1, expect.stringContaining("ptl 更新可用"), "warning");
     expect(notify).toHaveBeenNthCalledWith(2, expect.stringContaining("pi SDK 更新可用"), "warning");
   });
 

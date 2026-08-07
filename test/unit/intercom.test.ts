@@ -1,18 +1,15 @@
 /**
- * pit-communicate unit tests
- * 从 extensions/pit-communicate/ 源码 import，mailbox root 用 tmpdir 隔离
+ * @pi-triple/mailbox unit tests（原 pit-communicate，/pit 已改名 /mail）
+ * 从包入口 import，mailbox root 用 tmpdir 隔离
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-// 直接导入源码
-import { Mailbox } from "../../extensions/pit-communicate/mailbox.js";
-import { createMessage, validateMessage } from "../../extensions/pit-communicate/protocol.js";
-import { Presence } from "../../extensions/_shared/presence.js";
-import { Registry } from "../../extensions/_shared/registry.js";
-import { Delivery } from "../../extensions/pit-communicate/delivery.js";
+// 包入口导入（mailbox 包 + shared 包）
+import { Mailbox, createMessage, validateMessage, Delivery } from "@pi-triple/mailbox";
+import { Presence, Registry } from "@pi-triple/shared";
 
 let root: string;
 
