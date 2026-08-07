@@ -73,7 +73,15 @@ export interface BatchSuggestion {
 }
 ```
 
-**子进程模型**：`child_process.fork(batchProcessPath)`（IPC channel）——batch 崩溃不影响 pth 主进程（OS 进程隔离，裁决 15 方案 C）；pth 侧 watchdog 检测崩溃 → 事件记录（不自动重启 v1，/lab batch status 可见）。
+**子进程模型**：`child_process.fork(batchProcessPath)`（IPC channel）——batch 崩溃不影响 pth 主进程（OS 进程隔离，裁决 15 方案 C）；pth 侧 watchdog 检测崩溃 → 自动重启（裁决 26）。
+
+**最小 IPC 协议（对抗性审核 I7）**：
+```
+主进程 → batch: {type: "shutdown"} | {type: "pause"} | {type: "resume"}
+batch → 主进程: {type: "status", tasks: [{workerId, taskId}]} | {type: "error", message}
+```
+- batch 自驱动任务循环（直接连 pg 独立连接池）；IPC 仅用于生命周期控制（/lab batch remove = 发 shutdown → batch 完成当前任务后退出）
+- `BatchHandle.signal()` 暴露；TaskLoop 每轮循环前检查信号（pause 停止认领新任务）
 
 ## 4. worker 簇（worker-cluster.ts）
 
@@ -117,35 +125,51 @@ export function createWorkerCluster(deps: {
  *   - claim 后执行；执行失败 → reject（评估后明确不做）或重试
  *   - 逐条判别式失败不中断（裁决 10：原子批 = ACID 幻觉）
  *   - 认领竞态（claimed-by-other）为正常——由判别式处理，不特殊处理
+ * 接口统一（对抗性审核 I3）：适配 taskpool v1 既有接口
+ *   candidates(agentId) / claimTopN(agentId, n) / reject(agentId, taskId, reason) / submit(agentId, taskId, outputRef)
  */
 export class TaskLoop {
   constructor(deps: { kernel: WorkerKernel; role: WorkerRole; taskStore: TaskStore; workspaceMgr: TaskWorkspaceManager; intervalMs?: number }) {}
 
   async runOnce(): Promise<void> {
-    // 1. peek：只读获取符合标签的前 n 个任务（不锁定）
-    const candidates = await this.deps.taskStore.peek({ tags: this.role.labelPatterns, limit: 3 });
+    // 1. peek：只读获取符合标签的前 n 个任务（不锁定）——适配 candidates(agentId)
+    const candidates = await this.deps.taskStore.candidates(this.role.id);
 
     // 2. 模型判断：自检"能否用现有能力完成"（llm.complete 一次调用）
     const decision = await this.assess(candidates);   // { claimTaskIds: string[], rejectTaskIds: string[] }
 
     // 3. 认领（claim 即承诺）+ 拒绝（reject 带原因）
     for (const id of decision.claimTaskIds) {
-      const claimed = await this.deps.taskStore.claim(id, { agentId: this.role.id });
-      if (claimed) await this.execute(claimed);
+      const claimed = await this.deps.taskStore.claimTopN(this.role.id, [id]);
+      if (claimed.length > 0) await this.execute(claimed[0]);
       // claimed=false = 竞态（已被他人认领）——正常，跳过
     }
     for (const id of decision.rejectTaskIds) {
-      await this.deps.taskStore.reject(id, { agentId: this.role.id, reason: "cannot complete" });
+      await this.deps.taskStore.reject(this.role.id, id, "assessed-as-unfit");
+    }
+    // 空转防护（对抗性审核 I4）：assess 全拒且无 claim/reject → 对全部候选 reject（放回池供他 worker）
+    if (decision.claimTaskIds.length === 0 && decision.rejectTaskIds.length === 0 && candidates.length > 0) {
+      for (const t of candidates) {
+        await this.deps.taskStore.reject(this.role.id, t.id, "assessed-as-unfit");
+      }
     }
   }
 
   private async execute(task: Task): Promise<void> {
     // 任务级工作区分配（§6）→ kernel.reset() → 执行 → submit/归档
+    // try/catch 外包（对抗性审核 I10）：执行抛异常 → reject（claim=承诺，失败显式拒绝，不等 stale）
     const ws = await this.deps.workspaceMgr.allocate(task.id);
     this.deps.kernel.reset();                          // 任务级状态隔离
-    const result = await this.deps.kernel.ts.execute(task.program, { cwd: ws.dir });
-    await this.deps.taskStore.submit(task.id, { agentId: this.role.id, result });
-    await archiveTask(task, ws, result);               // 转录 + 产物归档（§7）
+    try {
+      // 执行入口：任务程序是 TS（v1 主路径）——bash/Python 经 vm context 的
+      // capabilities.bash / capabilities.python 由 LLM 代码调用（对抗性审核 B2 裁决：
+      // 注入 vm context 而非任务类型分发——三解释器真实接入执行路径）
+      const result = await this.deps.kernel.ts.execute(task.program, { cwd: ws.dir });
+      await this.deps.taskStore.submit(this.role.id, task.id, { ref: result });
+      await archiveTask(task, ws, result);             // 转录 + 产物归档（§7）
+    } catch (e) {
+      await this.deps.taskStore.reject(this.role.id, task.id, `execution-crashed: ${(e as Error).message}`);
+    }
   }
 }
 ```

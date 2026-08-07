@@ -60,17 +60,22 @@ settings          设置（替代 Redis settings:*；或留 Redis——待裁决
 ### 2.2 关键表 DDL 草案
 
 ```sql
--- 任务池：沿用 taskpool v1 语义，加 pg 约束
+-- 任务池：对齐 taskpool v1 语义（SqliteTaskStore 逐列验证，对抗性审核）
 CREATE TABLE tasks (
   id TEXT PRIMARY KEY,                    -- UUID
+  tenant_id TEXT NOT NULL DEFAULT 'default',  -- 多租户预留（v1 单租户，裁决 25）
   template_id TEXT REFERENCES task_templates(id),
   title TEXT NOT NULL,
+  text TEXT NOT NULL,                     -- 实例化后完整任务文本（认领注入用，非 title 替代）
   description TEXT,
+  created_by TEXT NOT NULL,               -- 发布者（审计链）
   payload JSONB DEFAULT '{}',             -- 输入参数（模板实例化产物）
   tags TEXT[] DEFAULT '{}',               -- 标签数组（sorter 匹配用，GIN 索引）
-  status TEXT NOT NULL DEFAULT 'pending', -- 六状态机
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','claimed','submitted','completed','rejected','escalated')),
+  claimed_by TEXT,                        -- 认领者 agentId（claim/submit/reject/stale 守卫）
   claims_count INTEGER DEFAULT 0,
-  rejected_reasons JSONB DEFAULT '[]',    -- 拒绝原因+排除名单
+  rejects JSONB DEFAULT '[]',             -- RejectRecord[]：{agentId, reason, at}（排除名单推导）
   sorter_selector TEXT,                   -- 认领者 selector_json 快照
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
@@ -79,36 +84,73 @@ CREATE TABLE tasks (
   completed_at TIMESTAMPTZ,
   escalated_at TIMESTAMPTZ,
   stale_ms INTEGER DEFAULT 600000,        -- stale 回收阈值（> 执行超时 300s）
-  artifact_path TEXT,                     -- 产物指针（引用而非复制：artifacts/<tenant>/<taskId>/）
+  artifact_path TEXT,                     -- 产物指针（引用而非复制）
   transcript_id TEXT REFERENCES transcripts(id)
 );
 CREATE INDEX idx_tasks_status ON tasks(status);
 CREATE INDEX idx_tasks_tags ON tasks USING GIN(tags);
 CREATE INDEX idx_tasks_created ON tasks(created_at);
+CREATE INDEX idx_tasks_claimed_by ON tasks(claimed_by, status);
+CREATE INDEX idx_tasks_claimed_at ON tasks(claimed_at) WHERE status='claimed';
 
--- 记忆条目：MemoryEntry 结构 → pg（anchors JSONB + GIN 索引替代锚点文件）
+-- 并发认领（对抗性审核 B2）：peek+claim 原子化
+-- SELECT id FROM tasks WHERE status='pending' ORDER BY created_at LIMIT N FOR UPDATE SKIP LOCKED
+-- （SQLite 单写者 changes()===1 在 pg 多连接下不可靠——必须显式行锁）
+
+-- 记忆条目：MemoryEntry 结构 → pg（hitCount/version/notWriteBack 独立列，对抗性审核 B3）
 CREATE TABLE memory_entries (
   id TEXT PRIMARY KEY,                    -- UUID（不可变）
+  tenant_id TEXT NOT NULL DEFAULT 'default',
   kind TEXT NOT NULL,                     -- axiom|rule|fact|experience|preference|<方言>
-  anchors JSONB NOT NULL DEFAULT '[]',    -- ≥1 锚点（写入校验）；GIN 索引
+  anchors JSONB NOT NULL DEFAULT '[]'
+    CHECK (jsonb_array_length(anchors) > 0),  -- 锚点非空不变量（写入即校验）
   content TEXT NOT NULL,                  -- 规则约束的构成
   rule_ref TEXT,
   idempotency_key TEXT UNIQUE,            -- 沉淀幂等键
-  status TEXT NOT NULL DEFAULT 'draft',   -- draft|official|archived
+  status TEXT NOT NULL DEFAULT 'official'
+    CHECK (status IN ('draft','official','archived')),  -- 默认对齐 createEntry（对抗性审核）
+  version INTEGER NOT NULL DEFAULT 1,     -- CAS 判定列（WHERE version = ?）
+  hit_count INTEGER DEFAULT 0,            -- 旁路计数器（独立列，不触发版本化）
+  not_write_back BOOLEAN DEFAULT FALSE,   -- 审核链拒绝标记（可索引查询）
   ttl_expires_at TIMESTAMPTZ,
   promoted_from TEXT,
-  meta JSONB DEFAULT '{}',                -- version/sourceTraces/hitCount/dialectVersion/versions
-  created_at TIMESTAMPTZ DEFAULT now(),
+  meta JSONB DEFAULT '{}',                -- 低频字段：sourceTraces/versions[]/dialectVersion
+  created_at TIMESTAMPTZ DEFAULT now(),   -- 真相源（meta 内不重复存 createdAt/updatedAt）
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX idx_memory_anchors ON memory_entries USING GIN(anchors);
 CREATE INDEX idx_memory_status ON memory_entries(status);
 
+-- 沉淀管道（对抗性审核 B4）：5 种 jsonl → 表
+CREATE TABLE memory_buffer (
+  id BIGSERIAL PRIMARY KEY,
+  key TEXT UNIQUE NOT NULL,               -- 预分配 idempotencyKey
+  content TEXT NOT NULL,
+  anchors JSONB DEFAULT '[]',
+  kind TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE TABLE memory_idem (
+  key TEXT PRIMARY KEY,                   -- 幂等键（UNIQUE 替代线性扫描）
+  entry_id TEXT NOT NULL,
+  watermark INTEGER                        -- 水位（pruneIdem: DELETE WHERE watermark > S）
+);
+CREATE TABLE memory_retry (
+  key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL DEFAULT 0        -- 重试计数（封顶 2）
+);
+CREATE TABLE memory_index (
+  anchor TEXT NOT NULL,
+  entry_id TEXT NOT NULL,
+  PRIMARY KEY (anchor, entry_id)          -- 锚点索引（替代 FS anchors.json）
+);
+
 -- 转录：任务执行完整档案
 CREATE TABLE transcripts (
   id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'default',
   task_id TEXT REFERENCES tasks(id),
-  tenant_id TEXT,
+  session_id TEXT,                        -- 会话关联（WM 链路可追溯，对抗性审核）
   agent_id TEXT,                          -- 执行者
   body JSONB NOT NULL DEFAULT '[]',       -- 事件序列（程序/结果/决策）
   summary TEXT,                           -- 结构化提炼（v2）
@@ -119,9 +161,12 @@ CREATE TABLE transcripts (
 -- 审计：可查询（替代 Redis Stream 只写不读）
 CREATE TABLE audit_log (
   id BIGSERIAL PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'default',
   event_type TEXT NOT NULL,
   actor TEXT,
-  tenant_id TEXT,
+  task_id TEXT,
+  worker_id TEXT,
+  session_id TEXT,
   payload JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -131,6 +176,14 @@ CREATE INDEX idx_audit_type_time ON audit_log(event_type, created_at);
 ### 2.3 schema 完整清单（其余表从略，分层 spec 细化时补全）
 
 memory_index / memory_pipeline / lab_events / credit_tx / skills / component_meta / settings / task_templates —— 结构与上表同风格（id + JSONB + 时间戳 + GIN/btree 索引）。
+
+**skills 表 = memory_entries 的 kind='skill' 视图**（不建独立表——裁决 4 "skill 是记忆的一种"，避免冗余存储和同步问题）。
+
+**迁移补充（对抗性审核）**：
+- MemoryPipeline 的直接 FS 依赖（buffer/idem/retry/consumed/not-write-back 五件套）全部改为 pg 访问：`observe()` → INSERT INTO memory_buffer；`write()` → pg 事务内幂等检查 + 重试计数 upsert + MemoryStore 写入；`flushBuffer()` → DELETE consumed rows；`pruneIdem()` → DELETE FROM memory_idem WHERE watermark > S；`notWriteBackIds()` → SELECT FROM memory_entries WHERE not_write_back = TRUE
+- agent-lab.db 全部 15 表归属：tasks/task_templates/lab_events/credit_tx → pg（kernel 域）；lab_agent_instances/lab_scheduler_instances/lab_optimizer_instances/lab_routing_bindings/scheduled_jobs/event_subscriptions → 留 SQLite（agent-lab 遗留域，kernel 不读）或随对应模块迁移；lab_scheduler_drafts/lab_optimization_rounds/lab_proposals/lab_namespace_kv → 废弃（对应模块被 kernel 取代）
+- workflow 状态 → 迁 pg（防 Redis 重启僵尸态；不变量 #4 细化）
+- 悬空引用防护（对抗性审核）：artifact_path 周期性健康检查（任务归档时验证 FS 存在）；FS rename + pg UPDATE 非原子 → 归档操作声明"FS rename 先行，pg 指针后写，失败重试"（幂等）；文档化悬空引用 = 数据丢失（诚实声明）
 
 ## 3. 数据归位边界（硬约束）
 

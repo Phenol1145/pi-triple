@@ -120,20 +120,28 @@ export class TsInterpreter implements Interpreter {
  * 能力注入：context 默认空，只注入白名单。
  * 不注入 fs/child_process/net——语言层面无能力（比运行时对抗更可靠）。
  * 安全 = 能力注入 + timeout + 步数守卫 + 来源可信（worker 只执行任务程序）。
+ * 对抗性审核裁决：bash/Python 解释器也注入 vm context（capabilities.bash/python），
+ *   使 LLM 生成的 TS 代码可调用——三解释器不是死代码（裁决 23 落实）。
  */
 export function buildCapabilities(deps: {
   llm: LlmFn;                        // llm.complete
   dataWorld: DataWorldAccess;        // 记忆/skill/任务读写（Spec C）
+  bash?: Interpreter;               // bash 解释器（LLM 代码可调用）
+  python?: Interpreter;             // Python 解释器（LLM 代码可调用）
   logger?: Logger;
 }): Record<string, unknown> {
   return {
     llm: deps.llm,
     memory: deps.dataWorld.memory,   // 记忆读写（接口保留自 2026-08-02 spec）
     skills: deps.dataWorld.skills,   // skill 数据对象读取
-    tasks: deps.dataWorld.tasks,     // 任务动词（peek/claim/reject/submit）
+    tasks: deps.dataWorld.tasks,     // 任务动词（仅 peek/submit——claim/reject 由 TaskLoop 机械控制，对抗性审核）
+    bash: deps.bash,                 // bash 解释器（execute(program)）
+    python: deps.python,             // Python 解释器（execute(program)）
   };
 }
 ```
+
+**任务动词面收窄（对抗性审核）**：vm context 的 `tasks` 只暴露 `peek`（只读）和 `submit`（提交自己的产出）——**不暴露 claim/reject**（认领/拒绝由 TaskLoop 机械逻辑控制，防止 LLM 代码绕过 assess 判定/抢占任务）。LLM 需委派子任务 → 独立 `tasks.delegate(subTask)` 动词（v2）。
 
 ### 4.3 步数守卫 workaround（vm 无指令数限制）
 
@@ -147,6 +155,22 @@ function withStepGuard(js: string, stepLimit: number): string {
 ```
 
 **v1 诚实声明**：步数守卫 v1 = timeout 兜底（不做 AST 插桩）。指令数精确限制留 v2。
+
+### 4.4 前置校验（对抗性审核：import/require 崩溃 + top-level await）
+
+```ts
+/**
+ * 前置校验（对抗性审核 B5）：
+ * 1. import/require 检测：vm context 无模块系统——LLM 代码含 import/require 会
+ *    ReferenceError 崩溃。前置扫描，命中即拒绝并给出友好错误（而非 vm 报错）。
+ * 2. top-level await 检测：Node 24 vm.SourceTextModule 不可用——顶层 await 会
+ *    SyntaxError。命中则自动包装为 (async () => { ... })() 并 .catch() 处理。
+ * 同时 prompt 模板明确告知 LLM：不可用 import/require，能力经注入全局变量访问。
+ */
+function preflight(program: string): { ok: true; code: string } | { ok: false; error: string } {
+  // import 语句 / require( 调用 / 顶层 await → 拒绝或包装
+}
+```
 
 ## 5. bash 解释器（bash-interpreter.ts）
 
@@ -212,12 +236,18 @@ export class PythonInterpreter implements Interpreter {
 
 **v1 诚实声明**：Python v1 = 无状态子进程（每次执行新进程）——持久 REPL 留 v2。Prime Agent 的 IPython 持久语义在 TS 解释器（vm context）上完整实现，Python 先求能跑。
 
+**使用边界（对抗性审核 I6）**：Python v1 适用于"单次脚本执行"场景（一次 execute 完成完整分析）——不适合"交互式逐行探索"（每次 spawn 冷启动 1-3 秒 import 开销）。PTH 核心数据科学场景若需多次 Python 调用 → v2 进程池预热（启动时 spawn `python3 -i` 保活，stdin/stdout 传递代码）。
+
 ## 7. llm 函数（llm-fn.ts）
 
 ```ts
 /**
  * llm.complete —— LLM 作为数据处理算法（范式 P4）。
- * 基于 model-router（pi 保留，裁决 8）：provider 兼容/密钥/failover 全走 pi。
+ * 基于 model-router + pi ModelRuntime（裁决 8 拆分：作为执行层 llm.complete 底层）。
+ * 实现路径（对抗性审核 B1 已验证）：
+ *   ModelRuntime.completeSimple(model, {systemPrompt, messages}, options)
+ *   —— UserMessage 只需 {role:"user", content, timestamp}（pi-ai 类型已核实），
+ *      转换层简单可行（无需重建完整 AssistantMessage 历史）。
  */
 export interface LlmFn {
   complete(
@@ -238,12 +268,22 @@ export function createLlmFn(deps: {
 }): LlmFn {
   return async (messages, opts) => {
     const model = deps.modelRouter.resolve(opts?.provider, opts?.model);
-    // 经 modelRouter.getRuntime() 调用（pi SDK ModelRuntime——provider 兼容层）
-    // 可编程：调用方可在任意位置/任意次数调用（嵌套/链式/多模型并行）
-    // withTimeout 包装（对齐 DEFAULT_EXECUTION_TIMEOUT_MS）+ AbortSignal 中止
+    const runtime = deps.modelRouter.getRuntime();   // pi ModelRuntime
+    // messages → Context 转换层：
+    //   - system 消息 → Context.systemPrompt（拼接多 system）
+    //   - user/assistant 消息 → UserMessage[]（{role, content, timestamp: Date.now()}）
+    //   - assistant 消息只保留 content（丢弃 usage/stopReason 等——completeSimple 不需）
+    const ctx = toContext(messages);
+    const result = await runtime.completeSimple(model, ctx, { signal: opts?.signal });
+    // result: AssistantMessage → 提取 content 文本（TextContent 数组 → 拼接）
+    return { content: extractText(result.content), model: result.model, usage: result.usage };
   };
 }
 ```
+
+**转换层职责（toContext）**：`{role, content}` 数组 → `Context`。v1 只支持纯文本消息（无图像/工具调用消息）——LLM 函数式调用场景足够。
+
+**withTimeout 包装**（对齐 DEFAULT_EXECUTION_TIMEOUT_MS）+ AbortSignal 中止。
 
 ## 8. worker 组装（index.ts）
 
