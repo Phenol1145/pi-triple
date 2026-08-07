@@ -112,6 +112,10 @@ PTH kernel = 解释性语言运行时（多解释器世界）
 | 12 | 经济闸门 | 缓行（只做动词族不做计费） |
 | 13 | 定位 | **给 PTH 用**（非 PTL）；在 pi-platform 内运行 |
 | 14 | 执行层形态（worker 簇 batch，用户确认 2026-08-07） | **batch = 进程单元**：按比例搭配的 worker 簇独享一个进程；高峰多开/低谷回收（多退少补）；sandbox 正常作用（bash 隔离）。**v1 简化**：每种 worker 类型各 1 个 → batch = 全角色 batch，弹性只加减 batch 数量，不分类型路由；动态构成调整（如开发者×2）留 v2，统计优化器 v1 只采集负载建议加减 batch（可手动执行） |
+| 15 | 容器化拓扑（用户确认 2026-08-07） | **方案 C**：batch = pth 容器内 spawn 子进程（child_process 级隔离）；compose 只加 postgres 服务；sandbox 继续管不可信代码。B（独立容器）留作多机演进路径（batch 进程与容器边界解耦，C→B 迁移成本低） |
+| 16 | 数据域归位（用户确认 2026-08-07） | **postgres = 执行层持久真相**（任务池/记忆/账本/转录/审计/skill/组件元数据）；**Redis = 交互层瞬态**（会话痕迹/认证/锁/队列）；**FS = blob 存储**（任务工作区临时/artifacts 产物归档/components tar/配置原文）；**引用而非复制**（pg 存 taskId/artifactPath 指针） |
+| 17 | 产物清理策略（用户确认 2026-08-07） | 产物归档**不自动清理**——推送到清理提示到交互层，人工/策略决定；防止产物丢失 |
+| 18 | 工作区形态（用户确认 2026-08-07） | **任务级工作区**：认领分配（workspaces/<tenant>/tasks/<taskId>/，sandbox 白名单）、提交后提炼归档（转录入 pg + 产物入 artifacts 卷 + 指针引用）、清理；batch worker 无固定 cwd。v1 简化：整个任务工作区 rename 到 artifacts 卷（不提炼），转录入 pg，先让系统运行起来 |
 
 ## 5. 未裁决的开放问题（brainstorming 待继续）
 
