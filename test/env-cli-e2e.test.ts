@@ -57,4 +57,41 @@ describe("env CLI（真实 run.ts 路径）", () => {
     expect(r.stdout).toContain('环境 "demo" 不存在');
     expect(r.stdout).not.toContain("未指定 --from");
   });
+
+  // ─── final fix wave C1：env fork CLI 路由（dispatch print + JSON 双通路） ──
+
+  it("env fork <child> <nosrc>（print）→ 到达 execEnvFork（修复前 UNKNOWN_COMMAND）", () => {
+    const r = runCli(["env", "fork", "child", "nosrc"], { PI_TRIPLE_HOME: dir, HOME: dir });
+    // ok:false → doPrintCommand process.exit(1)；TENANT_NOT_FOUND 证明 fork 分支已注册
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('环境 "nosrc" 不存在');
+    expect(r.stdout).not.toContain("未知命令");
+  });
+
+  it("env fork --json → 走 JSON router（修复前 UNSUPPORTED_JSON）", () => {
+    const r = runCli(["env", "fork", "child", "nosrc", "--json"], { PI_TRIPLE_HOME: dir, HOME: dir });
+    expect(r.status).toBe(1);
+    const parsed = JSON.parse(r.stdout);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error.code).toBe("TENANT_NOT_FOUND");
+  });
+
+  it("env fork happy path：create src → fork child（print）→ fork grandchild --json（两位置参数顺序）", () => {
+    const created = runCli(["env", "create", "src"], { PI_TRIPLE_HOME: dir, HOME: dir });
+    expect(created.status).toBe(0);
+
+    const r = runCli(["env", "fork", "child", "src"], { PI_TRIPLE_HOME: dir, HOME: dir });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("环境已派生");
+    expect(r.stdout).toContain("child");
+
+    const j = runCli(["env", "fork", "grandchild", "child", "--json"], { PI_TRIPLE_HOME: dir, HOME: dir });
+    expect(j.status).toBe(0);
+    // migrate() 的 banner/源目录提示会先打到 stdout（pre-existing，print 通路同样如此），
+    // JSON 信封是最后一行——取最后非空行解析
+    const lines = j.stdout.trim().split("\n");
+    const parsed = JSON.parse(lines[lines.length - 1]);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.data.alias).toBe("grandchild");
+  });
 });

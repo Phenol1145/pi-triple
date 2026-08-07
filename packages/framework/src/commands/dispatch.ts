@@ -18,7 +18,7 @@ import {
   execSessionAttach, execSessionStop, parseFlags,
 } from "./session.js";
 import { execTraceLs, execTraceShow, execTraceTimeline } from "./trace.js";
-import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, parseEnvPatch } from "../env.js";
+import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, execEnvFork, parseEnvPatch } from "../env.js";
 import { execExtensionCopy, execSkillCopy, parseCopyOpts } from "../extension-copy.js";
 
 // ─── 类型 ────────────────────────────────────────────────────
@@ -45,6 +45,7 @@ export function resolveDispatch(cmd: string, args: string[]): DispatchTarget | n
     case "env":
       if (sub === "ls" || sub === "list" || sub === "") return { kind: "exec", fn: () => execEnvList() };
       if (sub === "create") return { kind: "exec", fn: () => execEnvCreate(rest[0] ?? "", {}) };
+      if (sub === "fork") return { kind: "exec", fn: () => execEnvFork(rest[0] ?? "", rest[1] ?? "") };
       if (sub === "show") return { kind: "exec", fn: () => execEnvShow(rest[0] ?? "") };
       if (sub === "set") return { kind: "exec", fn: () => execEnvSet(rest[0] ?? "", parseEnvPatch(rest.slice(1))) };
       if (sub === "rm") return { kind: "exec", fn: () => execEnvRm(rest[0] ?? "") };
@@ -151,6 +152,8 @@ function helpCommand(): Promise<CommandResult> {
       "  ls                           列出后台会话",
       "  status                       健康检查",
       "  template ls|new|rm|rename    模板管理",
+      "  env create|fork|list|show|set|rm  环境管理（--json 可编程）",
+      "  env extension-copy|skill-copy     复制扩展/skill（--from <env> --mode 引用|源码）",
       "  shared status                共享层状态",
       "  hub submit|programs|run|dev  PTH 程序",
       "  tui dashboard|lab            打开 TUI 面板",

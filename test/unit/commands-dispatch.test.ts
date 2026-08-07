@@ -26,6 +26,18 @@ describe("resolveDispatch — exec 目标", () => {
     expect(resolveDispatch("shared", ["status"])?.kind).toBe("exec");
     expect(resolveDispatch("shared", ["init"])).toBeNull();
   });
+  it("env ls/list/无子命令 → exec", () => {
+    expect(resolveDispatch("env", ["ls"])?.kind).toBe("exec");
+    expect(resolveDispatch("env", ["list"])?.kind).toBe("exec");
+    expect(resolveDispatch("env", [])?.kind).toBe("exec");
+  });
+  it("env fork → exec（两位置参数透传：新别名+源别名）", () => {
+    expect(resolveDispatch("env", ["fork", "child", "parent"])?.kind).toBe("exec");
+    expect(resolveDispatch("env", ["fork"])?.kind).toBe("exec");
+  });
+  it("env 未知子命令 → null", () => {
+    expect(resolveDispatch("env", ["bogus"])).toBeNull();
+  });
   it("detach → exec", () => {
     expect(resolveDispatch("detach", [])?.kind).toBe("exec");
   });
@@ -85,6 +97,14 @@ describe("dispatchCommand — 执行", () => {
     const r = await dispatchCommand("hub", ["submit", "my-agent"]);
     expect(r.ok).toBe(true);
     expect(r.handoff).toEqual({ cmd: "ptl", args: ["hub", "submit", "my-agent"] });
+  });
+  it("help 列出 env 命令族 + extension-copy/skill-copy 提示（final fix wave I2）", async () => {
+    const r = await dispatchCommand("help", []);
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("env create|fork|list|show|set|rm");
+    expect(r.message).toContain("环境管理（--json 可编程）");
+    expect(r.message).toContain("extension-copy");
+    expect(r.message).toContain("skill-copy");
   });
   it("detach（非 tmux 环境）→ NOT_IN_TMUX 错误", async () => {
     // 隔离：测试进程可能继承真实 TMUX env——若不隔离，detach-client 会

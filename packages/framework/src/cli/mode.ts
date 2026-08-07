@@ -14,7 +14,7 @@ import { cmdAgentRun, cmdAgentClean } from "./agent.js";
 import { PthClient } from "../bridge/client.js";
 import { execSessionLs } from "../commands/session.js";
 import { execTraceLs } from "../commands/trace.js";
-import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, parseEnvPatch } from "../env.js";
+import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, execEnvFork, parseEnvPatch } from "../env.js";
 import { execExtensionCopy, execSkillCopy } from "../extension-copy.js";
 
 type PtlMode = "print" | "json";
@@ -37,6 +37,8 @@ const JSON_ROUTERS: Record<string, JsonRouter> = {
   env: async (sub, passthrough, flags) => {
     if (sub === "ls" || sub === "list" || sub === "") return await execEnvList();
     if (sub === "create") return await execEnvCreate(passthrough[0] ?? "", {});
+    // fork 两位置参数（新别名+源别名）都在 passthrough（parseArgs 不吞非 VALUED_FLAGS 位置参数）
+    if (sub === "fork") return await execEnvFork(passthrough[0] ?? "", passthrough[1] ?? "");
     if (sub === "show") return await execEnvShow(passthrough[0] ?? "");
     if (sub === "set") return await execEnvSet(passthrough[0] ?? "", parseEnvPatch(passthrough.slice(1)));
     if (sub === "rm") return await execEnvRm(passthrough[0] ?? "");
@@ -47,7 +49,7 @@ const JSON_ROUTERS: Record<string, JsonRouter> = {
   status: async () => await execStatus(),
   doctor: async () => await execStatus(),
   ls: async () => await execLs(),
-  stop: async (sub, passthrough) => await execStop(sub || passthrough[0] || ""),
+  stop: async (sub, passthrough, flags) => await execStop(sub || passthrough[0] || "", flags),
   shared: async (sub) => {
     if (sub === "status") return await execSharedStatus();
     return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "共享层子命令不支持 --json" } };
