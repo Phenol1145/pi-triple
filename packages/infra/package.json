@@ -1,0 +1,17 @@
+{
+  "name": "@pi-triple/infra",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.82.1",
+    "pino": "^9.0.0"
+  }
+}
