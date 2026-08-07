@@ -235,7 +235,12 @@ export async function main() {
       break;
     }
     case "env": {
-      const er = await dispatchCommand("env", subcommand ? [subcommand, ...passthrough, ...flattenFlags(flags)] : passthrough);
+      // 仅 extension-copy/skill-copy 需要把 VALUED_FLAGS（--from/--mode）展平回 dispatch 参数；
+      // 其余 env 子命令不 flatten——否则被 VALUED_FLAGS 吞掉的 flag（--model 等）会被
+      // 重新塞回 dispatch，parseEnvPatch 的"bare 两参"分支把 --model 当字段 → 绕过
+      // execEnvSet 空 patch 防御，报误导性的 "不可写字段: --model"（Finding #1 回归）。
+      const copySub = subcommand === "extension-copy" || subcommand === "skill-copy";
+      const er = await dispatchCommand("env", subcommand ? [subcommand, ...passthrough, ...(copySub ? flattenFlags(flags) : [])] : passthrough);
       doPrintCommand(er);
       break;
     }
