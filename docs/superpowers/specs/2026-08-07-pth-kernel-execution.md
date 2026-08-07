@@ -12,12 +12,12 @@
 
 ### 目标（v1）
 
-1. **batch 进程管理**：pth 容器内 spawn batch 子进程（方案 C）；手动加减（/lab 命令）+ 统计建议
+1. **batch 进程管理**：pth 容器内 spawn batch 子进程（方案 C）；手动加减（/pth 命令）+ 统计建议
 2. **worker 簇**：每 batch = 全角色 worker（每类型 ×1，v1）；worker = WorkerKernel（Spec A）
 3. **任务认领循环**：peek → claim → 执行 → submit → 转录归档（六状态机消费 Spec C taskStore）
 4. **任务级工作区**：认领分配（workspaces/<tenant>/tasks/<taskId>/）、提交归档、清理
 5. **转录归档**：执行记录 → pg transcripts；产物 → artifacts 卷（整目录 rename，v1 简化）
-6. **扩缩容命令**：/lab batch add/remove/status（手动）；统计建议（负载采集）
+6. **扩缩容命令**：/pth batch add/remove/status（手动）；统计建议（负载采集）
 
 ### 非目标（明确不做）
 
@@ -39,7 +39,7 @@ src/pth/kernel/execution/
 ├── workspace.ts          任务级工作区（认领分配/归档/清理）
 ├── archive.ts            转录归档（pg transcripts + artifacts 卷）
 ├── stats.ts              负载统计（pending 队列/worker 空闲率 → 建议）
-└── index.ts              barrel + /lab 命令注册
+└── index.ts              barrel + /pth 命令注册
 ```
 
 ## 3. batch 进程管理（batch-manager.ts）
@@ -48,8 +48,8 @@ src/pth/kernel/execution/
 /**
  * batch 管理：pth 主进程 spawn batch 子进程（方案 C，裁决 15）。
  * 子进程 = node 脚本（batch-process.ts），经 IPC 通信（child_process.fork 或 spawn+stdio）。
- * v1 手动加减：/lab batch add [n] / /lab batch remove [n] / /lab batch status。
- * 统计建议（stats.ts 采集）：pending 队列长度/worker 空闲率 → /lab batch suggest。
+ * v1 手动加减：/pth batch add [n] / /pth batch remove [n] / /pth batch status。
+ * 统计建议（stats.ts 采集）：pending 队列长度/worker 空闲率 → /pth batch suggest。
  */
 export interface BatchManager {
   spawnBatch(): Promise<BatchHandle>;        // 加一个 batch（全角色 worker ×1）
@@ -80,7 +80,7 @@ export interface BatchSuggestion {
 主进程 → batch: {type: "shutdown"} | {type: "pause"} | {type: "resume"}
 batch → 主进程: {type: "status", tasks: [{workerId, taskId}]} | {type: "error", message}
 ```
-- batch 自驱动任务循环（直接连 pg 独立连接池）；IPC 仅用于生命周期控制（/lab batch remove = 发 shutdown → batch 完成当前任务后退出）
+- batch 自驱动任务循环（直接连 pg 独立连接池）；IPC 仅用于生命周期控制（/pth batch remove = 发 shutdown → batch 完成当前任务后退出）
 - `BatchHandle.signal()` 暴露；TaskLoop 每轮循环前检查信号（pause 停止认领新任务）
 
 ## 4. worker 簇（worker-cluster.ts）
@@ -237,7 +237,7 @@ export async function archiveTask(task: Task, ws: { dir: string }, result: Inter
 
 ```ts
 /**
- * 负载统计（裁决 24）：采集 pending 队列长度 + worker 空闲率 → /lab batch suggest。
+ * 负载统计（裁决 24）：采集 pending 队列长度 + worker 空闲率 → /pth batch suggest。
  * v1：手动执行建议（不自动扩缩）；数据为统计优化器 v2 的基础。
  */
 export interface LoadStats {
@@ -258,23 +258,25 @@ export function suggest(stats: LoadStats): BatchSuggestion {
 }
 ```
 
-## 9. /lab 命令（index.ts 注册）
+## 9. /pth 命令（index.ts 注册）
 
 ```
-/lab batch add [n]         手动加 n 个 batch（默认 1）
-/lab batch remove [n]      手动减 n 个 batch（优雅退出：完成当前任务后）
-/lab batch status          列出 batch（id/pid/worker/当前任务/空闲率）
-/lab batch suggest         统计建议（加/减/维持 + 理由 + 数据）
-/lab batch stats           负载统计原始数据
+/pth batch add [n]         手动加 n 个 batch（默认 1）
+/pth batch remove [n]      手动减 n 个 batch（优雅退出：完成当前任务后）
+/pth batch status          列出 batch（id/pid/worker/当前任务/空闲率）
+/pth batch suggest         统计建议（加/减/维持 + 理由 + 数据）
+/pth batch stats           负载统计原始数据
 ```
 
-> **v1 交付范围标注（fix wave 评审确认）**：v1 交付底层原语（BatchManager.spawnBatch/killBatch/listBatches/suggest + stats.collectStats/suggest）；/lab 命令注册（batch add/remove/status/suggest/stats）移交 PTH 装配层。
+> **v1 交付范围标注（fix wave 评审确认）**：v1 交付底层原语（BatchManager.spawnBatch/killBatch/listBatches/suggest + stats.collectStats/suggest）；`/pth batch` 命令注册（add/remove/status/suggest/stats）移交 PTH 装配层。
+>
+> **命令命名决策（2026-08-07 用户裁决）**：PTH 侧命令前缀统一为 `/pth`（弃用 agent-lab 旧 `/lab` 前缀）；PTL CLI 命令由 `pit <command>` 更名为 `ptl <command>`（弃用旧名 pit）。
 
 ## 10. 与 C/A spec 的接口
 
 - **消费 Spec C**：`taskStore`（peek/claim/reject/submit——接口保留自 taskpool v1）、`transcriptStore`、`DataWorldAccess`
 - **消费 Spec A**：`createWorkerKernel`（WorkerKernel）、`Interpreter.execute`、`llm.complete`
-- **生产给上层**：batch 生命周期管理（pth 主进程装配）、/lab 命令、统计建议
+- **生产给上层**：batch 生命周期管理（pth 主进程装配）、/pth 命令、统计建议
 
 ## 11. 不变量
 
