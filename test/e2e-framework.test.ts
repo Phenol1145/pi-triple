@@ -280,6 +280,22 @@ describe("framework 全链路端到端（AI 主会话完整旅程）", () => {
       );
       expect(notifyB()).toContain("Accepted from ai-main");
 
+      // manual accept 语义（fix：index.ts 文本 else 分支补 mailbox.accept，与 watcher
+      // 副作用一致）——防回归：接受即移出 pending，① inbox 不再列出；② 二次 accept 不重复注入
+      uiB.notify.mockClear();
+      mailB.def.handler("inbox", ctxB);
+      expect(notifyB()).toContain("(0 pending)");
+      expect(notifyB()).not.toContain("ai-main");
+      const pendingDirB = join(dir, "data", "mailbox", "local", "sess-worker", "pending");
+      expect((await readdir(pendingDirB)).filter((f) => f.startsWith("msg-"))).toEqual([]);
+      const acceptedDirB = join(dir, "data", "mailbox", "local", "sess-worker", "accepted");
+      expect((await readdir(acceptedDirB)).some((f) => f.startsWith("msg-"))).toBe(true);
+      uiB.notify.mockClear();
+      const injectCalls = b.api.sendUserMessage.mock.calls.length;
+      mailB.def.handler("accept 1", ctxB);
+      expect(notifyB()).toContain("Invalid message #.");
+      expect(b.api.sendUserMessage.mock.calls.length).toBe(injectCalls);
+
       // 会话注册表：两个会话都在（文件邮箱的会话发现 /mail ps 依据）
       const registryRaw = await readFile(join(dir, "data", "mailbox", "local", "registry.json"), "utf-8");
       const registry = JSON.parse(registryRaw);

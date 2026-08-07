@@ -390,6 +390,9 @@ export default function pitMail(api: any /* ExtensionAPI */) {
         } else {
           // Mark as processed + inject into LLM
           delivery.acceptAndInject(msg);
+          // 接受即移出 pending（与 watcher 全部 accept 副作用的 mailbox.accept 一致；
+          // 缺失会导致 msg-<id>.json 滞留 pending → inbox 重复列出 + 二次 accept 重复注入）
+          mailbox.accept(msg.id);
           try {
             api.sendUserMessage(
               `[来自 ${msg.from.name} 的消息] ${msg.content}`,
