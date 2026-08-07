@@ -4,5 +4,6 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": { "ptl": "./dist/pit.js" }
+  "bin": { "ptl": "./dist/pit.js" },
+  "files": ["dist"]
 }

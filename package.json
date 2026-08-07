@@ -17,8 +17,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "clean": "rm -rf dist packages/shared/dist packages/infra/dist packages/framework/dist",
-    "build": "tsc -p packages/shared && tsc -p packages/infra && tsc -p packages/framework && tsc -p tsconfig.json",
+    "clean": "rm -rf dist packages/shared/dist packages/infra/dist packages/framework/dist packages/mailbox/dist packages/extensions-in-container/dist",
+    "build": "tsc -p packages/shared && tsc -p packages/infra && tsc -p packages/framework && tsc -p packages/mailbox && tsc -p packages/extensions-in-container && tsc -p tsconfig.json",
     "pth:dev": "tsx watch src/pth/main.ts",
     "pth:start": "node dist/pth/main.js",
     "test": "vitest run",
