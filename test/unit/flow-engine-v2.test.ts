@@ -2,12 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { FlowStore } from "../../src/ptl/flow/store.js";
+import { FlowStore } from "../../packages/framework/src/flow/store.js";
 import {
   type FlowDef,
   type NodeDef,
   type EdgeDef,
-} from "../../src/ptl/flow/schema.js";
+} from "../../packages/framework/src/flow/schema.js";
 import {
   type SpawnAgent,
   type SpawnResult,
@@ -16,7 +16,7 @@ import {
   makeResumeFlow,
   makeRunFlowV2,
   makeResumeFlowV2,
-} from "../../src/ptl/flow/engine.js";
+} from "../../packages/framework/src/flow/engine.js";
 
 // ── Mock spawnAgent ──────────────────────────────────────────
 

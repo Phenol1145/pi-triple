@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseArgs } from "../../src/ptl/cli/args.js";
+import { parseArgs } from "../../packages/framework/src/cli/args.js";
 
 describe("parseArgs", () => {
   it("ptl start local → local 进 passthrough（不是 subcommand）", () => {

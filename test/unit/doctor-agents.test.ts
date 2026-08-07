@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkTemplateAgentsMd } from "../../src/ptl/doctor-agents.js";
+import { checkTemplateAgentsMd } from "../../packages/framework/src/doctor-agents.js";
 
 function tmpDir(): string {
   return mkdtempSync(join(tmpdir(), "ptl-doctor-"));

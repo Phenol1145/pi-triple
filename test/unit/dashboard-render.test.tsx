@@ -12,7 +12,8 @@ vi.mock("node:child_process", () => ({
   spawnSync: () => ({ status: 0, stdout: "v0.1.0\n" }),
 }));
 
-vi.mock("../../src/ptl/config.js", () => {
+vi.mock("@pi-triple/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@pi-triple/shared")>();
   const TEMPLATES = Array.from({ length: 12 }, (_, i) => ({
     id: `tid-${i}`,
     alias: `tpl-${i}`,
@@ -20,12 +21,13 @@ vi.mock("../../src/ptl/config.js", () => {
     config: { alias: `tpl-${i}`, model: "m1", workLoop: { id: "wl-main" }, skills: [], extensions: [] },
   }));
   return {
+    ...mod,
     loadConfig: () => ({ version: 1, defaultTemplate: "tid-0", templates: {}, dataDir: "/tmp/pi-dashboard-test" }),
     listTemplates: () => TEMPLATES,
   };
 });
 
-vi.mock("../../src/ptl/session/session-store.js", () => {
+vi.mock("../../packages/framework/src/session/session-store.js", () => {
   const SESSIONS = Array.from({ length: 6 }, (_, i) => ({
     id: `sess-${i}`,
     kind: "session",
@@ -49,7 +51,7 @@ vi.mock("../../src/ptl/session/session-store.js", () => {
   return { listAllSessions: () => SESSIONS, listAllTraces: () => TRACES };
 });
 
-import { DashboardPage } from "../../src/ptl/tui-ptl/dashboard.js";
+import { DashboardPage } from "../../packages/framework/src/tui-ptl/dashboard.js";
 
 afterEach(cleanup);
 

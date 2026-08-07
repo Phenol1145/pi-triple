@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { scanSessionFiles, parseSessionHeader, toSessionRecords, listNodes, isTapeLive, newestTapeId, pickRestoreTape } from "../../src/ptl/session/pi-scan.js";
-import type { PiTripleConfig } from "../../src/ptl/config.js";
+import { scanSessionFiles, parseSessionHeader, toSessionRecords, listNodes, isTapeLive, newestTapeId, pickRestoreTape } from "../../packages/framework/src/session/pi-scan.js";
+import type { PiTripleConfig } from "@pi-triple/shared";
 
 // toSessionRecords 依赖 tmux 运行态：mock tmux 模块（保留 formatAge 真实实现），无真实 tmux 依赖
 const tmuxMocks = vi.hoisted(() => ({
@@ -11,8 +11,8 @@ const tmuxMocks = vi.hoisted(() => ({
   listPtlSessions: vi.fn(),
   listPtlPanesDetailed: vi.fn(),
 }));
-vi.mock("../../src/ptl/tmux.js", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("../../src/ptl/tmux.js")>();
+vi.mock("@pi-triple/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@pi-triple/shared")>();
   return { ...mod, hasTmux: tmuxMocks.hasTmux, listPtlSessions: tmuxMocks.listPtlSessions, listPtlPanesDetailed: tmuxMocks.listPtlPanesDetailed };
 });
 

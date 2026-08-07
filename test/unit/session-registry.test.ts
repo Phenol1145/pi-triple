@@ -5,8 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import {
   registryPath, loadRegistry, saveRegistry, markStarted, markStopped,
-} from "../../src/ptl/session-registry.js";
-import type { RegistryEntry } from "../../src/ptl/session-registry.js";
+} from "@pi-triple/shared";
+import type { RegistryEntry } from "@pi-triple/shared";
 
 describe("session-registry", () => {
   let root: string;

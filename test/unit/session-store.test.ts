@@ -3,9 +3,9 @@ import {
   registerSessionProvider, registerTraceProvider,
   listAllSessions, listAllTraces, resolveSession, resolveTrace, operateSession,
   _resetForTests,
-} from "../../src/ptl/session/session-store.js";
-import { uuidv7 } from "../../src/ptl/session/uuidv7.js";
-import type { SessionProvider, TraceProvider } from "../../src/ptl/session/session-provider.js";
+} from "../../packages/framework/src/session/session-store.js";
+import { uuidv7 } from "../../packages/framework/src/session/uuidv7.js";
+import type { SessionProvider, TraceProvider } from "../../packages/framework/src/session/session-provider.js";
 
 function makeProvider(workloop: string, caps: string[], id: string = "aaaaaaaa-1111-4111-8111-111111111111"): SessionProvider {
   return {

@@ -5,8 +5,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { FlowStore } from "../../src/ptl/flow/store.js";
-import { setValue, approve, reject } from "../../src/ptl/flow/edit.js";
+import { FlowStore } from "../../packages/framework/src/flow/store.js";
+import { setValue, approve, reject } from "../../packages/framework/src/flow/edit.js";
 
 describe("flow edit — setValue", () => {
   let tmpDir: string;

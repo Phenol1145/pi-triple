@@ -16,7 +16,7 @@ function withEnv(env: Record<string, string | undefined>, fn: () => void) {
   }
 }
 // open-db reads env at call time (not import time), so a plain import is fine
-import { sharedDbPath, localDbPath } from "../../src/ptl/lab-data/open-db.js";
+import { sharedDbPath, localDbPath } from "../../packages/framework/src/lab-data/open-db.js";
 
 describe("lab-data path resolution", () => {
   it("sharedDbPath: AGENT_LAB_DB_PATH 优先", () =>

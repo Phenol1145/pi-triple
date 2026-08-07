@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { createBiddingTraceProvider } from "../../src/ptl/session/trace-provider.js";
-import type { TraceProvider } from "../../src/ptl/session/session-provider.js";
+import { createBiddingTraceProvider } from "../../packages/framework/src/session/trace-provider.js";
+import type { TraceProvider } from "../../packages/framework/src/session/session-provider.js";
 
 function makeDb(): DatabaseSync {
   const db = new DatabaseSync(":memory:");

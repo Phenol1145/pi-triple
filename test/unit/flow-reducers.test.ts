@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseStateField, applyReducer, VALID_REDUCERS } from "../../src/ptl/flow/reducers.js";
+import { parseStateField, applyReducer, VALID_REDUCERS } from "../../packages/framework/src/flow/reducers.js";
 
 describe("parseStateField", () => {
   it("bare value → last-wins", () => {

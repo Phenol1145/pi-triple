@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { evalExpr, parseExpr, ExprError } from "../../src/ptl/flow/expr.js";
+import { evalExpr, parseExpr, ExprError } from "../../packages/framework/src/flow/expr.js";
 
 describe("flow-expr parseExpr (static validation)", () => {
   it("valid simple eq", () => {

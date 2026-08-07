@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { getPtlVersion, maybePrintUpdateHint } from "../../src/ptl/version.js";
-import { writeCache } from "../../src/ptl/version-check.js";
-import { resolveDataDir } from "../../src/ptl/config.js";
+import { getPtlVersion, maybePrintUpdateHint } from "../../packages/framework/src/version.js";
+import { writeCache } from "@pi-triple/shared";
+import { resolveDataDir } from "@pi-triple/shared";
 
 describe("getPtlVersion", () => {
   it("返回 package.json 的 version", () => {

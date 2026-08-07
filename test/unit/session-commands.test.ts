@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveDispatch } from "../../src/ptl/commands/dispatch.js";
+import { resolveDispatch } from "../../packages/framework/src/commands/dispatch.js";
 
 describe("dispatch session/trace", () => {
   it("session 子命令解析到 exec", () => {
@@ -17,7 +17,7 @@ describe("dispatch session/trace", () => {
   });
 
   it("execSessionBranch 缺 --at 返回用法错误", async () => {
-    const { execSessionBranch } = await import("../../src/ptl/commands/session.js");
+    const { execSessionBranch } = await import("../../packages/framework/src/commands/session.js");
     const r = execSessionBranch("abc", []);
     expect(r.ok).toBe(false);
     expect(r.error?.message).toContain("--at");
@@ -26,7 +26,7 @@ describe("dispatch session/trace", () => {
 
 describe("session/trace 命令契约", () => {
   it("execSessionLs 支持 --template/--workloop 过滤与 --json", async () => {
-    const store = await import("../../src/ptl/session/session-store.js");
+    const store = await import("../../packages/framework/src/session/session-store.js");
     store._resetForTests();
     store.registerSessionProvider({
       workloop: "pi",
@@ -37,7 +37,7 @@ describe("session/trace 命令契约", () => {
       ],
       show: () => "",
     });
-    const { execSessionLs } = await import("../../src/ptl/commands/session.js");
+    const { execSessionLs } = await import("../../packages/framework/src/commands/session.js");
     const byTpl = execSessionLs(["--template", "dev"]);
     expect(byTpl.ok).toBe(true);
     expect(byTpl.data?.sessions).toHaveLength(1);
@@ -51,7 +51,7 @@ describe("session/trace 命令契约", () => {
   });
 
   it("execTraceLs --json 返回 traces 数据并支持 --agent 过滤", async () => {
-    const store = await import("../../src/ptl/session/session-store.js");
+    const store = await import("../../packages/framework/src/session/session-store.js");
     store._resetForTests();
     store.registerTraceProvider({
       workloop: "bidding",
@@ -60,7 +60,7 @@ describe("session/trace 命令契约", () => {
       ],
       show: () => "trace",
     });
-    const { execTraceLs } = await import("../../src/ptl/commands/trace.js");
+    const { execTraceLs } = await import("../../packages/framework/src/commands/trace.js");
     const json = execTraceLs(["--json"]);
     expect(json.ok).toBe(true);
     expect(json.data?.traces).toHaveLength(1);
@@ -70,7 +70,7 @@ describe("session/trace 命令契约", () => {
   });
 
   it("traceTimeline 聚合 provider 的 timeline", async () => {
-    const store = await import("../../src/ptl/session/session-store.js");
+    const store = await import("../../packages/framework/src/session/session-store.js");
     store._resetForTests();
     store.registerTraceProvider({
       workloop: "bidding",

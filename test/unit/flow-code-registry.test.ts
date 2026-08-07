@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { registerCodeFn, resolveCodeFn, listCodeFns, type CodeFn } from "../../src/ptl/flow/code-registry.js";
+import { registerCodeFn, resolveCodeFn, listCodeFns, type CodeFn } from "../../packages/framework/src/flow/code-registry.js";
 
 describe("FlowCodeRegistry", () => {
   it("registers and resolves a fn", () => {

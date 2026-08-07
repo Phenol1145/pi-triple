@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 // useTableSelection 的移动逻辑抽纯函数（hook 薄壳）
-import { tableNextIndex, tableWindow } from "../../src/ptl/tui-shared/hooks.js";
+import { tableNextIndex, tableWindow } from "../../packages/framework/src/tui-shared/hooks.js";
 
 describe("tableNextIndex", () => {
   it("边界钳制", () => {

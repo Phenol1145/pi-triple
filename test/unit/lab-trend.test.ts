@@ -2,8 +2,8 @@
 // 夹具用 sqlite :memory:（node:sqlite），不依赖真实 DB 文件。
 import { describe, it, expect } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { dailyTrend } from "../../src/ptl/lab-data/telemetry.js";
-import { getWorkloops, agentKeyFromModel } from "../../src/ptl/lab-data/arena.js";
+import { dailyTrend } from "../../packages/framework/src/lab-data/telemetry.js";
+import { getWorkloops, agentKeyFromModel } from "../../packages/framework/src/lab-data/arena.js";
 
 const RUNS_SCHEMA = `CREATE TABLE runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, role TEXT NOT NULL, model TEXT NOT NULL, task_category TEXT, acceptance TEXT, completion REAL NOT NULL, tokens_in INTEGER, tokens_out INTEGER, cost REAL, tool_success REAL, turns INTEGER, interrupted INTEGER, signals TEXT, source TEXT NOT NULL, trace_id TEXT, template_id TEXT, session_id TEXT, agent_instance_id TEXT)`;
 

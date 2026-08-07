@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { FlowStore } from "../../src/ptl/flow/store.js";
-import { propose, discard, resumeV2, setValue, EditResult } from "../../src/ptl/flow/edit.js";
-import { validateFlow, type FlowDef } from "../../src/ptl/flow/schema.js";
-import { makeRunFlowV2, makeResumeFlowV2, type SpawnAgent, type RunResult, type SpawnResult } from "../../src/ptl/flow/engine.js";
+import { FlowStore } from "../../packages/framework/src/flow/store.js";
+import { propose, discard, resumeV2, setValue, EditResult } from "../../packages/framework/src/flow/edit.js";
+import { validateFlow, type FlowDef } from "../../packages/framework/src/flow/schema.js";
+import { makeRunFlowV2, makeResumeFlowV2, type SpawnAgent, type RunResult, type SpawnResult } from "../../packages/framework/src/flow/engine.js";
 
 let tmpRoot: string;
 let store: FlowStore;

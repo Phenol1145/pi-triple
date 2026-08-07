@@ -4,9 +4,9 @@ import {
   buildSessionMenu,
   bareTmuxName,
   SESSION_MENU,
-} from "../../src/ptl/tui-ptl/session-menu.js";
-import type { SessionMenuHandlers } from "../../src/ptl/tui-ptl/session-menu.js";
-import type { SessionRecord } from "../../src/ptl/session/session-provider.js";
+} from "../../packages/framework/src/tui-ptl/session-menu.js";
+import type { SessionMenuHandlers } from "../../packages/framework/src/tui-ptl/session-menu.js";
+import type { SessionRecord } from "../../packages/framework/src/session/session-provider.js";
 
 function rec(over: Partial<SessionRecord>): SessionRecord {
   return {

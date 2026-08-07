@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { aggregateByRole, listRoles, listModels, modelComparison } from "../src/ptl/lab-data/telemetry.js";
-import { openDb } from "../src/ptl/lab-data/open-db.js";
+import { aggregateByRole, listRoles, listModels, modelComparison } from "../packages/framework/src/lab-data/telemetry.js";
+import { openDb } from "../packages/framework/src/lab-data/open-db.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cmdOnboard, type OnboardPrompter, type OnboardDeps } from "../../src/ptl/cli/onboard.js";
+import { cmdOnboard, type OnboardPrompter, type OnboardDeps } from "../../packages/framework/src/cli/onboard.js";
 
 function fakeDeps(): OnboardDeps {
   return {

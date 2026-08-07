@@ -15,7 +15,7 @@ function writeCfg(obj: unknown) {
 describe("TemplateConfig schema + V2→V3 迁移", () => {
   it("V3 配置正常加载（templates key）", async () => {
     writeCfg({ version: 3, defaultTemplate: "u1", templates: { u1: { alias: "local" } } });
-    const { loadConfig } = await import("../../src/ptl/config.js");
+    const { loadConfig } = await import("@pi-triple/shared");
     const cfg = loadConfig();
     expect(cfg.templates["u1"].alias).toBe("local");
     expect(cfg.defaultTemplate).toBe("u1");
@@ -23,7 +23,7 @@ describe("TemplateConfig schema + V2→V3 迁移", () => {
 
   it("V2 配置（tenants key）自动迁移 V3", async () => {
     writeCfg({ version: 2, defaultTenant: "u1", tenants: { u1: { alias: "local", model: "m" } } });
-    const { loadConfig } = await import("../../src/ptl/config.js");
+    const { loadConfig } = await import("@pi-triple/shared");
     const cfg = loadConfig();
     expect(cfg.version).toBe(3);
     expect(cfg.templates["u1"].alias).toBe("local");
@@ -34,14 +34,14 @@ describe("TemplateConfig schema + V2→V3 迁移", () => {
 
   it("V2→V3 迁移写 .v2.bak 备份", async () => {
     writeCfg({ version: 2, defaultTenant: "u1", tenants: { u1: { alias: "x" } } });
-    const { loadConfig } = await import("../../src/ptl/config.js");
+    const { loadConfig } = await import("@pi-triple/shared");
     loadConfig();
     expect(fs.existsSync(path.join(tmpHome, "pi-triple.json.v2.bak"))).toBe(true);
   });
 
   it("V2→V3 幂等：无 tenants key 不报错", async () => {
     writeCfg({ version: 2, defaultTemplate: "u1", templates: { u1: { alias: "x" } } });
-    const { loadConfig } = await import("../../src/ptl/config.js");
+    const { loadConfig } = await import("@pi-triple/shared");
     const cfg = loadConfig();
     expect(cfg.version).toBe(3);
     expect(cfg.templates["u1"].alias).toBe("x");
@@ -49,7 +49,7 @@ describe("TemplateConfig schema + V2→V3 迁移", () => {
 
   it("createTemplate 建模板（UUID + alias）", async () => {
     writeCfg({ version: 3, defaultTemplate: "u1", templates: { u1: { alias: "local" } } });
-    const { createTemplate, loadConfig } = await import("../../src/ptl/config.js");
+    const { createTemplate, loadConfig } = await import("@pi-triple/shared");
     const id = createTemplate("dev");
     const cfg = loadConfig();
     expect(cfg.templates[id].alias).toBe("dev");
@@ -57,7 +57,7 @@ describe("TemplateConfig schema + V2→V3 迁移", () => {
 
   it("getTemplateAlias / resolveTemplateId 工作", async () => {
     writeCfg({ version: 3, defaultTemplate: "u1", templates: { u1: { alias: "local" } } });
-    const { getTemplateAlias, resolveTemplateId } = await import("../../src/ptl/config.js");
+    const { getTemplateAlias, resolveTemplateId } = await import("@pi-triple/shared");
     expect(getTemplateAlias("u1")).toBe("local");
     expect(resolveTemplateId("local").id).toBe("u1");
   });

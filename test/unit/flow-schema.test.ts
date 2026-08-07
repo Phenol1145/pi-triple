@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateFlow } from "../../src/ptl/flow/schema.js";
+import { validateFlow } from "../../packages/framework/src/flow/schema.js";
 
 const PR_REVIEW: unknown = {
   name: "pr-review",

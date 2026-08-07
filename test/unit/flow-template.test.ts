@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { interpolate } from "../../src/ptl/flow/template.js";
+import { interpolate } from "../../packages/framework/src/flow/template.js";
 
 describe("flow-template", () => {
   it("input 插值", () => {

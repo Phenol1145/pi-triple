@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { layoutChart } from "../../src/ptl/tui-shared/chart.js";
+import { layoutChart } from "../../packages/framework/src/tui-shared/chart.js";
 
 describe("layoutChart", () => {
   it("输出行数 = height，含 y 轴刻度", () => {

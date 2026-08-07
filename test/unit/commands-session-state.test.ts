@@ -3,9 +3,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execLs, execStop } from "../../src/ptl/commands.js";
-import { markStarted, loadRegistry } from "../../src/ptl/session-registry.js";
-import { ERR } from "../../src/ptl/output.js";
+import { execLs, execStop } from "../../packages/framework/src/commands.js";
+import { markStarted, loadRegistry } from "@pi-triple/shared";
+import { ERR } from "@pi-triple/shared";
 
 describe("execLs / execStop 状态增强", () => {
   let root: string;

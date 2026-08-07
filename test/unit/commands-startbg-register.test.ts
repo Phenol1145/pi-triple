@@ -10,8 +10,8 @@ import path from "node:path";
 const mockSpawnSync = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", () => ({ spawnSync: mockSpawnSync }));
 
-import { execStartBg } from "../../src/ptl/commands.js";
-import { loadRegistry } from "../../src/ptl/session-registry.js";
+import { execStartBg } from "../../packages/framework/src/commands.js";
+import { loadRegistry } from "@pi-triple/shared";
 
 describe("execStartBg — TUI 命令栏启动路径登记注册表", () => {
   const TEMPLATE_ID = "11111111-1111-4111-8111-111111111111";

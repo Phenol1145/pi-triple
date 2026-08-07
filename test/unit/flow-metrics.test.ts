@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { registerCodeFn } from "../../src/ptl/flow/code-registry.js";
-import { makeRunFlowV2, renderMetrics } from "../../src/ptl/flow/engine.js";
-import { FlowStore, readMetrics } from "../../src/ptl/flow/store.js";
+import { registerCodeFn } from "../../packages/framework/src/flow/code-registry.js";
+import { makeRunFlowV2, renderMetrics } from "../../packages/framework/src/flow/engine.js";
+import { FlowStore, readMetrics } from "../../packages/framework/src/flow/store.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

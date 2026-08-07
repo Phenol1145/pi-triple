@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { buildPiLaunch } from "../../src/ptl/launcher.js";
+import { buildPiLaunch } from "../../packages/framework/src/launcher.js";
 
 describe("buildPiLaunch agent options", () => {
   let tmpHome: string;

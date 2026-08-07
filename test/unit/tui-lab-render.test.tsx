@@ -4,8 +4,8 @@ import React from "react";
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "ink-testing-library";
 import { DatabaseSync } from "node:sqlite";
-import { TelemetryPage } from "../../src/ptl/tui-lab/telemetry.js";
-import { ArenaPage } from "../../src/ptl/tui-lab/arena.js";
+import { TelemetryPage } from "../../packages/framework/src/tui-lab/telemetry.js";
+import { ArenaPage } from "../../packages/framework/src/tui-lab/arena.js";
 
 afterEach(cleanup);
 

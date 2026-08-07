@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   resolveTuiPanel, TUI_PANELS, HUB_COMMANDS,
   DEPRECATED_COMMANDS, getDeprecatedMigration,
-} from "../../src/ptl/cli/route.js";
-import { cmdTui, type TuiLaunchOpts, cmdHub, type HubHandlers } from "../../src/ptl/cli/route.js";
+} from "../../packages/framework/src/cli/route.js";
+import { cmdTui, type TuiLaunchOpts, cmdHub, type HubHandlers } from "../../packages/framework/src/cli/route.js";
 
 describe("resolveTuiPanel", () => {
   it("无子命令 → dashboard", () => {

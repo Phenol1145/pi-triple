@@ -10,8 +10,8 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
-import { FlowStore } from "../../src/ptl/flow/store.js";
-import type { FlowDef } from "../../src/ptl/flow/schema.js";
+import { FlowStore } from "../../packages/framework/src/flow/store.js";
+import type { FlowDef } from "../../packages/framework/src/flow/schema.js";
 
 const SIMPLE_FLOW: FlowDef = {
   name: "test-flow",

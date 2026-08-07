@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from "vitest";
-import { FlowStore } from "../../src/ptl/flow/store.js";
-import { makeRunFlowV2, makeResumeFlowV2, type RunResult } from "../../src/ptl/flow/engine.js";
+import { FlowStore } from "../../packages/framework/src/flow/store.js";
+import { makeRunFlowV2, makeResumeFlowV2, type RunResult } from "../../packages/framework/src/flow/engine.js";
 import path from "node:path";
-import { validateFlow } from "../../src/ptl/flow/schema.js";
-import { registerCodeFn } from "../../src/ptl/flow/code-registry.js";
+import { validateFlow } from "../../packages/framework/src/flow/schema.js";
+import { registerCodeFn } from "../../packages/framework/src/flow/code-registry.js";
 
 // Register test code functions globally
 beforeAll(() => {

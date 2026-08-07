@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { scanSessionFiles } from "../../src/ptl/session/pi-scan.js";
-import { forkSession, cloneSession, transferSession, forkSessionAtNode } from "../../src/ptl/session/pi-fork.js";
+import { scanSessionFiles } from "../../packages/framework/src/session/pi-scan.js";
+import { forkSession, cloneSession, transferSession, forkSessionAtNode } from "../../packages/framework/src/session/pi-fork.js";
 
 const H1 = '{"type":"session","version":3,"id":"aaaaaaaa-1111-4111-8111-111111111111","timestamp":"2026-07-28T16:35:58.667Z","cwd":"/w/t1"}';
 const E1 = '{"type":"message","id":"e1","parentId":null,"timestamp":"2026-07-28T16:36:00.000Z","message":{"role":"user","content":"root"}}';

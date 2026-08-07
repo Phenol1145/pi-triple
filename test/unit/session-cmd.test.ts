@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { assertResumable } from "../../src/ptl/commands/session.js";
-import type { SessionRecord } from "../../src/ptl/session/session-provider.js";
+import { assertResumable } from "../../packages/framework/src/commands/session.js";
+import type { SessionRecord } from "../../packages/framework/src/session/session-provider.js";
 
 const rec = (status: "running" | "stopped", workloop = "pi"): SessionRecord => ({
   id: "aaaaaaaa-1111-4111-8111-111111111111", kind: "session", workloop,

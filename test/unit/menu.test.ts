@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { createMenu, menuStep, menuBreadcrumb, filterMenuByCapabilities } from "../../src/ptl/tui-shared/menu.js";
-import type { MenuNode } from "../../src/ptl/tui-shared/menu.js";
+import { createMenu, menuStep, menuBreadcrumb, filterMenuByCapabilities } from "../../packages/framework/src/tui-shared/menu.js";
+import type { MenuNode } from "../../packages/framework/src/tui-shared/menu.js";
 
 const fired: string[] = [];
 

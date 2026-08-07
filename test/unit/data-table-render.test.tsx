@@ -1,8 +1,8 @@
 import React from "react";
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "ink-testing-library";
-import { DataTable } from "../../src/ptl/tui-shared/data-table.js";
-import { tableWindow } from "../../src/ptl/tui-shared/hooks.js";
+import { DataTable } from "../../packages/framework/src/tui-shared/data-table.js";
+import { tableWindow } from "../../packages/framework/src/tui-shared/hooks.js";
 
 afterEach(cleanup);
 

@@ -5,8 +5,8 @@ import os from "node:os";
 import {
   compareVersions, isUpdateAvailable, cachePath, readCache, writeCache,
   isCacheFresh, fetchLatestPitVersion, fetchLatestPiSdkVersion, checkForUpdates,
-} from "../../src/ptl/version-check.js";
-import { loadConfig, resolveDataDir } from "../../src/ptl/config.js";
+} from "@pi-triple/shared";
+import { loadConfig, resolveDataDir } from "@pi-triple/shared";
 
 // 用 DATA_DIR 环境变量隔离缓存路径（resolveDataDir 支持 process.env.DATA_DIR）
 let tmpRoot: string;

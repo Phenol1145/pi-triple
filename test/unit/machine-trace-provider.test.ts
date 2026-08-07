@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { createMachineTraceProvider } from "../../src/ptl/session/trace-provider.js";
-import type { TraceProvider } from "../../src/ptl/session/session-provider.js";
+import { createMachineTraceProvider } from "../../packages/framework/src/session/trace-provider.js";
+import type { TraceProvider } from "../../packages/framework/src/session/session-provider.js";
 
 /** 当前 lab_events 真实 schema 的列子集（provider 查询只需这些列） */
 function makeDb(): DatabaseSync {

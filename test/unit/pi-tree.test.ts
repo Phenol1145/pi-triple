@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { scanSessionFiles } from "../../src/ptl/session/pi-scan.js";
-import { buildSessionTree } from "../../src/ptl/session/pi-tree.js";
+import { scanSessionFiles } from "../../packages/framework/src/session/pi-scan.js";
+import { buildSessionTree } from "../../packages/framework/src/session/pi-tree.js";
 
 describe("pi-tree", () => {
   let root: string;

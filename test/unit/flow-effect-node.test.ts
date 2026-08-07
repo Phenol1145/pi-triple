@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { EffectRegistry, registerEffect, type EffectFn } from "../../src/ptl/flow/effect-registry.js";
-import { makeRunFlowV2, makeResumeFlowV2 } from "../../src/ptl/flow/engine.js";
-import { FlowStore } from "../../src/ptl/flow/store.js";
-import { validateFlow } from "../../src/ptl/flow/schema.js";
+import { EffectRegistry, registerEffect, type EffectFn } from "../../packages/framework/src/flow/effect-registry.js";
+import { makeRunFlowV2, makeResumeFlowV2 } from "../../packages/framework/src/flow/engine.js";
+import { FlowStore } from "../../packages/framework/src/flow/store.js";
+import { validateFlow } from "../../packages/framework/src/flow/schema.js";
 
 // mock spawnAgent：仅 agent 节点触发；effect 节点同进程执行不 spawn
 const mockSpawnAgent = async () => ({ exitCode: 0, output: "", signal: null });

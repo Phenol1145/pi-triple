@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { renderTemplateAgents, ensureTemplateAgents, AGENTS_TPL_PATH } from "../../src/ptl/template-agents.js";
+import { renderTemplateAgents, ensureTemplateAgents, AGENTS_TPL_PATH } from "@pi-triple/shared";
 
 const TPL = `# 你是 PTL 模板环境中的 pi agent
 - 当前模板：<templateId>（别名 <alias>）`;

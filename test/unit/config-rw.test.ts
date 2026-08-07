@@ -8,7 +8,7 @@ import {
   getConfigValue,
   setConfigValue,
   unsetConfigValue,
-} from "../../src/ptl/config.js";
+} from "@pi-triple/shared";
 
 describe("config get/set/unset", () => {
   let tmpHome: string;

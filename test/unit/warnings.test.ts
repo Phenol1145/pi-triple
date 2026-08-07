@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSqliteExperimentalWarning } from "../../src/ptl/warnings.js";
+import { isSqliteExperimentalWarning } from "@pi-triple/shared";
 
 describe("isSqliteExperimentalWarning", () => {
   it("精确匹配 SQLite 实验警告", () => {

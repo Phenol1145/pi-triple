@@ -4,7 +4,7 @@
  * installBundledExtensions / syncBundledExtensions 需要从运行位置
  * 找到包内的 extensions/ 目录。布局有两种：
  *   - 发布（npm 包）：node_modules/<pkg>/dist/ptl/shared-layer.js → 包根/extensions
- *   - 开发（仓库源码）：<repo>/src/ptl/shared-layer.ts → 仓库根/extensions
+ *   - 开发（仓库源码）：<repo>/packages/framework/src/shared-layer.ts → 仓库根/extensions
  *
  * resolveBundledDir 逐级向上探测（最多 4 级），锁定两种布局都能命中。
  */
@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
-import { resolveBundledDir } from "../../src/ptl/shared-layer.js";
+import { resolveBundledDir } from "../../packages/framework/src/shared-layer.js";
 
 const tmpDirs: string[] = [];
 
@@ -42,7 +42,7 @@ describe("resolveBundledDir", () => {
     expect(resolveBundledDir(moduleUrl)).toBe(extDir);
   });
 
-  it("开发布局：src/ptl/shared-layer.ts → 仓库根/extensions", () => {
+  it("开发布局：packages/framework/src/shared-layer.ts → 仓库根/extensions", () => {
     const root = makeTmp();
     const extDir = path.join(root, "extensions");
     fs.mkdirSync(path.join(root, "src", "ptl"), { recursive: true });

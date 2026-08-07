@@ -2,16 +2,16 @@ import { describe, it, expect, beforeAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { FlowStore } from "../../src/ptl/flow/store.js";
-import { makeRunFlowV2 } from "../../src/ptl/flow/engine.js";
-import { validateFlow } from "../../src/ptl/flow/schema.js";
-import { registerCodeFn } from "../../src/ptl/flow/code-registry.js";
+import { FlowStore } from "../../packages/framework/src/flow/store.js";
+import { makeRunFlowV2 } from "../../packages/framework/src/flow/engine.js";
+import { validateFlow } from "../../packages/framework/src/flow/schema.js";
+import { registerCodeFn } from "../../packages/framework/src/flow/code-registry.js";
 import {
   registerSubflow,
   resolveSubflow,
   hasSubflow,
   type SubflowRegistry,
-} from "../../src/ptl/flow/subflow-registry.js";
+} from "../../packages/framework/src/flow/subflow-registry.js";
 
 // Register test code functions globally
 beforeAll(() => {

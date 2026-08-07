@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { registerPiSessionProvider } from "../../src/ptl/session/pi-provider.js";
-import { listAllSessions, resolveSession, operateSession } from "../../src/ptl/session/session-store.js";
+import { registerPiSessionProvider } from "../../packages/framework/src/session/pi-provider.js";
+import { listAllSessions, resolveSession, operateSession } from "../../packages/framework/src/session/session-store.js";
 
 describe("pi-provider 注册", () => {
   beforeEach(() => { /* 依赖模块级注册：测试前清理由 store 的测试隔离处理，这里只验证行为 */ });

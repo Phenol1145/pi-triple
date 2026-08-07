@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveDispatch, dispatchCommand } from "../../src/ptl/commands/dispatch.js";
+import { resolveDispatch, dispatchCommand } from "../../packages/framework/src/commands/dispatch.js";
 
 describe("resolveDispatch — exec 目标", () => {
   it("template ls / list / 无子命令 → exec", () => {

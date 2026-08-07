@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { printHelp, printGettingStarted, printNamespaceHelp, printCommandHelp } from "../../src/ptl/cli/main.js";
+import { printHelp, printGettingStarted, printNamespaceHelp, printCommandHelp } from "../../packages/framework/src/cli/main.js";
 
 function capture(fn: () => void): string {
   const lines: string[] = [];
