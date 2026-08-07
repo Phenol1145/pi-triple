@@ -61,7 +61,8 @@ export class SqliteTaskStore {
     const args: unknown[] = [];
     if (filter.status) { conds.push("status = ?"); args.push(filter.status); }
     if (filter.claimedBy) { conds.push("claimed_by = ?"); args.push(filter.claimedBy); }
-    const sql = conds.length > 0 ? `SELECT * FROM tasks WHERE ${conds.join(" AND ")} ORDER BY created_at` : `SELECT * FROM tasks ORDER BY created_at`;
+    // ORDER BY created_at, id：同毫秒 created_at 用随机 UUID id 作确定性 tie-break（修复前同值排序不稳定）
+    const sql = conds.length > 0 ? `SELECT * FROM tasks WHERE ${conds.join(" AND ")} ORDER BY created_at, id` : `SELECT * FROM tasks ORDER BY created_at, id`;
     const rows = this.db.prepare(sql).all(...args) as Array<Record<string, unknown>>;
     return rows.map(rowToTask);
   }

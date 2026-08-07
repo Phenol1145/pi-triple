@@ -67,6 +67,9 @@ test("candidates 匹配 + 排除已拒 agent + 升序（裁决 I8：reflow 后�
   const t1 = store.publish(task(["memory-maintenance"], "任务一"));
   const t2 = store.publish(task(["other"], "任务二"));
   const t3 = store.publish(task(["memory-maintenance"], "任务三"));
+  // 适配（修复轮1）：夹具固定 created_at 严格递增——连续 publish 同毫秒时 id tie-break 是随机 UUID 伪随机序，
+  // 不保证发布序；升序/FIFO 形式断言语义需 distinct created_at 才确定（同 reflowRound 手动老化模式）
+  for (const [i, t] of [t1, t2, t3].entries()) db.prepare(`UPDATE tasks SET created_at=? WHERE id=?`).run(1000 + i, t.id);
   assert.deepEqual(engine.candidates("agent-a").map((t) => t.id), [t1.id, t3.id]); // t2 不匹配
   // agent-a 拒绝过 t1 → 排除；reflow 回 pending 后排除名单仍生效
   store.claim("agent-a", t1.id);
@@ -88,6 +91,8 @@ test("claimTopN 原子认领前 n 个", () => {
   const a = store.publish(task(["m"], "a"));
   const b = store.publish(task(["m"], "b"));
   const c = store.publish(task(["m"], "c"));
+  // 适配（修复轮1）：同上——固定 created_at 严格递增，保证 FIFO 前 2 断言确定（同毫秒 id tie-break 不保证发布序）
+  for (const [i, t] of [a, b, c].entries()) db.prepare(`UPDATE tasks SET created_at=? WHERE id=?`).run(1000 + i, t.id);
   const claimed = engine.claimTopN("agent-a", 2);
   assert.deepEqual(claimed.map((t) => t.id), [a.id, b.id]); // FIFO 前 2
   assert.equal(store.get(c.id)!.status, "pending");

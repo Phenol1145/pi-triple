@@ -136,6 +136,22 @@ test("escalate 支持 claimed 源态（claims_count≥3 阈值升级，裁决 N1
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("list 同毫秒 created_at 按 id tie-break 确定性排序", () => {
+  const { dir, db, store } = fresh();
+  // 直接插入两条 created_at 完全相同、id 插入顺序与字典序相反的行（同毫秒场景最小复现）
+  const ins = db.prepare(
+    `INSERT INTO tasks (id, template_id, labels, text, params, status, claims_count, rejects, created_by, created_at)
+     VALUES (?,?,?,?,?,?,0,'[]',?,?)`,
+  );
+  const t0 = 1000;
+  ins.run("zzzzzzzz-0000-4000-8000-000000000000", "semantic-split", "[]", "t1", "{}", "pending", "me", t0);
+  ins.run("aaaaaaaa-0000-4000-8000-000000000000", "semantic-split", "[]", "t2", "{}", "pending", "me", t0);
+  const ids = store.list({ status: "pending" }).map((t) => t.id);
+  assert.deepEqual(ids, ["aaaaaaaa-0000-4000-8000-000000000000", "zzzzzzzz-0000-4000-8000-000000000000"]);
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("list 按状态过滤", () => {
   const { dir, db, store } = fresh();
   const a = pub(store);
