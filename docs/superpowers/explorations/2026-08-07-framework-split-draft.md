@@ -116,14 +116,51 @@ AI 在主会话中：
 
 **发布策略**：作为 pi 生态 npm 包（`@pi-triple/framework` 等），与 pi-dashboard 互补（ptl 管环境/会话编排，pi-dashboard 管远程 UI）。
 
-## 8. 未裁决/待定稿
+## 8. 待定项裁决（2026-08-07 questionnaire + 细化确认）
 
-1. **env 命令族的完整命令集**（create/fork/list/show/set/start？还有 rm/rename？）
-2. **fork 的配方复制深度**（扩展是复制 symlink 还是复制实体？skill 同理）
-3. **extension copy 的跨环境语义**（复制到共享层？还是环境专属？）
-4. **/reload 的触发路径**（会话内 /reload 是用户手动；AI 能否自动触发？——需要 pi 会话内 AI 调命令的机制）
-5. **framework 的插件注册 API**（mail-box/容器开发/hub 作为插件如何注册进 ptl？——沿用 pi 扩展机制的具体接口）
-6. **UX 打磨与能力设计的顺序**（已盘点 18 个 UX 问题——先修 UX 还是先做能力？）
+| # | 待定项 | 裁决 |
+|---|---|---|
+| 1 | env 命令集 | **六命令**：create/fork/list/show/set/rm |
+| 2 | fork 复制深度 | **复制配方引用（轻）**——扩展/skill 实体不复制，共享层引用不变。⚠️ 修改流程需变化（见 §8.1） |
+| 3 | extension copy 语义 | **默认共享层 + 可选专属**，且区分两种模式：仅改引用 vs 复制源码用于开发（见 §8.2） |
+| 4 | /reload 触发 | **会话内 /reload（原生）**——AI 会话内直接触发 |
+| 5 | 插件注册 API | **pi 扩展 + 命令注册**（沿用扩展开机制落地） |
+| 6 | UX 与能力顺序 | **能力先行，UX 穿插**（能力设计是灵魂，UX 在实现中修） |
+
+### 8.1 fork 引用复制 → 修改流程变化
+
+**现状结构（实测）**：
+```
+shared/extensions/<name>       ← 共享扩展实体
+shared/skills/<name>           ← 共享 skill 实体
+pi-config/<templateId>/extensions/<name> → symlink → shared/extensions/<name>
+```
+
+**fork 复制引用后的修改语义**：新环境与源环境共享扩展/skill 实体。修改某 skill/extension 时：
+- 改的是**共享实体** → 所有 fork 环境受影响
+- **修改流程变为**：
+  1. `ptl extension copy <name> --from <env> --mode source`（复制实体到环境专属）
+  2. 修改环境专属副本（不再影响共享/源环境）
+  3. 如需回共享 → 手动合回 shared/（或未来 sync 命令）
+
+**关键机制（已验证）**：shared-layer.ts:63 的 symlink 创建会**跳过已存在的**（`lstatSync(linkPath); continue`）——环境目录里放实体文件（非 symlink）即**天然遮蔽共享 symlink**。环境专属源码复制的物理机制**已存在**，只需命令层接入。
+
+### 8.2 extension copy 的两种模式
+
+```
+ptl extension copy <name> --from <env> [--mode 引用|源码]
+  ├─ 引用模式（默认）：只改 symlink/引用——环境挂载同一个扩展（改共享实体）
+  └─ 源码模式（--mode source）：复制扩展源码到环境专属目录（pi-config/<id>/extensions/<name>）
+       → 遮蔽共享 symlink → 独立开发/修改，不影响源
+```
+
+**两层语义**：
+- **引用** = 轻量挂载（共享）：所有环境看同一份实体，改动全局生效
+- **源码复制** = 独立开发（隔离）：环境专属副本，改动只影响本环境
+
+**与环境 fork 的组合**：fork（配方引用）+ 源码复制（实体隔离）构成完整的环境隔离工具链。
+
+**skill 同机制**：`ptl skill copy <name> --from <env> [--mode 引用|源码]`——与扩展对称。
 
 ## 9. 相关参考
 
