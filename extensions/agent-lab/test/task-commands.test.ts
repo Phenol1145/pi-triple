@@ -15,6 +15,7 @@ import { SqliteTaskStore } from "../src/taskpool/tasks.ts";
 import { SorterEngine } from "../src/taskpool/engine.ts";
 import { SEMANTIC_SPLIT_TEMPLATE } from "../src/taskpool/semantic-split.ts";
 import type { LabConfig } from "../src/types.ts";
+import { createTaskPoolFactory } from "../index.ts";
 
 test("渲染函数：publish/list/status/requeue/selector", () => {
   const p = renderTaskPublish({ id: "t1", templateId: "semantic-split", labels: ["m"], createdAt: 1 });
@@ -102,6 +103,31 @@ function placeholderDeps(overrides?: Record<string, unknown>) {
     ...overrides,
   };
 }
+
+// 冷库路径（评审轮 1 修复）：不先 new CoreRepository / EventLog 的 DB 上直接跑 taskPool
+// 工厂——createTaskPoolFactory 内幂等 exec CORE_SCHEMA，registry.register 不再抛
+// `no such table: task_templates`，fail-open 声明成立。
+test("冷库路径：未 bootstrap 的 DB 上 taskPool 工厂 + registry.register 不抛（CORE_SCHEMA 建表）", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "task-cold-"));
+  const db = new DatabaseSync(path.join(dir, "cold.db"));
+  // 前置断言：确为冷库（task_templates 尚不存在）——保证测试有意义
+  assert.throws(() => db.prepare("SELECT 1 FROM task_templates").get());
+
+  // core 未就绪 → getEvents 返回 undefined → 事件 fail-open 不落
+  const factory = createTaskPoolFactory(db, () => undefined);
+  assert.doesNotThrow(() => {
+    const { registry, store, engine } = factory();
+    registry.register({ ...SEMANTIC_SPLIT_TEMPLATE, createdAt: Date.now() }); // 修复前在此抛 no such table
+    assert.ok(registry.get("semantic-split"), "CORE_SCHEMA 应已建 task_templates");
+    const t = store.publish({ templateId: "semantic-split", text: "x", labels: [], createdBy: "cold-test" });
+    assert.ok(t.id);
+    assert.equal(store.list({}).length, 1, "CORE_SCHEMA 应已建 tasks");
+    assert.ok(engine, "engine 应可构造");
+  });
+
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
 
 function freshTaskPool() {
   const dir = mkdtempSync(path.join(tmpdir(), "task-cmd-"));

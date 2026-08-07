@@ -48,8 +48,32 @@ import { SqliteTemplateRegistry } from "./src/taskpool/templates.ts";
 import { SqliteTaskStore } from "./src/taskpool/tasks.ts";
 import { SorterEngine } from "./src/taskpool/engine.ts";
 import { SEMANTIC_SPLIT_TEMPLATE } from "./src/taskpool/semantic-split.ts";
+import type { DatabaseSync } from "node:sqlite";
+import { CORE_SCHEMA } from "./src/core/storage/schema.ts";
 
 const DIRECT_PREFIXES = ["deepseek", "moonshotai", "z-ai", "qwen"];
+
+// /lab task 惰性工厂（Task 7）。冷库（核心未 bootstrap、CORE_SCHEMA 尚未被
+// CoreRepository/EventLog 构造执行）路径：幂等 exec CORE_SCHEMA（全部 IF NOT EXISTS，
+// 热库 no-op）保证 task_templates/tasks 表存在，随后 registry.register/store 不再抛
+// `no such table`。事件经 getEvents 取 schedulerCore.events；core 未就绪时 fail-open 不落事件。
+export function createTaskPoolFactory(
+  raw: DatabaseSync,
+  getEvents: () => LabCore["events"] | undefined,
+): () => { registry: SqliteTemplateRegistry; store: SqliteTaskStore; engine: SorterEngine } {
+  return () => {
+    raw.exec(CORE_SCHEMA);
+    const events = getEvents();
+    const store = new SqliteTaskStore({
+      db: raw,
+      appendEvent: (e) => (events ? events.append(e) : "inserted"),
+    });
+    const registry = new SqliteTemplateRegistry(raw);
+    registry.register({ ...SEMANTIC_SPLIT_TEMPLATE, createdAt: Date.now() }); // INSERT OR IGNORE 幂等
+    const engine = new SorterEngine(raw, store);
+    return { registry, store, engine };
+  };
+}
 
 export default async function (pi: ExtensionAPI) {
   ensureDataDir();
@@ -936,18 +960,9 @@ export default async function (pi: ExtensionAPI) {
     executeDispatch,
     scheduledJobs: () => new ScheduledJobsStore(sharedStore.raw),
     // /lab task + /lab agent selector（任务池+分选器命令层，Task 7）：惰性工厂，命令调用时构造。
-    // 事件日志取 schedulerCore.events（CORE_SCHEMA 建任务池表）；core 未就绪时 fail-open 不落事件。
-    taskPool: () => {
-      const events = schedulerCore?.events;
-      const store = new SqliteTaskStore({
-        db: sharedStore.raw,
-        appendEvent: (e) => (events ? events.append(e) : "inserted"),
-      });
-      const registry = new SqliteTemplateRegistry(sharedStore.raw);
-      registry.register({ ...SEMANTIC_SPLIT_TEMPLATE, createdAt: Date.now() }); // INSERT OR IGNORE 幂等
-      const engine = new SorterEngine(sharedStore.raw, store);
-      return { registry, store, engine };
-    },
+    // createTaskPoolFactory 内幂等 exec CORE_SCHEMA——冷库（核心未 bootstrap）路径表也存在；
+    // 事件日志取 schedulerCore.events；core 未就绪时 fail-open 不落事件。
+    taskPool: createTaskPoolFactory(sharedStore.raw, () => schedulerCore?.events),
     runMigration: (dryRun: boolean) => {
       const ensureArenaBinding = () => {
         // Force the lazy bootstrap before checking — running /lab migrate
