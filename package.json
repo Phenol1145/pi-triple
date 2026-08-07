@@ -17,6 +17,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "prepublishOnly": "npm run build",
     "clean": "rm -rf dist packages/shared/dist packages/infra/dist packages/framework/dist packages/mailbox/dist packages/extensions-in-container/dist",
     "build": "tsc -p packages/shared && tsc -p packages/infra && tsc -p packages/framework && tsc -p packages/mailbox && tsc -p packages/extensions-in-container && tsc -p tsconfig.json",
     "pth:dev": "tsx watch src/pth/main.ts",
@@ -28,6 +29,9 @@
     "ptl:dev": "tsx packages/framework/src/pit.ts"
   },
   "dependencies": {
+    "@pi-triple/framework": "workspace:*",
+    "@pi-triple/infra": "workspace:*",
+    "@pi-triple/shared": "workspace:*",
     "@earendil-works/pi-ai": "^0.82.1",
     "@earendil-works/pi-coding-agent": "^0.82.1",
     "@fastify/websocket": "^11.0.0",
