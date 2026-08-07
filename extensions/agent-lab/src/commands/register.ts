@@ -52,6 +52,16 @@ import {
   type ExperimentStatusResult,
   type ExperimentCompareResult,
 } from "./render-experiment.ts";
+import type { SqliteTemplateRegistry } from "../taskpool/templates.ts";
+import type { SqliteTaskStore, TaskStatus } from "../taskpool/tasks.ts";
+import type { SorterEngine } from "../taskpool/engine.ts";
+import {
+  renderTaskPublish,
+  renderTaskList,
+  renderTaskStatus,
+  renderTaskRequeue,
+  renderSelectorSet,
+} from "./render-task.ts";
 
 // Re-export render helpers + facade types. Consumers (tests,
 // optimizer/facade.ts, index.ts) import these from register.ts.
@@ -116,6 +126,8 @@ interface Deps {
   runMigration?: (dryRun: boolean) => MigrationReport;
   /** /lab schedule 管理面（F/WP5 Task 28a——常驻会话内扩展命令） */
   scheduledJobs?: () => import("../scheduler/timed-trigger.ts").ScheduledJobsStore | undefined;
+  /** /lab task 与 /lab agent selector（任务池+分选器，Task 7 命令层接线） */
+  taskPool?: () => { registry: SqliteTemplateRegistry; store: SqliteTaskStore; engine: SorterEngine } | undefined;
 }
 
 // ── Command registration ────────────────────────────────────────────
@@ -156,7 +168,7 @@ export function parseDispatchArgs(argv: string[]): DispatchArgsParse {
 }
 
 export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
-  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, getSchedulerUuid, arenaSmoke, bench, captureCommandContext, executeDispatch, optimizerFacade, experimentFacade, runMigration, scheduledJobs } = deps;
+  const { store, catalog, cfg, ledger, saveConfig, schedulerRuntime, getSchedulerEvents, syncSchedulerAgents, getEffectiveRouting, getSchedulerUuid, arenaSmoke, bench, captureCommandContext, executeDispatch, optimizerFacade, experimentFacade, runMigration, scheduledJobs, taskPool } = deps;
 
   const aggsFor = (role: string) => new Map(store.aggregateByRole(role).map((a) => [a.model, a]));
 
@@ -731,10 +743,59 @@ export function registerCommands(pi: ExtensionAPI, deps: Deps): void {
         } else {
           ctx.ui.notify("用法: /lab schedule <add|ls|pause|resume|rm> [args] [--tenant <id>]", "info");
         }
+      } else if (cmd === "task") {
+        const tp = taskPool?.();
+        if (!tp) { ctx.ui.notify("Task pool unavailable — enable agent-lab task pool first", "error"); return; }
+        const action = argv[1];
+        if (action === "publish") {
+          const templateId = argv[2];
+          if (!templateId) { ctx.ui.notify("用法: /lab task publish <templateId> --param k=v [--label x]", "error"); return; }
+          const params: Record<string, string> = {};
+          const extraLabels: string[] = [];
+          for (let i = 3; i < argv.length; i++) {
+            if (argv[i] === "--param" && argv[i + 1]) { const [k, ...v] = argv[i + 1]!.split("="); params[k!] = v.join("="); i++; }
+            else if (argv[i] === "--label" && argv[i + 1]) { extraLabels.push(argv[i + 1]!); i++; }
+          }
+          const inst = tp.registry.instantiate(templateId, params, extraLabels);
+          if (!inst.ok) { ctx.ui.notify(inst.error, "error"); return; }
+          const task = tp.store.publish({ templateId, text: inst.text, labels: inst.labels, params, createdBy: "ptl" });
+          ctx.ui.notify(renderTaskPublish(task), "info");
+        } else if (action === "list") {
+          const statusIdx = argv.indexOf("--status");
+          const status = statusIdx >= 0 ? argv[statusIdx + 1] as TaskStatus : undefined;
+          const rows = tp.store.list(status ? { status } : {});
+          ctx.ui.notify(renderTaskList(rows), "info");
+        } else if (action === "status") {
+          const id = argv[2];
+          if (!id) { ctx.ui.notify("用法: /lab task status <id>", "error"); return; }
+          const t = tp.store.get(id);
+          if (!t) { ctx.ui.notify(`任务不存在: ${id}`, "error"); return; }
+          ctx.ui.notify(renderTaskStatus(t), "info");
+        } else if (action === "requeue") {
+          const id = argv[2];
+          if (!id) { ctx.ui.notify("用法: /lab task requeue <id>", "error"); return; }
+          const r = tp.store.requeue(id);
+          if (r !== "requeued") { ctx.ui.notify(`requeue 失败: ${r}`, "error"); return; }
+          ctx.ui.notify(renderTaskRequeue(tp.store.get(id)!), "info");
+        } else {
+          ctx.ui.notify("用法: /lab task publish|list|status|requeue", "error");
+        }
+      } else if (cmd === "agent" && argv[1] === "selector") {
+        const tp = taskPool?.();
+        if (!tp) { ctx.ui.notify("Task pool unavailable", "error"); return; }
+        const agentId = argv[2];
+        if (!agentId) { ctx.ui.notify("用法: /lab agent selector <agentId> --labels <regex...> [--text <regex>]", "error"); return; }
+        const labelIdx = argv.indexOf("--labels");
+        const textIdx = argv.indexOf("--text");
+        const labels: string[] = [];
+        if (labelIdx >= 0) for (let i = labelIdx + 1; i < argv.length; i++) { if (argv[i]!.startsWith("--")) break; labels.push(argv[i]!); }
+        const text = textIdx >= 0 && argv[textIdx + 1] ? argv[textIdx + 1] : undefined;
+        tp.engine.setSelector(agentId, { labelPatterns: labels, textPattern: text });
+        ctx.ui.notify(renderSelectorSet(agentId, { labelPatterns: labels, textPattern: text }), "info");
       } else if (cmd === "doctor") {
         ctx.ui.notify(`Agent Lab 状态:\n候选模型: ${catalog.candidates().length}\n目录新鲜: ${catalog.isFresh}\n角色数: ${store.listRoles().length}\nautoApply: ${cfg.autoApply}`, "info");
       } else {
-        ctx.ui.notify("用法: /lab <recommend|stats|models|log|pin|unpin|config|mode|migrate|market|scheduler|schedule|optimizer|experiment|doctor> ...\n  stats [role] [--global] [--tenant <alias|uuid>]", "info");
+        ctx.ui.notify("用法: /lab <recommend|stats|models|log|pin|unpin|config|mode|migrate|market|scheduler|schedule|task|agent|optimizer|experiment|doctor> ...\n  stats [role] [--global] [--tenant <alias|uuid>]", "info");
       }
     },
   });

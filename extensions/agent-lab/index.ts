@@ -44,6 +44,10 @@ import { evaluateShadow } from "./src/optimizer/shadow.ts";
 import { evaluateCanary, decideCanaryAction } from "./src/optimizer/canary-eval.ts";
 import { DEFAULT_MARKET_NAME, DEFAULT_WEIGHTED_SCORER_NAME, MARKET_DEFAULT_BINDING_NAME, MARKET_SCHEDULER_DEFINITION_ID, WEIGHTED_SCORER_DEFINITION_ID, MARKET_DEFAULT_BINDING_ID, WEIGHTED_TUNER_OPTIMIZER_ID, DEFAULT_WEIGHTED_TUNER_INSTANCE_ID } from "./src/schedulers/names.ts";
 import { runUuidIdentityMigration } from "./src/migrate-uuid-identity.ts";
+import { SqliteTemplateRegistry } from "./src/taskpool/templates.ts";
+import { SqliteTaskStore } from "./src/taskpool/tasks.ts";
+import { SorterEngine } from "./src/taskpool/engine.ts";
+import { SEMANTIC_SPLIT_TEMPLATE } from "./src/taskpool/semantic-split.ts";
 
 const DIRECT_PREFIXES = ["deepseek", "moonshotai", "z-ai", "qwen"];
 
@@ -931,6 +935,19 @@ export default async function (pi: ExtensionAPI) {
     },
     executeDispatch,
     scheduledJobs: () => new ScheduledJobsStore(sharedStore.raw),
+    // /lab task + /lab agent selector（任务池+分选器命令层，Task 7）：惰性工厂，命令调用时构造。
+    // 事件日志取 schedulerCore.events（CORE_SCHEMA 建任务池表）；core 未就绪时 fail-open 不落事件。
+    taskPool: () => {
+      const events = schedulerCore?.events;
+      const store = new SqliteTaskStore({
+        db: sharedStore.raw,
+        appendEvent: (e) => (events ? events.append(e) : "inserted"),
+      });
+      const registry = new SqliteTemplateRegistry(sharedStore.raw);
+      registry.register({ ...SEMANTIC_SPLIT_TEMPLATE, createdAt: Date.now() }); // INSERT OR IGNORE 幂等
+      const engine = new SorterEngine(sharedStore.raw, store);
+      return { registry, store, engine };
+    },
     runMigration: (dryRun: boolean) => {
       const ensureArenaBinding = () => {
         // Force the lazy bootstrap before checking — running /lab migrate
