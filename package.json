@@ -4,7 +4,7 @@
   "type": "module",
   "workspaces": ["packages/*"],
   "bin": {
-    "ptl": "./dist/ptl/pit.js"
+    "ptl": "./packages/framework/dist/packages/framework/src/pit.js"
   },
   "files": [
     "dist",
@@ -16,14 +16,15 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc",
+    "clean": "rm -rf dist packages/shared/dist packages/framework/dist",
+    "build": "tsc -p packages/shared && tsc -p packages/framework && tsc -p tsconfig.json",
     "pth:dev": "tsx watch src/pth/main.ts",
     "pth:start": "node dist/pth/main.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit",
+    "lint": "tsc --noEmit && tsc -p packages/shared --noEmit && tsc -p packages/framework --noEmit",
     "monitor": "node tools/docker-monitor/server.js",
-    "ptl:dev": "tsx src/ptl/pit.ts"
+    "ptl:dev": "tsx packages/framework/src/pit.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "^0.82.1",

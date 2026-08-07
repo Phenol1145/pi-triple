@@ -13,7 +13,10 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "react"
+    "jsxImportSource": "react",
+    "paths": {
+      "@pi-triple/shared": ["./packages/shared/src/index.ts"]
+    }
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "test"]
