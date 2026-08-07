@@ -111,6 +111,7 @@ PTH kernel = 解释性语言运行时（多解释器世界）
 | 11 | peek 前置 | peek（只读不锁定）先于 claim/reject——"认领即承诺" |
 | 12 | 经济闸门 | 缓行（只做动词族不做计费） |
 | 13 | 定位 | **给 PTH 用**（非 PTL）；在 pi-platform 内运行 |
+| 14 | 执行层形态（worker 簇 batch，用户确认 2026-08-07） | **batch = 进程单元**：按比例搭配的 worker 簇独享一个进程；高峰多开/低谷回收（多退少补）；sandbox 正常作用（bash 隔离）。**v1 简化**：每种 worker 类型各 1 个 → batch = 全角色 batch，弹性只加减 batch 数量，不分类型路由；动态构成调整（如开发者×2）留 v2，统计优化器 v1 只采集负载建议加减 batch（可手动执行） |
 
 ## 5. 未裁决的开放问题（brainstorming 待继续）
 
@@ -122,6 +123,7 @@ PTH kernel = 解释性语言运行时（多解释器世界）
 6. **执行路径收敛**：SDK 会话/workloop/PTL 本地三条路径 → 新架构收敛成什么？
 7. **挂载点**：PTH kernel 挂 PTH 会话层（agent-engine.ts:613-621）？代码落 src/pth（或 src/shared）？
 8. **语言 v1 范围**：TS 解释器 + bash 解释器？Python 留后？
+9. **扩缩容判据**：v1 手动加减 batch（统计优化器只建议）？还是自动？——待裁决
 
 ## 6. 相关参考
 
