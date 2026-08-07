@@ -1,7 +1,6 @@
 {
   "name": "@pi-triple/mailbox",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Pi-Triple mailbox — cross-session communication for pi (原 pit-communicate，/mail 命令)",
   "main": "./dist/index.js",
@@ -12,7 +11,17 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
-  "keywords": ["pi-extension", "pi-triple", "intercom", "mailbox"],
-  "author": "Pi-Triple"
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "pi-extension",
+    "pi-triple",
+    "intercom",
+    "mailbox"
+  ],
+  "author": "Pi-Triple",
+  "dependencies": {
+    "@pi-triple/shared": "^0.1.0"
+  }
 }

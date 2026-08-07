@@ -4,6 +4,14 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": { "ptl": "./dist/pit.js" },
-  "files": ["dist"]
+  "bin": {
+    "ptl": "./dist/pit.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@pi-triple/shared": "^0.1.0",
+    "@pi-triple/infra": "^0.1.0"
+  }
 }

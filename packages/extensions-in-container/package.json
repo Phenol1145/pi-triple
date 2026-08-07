@@ -1,7 +1,6 @@
 {
   "name": "@pi-triple/extensions-in-container",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Pi-Triple dev container — /container 命令族（start/mount/verify/status）封装 dev 容器",
   "main": "./dist/index.js",
@@ -12,7 +11,14 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
-  "keywords": ["pi-extension", "pi-triple", "container", "dev"],
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "pi-extension",
+    "pi-triple",
+    "container",
+    "dev"
+  ],
   "author": "Pi-Triple"
 }
