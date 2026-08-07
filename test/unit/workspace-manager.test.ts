@@ -2,8 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
-import { detectPlatform } from "../../src/shared/platform/index.js";
-import { WorkspaceManager } from "../../src/shared/workspace/manager.js";
+import { detectPlatform, WorkspaceManager } from "@pi-triple/infra";
 
 /**
  * F/WP2 Task 7 — 工作区分离：层级固化 workspaces/<tenantId>/<projectId>/ + tenant 间路径隔离 + program-run 命名。

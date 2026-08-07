@@ -30,8 +30,7 @@ import {
 import { loadRegistry, markStarted, markStopped } from "@pi-triple/shared";
 import { classifySession, isPidAlive } from "@pi-triple/shared";
 import { scanSessionFiles, newestTapeId } from "./session/pi-scan.js";
-import { WorkspaceManager } from "../../../src/shared/workspace/manager.js";
-import { detectPlatform } from "../../../src/shared/platform/index.js";
+import { WorkspaceManager, detectPlatform } from "@pi-triple/infra";
 
 
 // ─── Types ───────────────────────────────────────────────────

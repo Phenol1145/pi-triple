@@ -21,11 +21,13 @@ import { randomUUID } from "node:crypto";
 function abs(p: string): string {
   return path.resolve(process.cwd(), p);
 }
-import { detectPlatform } from "../../../src/shared/platform/index.js";
-import { createLogger } from "../../../src/shared/observability/logger.js";
-import { EnvCredentialProvider } from "../../../src/shared/credential-provider.js";
-import { ModelRouter } from "../../../src/shared/model-router/router.js";
-import { WorkspaceManager } from "../../../src/shared/workspace/manager.js";
+import {
+  detectPlatform,
+  createLogger,
+  EnvCredentialProvider,
+  ModelRouter,
+  WorkspaceManager,
+} from "@pi-triple/infra";
 import { ensureTemplateLinks } from "./shared-layer.js";
 import { getTemplateAlias, resolveDataDir } from "@pi-triple/shared";
 

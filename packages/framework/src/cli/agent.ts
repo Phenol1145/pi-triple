@@ -9,8 +9,7 @@ import { buildPiLaunch } from "../launcher.js";
 import { startPtlSession } from "@pi-triple/shared";
 import { loadConfig, getTemplateAlias, resolveDataDir } from "@pi-triple/shared";
 import { configureTmuxServer, tmuxSessionName } from "@pi-triple/shared";
-import { WorkspaceManager } from "../../../../src/shared/workspace/manager.js";
-import { detectPlatform } from "../../../../src/shared/platform/index.js";
+import { WorkspaceManager, detectPlatform } from "@pi-triple/infra";
 import fs from "node:fs";
 
 /** ptl agent run <template> <task> [--workspace temp|main] */

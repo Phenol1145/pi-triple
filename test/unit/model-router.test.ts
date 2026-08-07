@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ModelRouter } from "../../src/shared/model-router/router.js";
+import { ModelRouter } from "@pi-triple/infra";
 
 describe("ModelRouter", () => {
   let router: ModelRouter;
