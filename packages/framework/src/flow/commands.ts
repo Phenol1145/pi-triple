@@ -206,7 +206,7 @@ export function cmdFlowLs(jsonMode?: boolean): void {
     console.log(`  ${id.padEnd(14)}${name}${status}${steps}    ${created}`);
   }
 
-  console.log(`\n  查看: \x1b[36mpit flow status <id>\x1b[0m  ·  批准: \x1b[36mpit flow approve <id>\x1b[0m\n`);
+  console.log(`\n  查看: \x1b[36mptl flow status <id>\x1b[0m  ·  批准: \x1b[36mptl flow approve <id>\x1b[0m\n`);
 }
 
 // ─── approve / reject ────────────────────────────────────────

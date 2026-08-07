@@ -85,7 +85,7 @@ export const defaultTuiLauncher: TuiLauncher = async (opts) => {
     } else {
       console.log(`\x1b[31m❌ 未知模板: "${flags.template}"\x1b[0m`);
     }
-    console.log("  运行 \x1b[36mpit template ls\x1b[0m 查看可用模板\n");
+    console.log("  运行 \x1b[36mptl template ls\x1b[0m 查看可用模板\n");
     process.exit(1);
   }
   const templateId = resolved?.ok ? resolved.id : getDefaultTemplateId(cfg);

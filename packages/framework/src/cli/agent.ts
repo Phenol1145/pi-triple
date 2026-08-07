@@ -82,7 +82,7 @@ export async function cmdAgentRun(flags: Record<string, string>, passthrough: st
   console.log(`  会话: ${name}`);
   console.log(`  工作区: ${cwd}  (--workspace temp/main 切换)`);
   console.log(`  模板: ${alias} (${templateId.slice(0, 8)}…)`);
-  console.log(`  接入: \x1b[36mpit attach ${name}\x1b[0m`);
+  console.log(`  接入: \x1b[36mptl attach ${name}\x1b[0m`);
 }
 
 /** ptl agent clean <agentId> [--all] */

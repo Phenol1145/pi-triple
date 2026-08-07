@@ -275,7 +275,7 @@ export async function execLs(): Promise<CommandResult> {
   const lines = [
     "  \x1b[2m状态  NAME              TEMPLATE   MODEL\x1b[0m",
     ...rows.map((r) => `  ${MARK[r.status]}  ${r.name.padEnd(18)}${r.template.slice(0, 10).padEnd(11)}${r.model.slice(0, 24)}  ${r.info}`),
-    "\n  接入: \x1b[36mpit attach <name>\x1b[0m · 停止: \x1b[36mpit stop <name>\x1b[0m · 恢复: \x1b[36mpit restore\x1b[0m",
+    "\n  接入: \x1b[36mptl attach <name>\x1b[0m · 停止: \x1b[36mptl stop <name>\x1b[0m · 恢复: \x1b[36mptl restore\x1b[0m",
   ];
   return { ok: true, message: lines.join("\n"), data: { sessions: rows } };
 }
@@ -299,14 +299,14 @@ export async function execStop(name: string, flags: Record<string, string> = {})
     for (const n of orphans) markStopped(n, dataDir);
     return { ok: true, message: orphans.length === 0 ? "  无孤儿条目" : orphans.map((n) => `  ✅ 已清理孤儿 ${n}`).join("\n"), data: { orphans } };
   }
-  if (!name) {
-    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: ptl stop <name> | --stale | --orphans" } };
-  }
-  if (!hasTmux()) {
-    return { ok: false, message: "", error: { code: ERR.TMUX_NOT_INSTALLED, message: "tmux 未安装" } };
-  }
-
-  if (name === "--all") {
+  // UX 审计 #1：--all 被 parseArgs 解析为 flag（run.ts 展平回 dispatch 后经 parseFlags
+  // 到达 flags.all），旧实现只查 name === "--all" 且位于 !name 拦截之后 → 分支不可达，
+  // template rm 推荐的 "ptl stop --all" 报用法错。flags.all 分支必须在 !name 之前；
+  // name === "--all" 保留兼容直接调用方（TUI/JSON 通路）。
+  if (flags["all"] === "true" || name === "--all") {
+    if (!hasTmux()) {
+      return { ok: false, message: "", error: { code: ERR.TMUX_NOT_INSTALLED, message: "tmux 未安装" } };
+    }
     const pits = listPtlSessions();
     if (pits.length === 0) {
       return { ok: true, message: "  无后台会话", data: { stopped: [] } };
@@ -322,6 +322,12 @@ export async function execStop(name: string, flags: Record<string, string> = {})
       message: stopped.map((s) => `  ✅ 已停止 ${s}`).join("\n"),
       data: { stopped },
     };
+  }
+  if (!name) {
+    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: ptl stop <name> | --all | --stale | --orphans" } };
+  }
+  if (!hasTmux()) {
+    return { ok: false, message: "", error: { code: ERR.TMUX_NOT_INSTALLED, message: "tmux 未安装" } };
   }
 
   if (killPtlSession(name)) {

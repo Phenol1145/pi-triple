@@ -76,7 +76,7 @@ async function routeFlowCommand(subcmd: string | undefined, args: string[], flag
       break;
     default:
       console.log("");
-      console.log("  \x1b[36m\x1b[1mpit flow\x1b[0m  \x1b[2m— PTL Agents Workflow\x1b[0m");
+      console.log("  \x1b[36m\x1b[1mptl flow\x1b[0m  \x1b[2m— PTL Agents Workflow\x1b[0m");
       console.log("");
       console.log("  命令:");
       console.log("    flow run <flow.json> [k=v...]      启动工作流");

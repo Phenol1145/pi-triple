@@ -49,7 +49,7 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
           const updated = s.updatedAt.slice(0, 16).replace("T", " ");
           console.log(`  \x1b[1m${id}\x1b[0m${project}${state}${entries}  ${updated}  ${s.model}`);
         }
-        console.log("\n  详情: \x1b[36mpit hub observe session <id>\x1b[0m   trace: \x1b[36mpit hub observe trace <id>\x1b[0m");
+        console.log("\n  详情: \x1b[36mptl hub observe session <id>\x1b[0m   trace: \x1b[36mptl hub observe trace <id>\x1b[0m");
       }
       console.log("");
       return;

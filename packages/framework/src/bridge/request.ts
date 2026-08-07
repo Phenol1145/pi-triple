@@ -66,7 +66,7 @@ export async function cmdHubRequests(_flags: Record<string, string>): Promise<vo
         console.log(`  \x1b[1m${id}\x1b[0m${urgency}${status} ${date}  ${r.description}`);
         if (r.slotHint) console.log(`  ${"".padEnd(40)}slot: ${r.slotHint}`);
       }
-      console.log("\n  补全: \x1b[36mpit hub respond <requestId> <dir>\x1b[0m");
+      console.log("\n  补全: \x1b[36mptl hub respond <requestId> <dir>\x1b[0m");
     }
     console.log("");
   } catch (err: any) {

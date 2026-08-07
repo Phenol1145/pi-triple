@@ -30,7 +30,7 @@ export function resolveOrFail(input: string | undefined, config: PiTripleConfig)
   } else {
     console.log(`  \x1b[31m❌ 未知模板: "${input}"\x1b[0m`);
   }
-  console.log("  运行 \x1b[36mpit template ls\x1b[0m 查看可用模板\n");
+  console.log("  运行 \x1b[36mptl template ls\x1b[0m 查看可用模板\n");
   return null;
 }
 

@@ -31,7 +31,7 @@ export async function cmdPrograms(_flags: Record<string, string>): Promise<void>
         const date = p.updatedAt ? new Date(p.updatedAt).toISOString().slice(0, 16).replace("T", " ") : "-";
         console.log(`  \x1b[1m${name}\x1b[0m${ver}${date}`);
       }
-      console.log("\n  运行: \x1b[36mpit hub run <name>\x1b[0m");
+      console.log("\n  运行: \x1b[36mptl hub run <name>\x1b[0m");
     }
     console.log("");
   } catch (err: any) {

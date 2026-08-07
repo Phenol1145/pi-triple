@@ -77,7 +77,7 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
     console.log("  \x1b[31m❌ tmux 未安装 — ptl start 需要 tmux\x1b[0m");
     if (process.platform === "darwin") console.log("  安装: brew install tmux");
     else if (process.platform === "linux") console.log("  安装: sudo apt install tmux");
-    console.log("  原生前台启动（无 tmux）: \x1b[36mpit pi\x1b[0m");
+    console.log("  原生前台启动（无 tmux）: \x1b[36mptl pi\x1b[0m");
     process.exit(1);
   }
   configureTmuxServer();
@@ -239,7 +239,7 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
     }, resolveDataDir(config));
     console.log(`  \x1b[32m✅ 后台会话已启动\x1b[0m`);
     console.log(`  名称: ${name} · 模板: ${alias} (${templateId.slice(0, 8)}…) · 工作区: ${launch.cwd}`);
-    console.log(`  接入: \x1b[36mpit attach ${name}\x1b[0m`);
+    console.log(`  接入: \x1b[36mptl attach ${name}\x1b[0m`);
     console.log(`  切换: tmux 内 \x1b[2mCtrl+B s\x1b[0m 选择 · \x1b[2mCtrl+B d\x1b[0m 脱离`);
   } else {
     console.log(`  \x1b[31m❌ 启动失败: ${result.stderr}\x1b[0m`);
