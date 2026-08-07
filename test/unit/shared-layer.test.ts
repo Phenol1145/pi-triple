@@ -13,7 +13,11 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
-import { resolveBundledDir } from "../../packages/framework/src/shared-layer.js";
+import {
+  resolveBundledDir,
+  installBundledExtensions,
+  syncBundledExtensions,
+} from "../../packages/framework/src/shared-layer.js";
 
 const tmpDirs: string[] = [];
 
@@ -68,5 +72,82 @@ describe("resolveBundledDir", () => {
 
     const moduleUrl = pathToFileURL(path.join(pkgRoot, "dist", "ptl", "shared-layer.js")).href;
     expect(resolveBundledDir(moduleUrl)).toBe(path.join(pkgRoot, "dist", "extensions"));
+  });
+});
+
+/** 构造 tmp 仓库布局：<root>/extensions/{real-ext, link-ext→../packages/link-src} */
+function makeBundledRepo(root: string): void {
+  const bundledDir = path.join(root, "extensions");
+  fs.mkdirSync(bundledDir, { recursive: true });
+  fs.mkdirSync(path.join(root, "packages", "link-src"), { recursive: true });
+  fs.writeFileSync(path.join(root, "packages", "link-src", "index.ts"), "export const x = 1;\n");
+  fs.mkdirSync(path.join(bundledDir, "real-ext"), { recursive: true });
+  fs.writeFileSync(path.join(bundledDir, "real-ext", "index.ts"), "export const r = 1;\n");
+  fs.symlinkSync("../packages/link-src", path.join(bundledDir, "link-ext"), "dir");
+}
+
+/** 让 resolveBundledDir 命中 <root>/extensions 的 moduleUrl */
+function moduleUrlFor(root: string): string {
+  return pathToFileURL(path.join(root, "src", "ptl", "shared-layer.js")).href;
+}
+
+describe("installBundledExtensions / syncBundledExtensions — symlink 条目", () => {
+  it("installBundledExtensions 把指向目录的 symlink 物化为共享层真实目录", () => {
+    const root = makeTmp();
+    makeBundledRepo(root);
+    const sharedDir = path.join(root, "shared");
+
+    const installed = installBundledExtensions(sharedDir, moduleUrlFor(root));
+
+    expect(installed).toContain("real-ext");
+    expect(installed).toContain("link-ext");
+    const dst = path.join(sharedDir, "extensions", "link-ext");
+    expect(fs.existsSync(dst)).toBe(true);
+    expect(fs.lstatSync(dst).isSymbolicLink()).toBe(false); // 物化为真实目录，不残留仓库路径依赖
+    expect(fs.statSync(dst).isDirectory()).toBe(true);
+    expect(fs.readFileSync(path.join(dst, "index.ts"), "utf8")).toContain("export const x");
+  });
+
+  it("installBundledExtensions 跳过 dangling symlink 不报错", () => {
+    const root = makeTmp();
+    const bundledDir = path.join(root, "extensions");
+    fs.mkdirSync(bundledDir, { recursive: true });
+    fs.mkdirSync(path.join(bundledDir, "real-ext"), { recursive: true });
+    fs.writeFileSync(path.join(bundledDir, "real-ext", "index.ts"), "x");
+    fs.symlinkSync("../packages/missing", path.join(bundledDir, "dangling"), "dir");
+
+    const installed = installBundledExtensions(path.join(root, "shared"), moduleUrlFor(root));
+
+    expect(installed).toEqual(["real-ext"]);
+  });
+
+  it("syncBundledExtensions 同步 symlink 条目并写入 manifest", () => {
+    const root = makeTmp();
+    makeBundledRepo(root);
+    const sharedDir = path.join(root, "shared");
+
+    const synced = syncBundledExtensions(sharedDir, moduleUrlFor(root));
+
+    expect(synced).toContain("link-ext");
+    const dst = path.join(sharedDir, "extensions", "link-ext");
+    expect(fs.statSync(dst).isDirectory()).toBe(true);
+    expect(fs.lstatSync(dst).isSymbolicLink()).toBe(false);
+    expect(fs.existsSync(path.join(dst, "index.ts"))).toBe(true);
+    const manifest = fs.readFileSync(path.join(sharedDir, "extensions", ".bundled-manifest"), "utf8");
+    expect(manifest).toContain("link-ext");
+  });
+});
+
+describe("仓库 bundled 扩展接线（finding #1）", () => {
+  it("extensions/mailbox 与 extensions/extensions-in-container 被 installBundledExtensions 同步", () => {
+    const sharedDir = path.join(makeTmp(), "shared");
+    const installed = installBundledExtensions(sharedDir);
+
+    for (const name of ["mailbox", "extensions-in-container"]) {
+      const dst = path.join(sharedDir, "extensions", name);
+      expect(fs.existsSync(dst), `${name} 未被同步为 bundled 扩展`).toBe(true);
+      expect(fs.statSync(dst).isDirectory()).toBe(true);
+    }
+    expect(installed).toEqual(expect.arrayContaining(["mailbox", "extensions-in-container"]));
   });
 });
