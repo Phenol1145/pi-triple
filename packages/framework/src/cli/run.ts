@@ -235,7 +235,7 @@ export async function main() {
       break;
     }
     case "env": {
-      const er = await dispatchCommand("env", subcommand ? [subcommand, ...passthrough] : passthrough);
+      const er = await dispatchCommand("env", subcommand ? [subcommand, ...passthrough, ...flattenFlags(flags)] : passthrough);
       doPrintCommand(er);
       break;
     }

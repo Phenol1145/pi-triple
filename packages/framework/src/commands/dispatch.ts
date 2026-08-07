@@ -19,6 +19,7 @@ import {
 } from "./session.js";
 import { execTraceLs, execTraceShow, execTraceTimeline } from "./trace.js";
 import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, parseEnvPatch } from "../env.js";
+import { execExtensionCopy, execSkillCopy, parseCopyOpts } from "../extension-copy.js";
 
 // ─── 类型 ────────────────────────────────────────────────────
 
@@ -47,6 +48,8 @@ export function resolveDispatch(cmd: string, args: string[]): DispatchTarget | n
       if (sub === "show") return { kind: "exec", fn: () => execEnvShow(rest[0] ?? "") };
       if (sub === "set") return { kind: "exec", fn: () => execEnvSet(rest[0] ?? "", parseEnvPatch(rest.slice(1))) };
       if (sub === "rm") return { kind: "exec", fn: () => execEnvRm(rest[0] ?? "") };
+      if (sub === "extension-copy") return { kind: "exec", fn: () => execExtensionCopy(rest[0] ?? "", parseCopyOpts(rest.slice(1))) };
+      if (sub === "skill-copy") return { kind: "exec", fn: () => execSkillCopy(rest[0] ?? "", parseCopyOpts(rest.slice(1))) };
       return null;
     case "status":
       return { kind: "exec", fn: () => execStatus() };

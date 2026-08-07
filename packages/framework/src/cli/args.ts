@@ -12,7 +12,7 @@ export function parseArgs(args: string[]): { command: string; subcommand?: strin
   let subcommand = "";
   let i = 0;
 
-  const VALUED_FLAGS = new Set(["template", "project", "model", "provider", "thinking", "name", "workspace", "workloop", "at", "agent", "slot", "urgency"]);
+  const VALUED_FLAGS = new Set(["template", "project", "model", "provider", "thinking", "name", "workspace", "workloop", "at", "agent", "slot", "urgency", "from", "mode"]);
 
   while (i < args.length) {
     const arg = args[i];

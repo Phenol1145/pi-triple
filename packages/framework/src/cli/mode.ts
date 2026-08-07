@@ -15,6 +15,7 @@ import { PthClient } from "../bridge/client.js";
 import { execSessionLs } from "../commands/session.js";
 import { execTraceLs } from "../commands/trace.js";
 import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, parseEnvPatch } from "../env.js";
+import { execExtensionCopy, execSkillCopy } from "../extension-copy.js";
 
 type PtlMode = "print" | "json";
 
@@ -23,20 +24,24 @@ export function resolveMode(command: string, flags: Record<string, string>): Ptl
   return "print";
 }
 
-/** 表驱动 JSON 路由 */
-const JSON_ROUTERS: Record<string, (sub: string | undefined, passthrough: string[]) => Promise<{ ok: boolean; data?: any; error?: { code: string; message: string } }>> = {
+type JsonRouter = (sub: string | undefined, passthrough: string[], flags: Record<string, string>) => Promise<{ ok: boolean; data?: any; error?: { code: string; message: string } }>;
+
+/** 表驱动 JSON 路由（router 只取自己需要的 flags） */
+const JSON_ROUTERS: Record<string, JsonRouter> = {
   template: async (sub, passthrough) => {
     if (sub === "ls" || sub === "list") return await execTemplateLs();
     if (sub === "new") return await execTemplateNew(passthrough[0]);
     if (sub === "rm") return await execTemplateRm(passthrough[0] || "");
     return await execTemplateLs();
   },
-  env: async (sub, passthrough) => {
+  env: async (sub, passthrough, flags) => {
     if (sub === "ls" || sub === "list" || sub === "") return await execEnvList();
     if (sub === "create") return await execEnvCreate(passthrough[0] ?? "", {});
     if (sub === "show") return await execEnvShow(passthrough[0] ?? "");
     if (sub === "set") return await execEnvSet(passthrough[0] ?? "", parseEnvPatch(passthrough.slice(1)));
     if (sub === "rm") return await execEnvRm(passthrough[0] ?? "");
+    if (sub === "extension-copy") return await execExtensionCopy(passthrough[0] ?? "", { from: flags.from, mode: flags.mode });
+    if (sub === "skill-copy") return await execSkillCopy(passthrough[0] ?? "", { from: flags.from, mode: flags.mode });
     return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "env 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
   },
   status: async () => await execStatus(),
@@ -83,11 +88,11 @@ const JSON_ROUTERS: Record<string, (sub: string | undefined, passthrough: string
   },
 };
 
-export async function routeJsonCommand(command: string, subcommand: string | undefined, _flags: Record<string, string>, passthrough: string[]): Promise<boolean> {
+export async function routeJsonCommand(command: string, subcommand: string | undefined, flags: Record<string, string>, passthrough: string[]): Promise<boolean> {
   const router = JSON_ROUTERS[command];
   if (!router) return false;
 
-  const result = await router(subcommand, passthrough);
+  const result = await router(subcommand, passthrough, flags);
 
   if (result.ok) {
     emitJson(result.data ?? {});
