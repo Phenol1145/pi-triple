@@ -13,6 +13,8 @@ services:
       - agent-lab:/data/agent-lab
     environment:
       - REDIS_URL=redis://redis:6379
+      # PTH kernel 存储层（Spec C）：postgres 数据世界（凭据 compose 注入，与 postgres 服务一致）
+      - DATABASE_URL=postgresql://pth:${POSTGRES_PASSWORD:-pth-dev-password}@postgres:5432/pth
       - PI_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - PI_OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - LOG_LEVEL=info
@@ -43,6 +45,9 @@ services:
         condition: service_healthy
       # F/WP3 Task 11：pth 的 bash 工具依赖 sandbox 就绪（转发 /exec）
       sandbox:
+        condition: service_healthy
+      # PTH kernel 存储层（Spec C）：pi-platform 启动前需 postgres 就绪（DATABASE_URL 连接）
+      postgres:
         condition: service_healthy
     # pth 需访问 sandbox（bash 转发）→ 双网络：default（出网调 LLM）+ sandbox-internal（内网锁）
     networks:
