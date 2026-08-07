@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { getPtlVersion, maybePrintUpdateHint } from "../../packages/framework/src/version.js";
+import { pathToFileURL } from "node:url";
+import { getPtlVersion, resolveRepoRootPackageJson, maybePrintUpdateHint } from "../../packages/framework/src/version.js";
 import { writeCache } from "@pi-triple/shared";
 import { resolveDataDir } from "@pi-triple/shared";
 
@@ -10,6 +11,41 @@ describe("getPtlVersion", () => {
   it("返回 package.json 的 version", () => {
     const pkg = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf-8"));
     expect(getPtlVersion()).toBe(pkg.version);
+  });
+});
+
+describe("resolveRepoRootPackageJson", () => {
+  let tmpRoot: string;
+  let srcUrl: string;
+  let distUrl: string;
+  beforeAll(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-root-"));
+    fs.writeFileSync(path.join(tmpRoot, "package.json"), JSON.stringify({ name: "pi-triple", version: "9.9.9" }));
+    // 源码布局：packages/framework/src/version.ts（模块深 3 级）
+    const srcLayout = path.join(tmpRoot, "packages", "framework", "src");
+    fs.mkdirSync(srcLayout, { recursive: true });
+    // 构建产物布局：packages/framework/dist/packages/framework/src/version.js（模块深 5 级）
+    const distLayout = path.join(tmpRoot, "packages", "framework", "dist", "packages", "framework", "src");
+    fs.mkdirSync(distLayout, { recursive: true });
+    // 干扰项：中间层 package.json（非 pi-triple，不应命中）
+    fs.writeFileSync(
+      path.join(tmpRoot, "packages", "framework", "package.json"),
+      JSON.stringify({ name: "@pi-triple/framework", version: "0.1.0" }),
+    );
+    srcUrl = pathToFileURL(path.join(srcLayout, "version.ts")).href;
+    distUrl = pathToFileURL(path.join(distLayout, "version.js")).href;
+  });
+  afterAll(() => {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it("源码布局与构建产物布局均解析到仓库根版本（跳过非 pi-triple 中间包）", () => {
+    expect(resolveRepoRootPackageJson(srcUrl)?.version).toBe("9.9.9");
+    expect(resolveRepoRootPackageJson(distUrl)?.version).toBe("9.9.9");
+  });
+
+  it("无可解析路径返回 null", () => {
+    expect(resolveRepoRootPackageJson(pathToFileURL("/nonexistent/x.js").href)).toBeNull();
   });
 });
 

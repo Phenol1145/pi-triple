@@ -13,6 +13,7 @@ import {
   getTemplateAlias, getDefaultTemplateId,
 } from "@pi-triple/shared";
 import { migrate } from "../migrate.js";
+import { resolveRepoRootPackageJson } from "../version.js";
 import { initSharedLayer, linkTemplateToShared, promoteToShared, installBundledExtensions } from "../shared-layer.js";
 import { execSharedStatus } from "../commands.js";
 import { printBanner } from "./main.js";
@@ -75,17 +76,17 @@ async function updatePitSelf(): Promise<boolean> {
       console.log("  \x1b[31m❌ 无法解析 GitHub Release（未找到 pi-triple tarball asset）\x1b[0m");
       return false;
     }
-    const pkg = JSON.parse(fs.readFileSync(new URL("../../../../package.json", import.meta.url), "utf-8")) as { version: string };
-    const cmp = compareVersions(release.version, pkg.version);
+    const localVersion = resolveRepoRootPackageJson(import.meta.url)?.version ?? "0.0.0";
+    const cmp = compareVersions(release.version, localVersion);
     if (cmp === undefined) {
-      console.log(`  \x1b[31m❌ 无法比较版本（远端 ${release.version} vs 本地 ${pkg.version}），已中止（不安装）\x1b[0m`);
+      console.log(`  \x1b[31m❌ 无法比较版本（远端 ${release.version} vs 本地 ${localVersion}），已中止（不安装）\x1b[0m`);
       return false;
     }
     if (cmp <= 0) {
-      console.log(`  \x1b[32m✅ Pi-Triple 已是最新版 (v${pkg.version})\x1b[0m`);
+      console.log(`  \x1b[32m✅ Pi-Triple 已是最新版 (v${localVersion})\x1b[0m`);
       return true;
     }
-    console.log(`  当前 v${pkg.version} → 最新 v${release.version}，下载中…`);
+    console.log(`  当前 v${localVersion} → 最新 v${release.version}，下载中…`);
 
     const url = buildAssetUrl(release.tag, release.version);
     const dl = await fetch(url, { signal: AbortSignal.timeout(60_000) });

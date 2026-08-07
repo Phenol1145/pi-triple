@@ -3,16 +3,38 @@
  */
 
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { readCache, isCacheFresh, isUpdateAvailable } from "@pi-triple/shared";
 
 let cachedVersion: string | null = null;
 
+/**
+ * 定位仓库根 package.json（monorepo 单源版本）。
+ * 源码布局（packages/framework/src/version.ts，上溯 3 级）与构建产物布局
+ * （packages/framework/dist/packages/framework/src/version.js，上溯 5 级）层级不同，
+ * 故从模块位置向上探测最近一个 name === "pi-triple" 的 package.json，两种布局均命中仓库根。
+ */
+export function resolveRepoRootPackageJson(moduleUrl: string): { name?: string; version?: string } | null {
+  let dir = path.dirname(fileURLToPath(moduleUrl));
+  for (let i = 0; i < 8; i++) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf-8")) as { name?: string; version?: string };
+      if (pkg.name === "pi-triple") return pkg;
+    } catch {
+      // 该级无 package.json 或不可读——继续上溯
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break; // 已到文件系统根
+    dir = parent;
+  }
+  return null;
+}
+
 export function getPtlVersion(): string {
   if (cachedVersion) return cachedVersion;
-  // 仓库根 package.json（自 packages/framework/src 上溯三级；monorepo 布局下单源版本）
-  const pkg = JSON.parse(fs.readFileSync(new URL("../../../package.json", import.meta.url), "utf-8")) as { version?: string };
-  cachedVersion = pkg.version ?? "0.0.0";
+  cachedVersion = resolveRepoRootPackageJson(import.meta.url)?.version ?? "0.0.0";
   return cachedVersion;
 }
 
