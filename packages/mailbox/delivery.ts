@@ -2,11 +2,11 @@
  * Pi-Triple Intercom — Delivery
  *
  * 根据审核策略（manual/auto/hybrid）决定消息如何投递：
- * - manual:  只有 ui.notify 通知人，人执行 /pit accept 后才进 LLM
+ * - manual:  只有 ui.notify 通知人，人执行 /mail accept 后才进 LLM
  * - auto:    自动注入 LLM（sendMessage nextTurn），人收到通知
  * - hybrid:  按 priority/type 分流
  *
- * Rules: first-match wins（接收方评估）。会话级 /pit mode 仅内存、不持久化。
+ * Rules: first-match wins（接收方评估）。会话级 /mail mode 仅内存、不持久化。
  */
 import type { PitMessage } from "./protocol.js";
 import type { Mailbox } from "./mailbox.js";
@@ -24,7 +24,7 @@ export interface DeliveryActions {
 export interface IntercomConfig {
   defaultMode: ReviewMode;
   tenantMode?: ReviewMode;
-  /** /pit mode 设置，仅内存，不持久化 */
+  /** /mail mode 设置，仅内存，不持久化 */
   sessionMode?: ReviewMode;
   /** first-match wins，接收方评估 */
   rules?: Array<{
@@ -84,7 +84,7 @@ export class Delivery {
   }
 
   /**
-   * 人执行 /pit accept 后调用：注入 LLM + 标记 accept。
+   * 人执行 /mail accept 后调用：注入 LLM + 标记 accept。
    */
   acceptAndInject(msg: PitMessage): DeliveryDecision {
     this.processedIds.add(msg.id);

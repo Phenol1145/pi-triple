@@ -33,7 +33,7 @@ export class Audit {
     fs.appendFileSync(this.logPath, JSON.stringify(entry) + "\n");
   }
 
-  /** 返回日志文件路径（供 /pit audit 命令使用） */
+  /** 返回日志文件路径（供 /mail audit 命令使用） */
   getPath(): string {
     return this.logPath;
   }

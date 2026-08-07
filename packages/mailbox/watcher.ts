@@ -52,10 +52,10 @@ export class Watcher {
       });
       this.fsWatcher.on("error", (err) => {
         // 静默处理（避免未捕获错误导致扩展崩溃）
-        process.stderr.write(`[pit-communicate watcher] ${err.message}\n`);
+        process.stderr.write(`[mailbox watcher] ${err.message}\n`);
       });
     } catch (err: any) {
-      process.stderr.write(`[pit-communicate watcher] fs.watch 不可用，仅轮询: ${err.message}\n`);
+      process.stderr.write(`[mailbox watcher] fs.watch 不可用，仅轮询: ${err.message}\n`);
     }
 
     // 轮询兜底：fs.watch 在某些场景（网络盘/高负载）会丢事件

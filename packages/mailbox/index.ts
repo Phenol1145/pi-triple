@@ -1,7 +1,7 @@
 /**
- * Pi-Triple Intercom — pit-communicate extension
+ * Pi-Triple mailbox — @pi-triple/mailbox（原 pit-communicate 扩展，/pit 已改名 /mail）
  *
- * 注册 /pit 命令，提供跨会话通信：
+ * 注册 /mail 命令，提供跨会话通信：
  *   send/ask/share/broadcast  — 发送
  *   inbox/accept/reject       — 收件
  *   ps/mode/name/status       — 管理
@@ -12,10 +12,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Mailbox } from "./mailbox.js";
-import { Presence } from "../_shared/presence.js";
-import type { SessionState } from "../_shared/presence.js";
-import { Registry } from "../_shared/registry.js";
-import type { RegistryEntry } from "../_shared/registry.js";
+import { Presence, Registry, resolveMailboxRoot, resolveTenantId } from "@pi-triple/shared";
+import type { SessionState, MailboxRegistryEntry } from "@pi-triple/shared";
 import { Delivery } from "./delivery.js";
 import type { IntercomConfig, ReviewMode } from "./delivery.js";
 import { Watcher } from "./watcher.js";
@@ -23,7 +21,6 @@ import type { WatcherSideEffects } from "./watcher.js";
 import { Audit } from "./audit.js";
 import { createMessage } from "./protocol.js";
 import type { PitMessage } from "./protocol.js";
-import { resolveMailboxRoot, resolveTenantId } from "../_shared/paths.js";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -82,12 +79,12 @@ function formatPendingMessages(msgs: PitMessage[]): string[] {
       `  ${id}  ${icon} \x1b[1m${m.from.name}\x1b[0m  "${preview}"  ${ago}${priority}`,
     );
   }
-  lines.push(`  /pit accept N · /pit reject N`);
+  lines.push(`  /mail accept N · /mail reject N`);
   return lines;
 }
 
 function formatSessionList(
-  entries: RegistryEntry[],
+  entries: MailboxRegistryEntry[],
   mailboxRoot: string,
   tenantId: string,
 ): string[] {
@@ -159,7 +156,7 @@ export default function pitMail(api: any /* ExtensionAPI */) {
     onInjectNextTurn: (content: string, display: string, msgId: string) => {
       try {
         api.sendMessage(
-          { customType: "pit-mail", content, display },
+          { customType: "mail", content, display },
           { deliverAs: "nextTurn", triggerTurn: true },
         );
       } catch { /* ok */ }
@@ -195,7 +192,7 @@ export default function pitMail(api: any /* ExtensionAPI */) {
       injectNextTurn: (content: string, display: string) => {
         try {
           api.sendMessage(
-            { customType: "pit-mail", content, display },
+            { customType: "mail", content, display },
             { deliverAs: "nextTurn", triggerTurn: true },
           );
         } catch { /* ok */ }
@@ -213,9 +210,9 @@ export default function pitMail(api: any /* ExtensionAPI */) {
   const gcTimer = setInterval(() => mailbox.gc(), 3600_000);
   gcTimer.unref();
 
-  // ── Register /pit command ────────────────────────────────
-  api.registerCommand("pit", {
-    description: "Pi-Triple Intercom — cross-session communication",
+  // ── Register /mail command ───────────────────────────────
+  api.registerCommand("mail", {
+    description: "Pi-Triple mailbox — cross-session communication",
     getArgumentCompletions: (prefix: string) => {
       const parts = prefix.trim().split(/\s+/);
       const subCmds = [
@@ -270,13 +267,13 @@ export default function pitMail(api: any /* ExtensionAPI */) {
         const targetName = parts[0];
         const message = parts.slice(1).join(" ");
         if (!targetName || !message) {
-          ctx.ui.notify(`Usage: /pit ${cmd} <session-name> <message>`, "warning");
+          ctx.ui.notify(`Usage: /mail ${cmd} <session-name> <message>`, "warning");
           return;
         }
         const entries = registry.list();
-        const target = entries.find((e: RegistryEntry) => e.name === targetName);
+        const target = entries.find((e: MailboxRegistryEntry) => e.name === targetName);
         if (!target) {
-          ctx.ui.notify(`Session "${targetName}" not found. Use /pit ps.`, "warning");
+          ctx.ui.notify(`Session "${targetName}" not found. Use /mail ps.`, "warning");
           return;
         }
         const msg = createMessage({
@@ -305,7 +302,7 @@ export default function pitMail(api: any /* ExtensionAPI */) {
         const note = noteIdx >= 0 ? parts.slice(noteIdx + 1).join(" ") : "";
         const filePath = noteIdx >= 0 ? parts.slice(1, noteIdx).join(" ") : fileArg;
         if (!targetName || !filePath) {
-          ctx.ui.notify("Usage: /pit share <session-name> <file> [--note ...]", "warning");
+          ctx.ui.notify("Usage: /mail share <session-name> <file> [--note ...]", "warning");
           return;
         }
         const absFile = path.resolve(ctx.cwd, filePath);
@@ -314,7 +311,7 @@ export default function pitMail(api: any /* ExtensionAPI */) {
           return;
         }
         const fileStat = fs.statSync(absFile);
-        const target = registry.list().find((e: RegistryEntry) => e.name === targetName);
+        const target = registry.list().find((e: MailboxRegistryEntry) => e.name === targetName);
         if (!target) {
           ctx.ui.notify(`Session "${targetName}" not found.`, "warning");
           return;
@@ -338,10 +335,10 @@ export default function pitMail(api: any /* ExtensionAPI */) {
       if (cmd === "broadcast") {
         const message = argStr;
         if (!message) {
-          ctx.ui.notify("Usage: /pit broadcast <message>", "warning");
+          ctx.ui.notify("Usage: /mail broadcast <message>", "warning");
           return;
         }
-        const entries = registry.list().filter((e: RegistryEntry) => e.sessionId !== sessionId);
+        const entries = registry.list().filter((e: MailboxRegistryEntry) => e.sessionId !== sessionId);
         for (const target of entries) {
           const msg = createMessage({
             from: { sessionId, tenantId, name: sessionName },
@@ -374,7 +371,7 @@ export default function pitMail(api: any /* ExtensionAPI */) {
         const msgs = mailbox.readPending();
         const msg = (idx > 0 && idx <= msgs.length) ? msgs[idx - 1] : null;
         if (!msg) {
-          ctx.ui.notify("Invalid message #. Use /pit inbox to see IDs.", "warning");
+          ctx.ui.notify("Invalid message #. Use /mail inbox to see IDs.", "warning");
           return;
         }
         if (msg.type === "file") {
@@ -433,7 +430,7 @@ export default function pitMail(api: any /* ExtensionAPI */) {
       if (cmd === "mode") {
         const mode = rest[0] as ReviewMode;
         if (mode !== "manual" && mode !== "auto" && mode !== "hybrid") {
-          ctx.ui.notify("Usage: /pit mode <manual|auto|hybrid>", "warning");
+          ctx.ui.notify("Usage: /mail mode <manual|auto|hybrid>", "warning");
           return;
         }
         delivery.config.sessionMode = mode;
@@ -446,7 +443,7 @@ export default function pitMail(api: any /* ExtensionAPI */) {
       if (cmd === "name") {
         const name = argStr.trim();
         if (!name) {
-          ctx.ui.notify("Usage: /pit name <display-name>", "warning");
+          ctx.ui.notify("Usage: /mail name <display-name>", "warning");
           return;
         }
         sessionName = name;
@@ -474,17 +471,17 @@ export default function pitMail(api: any /* ExtensionAPI */) {
       // ── HELP ──────────────────────────────────────────────
       ctx.ui.notify(
         "Commands:\n" +
-        "  /pit send <name> <msg>   Send message\n" +
-        "  /pit ask <name> <q>       Ask question\n" +
-        "  /pit share <name> <file>  Share file\n" +
-        "  /pit broadcast <msg>      Broadcast\n" +
-        "  /pit inbox                View pending\n" +
-        "  /pit accept <#>           Accept message\n" +
-        "  /pit reject <#>           Reject message\n" +
-        "  /pit ps                   List registered sessions\n" +
-        "  /pit mode <m|a|h>         Set review mode\n" +
-        "  /pit name <name>          Set display name\n" +
-        "  /pit status               Intercom status\n" +
+        "  /mail send <name> <msg>   Send message\n" +
+        "  /mail ask <name> <q>       Ask question\n" +
+        "  /mail share <name> <file>  Share file\n" +
+        "  /mail broadcast <msg>      Broadcast\n" +
+        "  /mail inbox                View pending\n" +
+        "  /mail accept <#>           Accept message\n" +
+        "  /mail reject <#>           Reject message\n" +
+        "  /mail ps                   List registered sessions\n" +
+        "  /mail mode <m|a|h>         Set review mode\n" +
+        "  /mail name <name>          Set display name\n" +
+        "  /mail status               Intercom status\n" +
         "\nSession management: /control start|stop|ls (pit-control)\n" +
         "\nSwitch sessions: Ctrl+B s (tmux)",
       );
@@ -501,3 +498,16 @@ export default function pitMail(api: any /* ExtensionAPI */) {
     }
   });
 }
+
+// ── Package API（@pi-triple/mailbox 包导出面）──────────────
+export { Mailbox } from "./mailbox.js";
+export { Delivery } from "./delivery.js";
+export type { IntercomConfig, ReviewMode, DeliveryActions } from "./delivery.js";
+export { Watcher } from "./watcher.js";
+export type { WatcherSideEffects } from "./watcher.js";
+export { Audit } from "./audit.js";
+export type { AuditEvent } from "./audit.js";
+export { createMessage, validateMessage } from "./protocol.js";
+export type { PitMessage } from "./protocol.js";
+export { formatUpdateHint, maybeShowUpdateHint } from "./update-hint.js";
+export type { UpdateReport } from "./update-hint.js";
