@@ -116,18 +116,26 @@ PTH kernel = 解释性语言运行时（多解释器世界）
 | 16 | 数据域归位（用户确认 2026-08-07） | **postgres = 执行层持久真相**（任务池/记忆/账本/转录/审计/skill/组件元数据）；**Redis = 交互层瞬态**（会话痕迹/认证/锁/队列）；**FS = blob 存储**（任务工作区临时/artifacts 产物归档/components tar/配置原文）；**引用而非复制**（pg 存 taskId/artifactPath 指针） |
 | 17 | 产物清理策略（用户确认 2026-08-07） | 产物归档**不自动清理**——推送到清理提示到交互层，人工/策略决定；防止产物丢失 |
 | 18 | 工作区形态（用户确认 2026-08-07） | **任务级工作区**：认领分配（workspaces/<tenant>/tasks/<taskId>/，sandbox 白名单）、提交后提炼归档（转录入 pg + 产物入 artifacts 卷 + 指针引用）、清理；batch worker 无固定 cwd。v1 简化：整个任务工作区 rename 到 artifacts 卷（不提炼），转录入 pg，先让系统运行起来 |
+| 19 | 意图层形态（问卷裁决 2026-08-07） | **pi SDK 轻量会话**——意图层用现状 AgentSession（只做意图理解 + 任务撰写），不执行；执行层用 PTH kernel |
+| 20 | agent-lab 归位（问卷裁决 2026-08-07） | **选择性迁移**：taskpool/sorter/ingest/memory 保留迁 pg；scheduler/arena/economy/assembly/workloop 被 PTH kernel 取代。**废弃代码先不删**（后续可能消化） |
+| 21 | 执行路径收敛（问卷裁决 2026-08-07） | **全部收敛到 PTH kernel**——执行层只有 batch worker（kernel）；pi SDK 会话仅意图层；workloop 废弃（代码保留）；PTL 本地保持现状（开发态） |
+| 22 | 代码落点（问卷裁决 2026-08-07） | **src/pth/**（原生模块，PTH kernel 与 PTH 装配一体） |
+| 23 | 语言 v1 范围（问卷裁决 2026-08-07） | **TS + bash + Python** 三个解释器（Python 数据科学/ML 生态） |
+| 24 | 扩缩容判据（问卷裁决 2026-08-07） | **手动 + 统计建议**——/lab 命令加减 batch；统计优化器只采集负载数据给建议（人工执行）；自动扩缩留 v2 |
 
-## 5. 未裁决的开放问题（brainstorming 待继续）
+## 5. 开放问题（已全部收敛）
 
-1. **PTH 架构重想**：postgres 目标后端 + 双层次分离 + 多解释器——PTH 的模块结构、执行路径、agent-lab 归位全部要重新设计（用户指示"重新考虑，感觉走偏了"）
-2. **容器化拓扑**：pth + postgres + sandbox + redis？dev 容器？各服务职责？
-3. **数据域归位**：记忆/转录/任务/账本/会话痕迹/审计 → postgres 各表？Redis 还留什么？FS 还留什么？
-4. **交互层形态**：用户对话用 pi SDK 轻量会话（意图理解+任务撰写）？还是 PTH kernel 的轻量模式？
-5. **agent-lab 归位**：28530 行的 taskpool/memory/scheduler/economy——进 PTH kernel 数据世界/原生进 PTH/废弃？
-6. **执行路径收敛**：SDK 会话/workloop/PTL 本地三条路径 → 新架构收敛成什么？
-7. **挂载点**：PTH kernel 挂 PTH 会话层（agent-engine.ts:613-621）？代码落 src/pth（或 src/shared）？
-8. **语言 v1 范围**：TS 解释器 + bash 解释器？Python 留后？
-9. **扩缩容判据**：v1 手动加减 batch（统计优化器只建议）？还是自动？——待裁决
+~~1. PTH 架构重想~~ ✅ §1 范式 + §4 裁决
+~~2. 容器化拓扑~~ ✅ 裁决 15（方案 C）
+~~3. 数据域归位~~ ✅ 裁决 16/17/18
+~~4. 交互层形态~~ ✅ 裁决 19（pi SDK 轻量会话）
+~~5. agent-lab 归位~~ ✅ 裁决 20（选择性迁移，废弃代码保留）
+~~6. 执行路径收敛~~ ✅ 裁决 21（全部收敛到 PTH kernel）
+~~7. 挂载点~~ ✅ 裁决 22（src/pth/ 原生模块）
+~~8. 语言 v1 范围~~ ✅ 裁决 23（TS + bash + Python）
+~~9. 扩缩容判据~~ ✅ 裁决 24（手动 + 统计建议）
+
+**24 项裁决完成（2026-08-07）——设计已收敛，可进入 writing-plans**
 
 ## 6. 相关参考
 
