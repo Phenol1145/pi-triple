@@ -50,6 +50,19 @@ vm 内核 = 唯一的执行面（统一解释执行）
 
 **pi SDK 实际使用面**：172MB/4.5 万行 JS dist，PTH 仅用 4 个 API（createAgentSession/bindExtensions/createEventBus/DefaultResourceLoader）；agent-lab 对 SDK 依赖仅 pi.events + ExtensionAPI 类型。
 
+## 3.6 统一存储后端决策（2026-08-07 裁决：postgres 为目标后端）
+
+**决策**：vm 内核统一存储的目标后端 = **postgres**（docker 服务），非 SQLite 非 FS。
+
+**出处**：`extensions/agent-lab/docs/framework-vs-construction.md:81` 悬置问题（共享卷/账本服务化/postgres 化，Q3 未裁决）——现裁决：postgres 化。
+
+**理由**：多容器/多进程共享（FS 记忆域与 SQLite 单进程独占）、统一存储后端（记忆/转录/任务/账本一库装下）、MVCC 并发。
+
+**附带后果（待重新设计）**：
+- 容器化架构重想（compose 加 postgres 服务；当前 4 服务：pi-platform/sandbox/redis/dev）
+- PTH 架构重想（现 Redis+SQLite+FS 三介质分散；记忆系统 FS 模式、agent-lab.db SQLite、会话痕迹 Redis）
+- 用户提示"感觉有点走偏"——vm 内核设计可能建立在旧 PTH 架构假设上，需重新审视
+
 ## 4. 已裁决的设计点
 
 | # | 决策 | 内容 |
@@ -67,6 +80,7 @@ vm 内核 = 唯一的执行面（统一解释执行）
 3. **统一存储后端**：形态未定（SQLite 统一 vs 文件 vs 双后端统一访问层）——用户提出"统一之前开发的记忆系统 + pi 自身 skill/extension + 统一存储后端"，存储统一是核心
 4. **PTH 与 agent-lab 关系**：agent-lab 本身是被 PTH 托管的 extension——vm 内核统一 extension 后，agent-lab 的模块（taskpool/memory/scheduler）也变代码库？agent-lab.db 并入统一存储？——待用户裁决
 5. **vm 内核与 pi SDK AgentSession 的关系**：✅ 已裁决（方案 C）——保留 SessionManager/eventbus/provider（ModelRuntime），自研回合循环主体 + vm 内核
+6. **容器化/PTH 架构**：✅ 方向裁决（2026-08-07）——postgres 为目标后端，需重新设计容器化架构与 PTH 架构（用户指示"重新考虑，感觉走偏了"）——具体设计待新架构讨论
 
 ## 6. 相关参考
 
