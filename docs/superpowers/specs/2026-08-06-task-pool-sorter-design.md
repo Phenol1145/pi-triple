@@ -105,7 +105,7 @@ tasks {
   id           TEXT PRIMARY KEY
   template_id  TEXT NOT NULL
   labels       TEXT NOT NULL      -- JSON string[]（模板标签 + 实例标签）
-  text         TEXT NOT NULL      -- 实例化后的任务文本；派发时前缀注入 [task:<id>]（agent 识别自身 id 的机制，见 §7.1）
+  text         TEXT NOT NULL      -- 实例化后的任务文本；派发时前缀注入 [task:<id>]（不入库，运行时注入——见 §7.1；agent 识别自身 id 的机制）
   params       TEXT NOT NULL      -- JSON：具体参数值
   status       TEXT NOT NULL      -- pending|claimed|submitted|completed|rejected|escalated
   claimed_by   TEXT               -- 当前认领 agent（claimed 时非空）
@@ -129,13 +129,18 @@ claimed ──submit_task──→ submitted     [task.submitted，成果引用�
 submitted ──自动──→ completed          [task.completed，v1 提交即完成；submitted 为瞬态恒同步转移]
 claimed ──reject_task──→ rejected      [task.rejected，+reason +排除]
 claimed ──派发失败──→ rejected         [task.rejected，reason="dispatch-failed"，+排除]（裁决 I2）
+claimed ──claims_count≥3 且派发已返回──→ escalated  [task.escalated，→ PTL 事件]（裁决 N1：仅在派发返回后判定，不中断在途执行）
 rejected ──回流轮──→ pending           [task.reflowed，排除名单保留]
 rejected ──回流轮（无未排除匹配者）──→ escalated  [task.escalated，→ PTL 事件]
-pending ──回流轮（无任何未排除候选且 age>阈值）──→ escalated  [task.escalated，→ PTL 事件]（裁决 B2）
+pending ──回流轮（无任何未排除候选且 age>30min）──→ escalated  [task.escalated，→ PTL 事件]（裁决 B2）
 claimed ──stale 超时──→ pending        [task.stale_reclaim，默认 10 分钟]
+escalated ──requeue──→ pending         [task.requeued，清 rejects[] 且 claims_count 归零]（裁决 N2）
+rejected ──requeue──→ pending          [task.requeued，清 rejects[] 且 claims_count 归零]（裁决 N2）
 ```
 
-**裁决（对抗性审核 I2）**：派发返回 failed（agent 不存在/run 抛错/execution-timeout）→ 记自动 reject（reason="dispatch-failed"，进排除名单）——不再 stale 循环。claims_count 达 3 → 强制 escalated（防单 agent 反复认领-失败-回流转圈）。claims_count 由此成为升级判据之一，非死字段。
+**裁决（对抗性审核 I2 + 复审 N1）**：派发返回 failed（agent 不存在/run 抛错/execution-timeout）→ 记自动 reject（reason="dispatch-failed"，进排除名单）——不再 stale 循环。claims_count ≥3 → 强制 escalated——**判定仅在派发返回后（claimed 且非在途）进行**，不中断可能正在执行的任务。claims_count 由此成为升级判据之一，非死字段。
+
+**裁决（复审 N2）**：requeue 是官方转移（escalated/rejected → pending），发 task.requeued 事件，**同时清 rejects[] 并重置 claims_count=0**——否则 requeue 后立即重新触发 claims_count≥3 升级，requeue 成空操作。
 
 ### 5.3 关键语义
 
@@ -143,10 +148,11 @@ claimed ──stale 超时──→ pending        [task.stale_reclaim，默认 
 - **排除名单**：任务记录 `rejects[]` 推导（按 agentId 去重）——回流后分选器匹配时排除已拒绝过的 agent（`claimed_by` 不会落到名单内 agent）
 - **回流轮触发（裁决 I1，双触发并存）**：
   - 池空触发：池中无 pending+claimed 任务时执行
-  - **时间维触发**：rejected 任务 age（最后活动/拒绝时刻）超阈值（默认 10 分钟）即纳入回流判定——**防持续有新 publish 时 rejected 永久滞留**
-- **升级判定**（reflow 时）：对每个 rejected/pending 任务——剩余"标签匹配且未排除"的 agent 数 = 0 → escalated；否则 → pending
-- **pending 无候选升级（裁决 B2）**：从未被认领过的 pending 任务，若 age > 阈值（默认 30 分钟）且无任何"标签匹配且未排除"的 agent → escalated（补 §3 架构图"无可接者 → escalated"与 §5.2 的缺口）
-- **stale 回收**：周期扫描 claimed_at < now - timeout → 回 pending（防"认领了但执行端不可用"永久卡死；不判 agent 离线、不打分）；**不变量：staleMs > execution.timeoutMs + 裕量**（裁决 I5——防合法长执行中被 stale 回收导致双会话重复执行）
+  - **时间维触发**：rejected 任务 age（自**最后转移时刻**——rejected 进入时记录 `lastTransitionAt`，即 rejects[] 最后一项的 at）超阈值（默认 10 分钟）即纳入回流判定——**防持续有新 publish 时 rejected 永久滞留**（裁决 I1 + N5：age 基准 = 拒绝时刻，非认领时刻）
+- **升级判定（复审 N3，统一判据）**：对每个 rejected 任务与每个 **从未被认领过的** pending 任务（`claims_count=0`）——剩余"标签匹配且未排除"的 agent 数 = 0 → escalated；否则 → pending。**stale 回收产生的 pending（claims_count>0）不参与无候选升级**（它已进入 claims_count 阈值路径：stale→再认领→若派发仍失败→dispatch-failed reject→排除→最终 claims_count≥3 或回流无候选升级）。被认领/在途任务（claimed/submitted）永不参与升级判定
+- **pending 无候选升级（裁决 B2，age 门）**：上述"从未被认领过"的 pending 任务还需 age > 30 分钟（自 created_at 起）才升级——避免新发布任务在分选器尚未跑过一轮时误升级。**claims_count≥3 的 claimed 升级无 age 门**（见 §5.2）
+- **stale 回收**：周期扫描 claimed_at < now - timeout → 回 pending（防"认领了但执行端不可用"永久卡死；不判 agent 离线、不打分）；**不变量：staleMs > 池派发路径的实际执行超时 + 裕量**（裁决 I5 + 复审 N4——防合法长执行中被 stale 回收导致双会话重复执行）
+- **执行超时来源（复审 N4 钉死）**：`execution.timeoutMs`（arena 市场路径参数）**不适用于池派发路径**——池派发走 direct-execute，需在 SorterCycle 派发包装层强制超时（withTimeout 复用既有 `with-timeout.ts`，超时值取 SorterCycle 配置 `executionTimeoutMs`，默认 5 分钟，> 既有 DEFAULT_EXECUTION_TIMEOUT_MS 语义对齐）。此包装层列入 §8.2 触点清单（新增实现面，非零行为变更声明覆盖）
 - **成果引用**：submit_task 携带 outputRef（string），仅记入 submitted 事件 payload（裁决 I4，tasks 表不存）
 
 ## 6. 分选器（agents.selector_json + 引擎 + 周期）
@@ -174,8 +180,8 @@ lab_agent_instances.selector_json  TEXT  -- 可空 JSON：{ labelPatterns: strin
 
 ### 6.3 SorterCycle（驱动层，同 startIngestCycle 模式）
 
-- `startSorterCycle({ engine, dispatch, intervalMs, claimN, ... })` → `{ stop() }`，setInterval + unref（v1 单运行时假设——M10；装配宿主与配置面在计划阶段定，参照 startIngestCycle 现状：目前无运行时调用方，接线随 PTH 运行时）
-- 每轮：① 对每个有 selector 的 agent 跑 claimTopN(claimN)（claimN 默认 3）② 新认领任务经既有 direct-execute 派发唤醒执行（复用 polish 计划已建路径：direct + agentId + mode=execute；派发时**任务文本前缀注入 `[task:<id>]`**——见 §7.1）③ 派发返回 failed → 记自动 reject（reason="dispatch-failed"，裁决 I2）④ 回流轮（池空触发或时间维触发，§5.3）⑤ stale 回收（staleMs 默认 10 分钟，不变量：> execution.timeoutMs + 裕量）⑥ claims_count≥3 → escalate
+- `startSorterCycle({ engine, dispatch, intervalMs, claimN, executionTimeoutMs, staleMs, ... })` → `{ stop() }`，setInterval + unref（v1 单运行时假设——M10；装配宿主与配置面在计划阶段定，参照 startIngestCycle 现状：目前无运行时调用方，接线随 PTH 运行时）
+- 每轮：① 对每个有 selector 的 agent 跑 claimTopN(claimN)（claimN 默认 3）② 新认领任务经既有 direct-execute 派发唤醒执行（复用 polish 计划已建路径：direct + agentId + mode=execute；派发时**任务文本前缀注入 `[task:<id>]`**——见 §7.1；**派发包装层用 withTimeout 强制超时，超时值 = executionTimeoutMs，默认 5 分钟**——裁决 N4）③ 派发返回 failed → 记自动 reject（reason="dispatch-failed"，裁决 I2）④ 回流轮（池空触发或时间维触发，§5.3）⑤ stale 回收（staleMs 默认 10 分钟，**不变量：staleMs > executionTimeoutMs + 裕量**）⑥ claims_count≥3 且已非在途 → escalate（裁决 N1）
 - 单轮失败不破坏周期（幂等重试）
 - **并行格局声明（裁决 C7）**：池路径（publish→分选器→认领）与直派路径（/lab scheduler dispatch 人工直派）并行共存；weighted/market 策略继续服务直派通道。v1 不做两通道的优先级仲裁。
 
@@ -206,13 +212,13 @@ interface SorterSdkPort {
 
 - `/lab task publish <templateId> --param k=v [--label x]`——实例化 + 入池
 - `/lab task list [--status pending]` / `/lab task status <id>`
-- `/lab task requeue <id>`——escalated/rejected → pending，清 rejects[]（裁决 I7：最小运维出口，人工看到 escalated 后能处置）
+- `/lab task requeue <id>`——escalated/rejected → pending，**清 rejects[] 且重置 claims_count=0**（裁决 I7 + 复审 N2；官方转移见 §5.2，发 task.requeued 事件）
 - `/lab agent selector <agentId> --labels <regex...> [--text <regex>]`——selector 配置面（裁决 B2）
 
 ## 8. 边界与诚实声明
 
 1. **模型可用性前置**：agent 真实执行（自检/执行/submit）依赖 workloop 会话模型可用（已知环境前置）。验收分两级：**机械链路**（模板注册/实例化、状态机全转移、匹配/认领原子性、回流/升级、stale 回收、命令参数）必须实测绿；**agent 执行链路**用 mock 覆盖，真实执行标注为环境前置项。派发失败已有收敛路径（自动 reject + claims_count 阈值升级——裁决 I2），模型不可用不再产生无限空转
-2. **零行为变更**（除已声明的 cycle.ts 迁移与 contracts 可选字段）：新增表/列/模块。触点清单（对抗性审核 M2）：schema.ts、core/storage/repository.ts（迁移+按 selector 列查询）、core/contracts.ts、src/ingest/cycle.ts（dispatch→publish）、assembly 装配（sorter 端口接线）、commands/register.ts（/lab task 命令）
+2. **零行为变更**（除已声明的 cycle.ts 迁移、contracts 可选字段与**池派发超时包装层**——裁决 N4）：新增表/列/模块。触点清单（对抗性审核 M2 + 复审 N4）：schema.ts、core/storage/repository.ts（CORE_SCHEMA + ALTER 双路径迁移——M1、按 selector 列查询）、core/contracts.ts、src/ingest/cycle.ts（dispatch→publish）、assembly 装配（sorter 端口接线）、commands/register.ts（/lab task 命令）、SorterCycle 派发包装层（withTimeout 强制执行超时）
 3. **回流轮判定是 v1 简化**："无未排除的匹配 agent"基于 selector 规则静态推导，不做 agent 离线/能力动态评估——能力评估随自持态角色建造
 4. **stale 回收不区分原因**：认领超时一律回 pending（不判 agent 离线、不打分）——简化，后续演进；**不变量 staleMs > execution.timeoutMs + 裕量**（裁决 I5）
 5. **escalated = v1 终态**：人工处置经 `/lab task requeue`（裁决 I7）；PTL 硬通道（推送 UI）留后续
@@ -256,6 +262,19 @@ M1 双路径迁移（CORE_SCHEMA + ALTER）；M2 触点清单（§8.2 已补）�
 ### 攻击未命中（已核实正确的部分）
 
 C1 selector_json 加列可行（5 个同型迁移先例）；C2 EventLog 可承载全事件；C3 direct-execute 复用属实（getAgent 全局单查）；C4 认领原子性成立（BEGIN IMMEDIATE + status 守卫 + changes()===1）；C5 §7.2 迁移基线准确；C6 sorter? 端口先例链完整；C7 表名 tasks 无冲突（库内是 market_tasks）
+
+### 复审轮（同模型 2026-08-06）：上轮 9 项全部有实质落实，修订引入 4 Important 级新缺口——已全部修复
+
+| # | 复审发现 | 修复 |
+|---|---|---|
+| N1 | claims_count≥3 升级源状态未钉死（claimed→escalated 无转移行，可能中断在途执行） | §5.2 补 claimed→escalated 行：仅派发返回后（非在途）判定；§6.3 ⑥同注 |
+| N2 | requeue 不重置 claims_count → 立即再升级，requeue 成空操作；且非官方转移无事件 | §5.2 补 escalated/rejected→pending requeue 转移行 + task.requeued 事件 + 重置 claims_count=0 并清 rejects[]；§7.3 同步 |
+| N3 | pending 升级三处口径不一（任意 pending / 从未被认领 / 无 age 门） | §5.3 统一判据：无候选升级仅对 rejected 与从未被认领的 pending（claims_count=0）；stale 回收的 pending（claims_count>0）走 claims_count 阈值路径；age>30min（自 created_at）门；claimed/submitted 永不参与 |
+| N4 | execution.timeoutMs 在池派发路径无执行机制（arena 路径参数），不变量落空 | §6.3 池派发包装层 withTimeout 强制超时（executionTimeoutMs 默认 5 分钟，复用 with-timeout.ts）；§5.3 不变量改引用该值；包装层列入 §8.2 触点清单 |
+| N5 | rejected age 基准两可（“最后活动/拒绝时刻”） | §5.3 钉死：age = 拒绝时刻（rejects[] 最后一项的 at，引入 lastTransitionAt 语义） |
+| N6 | §5.1 text 列注释易误读为前缀入库 | 注释补“（不入库，运行时注入）” |
+| — | M1 建议计划写一句 CORE_SCHEMA+ALTER 双路径（防只做 ALTER） | §8.2 触点已标注 M1 双路径；计划阶段再显式化 |
+| — | M12 lab-data 抄录无法核实 | 计划阶段处理（若 /lab 命令走 engine 注入则无需抄录，自然消解） |
 
 ## 11. 后续演进路线（已讨论、不在 v1）
 
