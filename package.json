@@ -2,6 +2,7 @@
   "name": "pi-triple",
   "version": "0.1.1",
   "type": "module",
+  "workspaces": ["packages/*"],
   "bin": {
     "ptl": "./dist/ptl/pit.js"
   },
