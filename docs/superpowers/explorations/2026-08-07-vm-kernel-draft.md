@@ -32,6 +32,24 @@ vm 内核 = 唯一的执行面（统一解释执行）
 - **能力注入模型**：context 默认空，只注入白名单能力（联邦动词/记忆/WM），不注入 fs/child_process/net——比"沙箱化任意代码"更可靠（语言层面无能力，而非运行时对抗）
 - **持久性分层**：vm context（进程内热态）↔ WM（sqlite，会话级持久）↔ 转录（JSONL，任务级档案）
 
+## 3.5 会话层决策（2026-08-07 裁决：方案 C）
+
+**保留 pi SDK / pi 自带件**（provider 兼容等用 pi 自带的）：
+- `ModelRuntime`（provider 兼容：密钥/failover/协议）——sdk-adapter 已透传
+- `SessionManager`（JSONL 落盘/恢复）——SDK 可独立使用
+- `createEventBus`（事件总线）——已独立再导出
+- `model-router`（shared/，独立于 SDK）
+
+**自研件**（vm 内核 = 完整 agent 运行时）：
+- AgentSession 回合循环主体（LLM 调用 + 上下文管理 + 工具协议解析 + 回填 + 流式/中止）
+- 唯一工具 vm_kernel（PTC 风格：agent 视角只有一个工具）
+- 能力注入（记忆/task/skill 展开）
+- 统一存储后端
+
+**工程量估算（实测对比）**：方案 A（保留 SDK 回合）~1100 行/风险低/愿景 50%；方案 B（全自研）~2400-3000 行/风险中高/愿景 100%；方案 C（折中）~1800-2200 行——保留 SessionManager/eventbus/provider，自研回合循环 + vm 内核。
+
+**pi SDK 实际使用面**：172MB/4.5 万行 JS dist，PTH 仅用 4 个 API（createAgentSession/bindExtensions/createEventBus/DefaultResourceLoader）；agent-lab 对 SDK 依赖仅 pi.events + ExtensionAPI 类型。
+
 ## 4. 已裁决的设计点
 
 | # | 决策 | 内容 |
@@ -48,7 +66,7 @@ vm 内核 = 唯一的执行面（统一解释执行）
 2. **"一个 tool"的形态**：修正后 = 不是 PTH customTool，而是"唯一执行面"（extension 退场为代码库，vm 统一解释执行）——精确形态待定稿
 3. **统一存储后端**：形态未定（SQLite 统一 vs 文件 vs 双后端统一访问层）——用户提出"统一之前开发的记忆系统 + pi 自身 skill/extension + 统一存储后端"，存储统一是核心
 4. **PTH 与 agent-lab 关系**：agent-lab 本身是被 PTH 托管的 extension——vm 内核统一 extension 后，agent-lab 的模块（taskpool/memory/scheduler）也变代码库？agent-lab.db 并入统一存储？——待用户裁决
-5. **vm 内核与 pi SDK AgentSession 的关系**：真实执行在 pi SDK 会话层（审计发现）——vm 内核接管回合循环（选项 A）的精确机制待定
+5. **vm 内核与 pi SDK AgentSession 的关系**：✅ 已裁决（方案 C）——保留 SessionManager/eventbus/provider（ModelRuntime），自研回合循环主体 + vm 内核
 
 ## 6. 相关参考
 
