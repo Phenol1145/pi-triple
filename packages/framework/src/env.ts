@@ -115,6 +115,12 @@ export async function execEnvSet(alias: string, patch: Record<string, unknown> =
   if (!alias) {
     return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: ptl env set <alias> <field=value...>" } };
   }
+  // Finding #1 防御：--model y 等 flag 形式会被 args.ts VALUED_FLAGS 吞掉，
+  // 不进 passthrough → parseEnvPatch([]) 空 patch。空 patch 必须报错，
+  // 否则 set 成功但零修改（静默假阳性）。报错先于租户解析（用法错误优先）。
+  if (Object.keys(patch).length === 0) {
+    return { ok: false, message: "", error: { code: "INVALID_ARGS", message: "未提供任何字段，请用 field=value 形式（如 model=qwen3.8-max）" } };
+  }
   const invalid = Object.keys(patch).filter((k) => !ENV_WRITABLE.has(k));
   if (invalid.length > 0) {
     return { ok: false, message: "", error: { code: "INVALID_ARGS", message: `不可写字段: ${invalid.join(", ")}（可用: ${[...ENV_WRITABLE].join(", ")}）` } };

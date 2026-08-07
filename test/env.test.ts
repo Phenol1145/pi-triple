@@ -10,6 +10,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm } from "../packages/framework/src/env.js";
+import { parseArgs } from "../packages/framework/src/cli/args.js";
+import { dispatchCommand } from "../packages/framework/src/commands/dispatch.js";
 
 describe("env commands", () => {
   let dir: string;
@@ -58,5 +60,26 @@ describe("env commands", () => {
     expect(r.ok).toBe(true);
     const list = await execEnvList();
     expect(list.data?.envs?.some((e: any) => e.alias === "knowledge")).toBe(false);
+  });
+
+  // Finding #1（Important，静默假阳性）回归：ptl env set knowledge --model qwen3.8-max
+  // 时 qwen3.8-max 被 args.ts VALUED_FLAGS（含 model）当 flag 值吞掉、不进 passthrough
+  // → parseEnvPatch([]) 空 patch → 旧实现 set 成功但零修改（误导性假阳性）。
+  // 防御：execEnvSet 空 patch 必须返回 ok:false + field=value 提示。
+  it("set <alias> --model y（flag 形式，值被 CLI 吞掉）→ ok:false + 提示", async () => {
+    const parsed = parseArgs(["env", "set", "knowledge", "--model", "qwen3.8-max"]);
+    expect(parsed.flags.model).toBe("qwen3.8-max");
+    expect(parsed.passthrough).toEqual(["knowledge"]); // 值被 VALUED_FLAGS 吞掉，不进 passthrough
+    const r = await dispatchCommand("env", [parsed.subcommand!, ...parsed.passthrough]);
+    expect(r.ok).toBe(false);
+    expect(r.error?.message).toContain("field=value");
+    expect(r.error?.message).toContain("model=qwen3.8-max");
+  });
+
+  it("set with empty patch → ok:false + 提示（防御层，环境不存在也先报字段错误）", async () => {
+    const r = await execEnvSet("knowledge", {});
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe("INVALID_ARGS");
+    expect(r.error?.message).toContain("未提供任何字段");
   });
 });
