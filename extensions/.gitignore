@@ -1,0 +1,14 @@
+# npm pack 排除：pi-subagents / superpowers 运行痕迹目录
+# .pi-subagents：pi-subagents 工具的运行痕迹（transcript.jsonl/input.md/meta.json/output.md，
+#   内容含 ~/.pi-triple 数据绝对路径与完整对话历史），曾经 package.json files 白名单
+#   的 "extensions" 通配被打进发行包（316 文件）。
+# .superpowers：SDD 报告等开发过程记录。
+#
+# 为什么放在这里而不是根 .gitignore 或 agent-lab/.gitignore（实测确认）：
+# 1. package.json 存在 files 白名单时，npm-packlist 会丢弃根 .npmignore/.gitignore（白名单优先）；
+# 2. extensions/agent-lab/ 含 package.json，npm-packlist 会因该文件使 agent-lab/ 自身的
+#    .npmignore/.gitignore 全部失效（filterEntries 优先级，node_modules/npm-packlist 实测）；
+# 3. 本目录（extensions/）无 package.json，npm-packlist 会正常读取此处的 .gitignore
+#    （npm pack --dry-run 实测：排除后 316 条 .pi-subagents 路径全部消失）。
+.pi-subagents/
+.superpowers/
