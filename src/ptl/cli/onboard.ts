@@ -1,5 +1,5 @@
 /**
- * pit/onboard — cmdOnboard, tenant resolution, first-run migration
+ * ptl/onboard — cmdOnboard, tenant resolution, first-run migration
  */
 
 import fs from "node:fs";
@@ -95,8 +95,8 @@ function defaultDeps(): OnboardDeps {
     launchTui: async () => {
       const { render } = await import("ink");
       const React = (await import("react")).default;
-      const { PitApp } = await import("../tui-pit/app.js");
-      render(React.createElement(PitApp), { exitOnCtrlC: false });
+      const { PtlApp } = await import("../tui-ptl/app.js");
+      render(React.createElement(PtlApp), { exitOnCtrlC: false });
     },
   };
 }
@@ -140,11 +140,11 @@ export async function cmdOnboard(
   await deps.doctor("quick");
 
   console.log("\n  \x1b[32m\x1b[1m🎉 Pi-Triple 准备就绪！\x1b[0m\n");
-  console.log("  启动: pit start\n  可视化: pit tui dashboard\n  帮助: pit help\n");
+  console.log("  启动: ptl start\n  可视化: ptl tui dashboard\n  帮助: ptl help\n");
 
   // 交互向导：询问是否立即启动总控 TUI
   if (p) {
-    const go = await p.confirm("立即打开系统总控面板 (pit tui dashboard)？");
+    const go = await p.confirm("立即打开系统总控面板 (ptl tui dashboard)？");
     if (go) await deps.launchTui();
   }
 }

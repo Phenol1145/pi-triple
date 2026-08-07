@@ -45,7 +45,7 @@ describe("ProviderManager", () => {
   let origAgentDir: string | undefined;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pit-mgr-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-mgr-"));
     origHome = process.env.HOME;
     origAgentDir = process.env.PI_CODING_AGENT_DIR;
     // PI_CODING_AGENT_DIR for auth.json（租户隔离）

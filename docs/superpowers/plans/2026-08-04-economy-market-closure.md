@@ -12,7 +12,7 @@ pr: "feat(economy): 市场闭环 D2（市场 workflow/多评共识/组织/观测
 
 spec `docs/superpowers/specs/2026-08-03-economy-layer-design.md`（5 轮评审收敛定稿）+ D1 基础设施已合并 main（VoucherPort/中央池/elo/任务类型/escrow/effect/fanout/subflow 全部就绪）。D2 把基础设施装配成**可运转的市场**：§5.1 市场 flow 图的所有节点 fns、§7/§7a 结算与多评共识、§6 组织垫付、§8 观测、§9 记忆沉淀、C 接线包 10 项、§12 集成 bench。
 
-**关键架构决策**（spec §5.1/Q2-A）：市场 = flow 图。D1 已交付 effect/fanout/subflow 节点类型 + EffectRegistry/CodeRegistry；D2 在 agent-lab `src/economy/` 注册市场 fns，`market-runner.ts` 内嵌市场 FlowDef 并调用 pit-flow 引擎执行。竞价/评审 fanout 的 body = agent 节点（bidding/review workloop——v1 走 spawnAgent；bench 用 mock 策略函数，真实 LLM 冒烟为手动 runbook 非 CI）。
+**关键架构决策**（spec §5.1/Q2-A）：市场 = flow 图。D1 已交付 effect/fanout/subflow 节点类型 + EffectRegistry/CodeRegistry；D2 在 agent-lab `src/economy/` 注册市场 fns，`market-runner.ts` 内嵌市场 FlowDef 并调用 ptl-flow 引擎执行。竞价/评审 fanout 的 body = agent 节点（bidding/review workloop——v1 走 spawnAgent；bench 用 mock 策略函数，真实 LLM 冒烟为手动 runbook 非 CI）。
 
 **D2 rulings 8 项**（D1 ledger 移交——Task 1 落地）：effect 契约 / poolDebit 硬化 / credits 表耦合约定 / unfreeze 故障注入 / freeze 幂等语义 / 运行时解释接受 / Ledger 公共面 / spec 措辞修正。
 
@@ -463,7 +463,7 @@ export function experiencesFromSettlement(plan: SettlementPlan, task: MarketTask
 **Interfaces：**
 
 ```ts
-// market-runner.ts —— 市场闭环运行器（注册全部 fns + 内嵌市场 FlowDef + 调 pit-flow 引擎）
+// market-runner.ts —— 市场闭环运行器（注册全部 fns + 内嵌市场 FlowDef + 调 ptl-flow 引擎）
 export interface MarketRunnerDeps extends MarketFnsDeps {
   effects: EffectRegistry; codes: CodeRegistry; events: EconomyEventBus;
   orgMembers: OrgMembership; calibration: CalibrationPool;

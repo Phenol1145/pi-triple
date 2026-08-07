@@ -2,7 +2,7 @@
  * warnings.ts — 入口级警告过滤（进程启动最早处调用）
  *
  * node:sqlite 在 node 24 仍为实验特性（Stability 1.1），每次实例化
- * DatabaseSync 都会向 stderr 打印 ExperimentalWarning。pit 大量使用
+ * DatabaseSync 都会向 stderr 打印 ExperimentalWarning。ptl 大量使用
  * lab-data（只读 agent-lab DB），警告噪音大且无信息量。
  *
  * 策略：移除默认 warning 打印，安装自定义监听——

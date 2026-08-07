@@ -66,7 +66,7 @@ export function TelemetryPage({ db, templateId, refreshKey }: Props) {
   if (!db) {
     return (
       <Box flexDirection="column">
-        <Text dimColor>共享遥测 DB 不可用 — 确保 AGENT_LAB_DB_PATH 已设置或运行 pit onboard</Text>
+        <Text dimColor>共享遥测 DB 不可用 — 确保 AGENT_LAB_DB_PATH 已设置或运行 ptl onboard</Text>
       </Box>
     );
   }
@@ -74,7 +74,7 @@ export function TelemetryPage({ db, templateId, refreshKey }: Props) {
   if (data.rows.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text dimColor>暂无遥测数据 — 运行 pit flow submit 生成数据</Text>
+        <Text dimColor>暂无遥测数据 — 运行 ptl flow submit 生成数据</Text>
       </Box>
     );
   }

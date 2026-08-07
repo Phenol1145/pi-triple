@@ -67,7 +67,7 @@ export function ConfigPage({ width, height: _h }: ConfigPageProps) {
 
       <Box marginTop={1}>
         <Text dimColor>
-          Edit: pit config   |   View raw: cat pi-triple.json
+          Edit: ptl config   |   View raw: cat pi-triple.json
         </Text>
       </Box>
 

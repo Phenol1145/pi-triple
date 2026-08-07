@@ -29,8 +29,8 @@ root 模板（原 local）= 唯一保留扩展的控制面
 |---|---|---|
 | 工具类（agent 主动调用） | openrouter、ustc-pan、agent_lab、notebook_*、place_bid | **(b) CLI 后端适配壳**（默认）；低风险组合型工具可走 (c) |
 | 命令/UI 类 | /control、/flow、/health、/lab、questionnaire | pit CLI --json（agent 化后不需要富 UI） |
-| 进程内 hook 类 | pit-providers（401/403 密钥切换，after_provider_response） | localhost provider proxy 管 keypool（P3 专项），或永久留 root |
-| 实时推送/遥测类 | pit-communicate 投递、agent-lab 遥测注入 | 轮询 CLI（信箱已有落盘）/ sidecar，接受延迟降级 |
+| 进程内 hook 类 | ptl-providers（401/403 密钥切换，after_provider_response） | localhost provider proxy 管 keypool（P3 专项），或永久留 root |
+| 实时推送/遥测类 | ptl-communicate 投递、agent-lab 遥测注入 | 轮询 CLI（信箱已有落盘）/ sidecar，接受延迟降级 |
 
 ### 1.1 扩展替换的三条路线
 
@@ -59,8 +59,8 @@ schema 适度扁平 + 封闭集用 enum，语义规则下沉 CLI。**
 
 | 期 | 内容 | 完成判据 |
 |---|---|---|
-| **P1（本 spec）** | cli-dev 试点模板 + 通用排除机制 + dev-cli/pit-agent 双技能 + local→root 更名 | 见 §3 验收 |
-| **P2** | pit CLI agent 化：`pit commands --json` 机器可读命令目录、稳定错误码、非 TTY 零交互护栏、JSON 覆盖面审计补齐 | agent 在纯 CLI 模板内可完成全部 PTL 操作 |
+| **P1（本 spec）** | cli-dev 试点模板 + 通用排除机制 + dev-cli/ptl-agent 双技能 + local→root 更名 | 见 §3 验收 |
+| **P2** | pit CLI agent 化：`ptl commands --json` 机器可读命令目录、稳定错误码、非 TTY 零交互护栏、JSON 覆盖面审计补齐 | agent 在纯 CLI 模板内可完成全部 PTL 操作 |
 | **P3** | 按 §1 分类逐扩展迁移，**默认走 (b) 适配化**：CLI 实现 + shim 声明 schema；每个扩展退场须过 **parity 门槛**（功能等价 + 延迟可接受 + 安全面不回退）；(c) 裸 CLI 仅限低风险组合型工具；hook 类不迁（proxy 专项或留 root） | 非 root 模板业务扩展清零（仅剩平台托管 shim） |
 | **P4** | root 定位为控制面模板（唯一保留扩展）；全量验收；扩展机制文档降级为 "root 专属" | roadmap 关闭 |
 
@@ -68,13 +68,13 @@ schema 适度扁平 + 封闭集用 enum，语义规则下沉 CLI。**
 
 ### 3.0 local → root 更名（先行）
 
-`pit template rename local root`。别名是元数据（UUID `ee7cae31…` 不变），
+`ptl template rename local root`。别名是元数据（UUID `ee7cae31…` 不变），
 运行中会话不受影响（别名在启动时读入）。更名后同步更新 README/docs 中
 "local" 作为默认模板的措辞（如有硬编码引用）。
 
-### 3.1 排除机制 `.pit-shared-exclude`（唯一的 PTL 代码改动）
+### 3.1 排除机制 `.ptl-shared-exclude`（唯一的 PTL 代码改动）
 
-**位置**：`~/.pi-triple/data/pi-config/<uuid>/.pit-shared-exclude`（模板目录内，
+**位置**：`~/.pi-triple/data/pi-config/<uuid>/.ptl-shared-exclude`（模板目录内，
 随模板存在/删除）。
 
 **格式**：
@@ -106,18 +106,18 @@ schema 适度扁平 + 封闭集用 enum，语义规则下沉 CLI。**
 
 **文档**：
 - `authoring.md`："按模板分化"路径更新为两种——移出共享层（物理隔离）或
-  `.pit-shared-exclude`（逻辑排除，推荐，条目仍留共享层供他模板用）。
+  `.ptl-shared-exclude`（逻辑排除，推荐，条目仍留共享层供他模板用）。
 - `architecture.md` 共享层一节：修正"按模板排除需移出共享层"的警示表述。
 
 ### 3.2 cli-dev 模板
 
-- `pit template new cli-dev`（UUID 自动生成）。
-- 写入 `.pit-shared-exclude`：
-  - `extensions`：排除共享层全部扩展，**仅保留 `pit-providers`（密钥 failover）
+- `ptl template new cli-dev`（UUID 自动生成）。
+- 写入 `.ptl-shared-exclude`：
+  - `extensions`：排除共享层全部扩展，**仅保留 `ptl-providers`（密钥 failover）
     与 `questionnaire.ts`（交互提问）**。已查证两者均不 import `_shared`，
-    故 `_shared` 一并排除（最终保留名单 = `pit-providers`、`questionnaire.ts`）。
+    故 `_shared` 一并排除（最终保留名单 = `ptl-providers`、`questionnaire.ts`）。
   - `skills`：`["*"]`（共享层 9 个技能全排除）。
-- 该模板 pi 启动后预期加载：扩展 2 个（pit-providers + questionnaire.ts）+ 模板本地技能 2 个。
+- 该模板 pi 启动后预期加载：扩展 2 个（ptl-providers + questionnaire.ts）+ 模板本地技能 2 个。
 
 ### 3.3 模板本地技能（真实目录，不受共享层补链影响）
 
@@ -133,7 +133,7 @@ schema 适度扁平 + 封闭集用 enum，语义规则下沉 CLI。**
 - 护栏：容器内新增工具前先按 dev-container-tools 技能（用户级，保留不纳入）的
   放置决策树判断 dev/sandbox/宿主归属。
 
-**`skills/pit-agent/`** —— agent 驾驶 PTL 技能（P2 的试验田）：
+**`skills/ptl-agent/`** —— agent 驾驶 PTL 技能（P2 的试验田）：
 - 覆盖当前已稳定的 `--json` 面：session（ls/stop/restore）、template ls、
   flow（run/status/ls/approve）、hub（programs/submit/run）、config get/set。
 - 约定：非 TTY 下禁用 TUI 命令；错误判读（ok/data/error 结构）；
@@ -142,11 +142,11 @@ schema 适度扁平 + 封闭集用 enum，语义规则下沉 CLI。**
 ### 3.4 验收标准
 
 1. `npm test` 全绿（含 §3.1 新测试）。
-2. `pit template ls`：`local` 消失，`root` 为默认；`cli-dev` 存在。
+2. `ptl template ls`：`local` 消失，`root` 为默认；`cli-dev` 存在。
 3. `cli-dev` 启动会话：`extensions/` 实际挂载仅保留项；`skills/` 仅 dev-cli +
-   pit-agent（+ 用户级技能，见风险 R1）；**重启后排除不被复活**。
+   ptl-agent（+ 用户级技能，见风险 R1）；**重启后排除不被复活**。
 4. 会话内实测：`yt-dlp --version`（wrapper）、`docker exec pi-platform-dev-1 rg --version`、
-   `pit ls --json` 各成功一次。
+   `ptl ls --json` 各成功一次。
 
 ## 4. 非目标与风险
 
@@ -157,7 +157,7 @@ schema 适度扁平 + 封闭集用 enum，语义规则下沉 CLI。**
 - **R1 用户级技能仍会加载**：`~/.agents/skills/`（obsidian-cli、agent-reach、
   grilling、dev-container-tools）由 pi 直接加载，排除机制管不到。P1 接受此残留；
   用户级治理是独立议题。
-- **R2 保留扩展的隐性依赖**：pit-providers/questionnaire.ts 若 import `_shared`
+- **R2 保留扩展的隐性依赖**：ptl-providers/questionnaire.ts 若 import `_shared`
   或已排除扩展，排除后启动报错。已静态检查（两者仅依赖 pi SDK 与 typebox，
   不引用 `_shared`），测试覆盖启动路径兜底。
 - **R3 容器名耦合**：`docker exec` 依赖 compose 生成的容器名，compose project

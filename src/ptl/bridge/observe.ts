@@ -1,29 +1,29 @@
 /**
- * bridge/observe.ts — pit hub observe 命令（F/WP4 Task 21）
+ * bridge/observe.ts — ptl hub observe 命令（F/WP4 Task 21）
  *
  * 远程观测（只读）——数据源为 Redis 会话痕迹（WP5 前先行交付）：
  *
- *   pit hub observe sessions [--json]         会话列表
- *   pit hub observe session <id> [--json]     会话详情（meta）
- *   pit hub observe trace <id> [--json]       trace 时间线
- *   pit hub observe events [--json]           事件查询（EventLog 代理——WP5 Task 28 交付）
+ *   ptl hub observe sessions [--json]         会话列表
+ *   ptl hub observe session <id> [--json]     会话详情（meta）
+ *   ptl hub observe trace <id> [--json]       trace 时间线
+ *   ptl hub observe events [--json]           事件查询（EventLog 代理——WP5 Task 28 交付）
  *
  * print/json 双模式：缺省表格打印；--json 输出原样 JSON。
  */
 import { PthClient } from "./client.js";
-import { printBanner } from "../pit/main.js";
+import { printBanner } from "../cli/main.js";
 
 export async function cmdHubObserve(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const what = passthrough[0];
   if (!what || !["sessions", "session", "trace", "events"].includes(what)) {
-    console.log("  用法: pit hub observe <sessions|session <id>|trace <id>|events> [--json]");
+    console.log("  用法: ptl hub observe <sessions|session <id>|trace <id>|events> [--json]");
     process.exit(1);
   }
 
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: pit config set pth.url <url>  &&  pit config set pth.token <token>");
+    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
     process.exit(1);
   }
 
@@ -58,7 +58,7 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
     if (what === "session") {
       const id = passthrough[1];
       if (!id) {
-        console.log("  用法: pit hub observe session <id>");
+        console.log("  用法: ptl hub observe session <id>");
         process.exit(1);
       }
       const meta = await client.getObserveSession(id);
@@ -84,7 +84,7 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
     if (what === "trace") {
       const id = passthrough[1];
       if (!id) {
-        console.log("  用法: pit hub observe trace <id>");
+        console.log("  用法: ptl hub observe trace <id>");
         process.exit(1);
       }
       const trace = await client.getObserveTrace(id);

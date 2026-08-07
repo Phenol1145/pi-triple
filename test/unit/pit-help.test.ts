@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { printHelp, printGettingStarted, printNamespaceHelp, printCommandHelp } from "../../src/ptl/pit/main.js";
+import { printHelp, printGettingStarted, printNamespaceHelp, printCommandHelp } from "../../src/ptl/cli/main.js";
 
 function capture(fn: () => void): string {
   const lines: string[] = [];
@@ -31,10 +31,10 @@ describe("printHelp（分组）", () => {
 describe("printGettingStarted", () => {
   it("含 onboard/start/tui dashboard/help 四条指引", () => {
     const out = capture(printGettingStarted);
-    expect(out).toContain("pit onboard");
-    expect(out).toContain("pit start");
-    expect(out).toContain("pit tui dashboard");
-    expect(out).toContain("pit help");
+    expect(out).toContain("ptl onboard");
+    expect(out).toContain("ptl start");
+    expect(out).toContain("ptl tui dashboard");
+    expect(out).toContain("ptl help");
   });
 });
 

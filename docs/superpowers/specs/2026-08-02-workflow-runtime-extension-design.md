@@ -1,15 +1,15 @@
-# pit-flow 运行时扩展：code 节点 + 指标声明（子项目 A）
+# ptl-flow 运行时扩展：code 节点 + 指标声明（子项目 A）
 
 - **日期**：2026-08-02
 - **状态**：设计（待评审）
-- **范围**：pit-flow 运行时（`src/ptl/flow/`）扩展两个能力——**code 节点**（确定性计算节点）与 **node 级 metrics 字段**（经济语义声明点）。并行扇出已有（v2 引擎 `findReadyNodes` + `maxParallel` + `needs` AND-join），本设计仅确认与竞价场景的适配。
+- **范围**：ptl-flow 运行时（`src/ptl/flow/`）扩展两个能力——**code 节点**（确定性计算节点）与 **node 级 metrics 字段**（经济语义声明点）。并行扇出已有（v2 引擎 `findReadyNodes` + `maxParallel` + `needs` AND-join），本设计仅确认与竞价场景的适配。
 - **定位**：市场经济体制（子项目 D）与团队社会结构（子项目 E）的**运行时地基**——竞价流程（出价并行 → 评分选主 → 结算）将表达为 flow，评分/选主/结算等确定性计算需要 code 节点；credit/elo/记忆的经济语义需要 metrics 声明点。
 
 ---
 
 ## 1. 背景与目标
 
-### 1.1 现状（pit-flow v2）
+### 1.1 现状（ptl-flow v2）
 
 - 图驱动执行：`findReadyNodes` 找就绪节点 → `maxParallel` 分批执行 → 结果经 edges 传播（`consumed`/`firedEpoch` 记账）→ hunger 检测兜底
 - 节点类型仅 `agent`（spawn pi 进程执行）与 `human`（人工门）
@@ -196,4 +196,4 @@ memory 域声明指向未来规则条目（子项目 B）——A 只做结构声
 
 ## 9. 总结
 
-pit-flow 运行时扩展为市场与社会结构铺路：code 节点把确定性经济计算（评分/选主/结算/汇率）纳入 flow 表达力；metrics 字段提供经济语义的声明点与事件化输出（消费方后置）；竞价 workflow 场景（并行出价 → AND-join 评分 → 确定性结算）作为验证用例证明表达力。纯运行时扩展，零经济依赖，向后兼容。
+ptl-flow 运行时扩展为市场与社会结构铺路：code 节点把确定性经济计算（评分/选主/结算/汇率）纳入 flow 表达力；metrics 字段提供经济语义的声明点与事件化输出（消费方后置）；竞价 workflow 场景（并行出价 → AND-join 评分 → 确定性结算）作为验证用例证明表达力。纯运行时扩展，零经济依赖，向后兼容。

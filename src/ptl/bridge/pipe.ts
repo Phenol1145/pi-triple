@@ -1,7 +1,7 @@
 /**
  * bridge/pipe.ts — 将 agent 程序的 systemPrompt + skills 注入 pi 启动参数
  *
- * 与 pit run 语义对称：本地调试时用相同 manifest → launchPi。
+ * 与 ptl run 语义对称：本地调试时用相同 manifest → launchPi。
  */
 import fs from "node:fs";
 import path from "node:path";

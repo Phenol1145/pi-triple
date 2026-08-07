@@ -1,5 +1,5 @@
 /**
- * pit-flow v2 — reducers + state field parsing
+ * ptl-flow v2 — reducers + state field parsing
  */
 
 export type Reducer = "last-wins" | "append" | "concat";

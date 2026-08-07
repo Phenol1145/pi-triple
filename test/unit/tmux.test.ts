@@ -9,12 +9,12 @@ import {
   configureTmuxServer,
   tmuxSessionName,
   formatAge,
-  listPitSessions,
+  listPtlSessions,
   sessionsForTenant,
-  hasPitSession,
-  killPitSession,
+  hasPtlSession,
+  killPtlSession,
   buildTmuxSessionArgs,
-  startPitSession,
+  startPtlSession,
 } from "../../src/ptl/tmux.js";
 
 describe("tmux module", () => {
@@ -23,8 +23,8 @@ describe("tmux module", () => {
   });
 
   describe("tmuxSessionName", () => {
-    it("prefixes with pit-", () => {
-      expect(tmuxSessionName("test")).toBe("pit-test");
+    it("prefixes with ptl-", () => {
+      expect(tmuxSessionName("test")).toBe("ptl-test");
     });
   });
 
@@ -48,58 +48,58 @@ describe("tmux module", () => {
     });
   });
 
-  describe("hasPitSession", () => {
+  describe("hasPtlSession", () => {
     it("false when tmux missing", () => {
       mockSpawnSync.mockReturnValue({ status: 1 });
-      expect(hasPitSession("test")).toBe(false);
+      expect(hasPtlSession("test")).toBe(false);
     });
-    it("uses exact match =pit-<name>", () => {
+    it("uses exact match =ptl-<name>", () => {
       mockSpawnSync.mockReturnValue({ status: 0 });
-      hasPitSession("myname");
+      hasPtlSession("myname");
       const calls = mockSpawnSync.mock.calls;
       const lastCall = calls[calls.length - 1];
       // Second call is has-session (first was hasTmux check)
-      expect(lastCall[1]).toContain("=pit-myname");
+      expect(lastCall[1]).toContain("=ptl-myname");
     });
   });
 
   describe("sessionsForTenant", () => {
-    it("prefix matches pit-<alias>-", () => {
+    it("prefix matches ptl-<alias>-", () => {
       mockSpawnSync
         .mockReturnValueOnce({ status: 0 }) // hasTmux
         .mockReturnValueOnce({
           status: 0,
-          stdout: "pit-local-xsdc\npit-local-a3f3\npit-other-123\nno-prefix\n",
+          stdout: "ptl-local-xsdc\nptl-local-a3f3\nptl-other-123\nno-prefix\n",
         });
-      expect(sessionsForTenant("local")).toEqual(["pit-local-xsdc", "pit-local-a3f3"]);
+      expect(sessionsForTenant("local")).toEqual(["ptl-local-xsdc", "ptl-local-a3f3"]);
     });
   });
 
-  describe("listPitSessions", () => {
+  describe("listPtlSessions", () => {
     it("parses session list", () => {
       const ts = Math.floor(Date.now() / 1000) - 3600;
       mockSpawnSync
         .mockReturnValueOnce({ status: 0 })
         .mockReturnValueOnce({
           status: 0,
-          stdout: `pit-coder:1:${ts}\npit-reviewer:2:${ts - 60}\nnot-pit:1:${ts}\n`,
+          stdout: `ptl-coder:1:${ts}\nptl-reviewer:2:${ts - 60}\nnot-ptl:1:${ts}\n`,
         });
-      const sessions = listPitSessions();
+      const sessions = listPtlSessions();
       expect(sessions).toHaveLength(2);
       expect(sessions[0]).toMatchObject({ name: "coder", windows: 1 });
       expect(sessions[1]).toMatchObject({ name: "reviewer", windows: 2 });
     });
   });
 
-  describe("killPitSession", () => {
+  describe("killPtlSession", () => {
     it("kills with exact match", () => {
       mockSpawnSync
         .mockReturnValueOnce({ status: 0 })
         .mockReturnValueOnce({ status: 0 });
-      killPitSession("test");
+      killPtlSession("test");
       const calls = mockSpawnSync.mock.calls;
       const killCall = calls[calls.length - 1];
-      expect(killCall[1][2]).toBe("=pit-test");
+      expect(killCall[1][2]).toBe("=ptl-test");
     });
   });
 
@@ -117,10 +117,10 @@ describe("tmux module", () => {
         },
         cwd: "/workspace",
       };
-      const args = buildTmuxSessionArgs(launch, "pit-test", true);
+      const args = buildTmuxSessionArgs(launch, "ptl-test", true);
       expect(args).toContain("-d");
       expect(args).toContain("-s");
-      expect(args).toContain("pit-test");
+      expect(args).toContain("ptl-test");
       expect(args).toContain("--");
       expect(args).toContain("pi");
       // Env vars injected
@@ -135,17 +135,17 @@ describe("tmux module", () => {
     });
   });
 
-  describe("startPitSession", () => {
+  describe("startPtlSession", () => {
     it("passes args to tmux with correct session name", () => {
       mockSpawnSync.mockReturnValue({ status: 0, stderr: "" });
       const launch = { cmd: "pi", args: [], env: { PI_TEMPLATE: "x" }, cwd: "/tmp" };
-      const result = startPitSession(launch, "myname", true);
+      const result = startPtlSession(launch, "myname", true);
       expect(result.status).toBe(0);
       const calls = mockSpawnSync.mock.calls;
       const tmuxCall = calls[calls.length - 1];
       expect(tmuxCall[1][0]).toBe("new-session");
       expect(tmuxCall[1]).toContain("-s");
-      expect(tmuxCall[1]).toContain("pit-myname");
+      expect(tmuxCall[1]).toContain("ptl-myname");
     });
   });
 

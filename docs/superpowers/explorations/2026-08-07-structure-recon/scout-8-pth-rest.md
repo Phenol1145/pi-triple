@@ -154,7 +154,7 @@ observability/metrics.ts → prom-client, ioredis（叶子）
 
 - **agent-lab.db**：`node:sqlite DatabaseSync`，由 agent-lab 扩展（PTH main.ts:86-100 动态 import `../../extensions/agent-lab/index.ts`）打开。
   - PTH 侧 env 契约：agent-engine.ts:674-681 `prepareSystemEnv()` —— 未设 `AGENT_LAB_DB_PATH` 时置 `path.join(DATA_DIR, "agent-lab", "agent-lab.db")`，另有 `AGENT_LAB_CONFIG_DIR` = `<DATA_DIR>/agent-lab/config`、`PI_AGENT_INSTANCE_ID`。
-  - PTL/pit 侧另有全局路径：`~/.pi-triple/data/shared/agent-lab/agent-lab.db`（src/ptl/pit/route.ts:95,98；ptl/lab-data/open-db.ts:49,55）。
+  - PTL/pit 侧另有全局路径：`~/.pi-triple/data/shared/agent-lab/agent-lab.db`（src/ptl/cli/route.ts:95,98；ptl/lab-data/open-db.ts:49,55）。
   - PTH **不直读**该 DB——observe/events 经 system-event-bus RPC（`platform:observe-events:request/response`）由常驻会话代理查询（routes-observe.ts:98-122 传 engine.querySystemEvents；engine 未接则 501）。
 
 ### 4.3 FS 目录（DATA_DIR，缺省 `./.pi-platform-data`，容器内 `/data`）

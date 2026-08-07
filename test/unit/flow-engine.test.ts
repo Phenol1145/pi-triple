@@ -162,7 +162,7 @@ describe("FlowEngine", () => {
   let runId: string;
 
   beforeEach(() => {
-    testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pit-flow-test-"));
+    testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-flow-test-"));
     store = new FlowStore(testRoot);
   });
 

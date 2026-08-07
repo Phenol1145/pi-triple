@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 let tmpHome: string;
-beforeEach(() => { tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "pit-tpl-")); process.env.PI_TRIPLE_HOME = tmpHome; });
+beforeEach(() => { tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-tpl-")); process.env.PI_TRIPLE_HOME = tmpHome; });
 afterEach(() => { delete process.env.PI_TRIPLE_HOME; fs.rmSync(tmpHome, { recursive: true, force: true }); });
 
 function writeCfg(obj: unknown) {

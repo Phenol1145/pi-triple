@@ -1,29 +1,29 @@
 /**
- * pit/agent — pit agent run/clean 命令
+ * ptl/agent — ptl agent run/clean 命令
  */
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { buildPiLaunch } from "../launcher.js";
-import { startPitSession } from "../tmux.js";
+import { startPtlSession } from "../tmux.js";
 import { loadConfig, getTemplateAlias, resolveDataDir } from "../config.js";
 import { configureTmuxServer, tmuxSessionName } from "../tmux.js";
 import { WorkspaceManager } from "../../shared/workspace/manager.js";
 import { detectPlatform } from "../../shared/platform/index.js";
 import fs from "node:fs";
 
-/** pit agent run <template> <task> [--workspace temp|main] */
+/** ptl agent run <template> <task> [--workspace temp|main] */
 export async function cmdAgentRun(flags: Record<string, string>, passthrough: string[]): Promise<void> {
   const templateInput = passthrough[0];
   if (!templateInput) {
-    console.log("  用法: pit agent run <template> <task> [--workspace temp|main]");
+    console.log("  用法: ptl agent run <template> <task> [--workspace temp|main]");
     process.exit(1);
   }
   const task = passthrough.slice(1).join(" ").trim();
   if (!task) {
     console.log("  \x1b[31m❌ 请提供 task（要执行的任务描述）\x1b[0m");
-    console.log("  用法: pit agent run <template> <task>");
+    console.log("  用法: ptl agent run <template> <task>");
     process.exit(1);
   }
 
@@ -68,7 +68,7 @@ export async function cmdAgentRun(flags: Record<string, string>, passthrough: st
   });
 
   const name = `agent-${agentId.slice(0, 8)}`;
-  const result = startPitSession(launch, name, true); // detach=true (background)
+  const result = startPtlSession(launch, name, true); // detach=true (background)
   if (result.status !== 0) {
     console.log(`  \x1b[31m❌ 会话启动失败: ${result.stderr}\x1b[0m`);
     process.exit(1);
@@ -86,7 +86,7 @@ export async function cmdAgentRun(flags: Record<string, string>, passthrough: st
   console.log(`  接入: \x1b[36mpit attach ${name}\x1b[0m`);
 }
 
-/** pit agent clean <agentId> [--all] */
+/** ptl agent clean <agentId> [--all] */
 export function cmdAgentClean(flags: Record<string, string>, passthrough: string[]): void {
   const config = loadConfig();
   const dataDir = resolveDataDir(config);
@@ -119,7 +119,7 @@ export function cmdAgentClean(flags: Record<string, string>, passthrough: string
 
   const agentId = passthrough[0];
   if (!agentId) {
-    console.log("  用法: pit agent clean <agentId>  或  pit agent clean --all");
+    console.log("  用法: ptl agent clean <agentId>  或  ptl agent clean --all");
     process.exit(1);
   }
 

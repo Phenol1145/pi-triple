@@ -21,7 +21,7 @@
 │
 └─ 刻意要对所有 pi 进程生效、绕过模板治理（少见，想清楚）
      → 用户级：~/.agents/skills/<name>
-       ⚠️ pit 完全看不见它：pit template ls 不统计、无法按模板管控
+       ⚠️ pit 完全看不见它：ptl template ls 不统计、无法按模板管控
 ```
 
 ## 核心机制（决定一切操作语义）
@@ -41,7 +41,7 @@ launcher 在**每次启动 pi 前**调用 `ensureTemplateLinks`
 | 按模板分化只有一条路 | 把条目**移出共享层**，作为真实文件放进目标模板本地 |
 | 同名遮蔽可行 | 模板本地放一个与共享层同名的真实条目，可临时覆盖共享版（共享链接不会再建） |
 
-bundled 扩展（随 pi-triple 包分发、`pit update --all` 覆盖式同步）由
+bundled 扩展（随 pi-triple 包分发、`ptl update --all` 覆盖式同步）由
 `.bundled-manifest` 托管——**自定义扩展不要与 bundled 同名**，否则升级时被覆盖/剪枝。
 
 ## 操作手册
@@ -51,7 +51,7 @@ bundled 扩展（随 pi-triple 包分发、`pit update --all` 覆盖式同步）
 **模板本地**（试验/私有）：
 
 ```bash
-T=~/.pi-triple/data/pi-config/<uuid>     # pit template ls 查 uuid
+T=~/.pi-triple/data/pi-config/<uuid>     # ptl template ls 查 uuid
 mkdir -p $T/skills/my-skill
 $EDITOR $T/skills/my-skill/SKILL.md      # 格式按上游 docs/skills.md
 ```
@@ -62,10 +62,10 @@ $EDITOR $T/skills/my-skill/SKILL.md      # 格式按上游 docs/skills.md
 S=~/.pi-triple/data/shared
 mkdir -p $S/skills/my-skill
 $EDITOR $S/skills/my-skill/SKILL.md
-# 无需手动 symlink —— 任一模板下次 pit start/pi 时自动挂载
+# 无需手动 symlink —— 任一模板下次 ptl start/pi 时自动挂载
 ```
 
-**从模板本地提升到共享层**：`pit shared init` 会把默认模板的条目整体提升
+**从模板本地提升到共享层**：`ptl shared init` 会把默认模板的条目整体提升
 （`promoteToShared`，同名冲突保留共享层版本）；也可手动 `mv` 后依赖自动补链。
 
 ### 新建 extension
@@ -74,7 +74,7 @@ $EDITOR $S/skills/my-skill/SKILL.md
 
 - npm 依赖：扩展旁放 `package.json` + `npm install`（上游约定，PTL 下同样有效）。
 - 需要跨会话共享状态的扩展（信箱/审计/DB）参考共享层内的
-  `pit-communicate` / `agent-lab`，数据落 `~/.pi-triple/data/shared/`。
+  `ptl-communicate` / `agent-lab`，数据落 `~/.pi-triple/data/shared/`。
 
 ### 卸载 / 收缩范围
 
@@ -88,8 +88,8 @@ $EDITOR $S/skills/my-skill/SKILL.md
 ### 查看现状
 
 ```bash
-pit template ls          # 各模板挂载的扩展/技能计数（只统计模板目录）
-pit shared status        # 共享层条目计数
+ptl template ls          # 各模板挂载的扩展/技能计数（只统计模板目录）
+ptl shared status        # 共享层条目计数
 ls ~/.agents/skills/     # 用户级"编外"技能（pit 不可见，需手动盘点）
 ```
 
@@ -99,11 +99,11 @@ ls ~/.agents/skills/     # 用户级"编外"技能（pit 不可见，需手动�
    superpowers `writing-skills` 指路 "runtime's skills directory" → 裸 pi 语义下
    agent 把新技能写进 `~/.agents/skills/`。对裸 pi 正确，对 PTL 是体制外：
    不受模板治理、无法分类盘点。**要求 agent 写技能时，请明确说"放进 PTL 共享层/
-   模板本地"**；验收时 `pit template ls` 计数应 +1。
+   模板本地"**；验收时 `ptl template ls` 计数应 +1。
 2. **市场安装 = 用户级**：pi 技能市场安装落到 `~/.agents/skills/`
    （lockfile `~/.agents/.skill-lock.json`），同样绕过模板治理；需要治理就手动迁入共享层。
 3. **删 symlink ≠ 卸载**：见上表，共享层条目的"按模板排除"只能通过移出共享层实现。
-4. **bundled 同名覆盖**：自定义扩展与 bundled 扩展同名 → `pit update --all` 时被
+4. **bundled 同名覆盖**：自定义扩展与 bundled 扩展同名 → `ptl update --all` 时被
    `syncBundledExtensions` 覆盖/剪枝。
 
 ## SDK 升级复检护栏
@@ -115,4 +115,4 @@ ls ~/.agents/skills/     # 用户级"编外"技能（pit 不可见，需手动�
 1. diff 新旧版 `docs/skills.md` 的 "Locations" 段与 `docs/extensions.md` 的
    "Extension Locations" 段；
 2. 有变化 → 同步更新本文与 `architecture.md` 共享层一节；无变化 → 免检；
-3. 升级后跑 `pit doctor` + `pit shared status` 确认挂载链路完好。
+3. 升级后跑 `ptl doctor` + `ptl shared status` 确认挂载链路完好。

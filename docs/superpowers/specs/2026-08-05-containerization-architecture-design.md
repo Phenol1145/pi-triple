@@ -27,7 +27,7 @@ F 阶段回答一个问题：**联邦骨架 v1.0 的概念（构件/空位/回�
 ```
 ┌─ 开发者机器（本机态）──────────────────────────────┐
 │  PTL CLI（保持本机 tmux 工具——本地构建/调试）        │
-│   └─ pit hub <...> ─────────────┐                  │
+│   └─ ptl hub <...> ─────────────┐                  │
 └──────────────────────────────────┼────────────────┘
                                     │ HTTP/SSE/WS（Bearer auth）
 ┌─ Docker Compose（联邦态）─────────▼────────────────┐
@@ -127,9 +127,9 @@ F 阶段回答一个问题：**联邦骨架 v1.0 的概念（构件/空位/回�
 
 ### 4.3 自修改模式（sandbox = 联邦内调试区）
 
-- sandbox 镜像内嵌 **pi + PTL + 扩展**（pit-communicate/pit-control 等）。
+- sandbox 镜像内嵌 **pi + PTL + 扩展**（ptl-communicate/ptl-control 等）。
 - **密钥策略（v0.2 裁决）**：sandbox **不持 LLM 密钥**——代码执行不需要 LLM；自修改调试需要 pi 调 LLM 时，**按需临时注入**（人工 `docker exec` 注入或 compose 临时 env，用完即撤——非常态持有）。
-- 自修改/构件开发场景：在 sandbox 内启动 PTL 会话（tmux 在 sandbox 容器内——本机语义在容器内成立），人类经 `pit hub debug`（§5.5）接入或治理节点经回退通道触发；调试产物 = **构件**，经 §5 构件上传通道回流 pth 填槽生效。
+- 自修改/构件开发场景：在 sandbox 内启动 PTL 会话（tmux 在 sandbox 容器内——本机语义在容器内成立），人类经 `ptl hub debug`（§5.5）接入或治理节点经回退通道触发；调试产物 = **构件**，经 §5 构件上传通道回流 pth 填槽生效。
 - 与骨架对齐：sandbox 是"系统内的构建区"——根回退节点透传的构件请求，人类在 sandbox（或本机 PTL）中补全。
 
 ### 4.4 sandbox 失效降级（I1——必须设计，非 happy path）
@@ -181,15 +181,15 @@ ComponentManifest = {
 骨架 v1.0：根回退节点把"图无法自处理的构件缺口"透传给人类（PTL 补全）。落地：
 
 - **pth 侧**：`fallback_requests` 队列（Redis）——`{requestId, slotHint, description, urgency, createdAt, status}`。
-- **生产者（v0.2 裁决：手动建单先行）**：`pit hub request`——**人工创建构件请求**（模拟根回退节点的透传行为；自动触发判定[watchdog/T 参数]未实例化——骨架 §8 遗留，留 E 阶段接线）。通道先可用、可演示、可验收；dispatch routing.failed 自动挂钩列为 E 候选。
-- **PTL 侧**：`pit hub requests`（拉取待补全请求列表）/ `pit hub respond <requestId> <dir>`（构建构件→上传→关联 requestId 闭合）。
+- **生产者（v0.2 裁决：手动建单先行）**：`ptl hub request`——**人工创建构件请求**（模拟根回退节点的透传行为；自动触发判定[watchdog/T 参数]未实例化——骨架 §8 遗留，留 E 阶段接线）。通道先可用、可演示、可验收；dispatch routing.failed 自动挂钩列为 E 候选。
+- **PTL 侧**：`ptl hub requests`（拉取待补全请求列表）/ `ptl hub respond <requestId> <dir>`（构建构件→上传→关联 requestId 闭合）。
 - **通道复用**：respond 走 §5.1 构件上传 API + requestId 关联（非新协议）。
-- 人类补全流程闭环：（手动/未来自动）建单 → `pit hub requests` 可见 → 本地/sandbox 构建 → `pit hub respond` 上传填槽 → 请求闭合（审计）。
+- 人类补全流程闭环：（手动/未来自动）建单 → `ptl hub requests` 可见 → 本地/sandbox 构建 → `ptl hub respond` 上传填槽 → 请求闭合（审计）。
 
 ### 5.5 远程观测与调试接入
 
-- **`pit hub observe`**：远程会话列表/会话详情/trace 时间线/事件查询（PTH 网关新增只读路由——复用 Redis 会话痕迹 + **agent-lab EventLog 查询**[经常驻系统会话代理——DB 在 agent-lab 卷，pth 主进程不直接读，§6.0]）。
-- **`pit hub debug <target>`**：接入 sandbox 自修改模式（§4.3）——WebSocket 交互式会话（vs 现 hub run 的 SSE 单向）。
+- **`ptl hub observe`**：远程会话列表/会话详情/trace 时间线/事件查询（PTH 网关新增只读路由——复用 Redis 会话痕迹 + **agent-lab EventLog 查询**[经常驻系统会话代理——DB 在 agent-lab 卷，pth 主进程不直接读，§6.0]）。
+- **`ptl hub debug <target>`**：接入 sandbox 自修改模式（§4.3）——WebSocket 交互式会话（vs 现 hub run 的 SSE 单向）。
 - 现有 `hub submit/run/programs/dev` 保留（run 语义升级为"以最新版本临时运行"，长期定位被"装配常驻"替代——见 §8 演进）。
 
 ---
@@ -255,7 +255,7 @@ workloop checkpoint/resume 能力已存在——定时/事件触发的 dispatch 
 | 构件（更新包） | §5.1 ComponentManifest 泛化（多类型构件上传） |
 | 空位 / 填槽生效 | §5.2 targetSlot 绑定 + ComponentStore 登记生效 |
 | 骨架存 PTH（可序列化） | §3 pth 容器单实例 + 卷持久化（骨架=system-graph 构件，经 skeleton-update 类型上传） |
-| 根回退节点 → PTL | §5.4 fallback_requests 队列 + `pit hub requests/respond` |
+| 根回退节点 → PTL | §5.4 fallback_requests 队列 + `ptl hub requests/respond` |
 | PTL = builder's workbench | §5 全部（本机 PTL + hub 交互层）+ §4.3 sandbox 自修改模式 |
 | 机制性通路（扩展） | §6 定时触发/事件驱动（通路的新触发源——常驻系统会话承载，dispatch 唯一入口复用） |
 | 治理节点/回退节点实例化 | §6.0 **常驻系统会话 = system-governor 实例化雏形**（首个实例化）；legalAuth 声明式预留（强制校验待图→治理者映射，E 阶段） |

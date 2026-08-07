@@ -115,7 +115,7 @@ export async function interactiveStart(options: PickerOptions): Promise<{
 
     const modeItems: SelectItem[] = [
       { label: "接入", value: "fg", hint: "tmux 会话，立即接入（Ctrl+B d 脱离）" },
-      { label: "后台", value: "bg", hint: "tmux 后台运行，pit attach 接入" },
+      { label: "后台", value: "bg", hint: "tmux 后台运行，ptl attach 接入" },
     ];
 
     function Wizard() {

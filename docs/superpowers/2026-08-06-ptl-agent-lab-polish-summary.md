@@ -16,8 +16,8 @@
 | commit | 内容 |
 |---|---|
 | `2e91a4a` | `docs/ptl/templates/AGENTS.md.tpl` 模板源 + `src/ptl/template-agents.ts`（`renderTemplateAgents`/`ensureTemplateAgents`/`AGENTS_TPL_PATH`，幂等写入） |
-| `87d3076` | 接入 `pit template new`（新模板即生成）+ launcher 启动补写（既有模板幂等回填） |
-| `a945d39` | `pit doctor` 新增 AGENTS.md 检查项（缺失/占位符残留即告警） |
+| `87d3076` | 接入 `ptl template new`（新模板即生成）+ launcher 启动补写（既有模板幂等回填） |
+| `a945d39` | `ptl doctor` 新增 AGENTS.md 检查项（缺失/占位符残留即告警） |
 
 ### 机制
 - 复用 pi 原生上下文加载：`PI_CODING_AGENT_DIR` 已指向模板目录 → pi 启动时自动加载 `data/pi-config/<tid>/AGENTS.md`

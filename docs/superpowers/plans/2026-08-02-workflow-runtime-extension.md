@@ -1,8 +1,8 @@
-# pit-flow 运行时扩展（code 节点 + metrics 声明）Implementation Plan
+# ptl-flow 运行时扩展（code 节点 + metrics 声明）Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 为 pit-flow v2 引擎添加 code 节点（确定性计算）与 node 级 metrics 声明（经济语义声明点），使竞价 workflow（并行出价 → AND-join 评分 → 确定性选主/结算）可表达、可运行、可测试。
+**Goal:** 为 ptl-flow v2 引擎添加 code 节点（确定性计算）与 node 级 metrics 声明（经济语义声明点），使竞价 workflow（并行出价 → AND-join 评分 → 确定性选主/结算）可表达、可运行、可测试。
 
 **Architecture:** 在既有 v2 图驱动引擎（`src/ptl/flow/engine.ts` 的 executeWave：findReadyNodes → maxParallel 分批 → 结果合并）上扩展：schema 加 `code` 类型与 `metrics` 字段；新增 `FlowCodeRegistry`（白名单注册表，同进程调用确定性函数）；code 节点输出 JSON 字符串，写值提取扩展 `{{output.path}}`；metrics 节点完成时求值（state/input/result 三作用域）后追加到 `runDir/metrics.jsonl`。v1 引擎不动。
 
@@ -169,7 +169,7 @@ Expected: FAIL（模块不存在）
 - [ ] **Step 3: 实现**（新建 `src/ptl/flow/code-registry.ts`）
 
 ```typescript
-// pit-flow code 节点函数注册表（白名单：flow 只能引用已注册函数）
+// ptl-flow code 节点函数注册表（白名单：flow 只能引用已注册函数）
 
 export interface CodeFnContext {
   state: Readonly<Record<string, unknown>>;

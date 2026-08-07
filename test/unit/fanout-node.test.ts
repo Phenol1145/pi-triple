@@ -180,7 +180,7 @@ describe("fanout node schema validation", () => {
 describe("fanout node execution scenarios", () => {
   let store: FlowStore;
   let runFlowV2: (store: FlowStore, runId: string) => Promise<RunResult>;
-  const testDir = "/tmp/pit-flow-test-fanout";
+  const testDir = "/tmp/ptl-flow-test-fanout";
 
   beforeEach(() => {
     // Clean up any existing test data
@@ -435,7 +435,7 @@ describe("fanout node execution scenarios", () => {
 describe("fanout node default maxFanout behavior", () => {
   let store: FlowStore;
   let runFlowV2: (store: FlowStore, runId: string) => Promise<RunResult>;
-  const testDir = "/tmp/pit-flow-test-fanout-default";
+  const testDir = "/tmp/ptl-flow-test-fanout-default";
 
   beforeEach(() => {
     const fs = require("node:fs") as typeof import("node:fs");
@@ -484,7 +484,7 @@ describe("fanout node default maxFanout behavior", () => {
 
 describe("fanout body agent prompt interpolation", () => {
   let store: FlowStore;
-  const testDir = "/tmp/pit-flow-test-fanout-agent-prompt";
+  const testDir = "/tmp/ptl-flow-test-fanout-agent-prompt";
 
   beforeEach(() => {
     const fs = require("node:fs") as typeof import("node:fs");

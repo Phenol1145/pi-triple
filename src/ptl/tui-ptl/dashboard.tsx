@@ -1,4 +1,4 @@
-// src/ptl/tui-pit/dashboard.tsx — 总览面板（master-detail）
+// src/ptl/tui-ptl/dashboard.tsx — 总览面板（master-detail）
 //
 // Health 紧凑行 + 三个表（Templates / Sessions / Trace，Tab 切换焦点）+
 // 水平聚焦栏 + 详情区（聚焦表选中项）+ 会话操作模态菜单（Enter 打开，Esc 关闭）。
@@ -231,7 +231,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
           {focus === 0 ? <Text dimColor>{scrollHint(tplW, templates.length)}</Text> : null}
         </Text>
         {focus === 0 && (templates.length === 0 ? (
-          <Text dimColor>  无模板 — 创建: pit template new &lt;alias&gt;</Text>
+          <Text dimColor>  无模板 — 创建: ptl template new &lt;alias&gt;</Text>
         ) : templates.length > 0 ? (
           <DataTable
             columns={tplCols}
@@ -250,7 +250,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
           {focus === 1 ? <Text dimColor>{scrollHint(sessW, sessions.length)}</Text> : null}
         </Text>
         {focus === 1 && (sessions.length === 0 ? (
-          <Text dimColor>  无会话 — 启动: pit start --bg --name &lt;name&gt;</Text>
+          <Text dimColor>  无会话 — 启动: ptl start --bg --name &lt;name&gt;</Text>
         ) : sessions.length > 0 ? (
           <DataTable
             columns={sessCols}
@@ -270,7 +270,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
           {focus === 2 ? <Text dimColor>{scrollHint(traceW, traces.length)}</Text> : null}
         </Text>
         {focus === 2 && (traces.length === 0 ? (
-          <Text dimColor>  无追踪 — 运行竞价任务（pit hub submit / flow run 等）后显示</Text>
+          <Text dimColor>  无追踪 — 运行竞价任务（ptl hub submit / flow run 等）后显示</Text>
         ) : traces.length > 0 ? (
           <DataTable
             columns={traceCols}

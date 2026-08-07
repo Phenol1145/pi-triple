@@ -1,8 +1,8 @@
 /**
- * pit/main — banner / 分组帮助 / 上手指引 / 单命令详情 渲染
+ * ptl/main — banner / 分组帮助 / 上手指引 / 单命令详情 渲染
  */
 
-import { getPitVersion } from "../version.js";
+import { getPtlVersion } from "../version.js";
 
 export function printBanner(): void {
   console.log("");
@@ -10,7 +10,7 @@ export function printBanner(): void {
   console.log("");
 }
 
-export function getVersion(): string { return getPitVersion(); }
+export function getVersion(): string { return getPtlVersion(); }
 
 // ─── 分组帮助 ───────────────────────────────────────────────
 
@@ -85,7 +85,7 @@ const HELP_GROUPS: HelpGroup[] = [
 
 export function printHelp(): void {
   printBanner();
-  console.log("  用法: pit <command> [options]");
+  console.log("  用法: ptl <command> [options]");
   console.log("");
   for (const g of HELP_GROUPS) {
     const intro = g.intro ? `  \x1b[2m— ${g.intro}\x1b[0m` : "";
@@ -96,18 +96,18 @@ export function printHelp(): void {
     console.log("");
   }
   console.log("  \x1b[2m选项: --template <alias|uuid>  --project <name>  --model <model>\x1b[0m");
-  console.log("  \x1b[2m详情: pit help <cmd>   示例: pit help start\x1b[0m");
+  console.log("  \x1b[2m详情: ptl help <cmd>   示例: ptl help start\x1b[0m");
   console.log("");
 }
 
-// ─── 上手指引（裸 pit）──────────────────────────────────────
+// ─── 上手指引（裸 ptl）──────────────────────────────────────
 
 export function printGettingStarted(): void {
   printBanner();
-  console.log("  首次使用？   \x1b[36mpit onboard\x1b[0m");
-  console.log("  日常开发？   \x1b[36mpit start\x1b[0m");
-  console.log("  可视化？     \x1b[36mpit tui dashboard\x1b[0m");
-  console.log("  查看全部？   \x1b[36mpit help\x1b[0m");
+  console.log("  首次使用？   \x1b[36mptl onboard\x1b[0m");
+  console.log("  日常开发？   \x1b[36mptl start\x1b[0m");
+  console.log("  可视化？     \x1b[36mptl tui dashboard\x1b[0m");
+  console.log("  查看全部？   \x1b[36mptl help\x1b[0m");
   console.log("");
 }
 
@@ -178,7 +178,7 @@ export function printNamespaceHelp(ns: string): void {
   const rows = NAMESPACE_HELP[ns];
   if (!rows) { printHelp(); return; }
   console.log("");
-  console.log(`  \x1b[36m\x1b[1mpit ${ns}\x1b[0m`);
+  console.log(`  \x1b[36m\x1b[1mptl ${ns}\x1b[0m`);
   console.log("");
   for (const [cmd, desc] of rows) {
     console.log(`    ${cmd.padEnd(38)} \x1b[2m${desc}\x1b[0m`);
@@ -190,15 +190,15 @@ export function printNamespaceHelp(ns: string): void {
 
 const COMMAND_HELP: Record<string, { usage: string; desc: string; flags?: Array<[string, string]>; examples?: string[] }> = {
   start: {
-    usage: "pit start [--template x] [--bg --name n] [--model m]",
+    usage: "ptl start [--template x] [--bg --name n] [--model m]",
     desc: "启动 tmux 会话并接入（日常主操作）",
     flags: [["--template <alias|uuid>", "指定模板"], ["--bg", "纯后台不接入"], ["--name <n>", "命名会话"], ["--model <m>", "覆盖模型"]],
-    examples: ["pit start", "pit start --template dev", "pit start --bg --name coding"],
+    examples: ["ptl start", "ptl start --template dev", "ptl start --bg --name coding"],
   },
-  tui: { usage: "pit tui [dashboard|lab]", desc: "打开可视化 TUI 面板（默认 dashboard）" },
-  hub: { usage: "pit hub <submit|run|programs|dev|request|requests|respond|observe|debug>", desc: "PTH 远端程序管理 + 回退请求通道 + 观测 + 调试" },
-  onboard: { usage: "pit onboard", desc: "首次导引向导：环境检查→配置→模板→验证" },
-  doctor: { usage: "pit doctor", desc: "完整健康检查 + 交互修复" },
+  tui: { usage: "ptl tui [dashboard|lab]", desc: "打开可视化 TUI 面板（默认 dashboard）" },
+  hub: { usage: "ptl hub <submit|run|programs|dev|request|requests|respond|observe|debug>", desc: "PTH 远端程序管理 + 回退请求通道 + 观测 + 调试" },
+  onboard: { usage: "ptl onboard", desc: "首次导引向导：环境检查→配置→模板→验证" },
+  doctor: { usage: "ptl doctor", desc: "完整健康检查 + 交互修复" },
 };
 
 export function printCommandHelp(cmd: string): void {

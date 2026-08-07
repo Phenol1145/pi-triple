@@ -49,7 +49,7 @@ vi.mock("../../src/ptl/session/session-store.js", () => {
   return { listAllSessions: () => SESSIONS, listAllTraces: () => TRACES };
 });
 
-import { DashboardPage } from "../../src/ptl/tui-pit/dashboard.js";
+import { DashboardPage } from "../../src/ptl/tui-ptl/dashboard.js";
 
 afterEach(cleanup);
 

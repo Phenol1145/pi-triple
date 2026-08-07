@@ -815,7 +815,7 @@ test("quorum: abstentions count into denominator", () => {
 - Test: `extensions/agent-lab/test/memory-comms.test.ts`
 
 **Interfaces:**
-- Consumes: 无（pit-communicate 桥接为可选传输注入——v1 测试用内存传输 mock）
+- Consumes: 无（ptl-communicate 桥接为可选传输注入——v1 测试用内存传输 mock）
 - Produces:
 ```typescript
 export interface CommsMessage { msgId: string; from: string; to: string; tapeFragment: string; type?: string; timestamp: number; }
@@ -1071,6 +1071,6 @@ test("mounted sdk.comms.send delivers via channel", () => {
 ## Self-Review 记录
 
 - **Spec 覆盖**：§2 schema（T1）/ §3 语言体系（T2 EBNF、T3 规则链、T4 方言）/ §4 沉淀（T6 管道、T7 水位线）/ §5 检索（T5 store）/ §6 公域审核（T8 fork-merge、T9 审核链）/ §8 通讯（T10 comms）/ §7 DSP（T11）/ sdk 集成（T12）。§9 观测事件在 T6（memory_tx 回调）/T9（审计事件表）落点；§10 非目标（向量/自然语言方言/嵌套）未涉及；§12 隐藏依赖中 identity map（T10）、EBNF 手写 parser（T2）落地
-- **已知留白（计划阶段不展开，需在实施中注意）**：T9 审核链与 T8 的接线（审核批准 → merge 的调用链在 T8/T9 测试分别覆盖，集成点留 T12 冒烟后）；T10 与 pit-communicate 真实传输的桥接（v1 内存 transport + 接口，真实桥接在装配层子项目 C 接入——spec §12 承认）；T6 重试上限 ≤2 的计数持久化细节
+- **已知留白（计划阶段不展开，需在实施中注意）**：T9 审核链与 T8 的接线（审核批准 → merge 的调用链在 T8/T9 测试分别覆盖，集成点留 T12 冒烟后）；T10 与 ptl-communicate 真实传输的桥接（v1 内存 transport + 接口，真实桥接在装配层子项目 C 接入——spec §12 承认）；T6 重试上限 ≤2 的计数持久化细节
 - **类型一致性**：createEntry/validateEntryStructure/AXIOM_RULE_ID（T1）→ T3/T6/T8/T11/T12 使用；parseEbnf/validateAgainstGrammar（T2）→ T3；MemoryStore（T5）→ T6-T12；MemoryPipeline（T6）→ T12；WatermarkManager（T7）→ T11；PublicDomainStore（T8）→ 后续 C；AuditChain（T9）→ 后续 C；CommsChannel/IdentityMap（T10）→ T12；DspBuilder（T11）→ T12。签名跨任务一致
 - **依赖序**：T1→T2 并行可行（互不依赖）；T3 依赖 T1+T2；T4 独立；T5 依赖 T1；T6 依赖 T3+T5；T7 依赖 T5；T8 依赖 T5；T9 独立；T10 独立；T11 依赖 T5+T7；T12 依赖 T6+T10+T11（+T1 类型）

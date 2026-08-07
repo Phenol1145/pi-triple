@@ -1,5 +1,5 @@
 /**
- * pit-flow effect 节点函数注册表（白名单 + 幂等）。
+ * ptl-flow effect 节点函数注册表（白名单 + 幂等）。
  *
  * D2 effect 编写契约（ruling 1——所有 effect fn 必须遵守）：
  * 1. fn 内部按业务键幂等：同一业务键重复执行必须产生相同副作用，第二次起应为 no-op。

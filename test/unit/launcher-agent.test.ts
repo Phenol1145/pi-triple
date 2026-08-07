@@ -10,7 +10,7 @@ describe("buildPiLaunch agent options", () => {
   let templateId: string;
 
   beforeEach(() => {
-    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "pit-agent-test-"));
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-agent-test-"));
     process.env.PI_TRIPLE_HOME = tmpHome;
     templateId = randomUUID();
     // minimal pi-config structure

@@ -270,7 +270,7 @@ export function suggest(stats: LoadStats): BatchSuggestion {
 
 > **v1 交付范围标注（fix wave 评审确认）**：v1 交付底层原语（BatchManager.spawnBatch/killBatch/listBatches/suggest + stats.collectStats/suggest）；`/pth batch` 命令注册（add/remove/status/suggest/stats）移交 PTH 装配层。
 >
-> **命令命名决策（2026-08-07 用户裁决）**：PTH 侧命令前缀统一为 `/pth`（弃用 agent-lab 旧 `/lab` 前缀）；PTL CLI 命令由 `pit <command>` 更名为 `ptl <command>`（弃用旧名 pit）。
+> **命令命名决策（2026-08-07 用户裁决）**：PTH 侧命令前缀统一为 `/pth`（弃用 agent-lab 旧 `/lab` 前缀）；PTL CLI 命令由 `ptl <command>` 更名为 `ptl <command>`（弃用旧名 pit）。
 
 ## 10. 与 C/A spec 的接口
 

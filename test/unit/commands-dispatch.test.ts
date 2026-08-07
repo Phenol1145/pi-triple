@@ -32,32 +32,32 @@ describe("resolveDispatch — exec 目标", () => {
 });
 
 describe("resolveDispatch — handoff 目标（新命令名）", () => {
-  it("pi/attach/switch → pit 子进程", () => {
-    expect(resolveDispatch("pi", [])).toEqual({ kind: "handoff", cmd: "pit", args: ["pi"] });
-    expect(resolveDispatch("attach", ["coding"])).toEqual({ kind: "handoff", cmd: "pit", args: ["attach", "coding"] });
-    expect(resolveDispatch("switch", ["coding"])).toEqual({ kind: "handoff", cmd: "pit", args: ["switch", "coding"] });
+  it("pi/attach/switch → ptl 子进程", () => {
+    expect(resolveDispatch("pi", [])).toEqual({ kind: "handoff", cmd: "ptl", args: ["pi"] });
+    expect(resolveDispatch("attach", ["coding"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["attach", "coding"] });
+    expect(resolveDispatch("switch", ["coding"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["switch", "coding"] });
   });
-  it("hub submit/run/programs/dev → pit hub …（新命令名）", () => {
-    expect(resolveDispatch("hub", ["submit", "my-agent"])).toEqual({ kind: "handoff", cmd: "pit", args: ["hub", "submit", "my-agent"] });
-    expect(resolveDispatch("hub", ["run", "reviewer", "pr=1"])).toEqual({ kind: "handoff", cmd: "pit", args: ["hub", "run", "reviewer", "pr=1"] });
-    expect(resolveDispatch("hub", ["programs"])).toEqual({ kind: "handoff", cmd: "pit", args: ["hub", "programs"] });
-    expect(resolveDispatch("hub", ["dev", "dir"])).toEqual({ kind: "handoff", cmd: "pit", args: ["hub", "dev", "dir"] });
+  it("hub submit/run/programs/dev → ptl hub …（新命令名）", () => {
+    expect(resolveDispatch("hub", ["submit", "my-agent"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["hub", "submit", "my-agent"] });
+    expect(resolveDispatch("hub", ["run", "reviewer", "pr=1"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["hub", "run", "reviewer", "pr=1"] });
+    expect(resolveDispatch("hub", ["programs"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["hub", "programs"] });
+    expect(resolveDispatch("hub", ["dev", "dir"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["hub", "dev", "dir"] });
   });
   it("hub 无/未知子命令 → null", () => {
     expect(resolveDispatch("hub", [])).toBeNull();
     expect(resolveDispatch("hub", ["bogus"])).toBeNull();
   });
-  it("tui dashboard/lab → pit tui …；其他 → null", () => {
-    expect(resolveDispatch("tui", ["dashboard"])).toEqual({ kind: "handoff", cmd: "pit", args: ["tui", "dashboard"] });
-    expect(resolveDispatch("tui", ["lab"])).toEqual({ kind: "handoff", cmd: "pit", args: ["tui", "lab"] });
+  it("tui dashboard/lab → ptl tui …；其他 → null", () => {
+    expect(resolveDispatch("tui", ["dashboard"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["tui", "dashboard"] });
+    expect(resolveDispatch("tui", ["lab"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["tui", "lab"] });
     expect(resolveDispatch("tui", [])).toBeNull();
     expect(resolveDispatch("tui", ["bogus"])).toBeNull();
   });
-  it("flow 12 子命令 → pit flow …；未知 → null", () => {
-    expect(resolveDispatch("flow", ["run", "f.json", "k=v"])).toEqual({ kind: "handoff", cmd: "pit", args: ["flow", "run", "f.json", "k=v"] });
-    expect(resolveDispatch("flow", ["ls"])).toEqual({ kind: "handoff", cmd: "pit", args: ["flow", "ls"] });
-    expect(resolveDispatch("flow", ["approve", "r1"])).toEqual({ kind: "handoff", cmd: "pit", args: ["flow", "approve", "r1"] });
-    expect(resolveDispatch("flow", ["validate", "f.json"])).toEqual({ kind: "handoff", cmd: "pit", args: ["flow", "validate", "f.json"] });
+  it("flow 12 子命令 → ptl flow …；未知 → null", () => {
+    expect(resolveDispatch("flow", ["run", "f.json", "k=v"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["flow", "run", "f.json", "k=v"] });
+    expect(resolveDispatch("flow", ["ls"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["flow", "ls"] });
+    expect(resolveDispatch("flow", ["approve", "r1"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["flow", "approve", "r1"] });
+    expect(resolveDispatch("flow", ["validate", "f.json"])).toEqual({ kind: "handoff", cmd: "ptl", args: ["flow", "validate", "f.json"] });
     expect(resolveDispatch("flow", ["bogus"])).toBeNull();
   });
   it("未知命令 → null", () => {
@@ -84,7 +84,7 @@ describe("dispatchCommand — 执行", () => {
   it("hub submit → handoff 结果（不 spawn）", async () => {
     const r = await dispatchCommand("hub", ["submit", "my-agent"]);
     expect(r.ok).toBe(true);
-    expect(r.handoff).toEqual({ cmd: "pit", args: ["hub", "submit", "my-agent"] });
+    expect(r.handoff).toEqual({ cmd: "ptl", args: ["hub", "submit", "my-agent"] });
   });
   it("detach（非 tmux 环境）→ NOT_IN_TMUX 错误", async () => {
     // 隔离：测试进程可能继承真实 TMUX env——若不隔离，detach-client 会

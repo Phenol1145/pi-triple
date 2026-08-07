@@ -1,5 +1,5 @@
 /**
- * pit/route — 命令路由决策（纯函数）+ tui/hub 分发实现（依赖注入，便于测试）
+ * ptl/route — 命令路由决策（纯函数）+ tui/hub 分发实现（依赖注入，便于测试）
  *
  * 纯决策部分（resolveTuiPanel / getDeprecatedMigration / 常量表）无副作用；
  * cmdTui/cmdHub 通过注入 launcher/handlers 实现可测试。
@@ -39,12 +39,12 @@ export type HubCommand = (typeof HUB_COMMANDS)[number];
 // ─── deprecated（clean break：旧命令仅提示迁移）────────────────
 
 export const DEPRECATED_COMMANDS: Record<string, string> = {
-  ui: "pit tui dashboard",
-  lab: "pit tui lab",
-  submit: "pit hub submit",
-  run: "pit hub run",
-  programs: "pit hub programs",
-  dev: "pit hub dev",
+  ui: "ptl tui dashboard",
+  lab: "ptl tui lab",
+  submit: "ptl hub submit",
+  run: "ptl hub run",
+  programs: "ptl hub programs",
+  dev: "ptl hub dev",
 };
 
 /** 旧命令 → 迁移提示文案；未废弃返回 null。 */
@@ -68,8 +68,8 @@ export const defaultTuiLauncher: TuiLauncher = async (opts) => {
   const React = (await import("react")).default;
 
   if (opts.panel === "dashboard") {
-    const { PitApp } = await import("../tui-pit/app.js");
-    render(React.createElement(PitApp), { exitOnCtrlC: false });
+    const { PtlApp } = await import("../tui-ptl/app.js");
+    render(React.createElement(PtlApp), { exitOnCtrlC: false });
     return;
   }
 
@@ -100,7 +100,7 @@ export const defaultTuiLauncher: TuiLauncher = async (opts) => {
   render(React.createElement(LabApp, { templateId, templateAlias, globalTelemetry: flags.global === "true" }), { exitOnCtrlC: false });
 };
 
-/** pit tui [dashboard|lab] — 决策 + 调用注入的 launcher。 */
+/** ptl tui [dashboard|lab] — 决策 + 调用注入的 launcher。 */
 export async function cmdTui(
   subcommand: string | undefined,
   flags: Record<string, string>,
@@ -136,7 +136,7 @@ export const defaultHubHandlers: HubHandlers = {
   debug: cmdHubDebug,
 };
 
-/** pit hub <submit|run|programs|dev> — 分发到 bridge 命令；无/未知子命令打印命名空间帮助。 */
+/** ptl hub <submit|run|programs|dev> — 分发到 bridge 命令；无/未知子命令打印命名空间帮助。 */
 export async function cmdHub(
   subcommand: string | undefined,
   passthrough: string[],

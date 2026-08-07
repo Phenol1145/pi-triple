@@ -5,7 +5,7 @@
 | | PTL（Pi-Triple-Lite） | PTH（Pi-Triple-Heavy） |
 |---|----------------------|------------------------|
 | **定位** | 轻量开发/调试工具链 | agent 联邦平台 |
-| **入口** | `pit` CLI | `pth` server（HTTP/SSE/WebSocket） |
+| **入口** | `ptl` CLI | `pth` server（HTTP/SSE/WebSocket） |
 | **运行时** | pi 进程 × tmux | AgentEngine + Redis + BullMQ |
 | **适用** | 本地工作站 · 交互式调试 · 个人/小组 | 服务器部署 · 程序化 API · 集中治理 |
 | **来源** | `src/ptl/` | `src/pth/` |
@@ -23,37 +23,37 @@ git clone <repo> && cd pi-platform
 npm install && npm link
 
 # 2. 导引（检查环境 + 安装提供商 + 创建租户 + 迁移扩展）
-pit onboard
+ptl onboard
 
 # 3. 创建模板（首次）
-pit template new local
+ptl template new local
 
 # 4. 启动
-pit start                     # tmux 会话，立即接入
-pit start --bg --name coding  # 后台启动
-pit pi                        # 原生前台（无 tmux）
+ptl start                     # tmux 会话，立即接入
+ptl start --bg --name coding  # 后台启动
+ptl pi                        # 原生前台（无 tmux）
 
 # 4. 控制面板
-pit tui dashboard              # 系统总控 TUI
-pit tui lab                    # 模型调试 TUI
+ptl tui dashboard              # 系统总控 TUI
+ptl tui lab                    # 模型调试 TUI
 ```
 
-### pit CLI 命令速查
+### ptl CLI 命令速查
 
 | 命令 | 说明 |
 |------|------|
-| `pit start` | 创建 tmux 会话并立即接入（默认；`--bg` 纯后台，`--name` 命名） |
-| `pit pi` | 原生前台启动 pi（无 tmux，pi 原生体验） |
-| `pit attach/switch/detach` | 接入 / 瞬移切换 / 脱离会话 |
-| `pit ls / pit stop` | 列出 / 停止会话 |
-| `pit tui dashboard` / `pit tui lab` | 系统控制 / 模型调试 TUI |
-| `pit flow run/approve/reject/set/edit...` | pit-flow 波次工作流引擎 |
-| `pit hub submit/run/dev/programs` | PTL→PTH 桥（agent 程序提交/运行） |
-| `pit template ls/new/rm/rename` | 模板管理 |
-| `pit config get/set/unset` | 配置读写 |
-| `pit update --all` | 更新 pi + 扩展 + 内置同步 |
-| `pit doctor` / `pit onboard` | 环境诊断 / 首次导引 |
-| `pit install --shared <pkg>` | 安装共享扩展 |
+| `ptl start` | 创建 tmux 会话并立即接入（默认；`--bg` 纯后台，`--name` 命名） |
+| `ptl pi` | 原生前台启动 pi（无 tmux，pi 原生体验） |
+| `ptl attach/switch/detach` | 接入 / 瞬移切换 / 脱离会话 |
+| `ptl ls / ptl stop` | 列出 / 停止会话 |
+| `ptl tui dashboard` / `ptl tui lab` | 系统控制 / 模型调试 TUI |
+| `ptl flow run/approve/reject/set/edit...` | ptl-flow 波次工作流引擎 |
+| `ptl hub submit/run/dev/programs` | PTL→PTH 桥（agent 程序提交/运行） |
+| `ptl template ls/new/rm/rename` | 模板管理 |
+| `ptl config get/set/unset` | 配置读写 |
+| `ptl update --all` | 更新 pi + 扩展 + 内置同步 |
+| `ptl doctor` / `ptl onboard` | 环境诊断 / 首次导引 |
+| `ptl install --shared <pkg>` | 安装共享扩展 |
 
 详见 [PTL 架构](./docs/ptl/architecture.md)。新建技能/扩展的放置与挂载规范见 [创作指南](./docs/ptl/authoring.md)。
 
@@ -80,12 +80,12 @@ docker-compose up -d
 
 ## Roadmap
 
-- [x] PTL：tmux 多会话管理 + pit tui dashboard/lab TUI
+- [x] PTL：tmux 多会话管理 + ptl tui dashboard/lab TUI
 - [x] PTL：共享扩展层（symlink 注入，逐项更新）
-- [x] PTL：pit-providers 统一 provider 后端（声明式 JSON + 多 Key failover）
-- [x] PTL：pit-communicate 跨会话通信 + pit-control 会话内控制
-- [x] **PTL：pit-flow 波次工作流引擎**（并行执行 + reducer + human gate + 运行中热修改）
-- [x] **PTL→PTH 桥**：`pit hub submit/run` — agent 程序打包提交到 PTH 运行
+- [x] PTL：ptl-providers 统一 provider 后端（声明式 JSON + 多 Key failover）
+- [x] PTL：ptl-communicate 跨会话通信 + ptl-control 会话内控制
+- [x] **PTL：ptl-flow 波次工作流引擎**（并行执行 + reducer + human gate + 运行中热修改）
+- [x] **PTL→PTH 桥**：`ptl hub submit/run` — agent 程序打包提交到 PTH 运行
 - [ ] PTH：Windows 平台适配
 - [ ] PTH：Dapr/K8s Phase 2 迁移
 
@@ -102,16 +102,16 @@ pi-platform/
 │   │   ├── workspace/             # 工作目录隔离
 │   │   ├── platform/              # 跨 OS 适配器（posix/win32）
 │   │   └── observability/         # pino 日志
-│   ├── ptl/                       # Pi-Triple-Lite（bin: pit）
-│   │   ├── pit.ts + pit/          # CLI 入口 + 命令模块
-│   │   ├── flow/                  # ★ pit-flow 波次工作流引擎
+│   ├── ptl/                       # Pi-Triple-Lite（bin: ptl）
+│   │   ├── pit.ts + cli/          # CLI 入口 + 命令模块
+│   │   ├── flow/                  # ★ ptl-flow 波次工作流引擎
 │   │   ├── bridge/                # ★ PTL→PTH 桥（submit/run/dev）
 │   │   ├── lab-data/              # ★ lab 遥测数据层（SQLite）
 │   │   ├── config.ts              # 配置系统（v2 UUID+alias）
 │   │   ├── tmux.ts / launcher.ts  # tmux 会话 / pi 启动
 │   │   ├── shared-layer.ts        # 共享扩展层（symlink+manifest）
 │   │   ├── doctor.ts / migrate.ts # 诊断 / 迁移
-│   │   ├── tui-pit/ + tui-lab/    # 双 Ink TUI
+│   │   ├── tui-ptl/ + tui-lab/    # 双 Ink TUI
 │   │   └── tui-shared/            # TUI 组件库 + Screen 布局
 │   └── pth/                       # Pi-Triple-Heavy（bin: pth）
 │       ├── main.ts                # 服务器入口
@@ -124,9 +124,9 @@ pi-platform/
 │       ├── self-modify/           # 热加载 + A/B 重建
 │       └── observability/         # Prometheus + 审计
 ├── extensions/                    # bundled 扩展（5 个）
-│   ├── pit-providers/             # 统一 provider 后端
-│   ├── pit-communicate/           # 跨会话通信
-│   ├── pit-control/               # 会话内控制
+│   ├── ptl-providers/             # 统一 provider 后端
+│   ├── ptl-communicate/           # 跨会话通信
+│   ├── ptl-control/               # 会话内控制
 │   ├── workflow/                  # ★ pi 内流程编排（/flow）
 │   └── agent-lab/                 # 模型遥测
 ├── examples/                      # echo-agent / pr-review / arena-review / custom-*
@@ -162,8 +162,8 @@ pi-platform/
 ```bash
 npx tsc --noEmit        # 类型检查（不产出 dist）
 npx vitest run           # 447 tests（直跑 TS）
-npm run build && npm link # ★ pit/pth bin 跑 dist/，端到端验证前必须 build
-cd /tmp && pit template ls  # 冒烟测试
+npm run build && npm link # ★ ptl/pth bin 跑 dist/，端到端验证前必须 build
+cd /tmp && ptl template ls  # 冒烟测试
 ```
 
 > ⚠️ `tsc --noEmit` 与 vitest 都不产出/不依赖 dist，会掩盖“改了 src 未重建”的问题；CLI 冒烟前务必 `npm run build`。
@@ -172,11 +172,11 @@ cd /tmp && pit template ls  # 冒烟测试
 
 | 想做什么 | 参考 |
 |----------|------|
-| 新建 pi 扩展（bundled） | `extensions/pit-providers/` — provider 注册 |
-| 扩展命令 + 参数补全 | `extensions/pit-control/index.ts` — registerCommand + getArgumentCompletions |
-| 跨会话通信 | `extensions/pit-communicate/` — 文件邮箱 + Delivery 决策 |
+| 新建 pi 扩展（bundled） | `extensions/ptl-providers/` — provider 注册 |
+| 扩展命令 + 参数补全 | `extensions/ptl-control/index.ts` — registerCommand + getArgumentCompletions |
+| 跨会话通信 | `extensions/ptl-communicate/` — 文件邮箱 + Delivery 决策 |
 | PTH 自定义工具/路由/存储 | `src/pth/` — 接口替换见 [PTH 架构 #扩展方式](./docs/pth/architecture.md) |
-| PTL 加 CLI 命令 | `src/ptl/pit/admin.ts` + 注册到 `src/ptl/pit.ts` switch |
+| PTL 加 CLI 命令 | `src/ptl/cli/admin.ts` + 注册到 `src/ptl/pit.ts` switch |
 | TUI 新页面 | 遵循 [Screen 布局模板](./src/ptl/tui-shared/README.md) 5 条规则 |
 
 ### 设计原则
@@ -195,7 +195,7 @@ cd /tmp && pit template ls  # 冒烟测试
 - **PTH 无 TUI**：适合服务器/API 场景（→ PTL 本地调试 + PTL→PTH 桥）
 - **tmux**：Unix-only（Windows 支持规划中）
 - **PTH 进程限制**：BullMQ worker 在主进程（Phase 1 技术债）
-- **pit-communicate**：单机通信，不支持跨机器
+- **ptl-communicate**：单机通信，不支持跨机器
 
 ## License
 

@@ -1,4 +1,4 @@
-// test/unit/lab-data-paths.test.ts — phase 0 Task 2: pit lab-data path resolution
+// test/unit/lab-data-paths.test.ts — phase 0 Task 2: ptl lab-data path resolution
 import { describe, it, expect, afterEach } from "vitest";
 import { homedir } from "node:os";
 import { join } from "node:path";

@@ -121,7 +121,7 @@ export async function buildPiLaunch(templateId: string, options: {
   }
 
   if (options.systemPrompt) {
-    const tmpDir = path.join(os.tmpdir(), "pit-system-prompt");
+    const tmpDir = path.join(os.tmpdir(), "ptl-system-prompt");
     fs.mkdirSync(tmpDir, { recursive: true });
     const tmpFile = path.join(tmpDir, `${randomUUID()}.md`);
     fs.writeFileSync(tmpFile, options.systemPrompt);

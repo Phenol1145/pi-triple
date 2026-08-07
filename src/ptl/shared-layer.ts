@@ -204,7 +204,7 @@ export function installBundledExtensions(sharedDir: string): string[] {
 }
 
 /**
- * 覆盖式同步 bundled 扩展（用于 pit update --all）。
+ * 覆盖式同步 bundled 扩展（用于 ptl update --all）。
  * 共享层的 bundled 扩展由平台托管，更新时直接覆盖；
  * 用户自定义扩展不应放在与 bundled 同名的目录。
  * 也负责剪枝：.bundled-manifest 记录平台托管名单，旧 bundled 中已移除的条目自动删除。

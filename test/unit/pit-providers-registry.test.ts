@@ -13,7 +13,7 @@ let registry: typeof import("../../extensions/pit-providers/registry.js");
 let tmpHome: string;
 
 beforeEach(async () => {
-  tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "pit-reg-"));
+  tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-reg-"));
   process.env.PI_TRIPLE_HOME = tmpHome;
   // Dynamic reimport to clear module cache
   registry = await import("../../extensions/pit-providers/registry.js");

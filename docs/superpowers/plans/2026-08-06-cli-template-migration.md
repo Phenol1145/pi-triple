@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 落地 P1 试点——local→root 更名、`.pit-shared-exclude` 排除机制、cli-dev 纯 CLI 模板（dev-cli/pit-agent 双技能）。
+**Goal:** 落地 P1 试点——local→root 更名、`.ptl-shared-exclude` 排除机制、cli-dev 纯 CLI 模板（dev-cli/ptl-agent 双技能）。
 
-**Architecture:** 排除机制在 `linkTemplateToShared` 中实现（跳过建链 + 解链存量 symlink，永不删真实文件），每次启动强制生效；cli-dev 模板只保留 pit-providers + questionnaire.ts 两个胶水扩展，能力全靠 CLI + 模板本地技能。
+**Architecture:** 排除机制在 `linkTemplateToShared` 中实现（跳过建链 + 解链存量 symlink，永不删真实文件），每次启动强制生效；cli-dev 模板只保留 ptl-providers + questionnaire.ts 两个胶水扩展，能力全靠 CLI + 模板本地技能。
 
 **Tech Stack:** TypeScript（vitest 测试）、pit CLI、共享层 symlink 机制。
 
@@ -16,7 +16,7 @@
 - 排除机制对共享层**只读**：永不删除/修改 `~/.pi-triple/data/shared/` 内容
 - 模板自有**真实文件/目录永不删除**（只解 symlink）
 - 排除文件坏 JSON = 无排除 + 不阻塞启动
-- cli-dev 保留扩展名单（已静态查证无 `_shared` 依赖）：`pit-providers`、`questionnaire.ts`
+- cli-dev 保留扩展名单（已静态查证无 `_shared` 依赖）：`ptl-providers`、`questionnaire.ts`
 - dev 容器名：`pi-platform-dev-1`（技能内提供 compose 动态探测兜底）
 - 提交信息风格：`<type>(<scope>): 中文摘要——细节`（对齐现有 git log）
 
@@ -31,15 +31,15 @@
 
 ```bash
 cd /Users/anzhize/pi-platform
-pit template rename local root
+ptl template rename local root
 ```
 
-若命令形态不对，先 `pit template --help` 确认参数顺序。
+若命令形态不对，先 `ptl template --help` 确认参数顺序。
 
 - [ ] **Step 2: 验证**
 
 ```bash
-pit template ls --json | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['templates']; print([(t['alias'],t['isDefault']) for t in d])"
+ptl template ls --json | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['templates']; print([(t['alias'],t['isDefault']) for t in d])"
 ```
 
 Expected: `[('root', True), ('knowledge', False), ('dev', False)]`，无 `local`。UUID 应仍为 `ee7cae31-2dee-46bf-90b3-0adeaf62116b`。
@@ -50,7 +50,7 @@ Expected: `[('root', True), ('knowledge', False), ('dev', False)]`，无 `local`
 grep -rn "local" docs/ README.md ARCHITECTURE.md | grep -iv "localhost\|local 跑\|本地" | grep -i "模板\|template\|local（\|(local)"
 ```
 
-把指代"默认模板 local"的措辞改为 root（README 快速开始里 `pit template new local` 是示例命令，保留但可加注释说明默认模板现为 root）。
+把指代"默认模板 local"的措辞改为 root（README 快速开始里 `ptl template new local` 是示例命令，保留但可加注释说明默认模板现为 root）。
 
 - [ ] **Step 4: 提交**
 
@@ -67,7 +67,7 @@ git add -A && git commit -m "chore(ptl): 默认模板 local 更名 root——控
 - Test: `test/unit/shared-layer.test.ts`（追加 describe 块）
 
 **Interfaces:**
-- Produces: `SHARED_EXCLUDE_FILE`（常量 `".pit-shared-exclude"`）、
+- Produces: `SHARED_EXCLUDE_FILE`（常量 `".ptl-shared-exclude"`）、
   `readSharedExclude(templateDir: string): SharedExclude`、
   `SharedExclude` 接口（`extensions?/skills?/git?/npm?: string[]`）；
   `linkTemplateToShared` 行为变更（后续任务依赖"排除项不建链 + 存量 symlink 被解除"）
@@ -180,7 +180,7 @@ Expected: FAIL（`readSharedExclude`/`SHARED_EXCLUDE_FILE` 未导出）。
 
 ```typescript
 /** 模板级共享排除清单文件名（位于模板目录内，随模板共存亡） */
-export const SHARED_EXCLUDE_FILE = ".pit-shared-exclude";
+export const SHARED_EXCLUDE_FILE = ".ptl-shared-exclude";
 
 export interface SharedExclude {
   extensions?: string[];
@@ -247,7 +247,7 @@ Expected: PASS + exit 0。
 
 ```bash
 git add src/ptl/shared-layer.ts test/unit/shared-layer.test.ts
-git commit -m "feat(ptl): 模板级共享排除机制——.pit-shared-exclude（跳过建链+解链存量 symlink+真实文件永不删+坏 JSON 容错）；CLI 化迁移 P1/Task 1"
+git commit -m "feat(ptl): 模板级共享排除机制——.ptl-shared-exclude（跳过建链+解链存量 symlink+真实文件永不删+坏 JSON 容错）；CLI 化迁移 P1/Task 1"
 ```
 
 ---
@@ -255,13 +255,13 @@ git commit -m "feat(ptl): 模板级共享排除机制——.pit-shared-exclude�
 ### Task 2: cli-dev 模板 + 排除清单
 
 **Files:**
-- Create: `~/.pi-triple/data/pi-config/<uuid>/.pit-shared-exclude`
+- Create: `~/.pi-triple/data/pi-config/<uuid>/.ptl-shared-exclude`
 
 - [ ] **Step 1: 建模板**
 
 ```bash
-pit template new cli-dev
-pit template ls --json | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['templates']; print([t['id'] for t in d if t['alias']=='cli-dev'][0])"
+ptl template new cli-dev
+ptl template ls --json | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['templates']; print([t['id'] for t in d if t['alias']=='cli-dev'][0])"
 ```
 
 记下输出的 UUID（下文用 `<uuid>`）。
@@ -270,12 +270,12 @@ pit template ls --json | python3 -c "import json,sys; d=json.load(sys.stdin)['da
 
 ```bash
 T=~/.pi-triple/data/pi-config/<uuid>
-cat > $T/.pit-shared-exclude <<'EOF'
+cat > $T/.ptl-shared-exclude <<'EOF'
 {
   "extensions": [
     "_shared", ".bundled-manifest", "agent-lab", "agent-lab-bidder",
-    "health-check.ts", "model-search", "openrouter.ts", "pit-communicate",
-    "pit-control", "preset.ts", "speed-bench", "ustc-pan", "workflow"
+    "health-check.ts", "model-search", "openrouter.ts", "ptl-communicate",
+    "ptl-control", "preset.ts", "speed-bench", "ustc-pan", "workflow"
   ],
   "skills": ["*"]
 }
@@ -296,7 +296,7 @@ console.log('linked');
 ls -la $T/extensions/ $T/skills/
 ```
 
-Expected: `extensions/` 仅 `pit-providers`、`questionnaire.ts` 两个 symlink（无 _shared 等 13 项）；`skills/` 为空。
+Expected: `extensions/` 仅 `ptl-providers`、`questionnaire.ts` 两个 symlink（无 _shared 等 13 项）；`skills/` 为空。
 
 - [ ] **Step 4: 再跑一次验证持久性**（模拟重启补链）
 
@@ -385,19 +385,19 @@ head -5 $T/skills/dev-cli/SKILL.md   # frontmatter 完整（name/description）
 
 ---
 
-### Task 4: pit-agent 技能
+### Task 4: ptl-agent 技能
 
 **Files:**
-- Create: `~/.pi-triple/data/pi-config/<uuid>/skills/pit-agent/SKILL.md`
+- Create: `~/.pi-triple/data/pi-config/<uuid>/skills/ptl-agent/SKILL.md`
 
 - [ ] **Step 1: 写技能**
 
-写入以下内容到 `$T/skills/pit-agent/SKILL.md`：
+写入以下内容到 `$T/skills/ptl-agent/SKILL.md`：
 
 ````markdown
 ---
-name: pit-agent
-description: 用 pit CLI 驾驶 PTL 平台。需要管理 pi 会话、查询/创建模板、运行或审批 pit-flow 工作流、向 PTH 提交/运行 agent 程序时使用。agent 一律加 --json 取机器可读输出；禁止 TUI/attach 类交互命令。触发词：会话/模板/工作流/flow/hub/提交程序。
+name: ptl-agent
+description: 用 pit CLI 驾驶 PTL 平台。需要管理 pi 会话、查询/创建模板、运行或审批 ptl-flow 工作流、向 PTH 提交/运行 agent 程序时使用。agent 一律加 --json 取机器可读输出；禁止 TUI/attach 类交互命令。触发词：会话/模板/工作流/flow/hub/提交程序。
 ---
 
 # pit CLI — Agent 驾驶手册
@@ -405,46 +405,46 @@ description: 用 pit CLI 驾驶 PTL 平台。需要管理 pi 会话、查询/创
 ## 约定
 - 支持的命令一律加 `--json`：返回 `{"ok":bool,"data":...,"error":...}`
 - `ok:false` 或非零退出 → 读 `error` 换路，不要盲目重试
-- **禁止**：`pit tui *`、`pit attach`、`pit switch`（需交互终端）
+- **禁止**：`ptl tui *`、`ptl attach`、`ptl switch`（需交互终端）
 
 ## 会话
 ```bash
-pit ls --json                              # 会话列表（状态/模板/模型）
-pit start --template <alias> --bg --name <n>   # 后台起会话
-pit stop <name>                            # 停止
-pit restore                                # 按注册表恢复
+ptl ls --json                              # 会话列表（状态/模板/模型）
+ptl start --template <alias> --bg --name <n>   # 后台起会话
+ptl stop <name>                            # 停止
+ptl restore                                # 按注册表恢复
 ```
 
 ## 模板
 ```bash
-pit template ls --json                     # 模板 + 挂载计数
+ptl template ls --json                     # 模板 + 挂载计数
 ```
 
-## 工作流（pit-flow）
+## 工作流（ptl-flow）
 ```bash
-pit flow run <flow.json> --input k=v --json    # 启动
-pit flow status <runId 前缀> --json            # 查状态
-pit flow ls --json
-pit flow approve <runId>                   # 人工门禁——仅当用户明确批准时执行
-pit flow reject <runId>
+ptl flow run <flow.json> --input k=v --json    # 启动
+ptl flow status <runId 前缀> --json            # 查状态
+ptl flow ls --json
+ptl flow approve <runId>                   # 人工门禁——仅当用户明确批准时执行
+ptl flow reject <runId>
 ```
 `status=waiting_human` = 需要人类审批，转告用户，不要自行 approve。
 
 ## PTH hub（联邦）
 ```bash
-pit hub programs --json                    # PTH 上的程序
-pit hub submit <dir>                       # 提交 agent 程序（agent.json manifest）
-pit hub run <program> ...                  # 联邦运行（SSE 回显）
+ptl hub programs --json                    # PTH 上的程序
+ptl hub submit <dir>                       # 提交 agent 程序（agent.json manifest）
+ptl hub run <program> ...                  # 联邦运行（SSE 回显）
 ```
 
 ## 已知边界
-`pit status`、`pit doctor` 为人类可读输出（无 --json），可执行但需自行解析文本。
+`ptl status`、`ptl doctor` 为人类可读输出（无 --json），可执行但需自行解析文本。
 ````
 
 - [ ] **Step 2: 验证 frontmatter**
 
 ```bash
-head -4 $T/skills/pit-agent/SKILL.md
+head -4 $T/skills/ptl-agent/SKILL.md
 ```
 
 ---
@@ -460,21 +460,21 @@ head -4 $T/skills/pit-agent/SKILL.md
 把「核心机制」推论表中「按模板分化只有一条路」行改为：
 
 ```
-| 按模板分化有两条路 | ① `.pit-shared-exclude` 排除文件（推荐，条目仍留共享层供他模板用，每次启动强制生效）；② 把条目移出共享层，放目标模板本地（物理隔离） |
+| 按模板分化有两条路 | ① `.ptl-shared-exclude` 排除文件（推荐，条目仍留共享层供他模板用，每次启动强制生效）；② 把条目移出共享层，放目标模板本地（物理隔离） |
 ```
 
 「卸载 / 收缩范围」表中「从某个模板去掉共享层条目」行改为：
 
 ```
-| 从某个模板去掉**共享层**条目 | 在该模板目录写 `.pit-shared-exclude`（见下）；移出共享层仅当所有模板都不要它 |
+| 从某个模板去掉**共享层**条目 | 在该模板目录写 `.ptl-shared-exclude`（见下）；移出共享层仅当所有模板都不要它 |
 ```
 
 并在「操作手册」新增小节：
 
 ````markdown
-### 模板级排除（`.pit-shared-exclude`）
+### 模板级排除（`.ptl-shared-exclude`）
 
-模板目录内创建 `.pit-shared-exclude`：
+模板目录内创建 `.ptl-shared-exclude`：
 
 ```json
 { "extensions": ["agent-lab", "workflow"], "skills": ["*"], "git": [], "npm": [] }
@@ -484,7 +484,7 @@ head -4 $T/skills/pit-agent/SKILL.md
 - 下次启动强制生效：排除项不建链，存量 symlink 自动解除；模板自有真实文件永不删。
 - ⚠️ denylist 语义：共享层**新增**条目会默认进入未排除它的模板——新增共享条目时，
   巡检各模板的排除文件（cli-dev 等严格模板尤其注意）。
-- 实例：cli-dev 模板仅保留 `pit-providers` + `questionnaire.ts`。
+- 实例：cli-dev 模板仅保留 `ptl-providers` + `questionnaire.ts`。
 ````
 
 - [ ] **Step 2: architecture.md**
@@ -498,13 +498,13 @@ head -4 $T/skills/pit-agent/SKILL.md
 改为：
 
 ```
-> ⚠️ 注意：`ensureTemplateLinks` 在每次启动时补链——共享层条目默认全模板全局，删 symlink 会复活。按模板排除用 `.pit-shared-exclude` 排除文件（启动时强制生效），或移出共享层做物理隔离。操作规范见 [创作指南](./authoring.md)。
+> ⚠️ 注意：`ensureTemplateLinks` 在每次启动时补链——共享层条目默认全模板全局，删 symlink 会复活。按模板排除用 `.ptl-shared-exclude` 排除文件（启动时强制生效），或移出共享层做物理隔离。操作规范见 [创作指南](./authoring.md)。
 ```
 
 「关键函数」列表追加一行：
 
 ```
-- `readSharedExclude(templateDir)` — 读取模板级排除清单（`.pit-shared-exclude`，坏 JSON 容错）
+- `readSharedExclude(templateDir)` — 读取模板级排除清单（`.ptl-shared-exclude`，坏 JSON 容错）
 ```
 
 - [ ] **Step 3: 提交**
@@ -529,7 +529,7 @@ Expected: 全绿（测试数 ≥ 950 + 新增 8 例）。
 - [ ] **Step 2: 模板状态**
 
 ```bash
-pit template ls --json
+ptl template ls --json
 ```
 
 Expected: `root`（默认）、`knowledge`、`dev`、`cli-dev`；cli-dev 的 extensions 计数 = 2、skills 计数 = 0。
@@ -537,8 +537,8 @@ Expected: `root`（默认）、`knowledge`、`dev`、`cli-dev`；cli-dev 的 ext
 - [ ] **Step 3: cli-dev 起会话实测**
 
 ```bash
-pit start --template cli-dev --bg --name cli-verify
-sleep 5 && pit ls --json
+ptl start --template cli-dev --bg --name cli-verify
+sleep 5 && ptl ls --json
 ```
 
 Expected: `cli-verify` 会话在列。再次确认 `$T/extensions/` 仅 2 项（启动补链未复活排除项）。
@@ -548,7 +548,7 @@ Expected: `cli-verify` 会话在列。再次确认 `$T/extensions/` 仅 2 项（
 ```bash
 yt-dlp --version                                  # wrapper 路线
 docker exec pi-platform-dev-1 rg --version        # docker exec 路线
-pit ls --json >/dev/null && echo OK               # pit agent 化接口
+ptl ls --json >/dev/null && echo OK               # ptl agent 化接口
 ```
 
 Expected: 三条均成功。
@@ -556,7 +556,7 @@ Expected: 三条均成功。
 - [ ] **Step 5: 清理验证会话**
 
 ```bash
-pit stop cli-verify
+ptl stop cli-verify
 ```
 
 - [ ] **Step 6: 收尾提交**（如有验收中发现的修复）

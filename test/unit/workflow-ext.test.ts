@@ -103,7 +103,7 @@ describe("GateWatcher", () => {
 describe("runner", () => {
   it("syncRun 命令参数构造", async () => {
     const { syncRun } = await import("../../extensions/workflow/runner.js");
-    // 不实际调用 pit（在 mock 环境跑），只验证参数展开
+    // 不实际调用 ptl（在 mock 环境跑），只验证参数展开
     expect(typeof syncRun).toBe("function");
   });
 

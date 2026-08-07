@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildAssetUrl, parseLatestRelease, parseSha256File, verifySha256 } from "../../src/ptl/pit/admin.js";
+import { buildAssetUrl, parseLatestRelease, parseSha256File, verifySha256 } from "../../src/ptl/cli/admin.js";
 
 describe("buildAssetUrl", () => {
   it("构造下载 URL", () => {

@@ -1,8 +1,8 @@
 /**
- * bridge/dev.ts — pit dev 命令
+ * bridge/dev.ts — ptl dev 命令
  *
  * 本地调试 agent 程序：用 pi 原生会话加载程序的 systemPrompt + skills。
- * 对称于 pit run，但与 run 同级加载（未来可收敛为统一入口）。
+ * 对称于 ptl run，但与 run 同级加载（未来可收敛为统一入口）。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -11,7 +11,7 @@ import { pipeToProcess } from "./pipe.js";
 
 export async function cmdDev(dir: string, passthrough: string[], flags: Record<string, string>): Promise<void> {
   if (!dir) {
-    console.log("  用法: pit hub dev <dir> [pi args...]");
+    console.log("  用法: ptl hub dev <dir> [pi args...]");
     process.exit(1);
   }
 

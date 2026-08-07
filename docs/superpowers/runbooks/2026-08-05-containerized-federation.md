@@ -10,8 +10,8 @@
 
 ```
 ┌─ 本机 PTL（tmux 壳）─────────────────────────────┐
-│  pit hub submit/request/respond/observe/debug     │
-│  pit run / programs / dev                        │
+│  ptl hub submit/request/respond/observe/debug     │
+│  ptl run / programs / dev                        │
 └───────────────┬───────────────────────────────────┘
                 │ HTTP/SSE/WS (Bearer token)
 ┌───────────────▼───────────────────────────────────┐
@@ -54,7 +54,7 @@ curl -sf http://localhost:3001/health    # sandbox /health（compose 内部）
 ```
 
 **持久化不变量验证清单**（`docker compose down && up` 后应满足）：
-- [ ] 构件在 `/data/components` 持久化（`pit hub programs` 可见历史版本）
+- [ ] 构件在 `/data/components` 持久化（`ptl hub programs` 可见历史版本）
 - [ ] agent 能力在 `/data/agent-dir` 持久化（skills/prompts 不丢）
 - [ ] 会话在 `/data/sessions` 可恢复（recoverAll 自动——见 §3）
 - [ ] 认证不失效（Redis appendonly + 凭据外置 env）
@@ -98,26 +98,26 @@ docker exec -it <sandbox-container> /data/scripts/sandbox-debug-entry.sh pit
 docker exec -e PI_ANTHROPIC_API_KEY=<key> -it <sandbox-container> /data/scripts/sandbox-debug-entry.sh pi
 ```
 
-调试产物 = **构件**，经 `pit hub submit`/`pit hub respond` 上传回流 pth 填槽生效。
+调试产物 = **构件**，经 `ptl hub submit`/`ptl hub respond` 上传回流 pth 填槽生效。
 
 ---
 
 ## 5. hub 命令全表
 
 ```bash
-pit hub submit <dir>                    # 上传 agent-program（agent.json manifest 校验+打包）
-pit hub programs                        # 构件列表（含版本/类型）
-pit hub run <name> [args...]            # 运行 agent-program（SSE 单向回显）
-pit hub dev <name>                      # 开发模式
-pit hub request "<description>" --slot <slotId> [--urgency high|medium|low]
+ptl hub submit <dir>                    # 上传 agent-program（agent.json manifest 校验+打包）
+ptl hub programs                        # 构件列表（含版本/类型）
+ptl hub run <name> [args...]            # 运行 agent-program（SSE 单向回显）
+ptl hub dev <name>                      # 开发模式
+ptl hub request "<description>" --slot <slotId> [--urgency high|medium|low]
                                         # 手动建回退请求（自动触发留 E）
-pit hub requests                        # 回退请求列表（open 优先）
-pit hub respond <requestId> <dir>       # 构建构件→上传→自动闭合（slotHint 自动补位绑定）
-pit hub observe sessions                # 远程会话列表（Redis 痕迹）
-pit hub observe session <id>            # 会话详情
-pit hub observe trace <id>              # trace 时间线
-pit hub observe events                  # EventLog 查询（经常驻会话代理；按调用方 tenant 过滤）
-pit hub debug                           # 交互式接入 sandbox 调试区（WS 双向；需 platform-admin）
+ptl hub requests                        # 回退请求列表（open 优先）
+ptl hub respond <requestId> <dir>       # 构建构件→上传→自动闭合（slotHint 自动补位绑定）
+ptl hub observe sessions                # 远程会话列表（Redis 痕迹）
+ptl hub observe session <id>            # 会话详情
+ptl hub observe trace <id>              # trace 时间线
+ptl hub observe events                  # EventLog 查询（经常驻会话代理；按调用方 tenant 过滤）
+ptl hub debug                           # 交互式接入 sandbox 调试区（WS 双向；需 platform-admin）
 ```
 
 **构件类型**（ComponentManifest.type）：`agent-program | scheduler | optimizer | memory-pack | skeleton-update`。agent-program 走 agent.json；其余类型走 definition.json。可选字段：`targetSlot`（空位绑定）、`legalAuth`（声明式登记——审计追溯，不拦截）。
@@ -154,7 +154,7 @@ pit hub debug                           # 交互式接入 sandbox 调试区（WS
 ### 观测
 
 ```bash
-pit hub observe events                 # EventLog 查询（tenant 隔离——只能看自己租户）
+ptl hub observe events                 # EventLog 查询（tenant 隔离——只能看自己租户）
 ```
 
 ---
@@ -190,18 +190,18 @@ docker compose ps                                    # 全 healthy
 curl -sf localhost:3000/health
 
 # 2. 构件闭环
-pit hub submit examples/echo-agent/                  # agent-program 上传——需含 agent.json 的程序目录（examples/pr-review/ 缺 agent.json，勿用）
-pit hub programs                                     # 可见
-pit hub request "缺一个 X" --slot slot-a            # 建回退请求
-pit hub requests                                    # open 可见
-pit hub respond <id> examples/echo-agent/            # 上传+闭合（slot-a 绑定；respond 目录同样需含 agent.json）
+ptl hub submit examples/echo-agent/                  # agent-program 上传——需含 agent.json 的程序目录（examples/pr-review/ 缺 agent.json，勿用）
+ptl hub programs                                     # 可见
+ptl hub request "缺一个 X" --slot slot-a            # 建回退请求
+ptl hub requests                                    # open 可见
+ptl hub respond <id> examples/echo-agent/            # 上传+闭合（slot-a 绑定；respond 目录同样需含 agent.json）
 
 # 3. 定时/事件
 /lab schedule add --taskType <t> --interval 60 ...   # 秒级 interval 验证到点 dispatch
-pit hub observe events                              # 事件可见（scheduled.fire）；前置：pth 常驻系统会话需可解析模型（provider 配置），模型不可解析时 502
+ptl hub observe events                              # 事件可见（scheduled.fire）；前置：pth 常驻系统会话需可解析模型（provider 配置），模型不可解析时 502
 
 # 4. sandbox
-pit hub run <name>                                  # 会话内 bash 调用走 sandbox（日志/观测确认）
+ptl hub run <name>                                  # 会话内 bash 调用走 sandbox（日志/观测确认）
 docker compose stop sandbox && curl -sf localhost:3000/health  # 注意：degraded 仅在 sandbox /exec dispatch（bash 转发）连续失败时触发，单纯 curl /health 不会拉高计数
 docker compose start sandbox && sleep 10 && curl -sf localhost:3000/health  # 恢复 200
 

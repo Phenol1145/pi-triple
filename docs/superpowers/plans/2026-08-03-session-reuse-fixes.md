@@ -141,7 +141,7 @@ Expected: FAIL（transferSession 无第三参数、无防护、无重链——`A
 
 ```ts
 if (running) {
-  return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${source.id.slice(0, 8)}… 正在运行，请先停止再转移（pit session stop <id>）` } };
+  return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${source.id.slice(0, 8)}… 正在运行，请先停止再转移（ptl session stop <id>）` } };
 }
 ```
 
@@ -304,7 +304,7 @@ if (!result.ok) {
   if (result.reason === "ambiguous") {
     return { ok: false, message: "", error: { code: "AMBIGUOUS", message: `会话 "${id}" 匹配 ${result.candidates?.length ?? 0} 个，请使用完整 UUID：${result.candidates?.map((c) => c.slice(0, 8)).join(", ")}` } };
   }
-  return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话 "${id}" 不存在（pit session ls 查看）` } };
+  return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话 "${id}" 不存在（ptl session ls 查看）` } };
 }
 const record = result.record;
 ```
@@ -315,7 +315,7 @@ const record = result.record;
 // execSessionShow
 const r = resolveSession(id);
 if (!r.ok) {
-  return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在（pit session ls 查看）` } };
+  return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在（ptl session ls 查看）` } };
 }
 const rec = r.record;
 // 后续用 rec 替换 r（execSessionShow 用 rec.detail；execSessionResume 用 rec.workloop/rec.templateId/rec.id/rec.status；execSessionBranch 用 rec.id）
@@ -398,7 +398,7 @@ export function assertResumable(r: SessionRecord): CommandResult | null {
     return { ok: false, message: "", error: { code: "NOT_SUPPORTED", message: `会话类型（${r.workloop}）不支持 resume——只有纸带（pi 会话）可恢复` } };
   }
   if (r.status === "running") {
-    return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${r.id.slice(0, 8)}… 正在运行，请直接接入：pit attach <name>` } };
+    return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${r.id.slice(0, 8)}… 正在运行，请直接接入：ptl attach <name>` } };
   }
   return null;
 }
@@ -428,7 +428,7 @@ if (result.status === 0) {
     pid: getPanePid(result.session),
     sessionId: rec.id, // 记录纸带 → restore 可精确恢复
   }, resolveDataDir(cfg));
-  return { ok: true, message: `✅ 已后台恢复会话 ${rec.id.slice(0, 8)}…\n接入: pit attach ${name}`, data: { name } };
+  return { ok: true, message: `✅ 已后台恢复会话 ${rec.id.slice(0, 8)}…\n接入: ptl attach ${name}`, data: { name } };
 }
 ```
 
@@ -466,14 +466,14 @@ git commit -m "fix(session): resume 运行中会话拒绝（防双写者）+ 恢
 
 **Files:**
 - Modify: `src/ptl/session/pi-scan.ts`（`isTapeLive` / `newestTapeId` / `pickRestoreTape`）
-- Modify: `src/ptl/pit/sessions.ts`（`cmdRestore` 用 `pickRestoreTape`；`cmdStart`/`cmdStartBg` 探测 sessionId）
+- Modify: `src/ptl/cli/sessions.ts`（`cmdRestore` 用 `pickRestoreTape`；`cmdStart`/`cmdStartBg` 探测 sessionId）
 - Modify: `src/ptl/commands.ts`（`execStartBg` 探测 sessionId）
 - Test: `test/unit/pi-scan.test.ts`
 
 **Interfaces:**
 - Consumes: `scanSessionFiles`、`listPitPanesDetailed`、`hasTmux`、`loadConfig`
 - Produces:
-  - `isTapeLive(id: string, panes?: Map<string, PitPaneInfo>): boolean`——有 pane 的 name === `pit-${id8}` 或 currentCommand 含 id
+  - `isTapeLive(id: string, panes?: Map<string, PitPaneInfo>): boolean`——有 pane 的 name === `ptl-${id8}` 或 currentCommand 含 id
   - `newestTapeId(templateId: string, sinceMs: number, files?: PiSessionFile[]): string | undefined`——模板内 mtime ≥ sinceMs 的最新纸带
   - `pickRestoreTape(files: PiSessionFile[], entry: { templateId: string; sessionId?: string }, isLive: (id: string) => boolean): { resumeSession?: string; warning?: string }`——注册表 sessionId 优先（存在且未被占用）；否则模板内最新（live 则警告 + 不 resume）；均无 → `{}`
 
@@ -511,9 +511,9 @@ it("pickRestoreTape：纸带正被其他会话使用 → 警告且不 resume", (
   expect(r.warning).toBeTruthy();
 });
 
-it("isTapeLive：pane 名 pit-<id8> 或 currentCommand 含完整 id", () => {
+it("isTapeLive：pane 名 ptl-<id8> 或 currentCommand 含完整 id", () => {
   const panes = new Map<string, any>([
-    ["pit-aaaaaaaa", { pid: 123, currentCommand: "pi --session aaaaaaaa-1111-4111-8111-111111111111" }],
+    ["ptl-aaaaaaaa", { pid: 123, currentCommand: "pi --session aaaaaaaa-1111-4111-8111-111111111111" }],
   ]);
   expect(isTapeLive("aaaaaaaa-1111-4111-8111-111111111111", panes)).toBe(true);
   expect(isTapeLive("bbbbbbbb-2222-4222-8222-222222222222", panes)).toBe(false);
@@ -528,9 +528,9 @@ Expected: FAIL（`isTapeLive`/`newestTapeId`/`pickRestoreTape` 未导出）
 - [ ] **Step 3: 实现**（`src/ptl/session/pi-scan.ts`）
 
 ```ts
-/** 纸带 id 是否正被运行中的 pi 写入（pane 名 pit-<id8> 或当前命令含完整 id） */
+/** 纸带 id 是否正被运行中的 pi 写入（pane 名 ptl-<id8> 或当前命令含完整 id） */
 export function isTapeLive(id: string, panes: Map<string, PitPaneInfo> = hasTmux() ? listPitPanesDetailed() : new Map()): boolean {
-  return [...panes.keys()].some((n) => n === `pit-${id.slice(0, 8)}` || panes.get(n)?.currentCommand?.includes(id));
+  return [...panes.keys()].some((n) => n === `ptl-${id.slice(0, 8)}` || panes.get(n)?.currentCommand?.includes(id));
 }
 
 /** 模板内 sinceMs 之后修改过的最新纸带 id（fresh 启动后探测本会话的 tape） */
@@ -562,7 +562,7 @@ export function pickRestoreTape(
 }
 ```
 
-`pit/sessions.ts` `cmdRestore` 改造（替换原 `latest` 选择逻辑）：
+`ptl/sessions.ts` `cmdRestore` 改造（替换原 `latest` 选择逻辑）：
 
 ```ts
 const files = scanSessionFiles(config);
@@ -595,7 +595,7 @@ Expected: PASS（全部）+ 类型干净
 - [ ] **Step 5: 提交**
 
 ```bash
-git add src/ptl/session/pi-scan.ts src/ptl/pit/sessions.ts src/ptl/commands.ts test/unit/pi-scan.test.ts
+git add src/ptl/session/pi-scan.ts src/ptl/cli/sessions.ts src/ptl/commands.ts test/unit/pi-scan.test.ts
 git commit -m "fix(session): restore 按注册表 sessionId 精确恢复 + fresh 启动记录纸带（防恢复错会话）"
 ```
 

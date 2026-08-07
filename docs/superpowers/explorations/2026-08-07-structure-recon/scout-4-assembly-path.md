@@ -42,7 +42,7 @@ assembly 路径（`assembler.ts` + `agent-runtime.ts` + `memory-host.ts`）补�
 | `ruleBootstrap` | RuleBootstrap | ⚠️ 需 `PublicDomainBootstrap(pubDir).ensureInitialized()` 先种公域目录——生产从未初始化 |
 | `runner` | WorkLoopRunner | ✅ `capturedWlRunner` / `rt.workloopRuntime.runner`；`currentSeqOf` 在 runner.ts:143（特性检测兼容） |
 | `workDir` | string（记忆域根） | ❌ **生产无此概念**——状态全在 SQLite，记忆域是目录制（`<root>/agents/<id>/`，types.ts:54） |
-| `comms?` | `{transport, identity, delivery?}` | ❌ **CommsTransport 无生产实现**（memory/comms.ts:39-43 接口；仅测试 mock）——Task 12 pit-communicate 未落地 |
+| `comms?` | `{transport, identity, delivery?}` | ❌ **CommsTransport 无生产实现**（memory/comms.ts:39-43 接口；仅测试 mock）——Task 12 ptl-communicate 未落地 |
 | `now?`/`idGen?`/`checkpointStore?`/`bridge?`/`identityMap?` | 可选 | checkpointStore ✅（create-scheduler-runtime.ts 的 `workloopRuntime.checkpointStore`）；其余缺省自足 |
 
 ### AgentRuntimeDeps 全清单（agent-runtime.ts:23-42）
@@ -84,7 +84,7 @@ assembly 路径（`assembler.ts` + `agent-runtime.ts` + `memory-host.ts`）补�
 ## D. 风险 / 难点
 
 1. **workDir 无主（blocker）**：装配产物全部落在文件系统目录（`<root>/agents/<id>/`、`public-domain/`、`identity/`，types.ts:54-56），生产状态在 SQLite。根目录选型未定；`docs/framework-vs-construction.md:81` 的跨容器状态问题（共享卷/服务化/postgres）未裁决。多容器/PTH 多进程下记忆域不可共享。
-2. **CommsTransport 无生产实现（blocker）**：`comms.transport`（memory/comms.ts:39-43）仅测试 mock；pit-communicate（Task 12）未落地。缺省则 bridge/identity 全链为空（装配可跑但 comms 契约⑥⑨失效）。
+2. **CommsTransport 无生产实现（blocker）**：`comms.transport`（memory/comms.ts:39-43）仅测试 mock；ptl-communicate（Task 12）未落地。缺省则 bridge/identity 全链为空（装配可跑但 comms 契约⑥⑨失效）。
 3. **公域种子未初始化**：`RuleBootstrap` 依赖 `public-domain/` 被 `PublicDomainBootstrap` 种过（rule-bootstrap.ts:38-47）；生产 bootstrap 序列（E 脚本）未实施。
 4. **账本键域冲突**：生产 ledger 以 model 键开户后经 `ledger.migrateAgentKeys` 迁 UUID（index.ts ~L350）；装配 `SqliteLedgerAdapter.open` 直接 UUID flat-K 开户。两条创建路径（arena bootstrap 的 `ensureArenaInstance/syncArenaAgents` vs 装配）可能对同一 agent 双开户——`open` 幂等（{created:false}）但 `assembleAgent` 的 `getAgent` 预检会抛"already registered"，**装配无法吸收既有 agent**，需创建路径统一。
 5. **DSP loadSnapshot 未交付**：`agent-runtime.ts:14-15` 明示 `src/memory/dsp.ts`（DspBuilder:64）只有 build/snapshot/restore，无 `loadSnapshot`（Task 11 交付项）——`restoreDspOrder`（agent-runtime.ts:254-267）特性检测回退 `build("realtime")`，契约⑦快照恢复暂为防御语义。

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 构建经济层全部底层机制——VoucherPort/中央池/elo 系统/任务类型注册表/pit-flow 三扩展（effect/fanout/subflow）/双向托管——为 D2 市场闭环提供可测基础设施。
+**Goal:** 构建经济层全部底层机制——VoucherPort/中央池/elo 系统/任务类型注册表/ptl-flow 三扩展（effect/fanout/subflow）/双向托管——为 D2 市场闭环提供可测基础设施。
 
 **Architecture:** 货币机制在 `extensions/agent-lab/src/economy/`（新目录，SqliteVoucher 与 SqliteLedger 共享 DatabaseSync）；flow 引擎扩展在 `src/ptl/flow/`（code 节点保持纯函数，effect 节点承担确定性副作用）；elo/任务类型走项目 RegistryPattern。
 

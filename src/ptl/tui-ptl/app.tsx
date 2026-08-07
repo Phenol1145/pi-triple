@@ -11,7 +11,7 @@ import { OutputPanel } from "./output-panel.js";
 import type { CommandResult } from "../commands.js";
 import { dispatchCommand } from "../commands/dispatch.js";
 import { loadConfig, listTemplates } from "../config.js";
-import { listPitSessions } from "../tmux.js";
+import { listPtlSessions } from "../tmux.js";
 import { registerPiSessionProvider } from "../session/pi-provider.js";
 import { registerBiddingTraceProvider, registerMachineTraceProvider } from "../session/trace-provider.js";
 
@@ -25,7 +25,7 @@ const TABS = ["Dashboard", "Templates", "Sessions", "Extensions", "Config"];
 const DESTRUCTIVE_CMDS = ["template rm", "stop", "stop --all"];
 
 /** TUI-wired bg session start — 与 CLI 同一构建路径 */
-export function PitApp() {
+export function PtlApp() {
   const { columns, rows } = useTerminalSize();
   const { exit: unmountInk } = useApp();
   const [notification, setNotification] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export function PitApp() {
   const completions = useMemo<Record<string, string[]>>(() => {
     const cfg = loadConfig();
     const templateAliases = listTemplates(cfg).map((t) => t.alias);
-    const sessions = listPitSessions().map((s) => s.name);
+    const sessions = listPtlSessions().map((s) => s.name);
     return {
       pi: ["--template", ...templateAliases],
       attach: sessions,

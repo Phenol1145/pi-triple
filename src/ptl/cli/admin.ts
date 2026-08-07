@@ -1,5 +1,5 @@
 /**
- * pit/admin — update / install / remove / shared / migrate / tenant rename
+ * ptl/admin — update / install / remove / shared / migrate / tenant rename
  */
 
 import fs from "node:fs";
@@ -121,7 +121,7 @@ async function updatePitSelf(): Promise<boolean> {
       console.log(`  \x1b[36m安装 pi-triple@${release.version}（npm install -g，约需 10-30s）…\x1b[0m`);
       const r = spawnSync("npm", ["install", "-g", tmpFile], { stdio: "inherit" });
       if (r.status === 0) {
-        console.log(`  \x1b[32m✅ Pi-Triple 已升级到 v${release.version}，重启 pit 会话生效\x1b[0m`);
+        console.log(`  \x1b[32m✅ Pi-Triple 已升级到 v${release.version}，重启 ptl 会话生效\x1b[0m`);
         return true;
       }
       console.log("  \x1b[31m❌ npm install -g 失败（可尝试 sudo 或检查 npm 权限）\x1b[0m");
@@ -158,7 +158,7 @@ export async function handleUpdate(flags: Record<string, string>): Promise<void>
   if (curVer === latestVer) {
     console.log("  \x1b[32m✅ pi 已是最新版\x1b[0m");
   } else if (dryRun) {
-    console.log(`  \x1b[33m⚠ pi 有更新（v${latestVer}）→ 运行 pit update 升级\x1b[0m`);
+    console.log(`  \x1b[33m⚠ pi 有更新（v${latestVer}）→ 运行 ptl update 升级\x1b[0m`);
   } else {
     console.log("  升级中…");
     const r = spawnSync("npm", ["install", "-g", `@earendil-works/pi-coding-agent@${latestVer}`], { stdio: "inherit" });
@@ -201,7 +201,7 @@ export async function handleUpdate(flags: Record<string, string>): Promise<void>
   }
 
   if (!updateExt) {
-    console.log("  \x1b[2m提示: pit update --extensions 更新扩展包 · pit update --all 全部更新\x1b[0m");
+    console.log("  \x1b[2m提示: ptl update --extensions 更新扩展包 · ptl update --all 全部更新\x1b[0m");
   }
 }
 
@@ -241,7 +241,7 @@ export async function handleShared(subcommand: string | undefined): Promise<void
     const defaultId = getDefaultTemplateId(config2);
     const templateDir = path.join(dataDir2, "pi-config", defaultId);
     if (!fs.existsSync(templateDir)) {
-      console.log(`  ❌ 默认模板目录不存在，先运行 pit onboard`);
+      console.log(`  ❌ 默认模板目录不存在，先运行 ptl onboard`);
       return;
     }
     const { moved, kept } = promoteToShared(templateDir, sharedDir2);

@@ -141,7 +141,7 @@ export class PthClient {
       const reason = err?.cause?.code ?? err?.cause?.message ?? err?.message ?? String(err);
       throw new Error(
         `无法连接 PTH 服务器 (${this.url}${path})：${reason}。` +
-        `请确认 pth 已启动（node dist/pth/main.js），或检查 pit config get pth.url`
+        `请确认 pth 已启动（node dist/pth/main.js），或检查 ptl config get pth.url`
       );
     }
   }
@@ -368,7 +368,7 @@ export class PthClient {
   /** 统一错误处理 */
   private async throwError(res: Response, prefix: string): Promise<never> {
     if (res.status === 401) {
-      throw new Error(`${prefix}: Token 无效 (401)。检查 pit config get pth.token`);
+      throw new Error(`${prefix}: Token 无效 (401)。检查 ptl config get pth.token`);
     }
     if (res.status === 404) {
       throw new Error(`${prefix}: 路由不存在 (404)。PTH 可能版本过旧，请升级`);

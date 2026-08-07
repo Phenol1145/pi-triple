@@ -1,9 +1,9 @@
-// src/ptl/tui-pit/session-menu.tsx — 会话操作菜单（dashboard 与 sessions 面板共用）
+// src/ptl/tui-ptl/session-menu.tsx — 会话操作菜单（dashboard 与 sessions 面板共用）
 //
 // 导出：
 //   SESSION_MENU            静态菜单规格（叶子 op 由 buildSessionMenu 绑定处理器）
 //   sessionMenuCapabilities 会话 → 可执行能力（纯函数，可测）
-//   bareTmuxName             tmux 会话名（pit- 前缀）→ 裸名
+//   bareTmuxName             tmux 会话名（ptl- 前缀）→ 裸名
 //   sessionTmuxName         SessionRecord → tmux 会话名（含前缀；未运行返回 null）
 //   buildSessionMenu         规格 + 处理器 → 按能力过滤的 MenuNode 树（可测）
 //   SessionMenuPanel         模态菜单组件（菜单/SelectList 对话框/危险确认 一体）
@@ -21,7 +21,7 @@ import {
 import type { MenuNode, MenuState, SelectItem } from "../tui-shared/index.js";
 import { listTemplates, loadConfig } from "../config.js";
 import { scanSessionFiles, listNodes } from "../session/pi-scan.js";
-import { hasTmux, listPitPanes } from "../tmux.js";
+import { hasTmux, listPtlPanes } from "../tmux.js";
 import type { SessionRecord } from "../session/session-provider.js";
 
 // ─── 菜单规格（静态；叶子 capability 即过滤键）────────────────
@@ -64,18 +64,18 @@ export function sessionMenuCapabilities(rec: SessionRecord): string[] {
   return caps;
 }
 
-/** tmux 会话名（含 pit- 前缀）→ 裸名（pit attach/stop 用） */
+/** tmux 会话名（含 ptl- 前缀）→ 裸名（ptl attach/stop 用） */
 export function bareTmuxName(full: string): string {
-  return full.startsWith("pit-") ? full.slice("pit-".length) : full;
+  return full.startsWith("ptl-") ? full.slice("ptl-".length) : full;
 }
 
-/** 由 SessionRecord 解析 tmux 会话名（含 pit- 前缀）；未运行/无 tmux 返回 null */
+/** 由 SessionRecord 解析 tmux 会话名（含 ptl- 前缀）；未运行/无 tmux 返回 null */
 export function sessionTmuxName(rec: SessionRecord): string | null {
   if (!hasTmux()) return null;
-  const panes = listPitPanes();
+  const panes = listPtlPanes();
   return (
     Object.keys(panes).find(
-      (n) => n === `pit-${rec.id.slice(0, 8)}` || panes[n]?.includes(rec.id),
+      (n) => n === `ptl-${rec.id.slice(0, 8)}` || panes[n]?.includes(rec.id),
     ) ?? null
   );
 }
@@ -185,7 +185,7 @@ export function SessionMenuPanel({
     },
     pickTemplate: (op, id) => {
       const tpls = listTemplates(loadConfig());
-      if (tpls.length === 0) { cb.current.onNotify?.("无模板 — pit template new <alias> 创建"); cb.current.onClose(); return; }
+      if (tpls.length === 0) { cb.current.onNotify?.("无模板 — ptl template new <alias> 创建"); cb.current.onClose(); return; }
       setDialog({
         title: `选择目标模板 — ${op}`,
         items: tpls.map((t) => ({

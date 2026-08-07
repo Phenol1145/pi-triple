@@ -32,7 +32,7 @@ describe("concurrent WAL writes", () => {
   let workerScript: string;
 
   beforeAll(() => {
-    dbDir = mkdtempSync(join(tmpdir(), "pit-wal-test-"));
+    dbDir = mkdtempSync(join(tmpdir(), "ptl-wal-test-"));
     dbPath = join(dbDir, "shared.db");
     workerScript = join(dbDir, "worker.mjs");
     writeFileSync(workerScript, WORKER_SRC);

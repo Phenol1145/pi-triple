@@ -6,27 +6,27 @@
 
 Pi-Triple 已发布 GitHub 发行版（`Phenol1145/pi-triple`，Release v0.1.0 + tarball）。但更新机制存在缺口：
 
-1. **更新入口分散且不完整**：`pit update` 只升级 pi SDK（npm 全局包）与扩展/共享层，**Pi-Triple 本体（pit/pth 代码）没有任何更新机制**——发行版用户只能手动下载替换。
+1. **更新入口分散且不完整**：`ptl update` 只升级 pi SDK（npm 全局包）与扩展/共享层，**Pi-Triple 本体（pit/pth 代码）没有任何更新机制**——发行版用户只能手动下载替换。
 2. **提示不一致**：pi 会话内会弹"New version available. Run `pi update`"——对 Pi-Triple 用户，`pi update` 只更新 pi SDK 组件，产品本体/扩展/共享层不更新，照做会困惑。
 3. **无版本感知**：`main.ts` 里 `VERSION` 硬编码 `"0.1.0"`，与 `package.json` 双源漂移风险。
 
 ## 目标
 
-- `pit update` 成为**全量更新命令**：一次完成 pi SDK + Pi-Triple 本体 + 扩展包 + 共享层。
-- **会话内更新提示**：用户日常在 pi TUI 会话内工作，更新可用时通过扩展机制在会话内弹出通知（仿 pi 的提示模式），统一引导到 `pit update`。
+- `ptl update` 成为**全量更新命令**：一次完成 pi SDK + Pi-Triple 本体 + 扩展包 + 共享层。
+- **会话内更新提示**：用户日常在 pi TUI 会话内工作，更新可用时通过扩展机制在会话内弹出通知（仿 pi 的提示模式），统一引导到 `ptl update`。
 - 本体更新走 **GitHub Release 拉包**（用户决策）：查询 releases/latest → 下载 tarball → sha256 校验 → `npm install -g`。
 - **完全不修改 pi 源码**（R0，用户决策）：pi 的原生提示保留，pit 提示作为权威引导。
 
 ## 架构
 
-### 组件 1：`pit update` 全量更新（4 阶段）
+### 组件 1：`ptl update` 全量更新（4 阶段）
 
 ```
-pit update                    # 全量（默认全部执行，单阶段失败不中断后续）
-pit update --dry-run          # 只检查报告，不下载不安装
-pit update --pi-only          # 仅阶段①（保留现有 flag 语义）
-pit update --extensions       # 阶段①+③（向后兼容现有行为）
-pit update --all              # 全量（兼容现有 flag）
+ptl update                    # 全量（默认全部执行，单阶段失败不中断后续）
+ptl update --dry-run          # 只检查报告，不下载不安装
+ptl update --pi-only          # 仅阶段①（保留现有 flag 语义）
+ptl update --extensions       # 阶段①+③（向后兼容现有行为）
+ptl update --all              # 全量（兼容现有 flag）
 ```
 
 | 阶段 | 内容 | 实现 |
@@ -57,15 +57,15 @@ pit update --all              # 全量（兼容现有 flag）
 - **24h 缓存**：`dataDir/version-check.json`（`{checkedAt, pit, piSdk}`），tmp+rename 原子写；缓存有效期内不重复请求（GitHub API 未认证限流 60 req/h；多会话并发时首写者查网络、其余读缓存——原子写保证无竞态损坏）。
 - 纯函数 + 注入式 fetch/shell，可单测。
 
-接入点：`pit-communicate/index.ts` factory（每个 pi 会话加载）异步调用（不阻塞启动），有更新则：
-- `ctx.ui.notify(\`⚠ pit 更新可用: v${v}（当前 ${cur}）→ 运行 pit update 一次更新全部\`, "warning")`
+接入点：`ptl-communicate/index.ts` factory（每个 pi 会话加载）异步调用（不阻塞启动），有更新则：
+- `ctx.ui.notify(\`⚠ pit 更新可用: v${v}（当前 ${cur}）→ 运行 ptl update 一次更新全部\`, "warning")`
 - pi SDK 有更新同理（文案区分）。
 
 **当前版本获取（扩展侧）**：`resolveInstalledPitVersion()`——`spawnSync("npm", ["root", "-g"])` 取全局根，读 `pi-triple/package.json` 的 `version`；失败（未全局安装，如源码运行）则返回 undefined，跳过本体检查（只报 pi SDK）。
 
-**辅通道（CLI）**：`pit start` / `pi` 命令启动前 stderr 一行同样文案（兜底：无扩展环境的瞬时可见）。
+**辅通道（CLI）**：`ptl start` / `pi` 命令启动前 stderr 一行同样文案（兜底：无扩展环境的瞬时可见）。
 
-**不提示场景**：`pit update` / `pit help` / `pit --version` / `pit onboard` 自身；离线 env；缓存未过期；无更新。
+**不提示场景**：`ptl update` / `ptl help` / `ptl --version` / `ptl onboard` 自身；离线 env；缓存未过期；无更新。
 
 ## 决策记录
 
@@ -93,7 +93,7 @@ pit update --all              # 全量（兼容现有 flag）
 - `test/unit/version-check.test.ts`（新）：注入式 fetch——semver 比较分支、GitHub 响应解析（tag/assets/digest）、npm view 解析、缓存命中/过期/损坏、env 跳过、异常吞掉。
 - `test/unit/update-release.test.ts`（新）：阶段② dry-run 报告格式、下载 URL 构造、sha256 比对（好/坏 digest）、版本比较函数。
 - 现有 `admin` 相关测试回归（pi SDK 检查逻辑不动）。
-- 手动验证清单（发行版流程）：真实 `pit update --dry-run` → 真实发布 v0.1.1 后 `pit update` 端到端（下载→校验→安装→新会话生效）、会话内 notify 显示。
+- 手动验证清单（发行版流程）：真实 `ptl update --dry-run` → 真实发布 v0.1.1 后 `ptl update` 端到端（下载→校验→安装→新会话生效）、会话内 notify 显示。
 
 ## 风险与缓解
 

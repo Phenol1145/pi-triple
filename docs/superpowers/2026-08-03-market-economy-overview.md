@@ -21,9 +21,9 @@
 
 | # | 子项目 | 状态 | spec | 分支 |
 |---|--------|------|------|------|
-| 0 | pit-communicate/pit-control 整合 | ✅ 已合并 | 2026-08-01-pit-communicate-control-consolidation-design.md | feat/pit-communicate-control-consolidation |
-| 1 | pit 全量更新 + 会话内提示 | ✅ 已合并 + **v0.1.1 已发布** | 2026-08-01-pit-update-release-design.md | feat/pit-update-release |
-| A | pit-flow 运行时扩展（code 节点 + metrics） | ✅ 已合并 | 2026-08-02-workflow-runtime-extension-design.md | feat/flow-runtime-extension |
+| 0 | ptl-communicate/ptl-control 整合 | ✅ 已合并 | 2026-08-01-ptl-communicate-control-consolidation-design.md | feat/ptl-communicate-control-consolidation |
+| 1 | pit 全量更新 + 会话内提示 | ✅ 已合并 + **v0.1.1 已发布** | 2026-08-01-ptl-update-release-design.md | feat/ptl-update-release |
+| A | ptl-flow 运行时扩展（code 节点 + metrics） | ✅ 已合并 | 2026-08-02-workflow-runtime-extension-design.md | feat/flow-runtime-extension |
 | B | 记忆系统（L3 语义记忆 + 语言体系 + 公域/审核链/通讯） | ✅ 已合并 | 2026-08-02-memory-system-design.md | feat/memory-system |
 | C | 装配层（Agent Assembly） | ✅ 已合并 | 2026-08-02-agent-assembly-design.md | feat/agent-assembly |
 | D | **经济层**（多货币/汇率/elo/嵌套市场/竞价 workflow 化/货币循环观测） | ✅ **已合并 + 真实 LLM 冒烟跑通**（D1 基础设施 + D2 市场闭环 + D3 硬化 + D4 收敛+冒烟） | 2026-08-03-economy-layer-design.md | feat/economy-*（已合并删除） |

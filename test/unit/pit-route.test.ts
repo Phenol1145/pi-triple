@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   resolveTuiPanel, TUI_PANELS, HUB_COMMANDS,
   DEPRECATED_COMMANDS, getDeprecatedMigration,
-} from "../../src/ptl/pit/route.js";
-import { cmdTui, type TuiLaunchOpts, cmdHub, type HubHandlers } from "../../src/ptl/pit/route.js";
+} from "../../src/ptl/cli/route.js";
+import { cmdTui, type TuiLaunchOpts, cmdHub, type HubHandlers } from "../../src/ptl/cli/route.js";
 
 describe("resolveTuiPanel", () => {
   it("无子命令 → dashboard", () => {
@@ -30,17 +30,17 @@ describe("HUB_COMMANDS", () => {
 });
 
 describe("getDeprecatedMigration", () => {
-  it("ui → pit tui dashboard", () => {
-    expect(getDeprecatedMigration("ui")).toMatch(/pit tui dashboard/);
+  it("ui → ptl tui dashboard", () => {
+    expect(getDeprecatedMigration("ui")).toMatch(/ptl tui dashboard/);
   });
-  it("lab → pit tui lab", () => {
-    expect(getDeprecatedMigration("lab")).toMatch(/pit tui lab/);
+  it("lab → ptl tui lab", () => {
+    expect(getDeprecatedMigration("lab")).toMatch(/ptl tui lab/);
   });
-  it("submit/run/programs/dev → pit hub …", () => {
-    expect(getDeprecatedMigration("submit")).toMatch(/pit hub submit/);
-    expect(getDeprecatedMigration("run")).toMatch(/pit hub run/);
-    expect(getDeprecatedMigration("programs")).toMatch(/pit hub programs/);
-    expect(getDeprecatedMigration("dev")).toMatch(/pit hub dev/);
+  it("submit/run/programs/dev → ptl hub …", () => {
+    expect(getDeprecatedMigration("submit")).toMatch(/ptl hub submit/);
+    expect(getDeprecatedMigration("run")).toMatch(/ptl hub run/);
+    expect(getDeprecatedMigration("programs")).toMatch(/ptl hub programs/);
+    expect(getDeprecatedMigration("dev")).toMatch(/ptl hub dev/);
   });
   it("未废弃命令 → null", () => {
     expect(getDeprecatedMigration("start")).toBeNull();
@@ -63,19 +63,19 @@ describe("cmdTui", () => {
     return { calls, fake };
   };
 
-  it("pit tui（无子命令）→ 默认 dashboard", async () => {
+  it("ptl tui（无子命令）→ 默认 dashboard", async () => {
     const { calls, fake } = collect();
     await cmdTui("", {}, fake);
     expect(calls).toEqual([{ panel: "dashboard", flags: {} }]);
   });
 
-  it("pit tui dashboard → dashboard", async () => {
+  it("ptl tui dashboard → dashboard", async () => {
     const { calls, fake } = collect();
     await cmdTui("dashboard", {}, fake);
     expect(calls[0].panel).toBe("dashboard");
   });
 
-  it("pit tui lab --template dev → lab + flags 透传", async () => {
+  it("ptl tui lab --template dev → lab + flags 透传", async () => {
     const { calls, fake } = collect();
     await cmdTui("lab", { template: "dev", global: "true" }, fake);
     expect(calls[0]).toEqual({ panel: "lab", flags: { template: "dev", global: "true" } });

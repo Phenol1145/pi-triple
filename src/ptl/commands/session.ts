@@ -1,5 +1,5 @@
 /**
- * pit/commands/session — pit session 命令族（纸带操作，CLI/TUI 共享）
+ * ptl/commands/session — ptl session 命令族（纸带操作，CLI/TUI 共享）
  *
  * 读侧（ls/show/tree/resume）直接读 session-store / pi-scan / pi-tree；
  * 写侧（fork/clone/transfer/branch）委托 operateSession → provider 能力分发。
@@ -44,7 +44,7 @@ export function execSessionLs(args: string[]): CommandResult {
     return { ok: true, message: "", data: { sessions: filtered } };
   }
   if (filtered.length === 0) {
-    return { ok: true, message: "  无会话（纸带）。启动: pit start --bg --name <name>", data: { sessions: filtered } };
+    return { ok: true, message: "  无会话（纸带）。启动: ptl start --bg --name <name>", data: { sessions: filtered } };
   }
   const lines = filtered.map((s) =>
     `  ${s.status === "running" ? "●" : "○"} [${s.workloop}] ${s.id.slice(0, 8)}…  ${s.templateAlias}  ${s.summary}`);
@@ -56,7 +56,7 @@ export function execSessionLs(args: string[]): CommandResult {
 export function execSessionShow(id: string): CommandResult {
   const r = resolveSession(id);
   if (!r.ok) {
-    return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在（pit session ls 查看）` } };
+    return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在（ptl session ls 查看）` } };
   }
   const rec = r.record;
   const detail = Object.entries(rec.detail).map(([k, v]) => `  ${k}: ${v}`).join("\n");
@@ -77,7 +77,7 @@ export function execSessionClone(id: string, args: string[]): CommandResult {
 
 export function execSessionTransfer(id: string, args: string[]): CommandResult {
   const { flags } = parseFlags(args);
-  if (!flags.template) return { ok: false, message: "", error: { code: "USAGE", message: "用法: pit session transfer <id> --template <tpl>" } };
+  if (!flags.template) return { ok: false, message: "", error: { code: "USAGE", message: "用法: ptl session transfer <id> --template <tpl>" } };
   return operateSession("transfer", id, { templateId: flags.template });
 }
 
@@ -92,7 +92,7 @@ function listNodesFor(id: string): string | null {
 export function execSessionBranch(id: string, args: string[]): CommandResult {
   const { flags } = parseFlags(args);
   if (!flags.at && flags["list-nodes"] !== "true") {
-    return { ok: false, message: "", error: { code: "USAGE", message: "用法: pit session branch <id> --at <nodeId> [--template <tpl>]\n  列出节点: pit session branch <id> --list-nodes" } };
+    return { ok: false, message: "", error: { code: "USAGE", message: "用法: ptl session branch <id> --at <nodeId> [--template <tpl>]\n  列出节点: ptl session branch <id> --list-nodes" } };
   }
   const r = resolveSession(id);
   if (!r.ok) {
@@ -130,7 +130,7 @@ export function assertResumable(r: SessionRecord): CommandResult | null {
     return { ok: false, message: "", error: { code: "NOT_SUPPORTED", message: `会话类型（${r.workloop}）不支持 resume——只有纸带（pi 会话）可恢复` } };
   }
   if (r.status === "running") {
-    return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${r.id.slice(0, 8)}… 正在运行，请直接接入：pit attach <name>` } };
+    return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${r.id.slice(0, 8)}… 正在运行，请直接接入：ptl attach <name>` } };
   }
   return null;
 }
@@ -164,10 +164,10 @@ export async function execSessionResume(id: string, args: string[]): Promise<Com
     ...(workspaceCwd ? { workspaceCwd } : {}),
   });
   const name = flags.name || `${getTemplateAlias(rec.templateId, cfg)}-${Date.now().toString(36)}`;
-  const { startPitSession, getPanePid } = await import("../tmux.js");
+  const { startPtlSession, getPanePid } = await import("../tmux.js");
   const { markStarted } = await import("../session-registry.js");
   const { resolveDataDir } = await import("../config.js");
-  const result = startPitSession(launch, name, true);
+  const result = startPtlSession(launch, name, true);
   if (result.status === 0) {
     markStarted({
       name,
@@ -178,7 +178,7 @@ export async function execSessionResume(id: string, args: string[]): Promise<Com
       pid: getPanePid(result.session),
       sessionId: rec.id, // 记录纸带 → restore 可精确恢复
     }, resolveDataDir(cfg));
-    return { ok: true, message: `✅ 已后台恢复会话 ${rec.id.slice(0, 8)}…\n接入: pit attach ${name}`, data: { name } };
+    return { ok: true, message: `✅ 已后台恢复会话 ${rec.id.slice(0, 8)}…\n接入: ptl attach ${name}`, data: { name } };
   }
   return { ok: false, message: "", error: { code: "START_FAILED", message: `启动失败: ${result.stderr}` } };
 }
@@ -186,12 +186,12 @@ export async function execSessionResume(id: string, args: string[]): Promise<Com
 // ─── attach / stop（委托共享命令层）────────────────────────────
 
 export function execSessionAttach(name: string): CommandResult {
-  if (!name) return { ok: false, message: "", error: { code: "USAGE", message: "用法: pit session attach <name>" } };
-  return { ok: true, message: "", handoff: { cmd: "pit", args: ["attach", name] } };
+  if (!name) return { ok: false, message: "", error: { code: "USAGE", message: "用法: ptl session attach <name>" } };
+  return { ok: true, message: "", handoff: { cmd: "ptl", args: ["attach", name] } };
 }
 
 export async function execSessionStop(idOrName: string): Promise<CommandResult> {
-  if (!idOrName) return { ok: false, message: "", error: { code: "USAGE", message: "用法: pit session stop <id|name>" } };
-  // 会话名（pit-<name>）或会话 id → 转 execStop
+  if (!idOrName) return { ok: false, message: "", error: { code: "USAGE", message: "用法: ptl session stop <id|name>" } };
+  // 会话名（ptl-<name>）或会话 id → 转 execStop
   return execStop(idOrName);
 }

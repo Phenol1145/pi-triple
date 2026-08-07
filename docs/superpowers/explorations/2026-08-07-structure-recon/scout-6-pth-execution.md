@@ -74,7 +74,7 @@ runtime 构造时（237-274）：`createSchedulerRuntime(sharedStore.raw, {event
 
 **现状边界契约（spec §6.0 选项 C，scout-3 确认）**：
 - PTH 对 agent-lab：**零静态 import**。唯一接触点 = ①`main.ts:99-105` 动态 specifier；②`systemExtensionFactories` 构造参数（`agent-engine.ts:100`/599）；③env 注入 `AGENT_LAB_DB_PATH/CONFIG_DIR/PI_AGENT_INSTANCE_ID`（`agent-engine.ts:674-679`）。
-- agent-lab 对 PTH：**零 import**（`config-io.ts` 自含 `pitHome()` 解析，与 pit 经 env 契约一致）。
+- agent-lab 对 PTH：**零 import**（`config-io.ts` 自含 `ptlHome()` 解析，与 pit 经 env 契约一致）。
 
 **归属判定**：
 - 内核定位 = **PTH 会话执行基座**（agent 回合宿主/替换、工具执行、回合调度、budget 控制）→ 代码写 **`src/pth/`**（或 `src/shared/` 被 pth 引用），经 `sdk-adapter` 挂 `createSession`/`session.prompt`/customTools。agent-lab 无感知（它经 SDK 会话天然获得内核提供的执行语义）。

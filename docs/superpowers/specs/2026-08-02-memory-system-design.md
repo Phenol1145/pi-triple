@@ -3,7 +3,7 @@
 - **日期**：2026-08-02
 - **状态**：设计（经两轮对抗性评审修订）
 - **范围**：L3 语义记忆系统——MemoryEntry 最小单元、语言体系（EBNF + 方言层）、沉淀管道、检索、公域/私域作用域管理（fork-merge + 审核链）、SSP/DSP 明确化、通讯（纸带交换）与记忆的分离
-- **定位**：市场经济体制（方案 A）三阶段之②——装配层（C）与经济层（D）之间的地基。前序：pit-flow 运行时扩展（子项目 A ✅：code 节点 + metrics 声明 + 竞价 workflow）
+- **定位**：市场经济体制（方案 A）三阶段之②——装配层（C）与经济层（D）之间的地基。前序：ptl-flow 运行时扩展（子项目 A ✅：code 节点 + metrics 声明 + 竞价 workflow）
 - **对抗性评审记录**：两轮（kimi-k2.7-code / kimi-coding/k3-256k），关键裁决：方言层 C 渐进、唯一通道不变量修正、DSP 检索快照进 checkpoint、审核策略矩阵、版本 DAG 基线、write-behind 缓冲、comms 与用户消息同通道
 
 ---
@@ -179,7 +179,7 @@ L0 语义层：统一语义树（字段/关系/值域——模型无关）
 **通讯 = 纸带交换**（瞬态、定向、近实时）；公域记忆 ≠ 通讯（及时性差是特性）。
 
 - **comms 与用户消息同通道（用户裁决）**：纸带片段作为 user 消息追加进接收方纸带（带来源标记 `peer:<id>`），与 operator 消息走完全相同注入路径——不绕过校验链（因为不冒充记忆）
-- **传输复用 pit-communicate + 语义桥接 `sdk.comms`**（C 方案）：`send(peer, tapeFragment)` / 收件事件 `comms_received`（可触发转移）；进 WorkLoopSDK
+- **传输复用 ptl-communicate + 语义桥接 `sdk.comms`**（C 方案）：`send(peer, tapeFragment)` / 收件事件 `comms_received`（可触发转移）；进 WorkLoopSDK
 - **comms 独立日志**（append-only，checkpoint 只存日志指针——防 checkpoint 膨胀）
 - **幂等**：接收侧按 msgId 去重——msgId 由 sdk.comms 发送方生成（UUID）；去重范围 = 接收 agent 全局；**去重状态随 checkpoint 水位同步（第四轮 R4）**：dedup 记录带 checkpoint 水位，resume 后丢弃晚于 S 的 dedup 记录（允许重复投递，纸带 append-only + 内容比对兜底——防“已投递但被拒收”的幽灵拒收）；纸带 fork/clone 时 comms 消息不随分支重放（消息是事件不是纸带内容）
 - **mode 映射**：agent↔agent 消息**必须 auto 模式**（manual 模式会被人力门卡死"近实时"）
@@ -220,7 +220,7 @@ L0 语义层：统一语义树（字段/关系/值域——模型无关）
 
 ## 12. 隐藏依赖与风险（对抗性评审确认）
 
-1. pit-communicate delivery 语义（manual/hybrid/auto mode 分流）——comms 正确性依赖，agent 间必须 auto
+1. ptl-communicate delivery 语义（manual/hybrid/auto mode 分流）——comms 正确性依赖，agent 间必须 auto
 2. agentId → (tenantId, sessionId) 身份映射层——需新建（mailbox 按 tenant/session 寻址）
 3. audit.jsonl 4KB 原子追加限制（PIPE_BUF）——多 agent 并发写超 4KB 交错（记录风险）
 4. pi 扩展点稳定性：comms 注入依赖 session_start + injectNextTurn/injectSteer——pi API 变更击穿通讯层

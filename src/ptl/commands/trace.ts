@@ -1,5 +1,5 @@
 /**
- * pit/commands/trace — pit trace 命令族（状态追踪，CLI/TUI 共享）
+ * ptl/commands/trace — ptl trace 命令族（状态追踪，CLI/TUI 共享）
  *
  * 读 trace provider 聚合视图（session-store）：credit/结算/遥测变化。
  * timeline 委托 store 的 traceTimeline（遍历 provider.timeline）。
@@ -14,7 +14,7 @@ export function execTraceLs(args: string[]): CommandResult {
     (!flags.template || t.templateId === flags.template) &&
     (!flags.agent || t.detail["agent"] === flags.agent || t.summary.includes(flags.agent)));
   if (flags.json === "true") return { ok: true, message: "", data: { traces } };
-  if (traces.length === 0) return { ok: true, message: "  无追踪记录。运行竞价任务（pit lab 或 flow submit）产生 credit 变化", data: { traces } };
+  if (traces.length === 0) return { ok: true, message: "  无追踪记录。运行竞价任务（ptl lab 或 flow submit）产生 credit 变化", data: { traces } };
   return {
     ok: true,
     message: traces.map((t) => `  ${t.id.slice(0, 12)}  ${t.timestamp.slice(0, 16)}  ${t.summary}`).join("\n"),
@@ -30,7 +30,7 @@ export function execTraceShow(id: string): CommandResult {
 }
 
 export function execTraceTimeline(agentId: string): CommandResult {
-  if (!agentId) return { ok: false, message: "", error: { code: "USAGE", message: "用法: pit trace timeline <agentId>" } };
+  if (!agentId) return { ok: false, message: "", error: { code: "USAGE", message: "用法: ptl trace timeline <agentId>" } };
   const tl = traceTimeline(agentId);
   if (tl.length === 0) return { ok: true, message: `  无 ${agentId} 的轨迹` };
   return { ok: true, message: tl.map((t) => `  ${t.timestamp.slice(0, 16)}  ${t.summary}`).join("\n"), data: { traces: tl } };

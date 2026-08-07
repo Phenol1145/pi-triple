@@ -58,7 +58,7 @@ beforeAll(async () => {
   const sessionStore = new RedisSessionStore(redis);
   const credentials = new EnvCredentialProvider();
   const audit = new AuditWriter(redis);
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "pit-test-"));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-test-"));
   const workspaceMgr = new WorkspaceManager(
     platform,
     `${dataDir}/workspaces`,
@@ -143,7 +143,7 @@ describe("AgentEngine session lifecycle", () => {
     const sessionStore = new RedisSessionStore(r);
     const credentials = new EnvCredentialProvider();
     const audit = new AuditWriter(r);
-    const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "pit-test-"));
+    const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-test-"));
     const workspaceMgr = new WorkspaceManager(platform, path.join(testDataDir, "workspaces"), path.join(testDataDir, "platform"), path.join(testDataDir, "tenants"));
 
     const pool = new SessionPool(
@@ -185,7 +185,7 @@ describe("AgentEngine session lifecycle", () => {
     const sessionStore = new RedisSessionStore(r);
     const credentials = new EnvCredentialProvider();
     const audit = new AuditWriter(r);
-    const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "pit-test-"));
+    const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-test-"));
     const workspaceMgr = new WorkspaceManager(platform, path.join(testDataDir, "workspaces"), path.join(testDataDir, "platform"), path.join(testDataDir, "tenants"));
 
     const pool = new SessionPool(

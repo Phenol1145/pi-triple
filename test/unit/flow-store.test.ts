@@ -27,7 +27,7 @@ const SIMPLE_FLOW: FlowDef = {
 };
 
 function tempDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "pit-flow-test-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "ptl-flow-test-"));
 }
 
 describe("FlowStore", () => {

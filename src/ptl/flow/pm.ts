@@ -1,5 +1,5 @@
 /**
- * pit-flow process manager — spawnAgent 实现
+ * ptl-flow process manager — spawnAgent 实现
  */
 import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";

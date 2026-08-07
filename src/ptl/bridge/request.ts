@@ -1,26 +1,26 @@
 /**
- * bridge/request.ts — pit hub request / pit hub requests 命令（F/WP4 Task 20）
+ * bridge/request.ts — ptl hub request / ptl hub requests 命令（F/WP4 Task 20）
  *
  * 手动建单（spec §5.4——自动触发判定[watchdog/T 参数]留 E 阶段）：模拟根回退节点
  * 的透传行为——人类/PTL 主动创建构件缺口请求。
  *
- *   pit hub request "<description>" --slot <slotHint> [--urgency low|medium|high]
- *   pit hub requests（列表——open 优先）
+ *   ptl hub request "<description>" --slot <slotHint> [--urgency low|medium|high]
+ *   ptl hub requests（列表——open 优先）
  */
 import { PthClient } from "./client.js";
-import { printBanner } from "../pit/main.js";
+import { printBanner } from "../cli/main.js";
 
 export async function cmdHubRequest(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const description = passthrough[0];
   if (!description) {
-    console.log('  用法: pit hub request "<description>" --slot <slotHint> [--urgency low|medium|high]');
+    console.log('  用法: ptl hub request "<description>" --slot <slotHint> [--urgency low|medium|high]');
     process.exit(1);
   }
 
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: pit config set pth.url <url>  &&  pit config set pth.token <token>");
+    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
     process.exit(1);
   }
 
@@ -43,7 +43,7 @@ export async function cmdHubRequests(_flags: Record<string, string>): Promise<vo
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: pit config set pth.url <url>  &&  pit config set pth.token <token>");
+    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
     process.exit(1);
   }
 
@@ -54,7 +54,7 @@ export async function cmdHubRequests(_flags: Record<string, string>): Promise<vo
     console.log("  \x1b[1m回退请求列表\x1b[0m");
 
     if (reqs.length === 0) {
-      console.log("\n  暂无回退请求。建单: pit hub request \"<description>\" --slot <slotHint>");
+      console.log("\n  暂无回退请求。建单: ptl hub request \"<description>\" --slot <slotHint>");
     } else {
       console.log("");
       console.log(`  \x1b[2m${"REQUEST_ID".padEnd(40)}URGENCY STATUS  CREATED  DESCRIPTION\x1b[0m`);

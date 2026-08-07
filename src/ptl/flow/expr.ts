@@ -1,5 +1,5 @@
 /**
- * pit-flow when 表达式求值器（递归下降，零依赖，无 eval）
+ * ptl-flow when 表达式求值器（递归下降，零依赖，无 eval）
  *
  * 文法:
  *   expr       = or

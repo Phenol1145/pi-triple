@@ -10,7 +10,7 @@
 2. **subagent 继承父进程 env（含 PI_CODING_AGENT_DIR）**→ **运行在父会话的同一租户内**——没有 agent 级租户隔离。
 3. **lab 拦截器只改写 `input.model` 字符串**——Arena/weighted-scorer 做的"agent 选择"本质是字符串替换，不涉及 pit 租户/会话/工作区管理。
 4. **pi-subagents 的 AgentConfig 结构与 pit 租户配置高度同构**（model/tools/extensions/skills/systemPrompt/work-dir），是天然接合面。
-5. **pit launcher 的 `buildPiLaunch(tenantId)` 提供完整的租户隔离 pi 进程热备**（PI_CODING_AGENT_DIR + per-tenant workspace + session-dir + tmux 会话管理），恰是 lab 调度器"agent 实例"可以映射的载体。
+5. **ptl launcher 的 `buildPiLaunch(tenantId)` 提供完整的租户隔离 pi 进程热备**（PI_CODING_AGENT_DIR + per-tenant workspace + session-dir + tmux 会话管理），恰是 lab 调度器"agent 实例"可以映射的载体。
 
 ---
 
@@ -50,7 +50,7 @@ const proc = spawn(spawnSpec.command, spawnSpec.args, {
   - `watchdog/` 目录：子进程状态/诊断/渲染/评审
   - `foreground/foreground-control.ts`：前台控制通道
   - 会话文件：`options.sessionDir`（per-subagent-run 的 session file）
-- **但不用 pit**：无 tmux 会话、无 `pit start`、无 `pit attach/switch/stop/ls`。
+- **但不用 pit**：无 tmux 会话、无 `ptl start`、无 `ptl attach/switch/stop/ls`。
 - **结论**：具备自己的一套进程管理，但不可见/不可切换/不可经 pit 控制。
 
 ---
@@ -108,14 +108,14 @@ const proc = spawn(spawnSpec.command, spawnSpec.args, {
 | 工作区隔离 | ✅ per-tenant workspace | ❌ 继承 cwd 或指定的 cwd |
 | 会话管理 | ✅ session-dir（per-tenant）+ PI_SESSION_ID | ✅ 自己的 session-dir（per-run） |
 | lab 配置 | ✅ AGENT_LAB_DB_PATH + CONFIG_DIR | ❌ 不设置 |
-| tmux | ✅ pit start 托管 | ❌ 无 |
+| tmux | ✅ ptl start 托管 | ❌ 无 |
 
-### 3.2 pit 会话管理（`src/ptl/pit/sessions.ts` + `src/ptl/tmux.ts`）
+### 3.2 pit 会话管理（`src/ptl/cli/sessions.ts` + `src/ptl/tmux.ts`）
 
-- `cmdStart`：tmux 会话创建 + 接入（`tmux new-session -s pit-<name>`）
+- `cmdStart`：tmux 会话创建 + 接入（`tmux new-session -s ptl-<name>`）
 - `cmdAttach`/`cmdSwitch`/`cmdDetach`：tmux switch-client / detach
 - `cmdLs`/`cmdStop`：会话列表/停止
-- pit-control 扩展：`/control start/stop/ls/switch/detach/ui` — pi 会话内管理 tmux
+- ptl-control 扩展：`/control start/stop/ls/switch/detach/ui` — pi 会话内管理 tmux
 
 ### 3.3 共享扩展层（`src/ptl/shared-layer.ts`）
 
@@ -139,26 +139,26 @@ const proc = spawn(spawnSpec.command, spawnSpec.args, {
 | `buildPiLaunch` 设 `AGENT_LAB_DB_PATH` | ✅ | launcher.ts:129-130：`AGENT_LAB_DB_PATH: path.join(sharedDir, "agent-lab", "agent-lab.db")` |
 | lab interceptor 感知 PI_CODING_AGENT_DIR | ⚠️ 间接 | model-scope.ts:8 读 `process.env.PI_CODING_AGENT_DIR ?? "~/.pi/agent"` 的 settings.json（subagents.modelScope.allow） |
 | subagent 派发经 pit | ❌ | pi-subagents spawn 自己管理，不与 pit 通信 |
-| lab AgentInstance ↔ pit tenant | ❌ | AgentInstance 是 lab 内部概念，不映射到 pit 租户 |
+| lab AgentInstance ↔ ptl tenant | ❌ | AgentInstance 是 lab 内部概念，不映射到 pit 租户 |
 
 ---
 
 ## 5. 集成路径分析
 
-### 路径 A：lab 调度器经 pit launcher 起 agent（深度集成）
+### 路径 A：lab 调度器经 ptl launcher 起 agent（深度集成）
 
-**思路**：lab dispatch 选定模型后，不改写 `input.model`，而是调用 `buildPiLaunch(agentTenantId, {model: selectedModel})` 起一个**租户隔离的 pit tmux 会话**作为"agent 实例"。pi-subagents 的 subagent runner 退位为 pit 的 runtime adapter。
+**思路**：lab dispatch 选定模型后，不改写 `input.model`，而是调用 `buildPiLaunch(agentTenantId, {model: selectedModel})` 起一个**租户隔离的 ptl tmux 会话**作为"agent 实例"。pi-subagents 的 subagent runner 退位为 pit 的 runtime adapter。
 
 **改动点**：
 1. `lab scheduler-bridge.ts`：`decideSchedulerSelection` 返回的不是 `{action:"apply", model}` 而是 `{action:"spawn", tenantId, model, sessionOpts}`
-2. `lab interceptor/register.ts`：`action==="spawn"` 时调 `buildPiLaunch` + `pit start --bg` 起会话，而非改写 input.model
-3. pi-subagents 侧的 `tool_call(subagent)` → 检测到 `action==="spawn"` 时走 pit adapter（新的 execution path），而非 `buildPiArgs` + `spawn`
+2. `lab interceptor/register.ts`：`action==="spawn"` 时调 `buildPiLaunch` + `ptl start --bg` 起会话，而非改写 input.model
+3. pi-subagents 侧的 `tool_call(subagent)` → 检测到 `action==="spawn"` 时走 ptl adapter（新的 execution path），而非 `buildPiArgs` + `spawn`
 4. agent 的 session-dir / workspace 由 pit 按租户管理
 5. arena settle 时结算与 agent 余额绑在 ledger 不变，但"agent 身份"从 `agent-arena-<modelId>` 映射到 `tenantId`
 
 **难点**：
-- 大改动（lab + pi-subagents 两侧），当前 `tool_call` 事件模型不支持"不 spawn 子进程"语义（subagent 工具期望 spawn 进程并返回结果）。需要新增一套"pit-subagent"工具或事件。
-- pi-subagents 的 `AgentConfig` 渲染目前是同步 JSON 拼接 + 命令构建；替换为 pit launch 需要打破其内部的 execution/runner 封装。
+- 大改动（lab + pi-subagents 两侧），当前 `tool_call` 事件模型不支持"不 spawn 子进程"语义（subagent 工具期望 spawn 进程并返回结果）。需要新增一套"ptl-subagent"工具或事件。
+- pi-subagents 的 `AgentConfig` 渲染目前是同步 JSON 拼接 + 命令构建；替换为 ptl launch 需要打破其内部的 execution/runner 封装。
 - tmux 会话管理语义不同（pi-subagents 期望 await 进程退出并捕获 stdout；tmux 后台会话不直接返回 stdout）。
 
 **与 spec 关系**：接近全局架构 spec §9.2 的完整路径——Scheduler 经 SDK `agents.run()` 执行 AgentInstance 的 WorkLoop。但当前 WorkLoop/Agent Runtime 尚未实现。
@@ -184,15 +184,15 @@ const proc = spawn(spawnSpec.command, spawnSpec.args, {
 
 ### 路径 C：pit 作为 lab 的 runtime backend（pit 驱动 lab）
 
-**思路**：反过来——让 pit 成为 lab 的"SchedulerSDK.agents.run()"实现。pit 提供 `pit lab-agent start <role> --tenant <id>` 命令（lab 在 console 里调 pit），pit 负责起 tmux 会话、配 PI_CODING_AGENT_DIR、管理生命周期。lab 调度器通过 `pit` CLI 或内部 API 驱使其"agent 实例"。
+**思路**：反过来——让 pit 成为 lab 的"SchedulerSDK.agents.run()"实现。pit 提供 `ptl lab-agent start <role> --tenant <id>` 命令（lab 在 console 里调 pit），pit 负责起 tmux 会话、配 PI_CODING_AGENT_DIR、管理生命周期。lab 调度器通过 `ptl` CLI 或内部 API 驱使其"agent 实例"。
 
 **改动点**：
-1. pit 新增 `pit agent start/stop/status` 子命令：等同于 `pit start --bg --name agent-<role>-<id>` + 自动配 PI_CODING_AGENT_DIR
-2. lab scheduler-bridge 的 `dispatch` 返回后，调 `pit agent start --model <selected> --role <role> --tenant <agentTenant>` 等待结果
+1. pit 新增 `ptl agent start/stop/status` 子命令：等同于 `ptl start --bg --name agent-<role>-<id>` + 自动配 PI_CODING_AGENT_DIR
+2. lab scheduler-bridge 的 `dispatch` 返回后，调 `ptl agent start --model <selected> --role <role> --tenant <agentTenant>` 等待结果
 3. pit 侧 `buildPiLaunch` 暴露为编程 API（导出 + 可用 import 而非 CLI）
 
 **难点**：
-- lab 调度器目前是同步 rewrite → subagent 工具自己 spawn。改成"pit agent start + await"需要 pi-subagents 侧支持"外置 agent 执行器"模式。
+- lab 调度器目前是同步 rewrite → subagent 工具自己 spawn。改成"ptl agent start + await"需要 pi-subagents 侧支持"外置 agent 执行器"模式。
 - pit CLI 需要编程 API（已有 `launchPi` + `buildPiLaunch`，但缺少"后台启动 + 等待结果 + 返回退出码/输出"的编程接口）。
 
 **与 spec 关系**：让 pit 成为 spec §9.2 的 Runtime 后端——"Scheduler SDK 加载 AgentInstance 和 WorkLoop……Scheduler SDK 检查 single-flight……Runtime 执行"。pit 提供了隔离、会话、工作区，lab 提供调度+经济账本。
@@ -203,7 +203,7 @@ const proc = spawn(spawnSpec.command, spawnSpec.args, {
 **思路**：不改 subagent 派发机制，而是让 lab 本身"多租户化"——每个 pit 租户运行自己的 lab 配置（独立的 scheduler instance、agent 群体、账本）。lab 数据的路径断裂（已知 bug）先行修好，让每个租户的 `AGENT_LAB_CONFIG_DIR` 指向独立 DB。
 
 **改动点**：
-1. 修 `pit tui lab` TUI "DB offline"——lab-data/open-db.ts 默认 DATA_DIR 改为 `pitHome()/data`
+1. 修 `ptl tui lab` TUI "DB offline"——lab-data/open-db.ts 默认 DATA_DIR 改为 `ptlHome()/data`
 2. lab ledger/tasks 数据从 `lab_agent_instances` 等表按 `tenantId` 隔离（租户 A 的 arena 与租户 B 隔离）
 3. `AGENT_LAB_DB_PATH` 已有（`buildPiLaunch` 设了），但 lab 侧 `localConfigDir()` + ledger 的 DB 路径与之不一致——需统一。
 
@@ -219,5 +219,5 @@ const proc = spawn(spawnSpec.command, spawnSpec.args, {
 
 1. **先修数据路径断裂**（lab-data TUI 的 "DB offline" + ledger 路径统一）。基础——不修则任何多租户 talk 都落不了地。
 2. **路径 B**（subagent 租户隔离）：最小侵入——不改 lab 选择逻辑、不改 pi-subagents 核心流程，只在 spawn env 层加 PI_CODING_AGENT_DIR 指向。
-3. **路径 C**（pit 驱动 lab agent）：pit 加 `pit agent start` 子命令，lab 调度器可选"pit 托管"模式。路径 B 的 subagent 在 pit 托管下就是 tmux 会话——B 到 C 是自然升级。
-4. **路径 A**（深度集成）作远期目标——等 WorkLoop SDK + Agent Runtime 实现后（spec §9.2），Arena agent 的执行自然落入 `pit agent start` 的管道。
+3. **路径 C**（pit 驱动 lab agent）：pit 加 `ptl agent start` 子命令，lab 调度器可选"pit 托管"模式。路径 B 的 subagent 在 pit 托管下就是 tmux 会话——B 到 C 是自然升级。
+4. **路径 A**（深度集成）作远期目标——等 WorkLoop SDK + Agent Runtime 实现后（spec §9.2），Arena agent 的执行自然落入 `ptl agent start` 的管道。

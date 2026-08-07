@@ -1,5 +1,5 @@
 /**
- * pit-flow store — run 目录 CRUD + 双锁 + checkpoint + 快照历史
+ * ptl-flow store — run 目录 CRUD + 双锁 + checkpoint + 快照历史
  *
  * Run 目录:
  *   ~/.pi-triple/data/flows/<runId>/

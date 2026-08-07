@@ -83,7 +83,7 @@ function resolveTarget(source: PiSessionFile, opts: ForkOpts | TransferOpts): Ta
     } else {
       return {
         ok: false,
-        error: { ok: false, message: "", error: { code: "TEMPLATE_NOT_FOUND", message: `模板 "${requested}" 不存在（pit template ls 查看）` } },
+        error: { ok: false, message: "", error: { code: "TEMPLATE_NOT_FOUND", message: `模板 "${requested}" 不存在（ptl template ls 查看）` } },
       };
     }
   }
@@ -154,7 +154,7 @@ export function cloneSession(source: PiSessionFile, opts: ForkOpts): CommandResu
  */
 export function transferSession(source: PiSessionFile, opts: TransferOpts, running?: boolean): CommandResult {
   if (running) {
-    return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${source.id.slice(0, 8)}… 正在运行，请先停止再转移（pit session stop <id>）` } };
+    return { ok: false, message: "", error: { code: "ALREADY_RUNNING", message: `会话 ${source.id.slice(0, 8)}… 正在运行，请先停止再转移（ptl session stop <id>）` } };
   }
   const parsed = readEntries(source.file);
   if (!parsed) return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话文件无效或不可读: ${source.file}` } };
@@ -220,7 +220,7 @@ export function forkSessionAtNode(source: PiSessionFile, opts: BranchOpts): Comm
   const byId = new Map(parsed.entries.map((e) => [e.id as string, e]));
   const node = byId.get(opts.at);
   if (!node) {
-    return { ok: false, message: "", error: { code: "NODE_NOT_FOUND", message: `节点 "${opts.at}" 不存在（pit session branch --list-nodes 查看）` } };
+    return { ok: false, message: "", error: { code: "NODE_NOT_FOUND", message: `节点 "${opts.at}" 不存在（ptl session branch --list-nodes 查看）` } };
   }
 
   // 沿 parentId 链回溯到 root，收集主线（node 含；后代不含）

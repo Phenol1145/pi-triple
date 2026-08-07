@@ -3,8 +3,7 @@
   "version": "0.1.1",
   "type": "module",
   "bin": {
-    "pit": "./dist/ptl/pit.js",
-    "pth": "./dist/pth/main.js"
+    "ptl": "./dist/ptl/pit.js"
   },
   "files": [
     "dist",
@@ -17,13 +16,13 @@
   },
   "scripts": {
     "build": "tsc",
-    "pit:dev": "tsx src/ptl/pit.ts",
     "pth:dev": "tsx watch src/pth/main.ts",
     "pth:start": "node dist/pth/main.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
-    "monitor": "node tools/docker-monitor/server.js"
+    "monitor": "node tools/docker-monitor/server.js",
+    "ptl:dev": "tsx src/ptl/pit.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "^0.82.1",

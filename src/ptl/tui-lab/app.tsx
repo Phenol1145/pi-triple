@@ -8,7 +8,7 @@ import { Box, Text, useInput } from "ink";
 import type { DatabaseSync } from "node:sqlite";
 import { openReadOnlyOrNull, sharedDbPath, localDbPath } from "../lab-data/index.js";
 import { useTabs, useRefresh, Screen, useTerminalSize } from "../tui-shared/index.js";
-import { CommandBar, type CmdNode } from "../tui-pit/command-bar.js";
+import { CommandBar, type CmdNode } from "../tui-ptl/command-bar.js";
 import { TelemetryPage } from "./telemetry.js";
 import { ArenaPage } from "./arena.js";
 import { EventsPage } from "./events.js";

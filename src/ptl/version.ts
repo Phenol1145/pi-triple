@@ -1,5 +1,5 @@
 /**
- * pit/version — 版本单源（package.json）+ 启动更新提示（CLI 辅通道，只读缓存零网络）
+ * ptl/version — 版本单源（package.json）+ 启动更新提示（CLI 辅通道，只读缓存零网络）
  */
 
 import fs from "node:fs";
@@ -8,7 +8,7 @@ import { readCache, isCacheFresh, isUpdateAvailable } from "./version-check.js";
 
 let cachedVersion: string | null = null;
 
-export function getPitVersion(): string {
+export function getPtlVersion(): string {
   if (cachedVersion) return cachedVersion;
   const pkg = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf-8")) as { version?: string };
   cachedVersion = pkg.version ?? "0.0.0";
@@ -24,15 +24,15 @@ export function currentPiSdkVersion(): string {
   }
 }
 
-export function maybePrintUpdateHint(currentPit?: string, currentPiSdk?: string): void {
+export function maybePrintUpdateHint(currentPtl?: string, currentPiSdk?: string): void {
   try {
     if (process.env.PI_OFFLINE || process.env.PI_SKIP_VERSION_CHECK) return;
     const cache = readCache();
     if (!cache || !isCacheFresh(cache)) return; // CLI 只读缓存，不查询（扩展兜底）
     const hints: string[] = [];
-    const pitVer = currentPit ?? getPitVersion();
-    if (cache.pit && isUpdateAvailable(cache.pit, pitVer)) {
-      hints.push(`pit 更新可用: v${cache.pit}（当前 v${pitVer}）`);
+    const ptlVer = currentPtl ?? getPtlVersion();
+    if (cache.ptl && isUpdateAvailable(cache.ptl, ptlVer)) {
+      hints.push(`ptl 更新可用: v${cache.ptl}（当前 v${ptlVer}）`);
     }
     if (cache.piSdk) {
       const piSdkVer = currentPiSdk ?? currentPiSdkVersion();
@@ -41,7 +41,7 @@ export function maybePrintUpdateHint(currentPit?: string, currentPiSdk?: string)
       }
     }
     if (hints.length > 0) {
-      console.error(`\x1b[33m⚠ ${hints.join(" · ")} → 运行 pit update 一次更新全部\x1b[0m`);
+      console.error(`\x1b[33m⚠ ${hints.join(" · ")} → 运行 ptl update 一次更新全部\x1b[0m`);
     }
   } catch {
     /* 提示失败静默 */

@@ -15,7 +15,7 @@ let savedOffline: string | undefined;
 let savedSkip: string | undefined;
 
 beforeAll(() => {
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pit-vc-"));
+  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-vc-"));
   savedDataDir = process.env.DATA_DIR;
   savedOffline = process.env.PI_OFFLINE;
   savedSkip = process.env.PI_SKIP_VERSION_CHECK;
@@ -64,7 +64,7 @@ describe("isUpdateAvailable", () => {
 
 describe("缓存", () => {
   it("writeCache → readCache 往返一致", () => {
-    const data = { checkedAt: new Date().toISOString(), pit: "0.2.0", piSdk: "0.84.0" };
+    const data = { checkedAt: new Date().toISOString(), ptl: "0.2.0", piSdk: "0.84.0" };
     writeCache(data);
     expect(readCache()).toEqual(data);
   });
@@ -123,10 +123,10 @@ describe("checkForUpdates", () => {
     delete process.env.PI_SKIP_VERSION_CHECK;
   });
   it("缓存新鲜时直接返回缓存不查询", async () => {
-    writeCache({ checkedAt: new Date().toISOString(), pit: "0.2.0" });
+    writeCache({ checkedAt: new Date().toISOString(), ptl: "0.2.0" });
     const fetchImpl = vi.fn() as unknown as typeof fetch;
     const r = await checkForUpdates({ fetchImpl });
-    expect(r).toEqual({ pit: "0.2.0" });
+    expect(r).toEqual({ ptl: "0.2.0" });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
   it("无缓存/过期时并行查询并写缓存", async () => {
@@ -134,7 +134,7 @@ describe("checkForUpdates", () => {
     const fetchImpl = (async () => ({ ok: true, json: async () => ({ tag_name: "v0.3.0" }) })) as unknown as typeof fetch;
     const shell = (() => ({ status: 0, stdout: "0.85.0" })) as never;
     const r = await checkForUpdates({ fetchImpl, shell });
-    expect(r).toEqual({ pit: "0.3.0", piSdk: "0.85.0" });
-    expect(readCache()).toMatchObject({ pit: "0.3.0", piSdk: "0.85.0" });
+    expect(r).toEqual({ ptl: "0.3.0", piSdk: "0.85.0" });
+    expect(readCache()).toMatchObject({ ptl: "0.3.0", piSdk: "0.85.0" });
   });
 });

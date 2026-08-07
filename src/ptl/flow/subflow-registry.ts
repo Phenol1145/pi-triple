@@ -1,4 +1,4 @@
-// pit-flow subflow 子图注册表
+// ptl-flow subflow 子图注册表
 //
 // subflow 节点通过 `flow: string` 引用已注册子图，或通过内联 FlowDef 定义。
 // 本注册表提供命名解析，与 code-registry / effect-registry 模式一致。

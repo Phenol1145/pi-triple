@@ -15,7 +15,7 @@
 | | PTL（Pi-Triple-Lite） | PTH（Pi-Triple-Heavy） |
 |---|---|---|
 | 定位 | 轻量开发/调试工具链 | **agent 联邦平台（服务器）** |
-| 入口 | `pit` CLI | `pth` server |
+| 入口 | `ptl` CLI | `pth` server |
 | 运行时 | 真实 pi 进程 × tmux | AgentEngine + Redis + BullMQ |
 | 源码 | `src/ptl/` | `src/pth/` |
 | agent 执行 | **不运行 agent 本体**（交互/触发/桥接） | **agent 实际运行处** |

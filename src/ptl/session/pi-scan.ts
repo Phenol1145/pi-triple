@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { SessionRecord } from "./session-provider.js";
-import { listPitSessions, listPitPanesDetailed, hasTmux, formatAge, type PitSession, type PitPaneInfo } from "../tmux.js";
+import { listPtlSessions, listPtlPanesDetailed, hasTmux, formatAge, type PtlSession, type PtlPaneInfo } from "../tmux.js";
 import { classifySession } from "../session-state.js";
 import { pitHome, loadConfig } from "../config.js";
 
@@ -56,8 +56,8 @@ export function scanSessionFiles(dataDirOrConfig: string | { dataDir: string }):
 
 /** 合并 tmux 运行态 → SessionRecord 列表 */
 export function toSessionRecords(files: PiSessionFile[]): SessionRecord[] {
-  const running = hasTmux() ? new Map(listPitSessions().map((s) => [`pit-${s.name}`, s])) : new Map<string, PitSession>();
-  const panes = hasTmux() ? listPitPanesDetailed() : new Map<string, PitPaneInfo>();
+  const running = hasTmux() ? new Map(listPtlSessions().map((s) => [`ptl-${s.name}`, s])) : new Map<string, PtlSession>();
+  const panes = hasTmux() ? listPtlPanesDetailed() : new Map<string, PtlPaneInfo>();
   const aliases: Record<string, string> = {};
   try {
     const cfg = JSON.parse(fs.readFileSync(path.join(pitHome(), "pi-triple.json"), "utf-8"));
@@ -65,7 +65,7 @@ export function toSessionRecords(files: PiSessionFile[]): SessionRecord[] {
   } catch { /* 无配置时用 templateId 兜底 */ }
 
   return files.map((f) => {
-    const tmuxName = [...panes.keys()].find((n) => n === `pit-${f.id.slice(0, 8)}` || panes.get(n)?.currentCommand?.includes(f.id));
+    const tmuxName = [...panes.keys()].find((n) => n === `ptl-${f.id.slice(0, 8)}` || panes.get(n)?.currentCommand?.includes(f.id));
     const sess = tmuxName ? running.get(tmuxName) : undefined;
     const pane = tmuxName ? panes.get(tmuxName) : undefined;
     // 纸带视图无注册表参与：running 仅当 tmux 在且 pane pid 存活（空壳 → 停止）
@@ -101,9 +101,9 @@ export function toSessionRecords(files: PiSessionFile[]): SessionRecord[] {
   });
 }
 
-/** 纸带 id 是否正被运行中的 pi 写入（pane 名 pit-<id8> 或当前命令含完整 id） */
-export function isTapeLive(id: string, panes: Map<string, PitPaneInfo> = hasTmux() ? listPitPanesDetailed() : new Map()): boolean {
-  return [...panes.keys()].some((n) => n === `pit-${id.slice(0, 8)}` || panes.get(n)?.currentCommand?.includes(id));
+/** 纸带 id 是否正被运行中的 pi 写入（pane 名 ptl-<id8> 或当前命令含完整 id） */
+export function isTapeLive(id: string, panes: Map<string, PtlPaneInfo> = hasTmux() ? listPtlPanesDetailed() : new Map()): boolean {
+  return [...panes.keys()].some((n) => n === `ptl-${id.slice(0, 8)}` || panes.get(n)?.currentCommand?.includes(id));
 }
 
 /** 模板内 sinceMs 之后修改过的最新纸带 id（fresh 启动后探测本会话的 tape） */

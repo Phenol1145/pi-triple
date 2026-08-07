@@ -1,4 +1,4 @@
-// pit-flow code 节点函数注册表（白名单：flow 只能引用已注册函数）
+// ptl-flow code 节点函数注册表（白名单：flow 只能引用已注册函数）
 
 export interface CodeFnContext {
   state: Readonly<Record<string, unknown>>;

@@ -15,7 +15,7 @@ describe("config get/set/unset", () => {
   let origHome: string | undefined;
 
   beforeEach(() => {
-    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "pit-cfg-"));
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-cfg-"));
     origHome = process.env.PI_TRIPLE_HOME;
     process.env.PI_TRIPLE_HOME = tmpHome;
   });

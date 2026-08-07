@@ -19,7 +19,7 @@ import { listAllSessions } from "../session/session-store.js";
 import type { SessionRecord } from "../session/session-provider.js";
 import { SessionMenuPanel, sessionTmuxName, bareTmuxName } from "./session-menu.js";
 import {
-  killPitSession,
+  killPtlSession,
   buildTmuxSessionArgs,
 } from "../tmux.js";
 
@@ -81,7 +81,7 @@ export function SessionsPage({
     summary: s.summary,
   }));
 
-  // attach：tmux 内 switch-client 瞬移；tmux 外 handoff（pit attach 接管终端）
+  // attach：tmux 内 switch-client 瞬移；tmux 外 handoff（ptl attach 接管终端）
   const attachSession = (rec: SessionRecord) => {
     const full = sessionTmuxName(rec);
     if (!full) { onNotify?.("会话未在运行（tmux 无匹配）"); return; }
@@ -133,7 +133,7 @@ export function SessionsPage({
         <ConfirmDialog
           message={`Stop session "${deleteTarget}"?`}
           onConfirm={() => {
-            killPitSession(deleteTarget);
+            killPtlSession(deleteTarget);
             refreshSessions();
             setMode("list");
             setDeleteTarget(null);
@@ -162,7 +162,7 @@ export function SessionsPage({
             const name = `${alias}-${Date.now().toString(36)}`;
             const launch = await buildPiLaunch(templateId, {});
             // B4 fix: use buildTmuxSessionArgs to inject PI_/AGENT_LAB_ env vars
-            const session = `pit-${name}`;
+            const session = `ptl-${name}`;
             const args = buildTmuxSessionArgs(launch, session, false);
             handoffTerminal("tmux", args, unmount);
           }}
@@ -194,7 +194,7 @@ export function SessionsPage({
       </Box>
 
       {sessions.length === 0 ? (
-        <Text dimColor>  无会话 — 启动: pit start --bg --name &lt;name&gt;</Text>
+        <Text dimColor>  无会话 — 启动: ptl start --bg --name &lt;name&gt;</Text>
       ) : (
         <>
           <DataTable
@@ -215,8 +215,8 @@ export function SessionsPage({
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>Hints:</Text>
         <Text dimColor>  - 列表含已停止会话（○）；仅运行中（●）可 attach/stop</Text>
-        <Text dimColor>  - Inside tmux: [a] switches instantly (pit ui keeps running)</Text>
-        <Text dimColor>  - Outside tmux: [a] attaches (pit ui exits) · pit detach 脱离</Text>
+        <Text dimColor>  - Inside tmux: [a] switches instantly (ptl ui keeps running)</Text>
+        <Text dimColor>  - Outside tmux: [a] attaches (ptl ui exits) · ptl detach 脱离</Text>
       </Box>
 
       <Box marginTop={1}>

@@ -147,7 +147,7 @@ describe("FlowEngine v2 — waves", () => {
   let testRoot: string;
 
   beforeEach(() => {
-    testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pit-flow-v2-"));
+    testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-flow-v2-"));
     store = new FlowStore(testRoot);
   });
 

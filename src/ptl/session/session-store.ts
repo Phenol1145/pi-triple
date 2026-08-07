@@ -95,7 +95,7 @@ export function operateSession(
     if (resolved.reason === "ambiguous") {
       return { ok: false, message: "", error: { code: "AMBIGUOUS", message: `会话 "${id}" 匹配 ${resolved.candidates?.length ?? 0} 个，请使用完整 UUID：${resolved.candidates?.map((c) => c.slice(0, 8)).join(", ")}` } };
     }
-    return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话 "${id}" 不存在（pit session ls 查看）` } };
+    return { ok: false, message: "", error: { code: "SESSION_NOT_FOUND", message: `会话 "${id}" 不存在（ptl session ls 查看）` } };
   }
   const record = resolved.record;
   const provider = sessionProviders.find((p) => p.workloop === record.workloop);

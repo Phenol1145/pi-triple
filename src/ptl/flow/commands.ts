@@ -1,5 +1,5 @@
 /**
- * pit-flow CLI 命令（薄层，调 store/engine/edit）
+ * ptl-flow CLI 命令（薄层，调 store/engine/edit）
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -19,7 +19,7 @@ function store(): FlowStore {
 
 /** runId 解析：支持完整 UUID 或唯一前缀 */
 function resolveRunId(s: FlowStore, input: string): string {
-  if (!input) { console.log("  \x1b[31m❌ 缺少 runId（运行 pit flow ls 查看已有工作流）\x1b[0m"); process.exit(1); }
+  if (!input) { console.log("  \x1b[31m❌ 缺少 runId（运行 ptl flow ls 查看已有工作流）\x1b[0m"); process.exit(1); }
   if (s.hasRun(input)) return input;
   const matches = s.listRuns().filter((r) => r.runId.startsWith(input)).map((r) => r.runId);
   if (matches.length === 1) return matches[0]!;
@@ -28,7 +28,7 @@ function resolveRunId(s: FlowStore, input: string): string {
     process.exit(1);
   }
   console.log(`  \x1b[31m❌ 工作流 "${input.slice(0, 8)}…" 不存在\x1b[0m`);
-  console.log("  运行 pit flow ls 查看已有工作流");
+  console.log("  运行 ptl flow ls 查看已有工作流");
   process.exit(1);
 }
 
@@ -98,9 +98,9 @@ export async function cmdFlowRun(filePath: string, inputArgs: string[]): Promise
       break;
     case "waiting_human":
       console.log(`  \x1b[33m⏳ 等待人工审批\x1b[0m`);
-      console.log(`  pit flow show ${runId.slice(0, 8)}  — 查看详情`);
-      console.log(`  pit flow approve ${runId.slice(0, 8)}  — 批准`);
-      console.log(`  pit flow reject ${runId.slice(0, 8)}  — 驳回`);
+      console.log(`  ptl flow show ${runId.slice(0, 8)}  — 查看详情`);
+      console.log(`  ptl flow approve ${runId.slice(0, 8)}  — 批准`);
+      console.log(`  ptl flow reject ${runId.slice(0, 8)}  — 驳回`);
       break;
   }
 }
@@ -190,7 +190,7 @@ export function cmdFlowLs(jsonMode?: boolean): void {
   }
 
   if (runs.length === 0) {
-    console.log("\n  暂无工作流。启动: pit flow run <flow.json>");
+    console.log("\n  暂无工作流。启动: ptl flow run <flow.json>");
     console.log("");
     return;
   }
@@ -233,7 +233,7 @@ async function doApproveOrReject(runId: string, note: string | undefined, isAppr
   // approve/reject 后流程可能再次进入人工门
   if (result.status === "waiting_human") {
     console.log(`  \x1b[33m⏳ 再次等待人工审批\x1b[0m`);
-    console.log(`  pit flow show ${runId.slice(0, 8)}  — 查看详情`);
+    console.log(`  ptl flow show ${runId.slice(0, 8)}  — 查看详情`);
   } else {
     console.log(`  \x1b[32m✅ 工作流已完成\x1b[0m`);
   }
@@ -308,8 +308,8 @@ export async function cmdFlowPropose(runId: string): Promise<void> {
       const m = s.loadMeta(runId);
       if (m.status === "editing") {
         console.log(`  状态: editing — 可修改图或状态`);
-        console.log(`  提交: pit flow resume ${runId.slice(0, 8)}`);
-        console.log(`  放弃: pit flow discard ${runId.slice(0, 8)}`);
+        console.log(`  提交: ptl flow resume ${runId.slice(0, 8)}`);
+        console.log(`  放弃: ptl flow discard ${runId.slice(0, 8)}`);
       } else if (m.editRequested) {
         console.log(`  状态: running (将在波边界停波)`);
       }
@@ -349,7 +349,7 @@ export async function cmdFlowEdit(runId: string): Promise<void> {
   const result = await editGraph(s, runId);
   if (!result.ok) {
     console.log(`  \x1b[31m❌ 编辑失败: ${result.error}\x1b[0m`);
-    console.log("  可先运行 pit flow show <runId> 查看当前图定义");
+    console.log("  可先运行 ptl flow show <runId> 查看当前图定义");
     if (result.error && result.error.includes("临时文件")) console.log(`  ${result.error}`);
     process.exit(1);
   }
@@ -360,8 +360,8 @@ export async function cmdFlowEdit(runId: string): Promise<void> {
 
 export async function cmdFlowSet(runId: string, pathStr: string, rawValue: string): Promise<void> {
   if (!pathStr || rawValue === undefined) {
-    console.log("  用法: pit flow set <runId> <path> <value>");
-    console.log("  示例: pit flow set abc12345 nodes.2.prompt \"新的提示\"");
+    console.log("  用法: ptl flow set <runId> <path> <value>");
+    console.log("  示例: ptl flow set abc12345 nodes.2.prompt \"新的提示\"");
     console.log("   路径: nodes.N.x / edges.N.x / entry / state.x.y");
     process.exit(1);
   }

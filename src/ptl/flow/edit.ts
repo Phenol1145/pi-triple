@@ -1,5 +1,5 @@
 /**
- * pit-flow edit — setValue / editGraph / approve / reject
+ * ptl-flow edit — setValue / editGraph / approve / reject
  *
  * setValue: 点路径修改 graph.json 或 state.json。
  *   路径命名空间:
@@ -371,7 +371,7 @@ export async function setValue(
 
     store.saveGraph(runId, vResult.def, newVersion);
     if (vResult.warnings.length > 0) {
-      console.warn(`[pit-flow] Validation warnings: ${vResult.warnings.join("; ")}`);
+      console.warn(`[ptl-flow] Validation warnings: ${vResult.warnings.join("; ")}`);
     }
 
     return { ok: true };
@@ -437,7 +437,7 @@ export async function editGraph(store: FlowStore, runId: string): Promise<EditRe
     try { fs.unlinkSync(tmpPath); } catch { /* already gone */ }
 
     if (vResult.warnings.length > 0) {
-      console.warn(`[pit-flow] Validation warnings: ${vResult.warnings.join("; ")}`);
+      console.warn(`[ptl-flow] Validation warnings: ${vResult.warnings.join("; ")}`);
     }
     return { ok: true };
   });

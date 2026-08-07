@@ -1,5 +1,5 @@
 /**
- * bridge/submit.ts — pit submit 命令
+ * bridge/submit.ts — ptl submit 命令
  *
  * 校验 agent.json → 打包 → 上传到 PTH。
  * --dry-run 只校验+打包，不上传。
@@ -13,7 +13,7 @@ export async function cmdSubmit(passthrough: string[], flags: Record<string, str
   const dir = passthrough[0];
 
   if (!dir) {
-    console.log("  用法: pit hub submit <dir> [--dry-run]");
+    console.log("  用法: ptl hub submit <dir> [--dry-run]");
     process.exit(1);
   }
 
@@ -48,7 +48,7 @@ export async function cmdSubmit(passthrough: string[], flags: Record<string, str
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: pit config set pth.url <url>  &&  pit config set pth.token <token>");
+    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
     process.exit(1);
   }
 

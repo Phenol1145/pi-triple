@@ -17,7 +17,7 @@ import { Delivery } from "../../extensions/pit-communicate/delivery.js";
 let root: string;
 
 beforeAll(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "pit-intercom-"));
+  root = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-intercom-"));
 });
 
 afterAll(() => {

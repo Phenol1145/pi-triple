@@ -2,15 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** ① PTL CLI 由 `pit` 更名 `ptl`（bin/目录/引用/tmux 前缀/docs）；② PTH 装配层：main.ts 启动 BatchManager + pg + watchdog；③ `/pth` 命令注册（batch 命令族）；④ BatchManager↔batch-process 生产组合验证；⑤ GitHub 发布准备。
+**Goal:** ① PTL CLI 由 `ptl` 更名 `ptl`（bin/目录/引用/tmux 前缀/docs）；② PTH 装配层：main.ts 启动 BatchManager + pg + watchdog；③ `/pth` 命令注册（batch 命令族）；④ BatchManager↔batch-process 生产组合验证；⑤ GitHub 发布准备。
 
-**Architecture:** 改名是机械重构（bin 名 + src/ptl/pit/ 目录 → src/ptl/cli/ + 引用 + tmux 前缀）；装配层在 src/pth/main.ts 与 src/pth/kernel/ 之间接线（BatchManager 生命周期 + /pth 命令 + pg 连接池共享）。
+**Architecture:** 改名是机械重构（bin 名 + src/ptl/cli/ 目录 → src/ptl/cli/ + 引用 + tmux 前缀）；装配层在 src/pth/main.ts 与 src/pth/kernel/ 之间接线（BatchManager 生命周期 + /pth 命令 + pg 连接池共享）。
 
 **Tech Stack:** node:child_process（fork）、pg（既有）、node:fs。零新依赖。
 
 ## Global Constraints
 
-- 更名范围：`pit` → `ptl`（bin 名/命令名/目录名/注释/tmux 前缀 `pit-` → `ptl-`/docs）；**不破坏**正在运行的 tmux 会话（旧 `pit-` 前缀会话保留，新会话用 `ptl-`）
+- 更名范围：`ptl` → `ptl`（bin 名/命令名/目录名/注释/tmux 前缀 `ptl-` → `ptl-`/docs）；**不破坏**正在运行的 tmux 会话（旧 `ptl-` 前缀会话保留，新会话用 `ptl-`）
 - 命令前缀：PTH 侧 `/pth`（弃用 `/lab`——agent-lab 旧命令保留不删）
 - 依赖限制：零新增运行时依赖
 - 测试：改名后全套回归（根 vitest + agent-lab node:test）
@@ -23,11 +23,11 @@
 
 **Files:**
 - Modify: `package.json`（bin: "pit" → "ptl"）
-- Rename: `src/ptl/pit/` → `src/ptl/cli/`（10 文件）
+- Rename: `src/ptl/cli/` → `src/ptl/cli/`（10 文件）
 - Modify: `src/ptl/pit.ts`（入口引用）
-- Modify: `src/ptl/tmux.ts`（会话前缀 `pit-` → `ptl-`）
-- Modify: src/ptl/ 下所有引用 `pit` 的文件（约 34 个）
-- Modify: docs/ 下引用 `pit` 的文档（约 28 个）
+- Modify: `src/ptl/tmux.ts`（会话前缀 `ptl-` → `ptl-`）
+- Modify: src/ptl/ 下所有引用 `ptl` 的文件（约 34 个）
+- Modify: docs/ 下引用 `ptl` 的文档（约 28 个）
 - Test: 根 vitest 全套 + agent-lab 套件
 
 **Interfaces:**
@@ -38,13 +38,13 @@
 
 ```bash
 # 测试：package.json bin 有 ptl
-node -e "const p = require('./package.json'); if (!p.bin?.ptl) throw new Error('bin.ptl missing'); if (p.bin.pit) throw new Error('bin.pit should be removed'); console.log('OK')"
+node -e "const p = require('./package.json'); if (!p.bin?.ptl) throw new Error('bin.ptl missing'); if (p.bin.pit) throw new Error('bin.ptl should be removed'); console.log('OK')"
 ```
 
 - [ ] **Step 2: 改名目录 + bin**
 
 ```bash
-git mv src/ptl/pit src/ptl/cli
+git mv src/ptl/ptl src/ptl/cli
 # package.json: "pit": "./dist/ptl/pit.js" → "ptl": "./dist/ptl/pit.js"（保留输出路径，bin 键名改）
 # 注：dist 输出路径不变（tsc outDir 结构），只改 bin 键名
 ```
@@ -53,8 +53,8 @@ git mv src/ptl/pit src/ptl/cli
 
 ```bash
 # src/ptl/ 内引用 "pit" 的（命令名/注释/字符串）改为 "ptl"
-# 注意区分：命令名 pit → ptl；tmux 前缀 pit- → ptl-；pit-flow 概念名保留（flow 子命令）
-grep -rn '"pit"\|`pit \|pit-' src/ptl/ --include="*.ts" | grep -v node_modules
+# 注意区分：命令名 pit → ptl；tmux 前缀 ptl- → ptl-；ptl-flow 概念名保留（flow 子命令）
+grep -rn '"pit"\|`ptl \|ptl-' src/ptl/ --include="*.ts" | grep -v node_modules
 ```
 
 - [ ] **Step 4: 更新 docs**
@@ -70,7 +70,7 @@ npm run build && npx vitest run && cd extensions/agent-lab && node --experimenta
 git commit -m "refactor(ptl): PTL CLI 更名 pit→ptl——bin/ptl 目录 src/ptl/cli/tmux 前缀 ptl-/docs 引用，旧名兼容提示"
 ```
 
-**注意**：tmux 旧会话（`pit-` 前缀）不迁移（正在运行）；新会话用 `ptl-`。`pit-flow` 概念名（flow 子命令）保留。
+**注意**：tmux 旧会话（`ptl-` 前缀）不迁移（正在运行）；新会话用 `ptl-`。`ptl-flow` 概念名（flow 子命令）保留。
 
 ---
 

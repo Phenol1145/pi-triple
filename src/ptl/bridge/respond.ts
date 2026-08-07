@@ -1,11 +1,11 @@
 /**
- * bridge/respond.ts — pit hub respond <requestId> <dir>（F/WP4 Task 20）
+ * bridge/respond.ts — ptl hub respond <requestId> <dir>（F/WP4 Task 20）
  *
  * 构建构件（复用 submit 的打包链路 packProgram——agent-program 目录）→ 走 §5.1
  * 构件上传 API（POST /api/v1/components）+ requestId 关联 → pth 保存成功后自动闭合
  * 回退请求。**通道复用**：非新协议（spec §5.4）。
  *
- * 人类补全流程闭环：建单 → pit hub requests 可见 → 本地构建 → respond 上传填槽 → 请求闭合。
+ * 人类补全流程闭环：建单 → ptl hub requests 可见 → 本地构建 → respond 上传填槽 → 请求闭合。
  */
 import fs from "node:fs";
 import { packProgram } from "./pack.js";
@@ -16,7 +16,7 @@ export async function cmdHubRespond(passthrough: string[], _flags: Record<string
   const dir = passthrough[1];
 
   if (!requestId || !dir) {
-    console.log("  用法: pit hub respond <requestId> <dir>");
+    console.log("  用法: ptl hub respond <requestId> <dir>");
     process.exit(1);
   }
 
@@ -40,7 +40,7 @@ export async function cmdHubRespond(passthrough: string[], _flags: Record<string
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: pit config set pth.url <url>  &&  pit config set pth.token <token>");
+    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
     process.exit(1);
   }
 

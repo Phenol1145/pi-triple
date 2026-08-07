@@ -3,7 +3,7 @@
 - **日期**：2026-08-02
 - **状态**：设计（待评审）
 - **范围**：agent 装配——`assembleAgent` 把声明（AgentDefinition + memory spec）变成可运行的经济主体（AgentRuntime）；记忆系统（子项目 B ✅）的接线契约落实；开户与注册持久。
-- **定位**：市场经济体制（方案 A）三阶段之③——经济层（D：多货币/嵌套市场/elo/竞价 workflow）的前置。前序：pit-flow 运行时扩展（A ✅）+ 记忆系统（B ✅）。
+- **定位**：市场经济体制（方案 A）三阶段之③——经济层（D：多货币/嵌套市场/elo/竞价 workflow）的前置。前序：ptl-flow 运行时扩展（A ✅）+ 记忆系统（B ✅）。
 
 ---
 
@@ -20,7 +20,7 @@
 
 1. 无"装配"动作：定义 → 可执行主体的实例化路径不存在
 2. 记忆系统是离散模块，无宿主挂载（mountMemorySdk 无调用方）
-3. 记忆系统最终评审的 9 项接线契约（revive/idem prune/TTL sweeper/审核窗口/方言解析/pit-communicate 桥接/纸带注入/DSP restore/dir 显式）无落实方
+3. 记忆系统最终评审的 9 项接线契约（revive/idem prune/TTL sweeper/审核窗口/方言解析/ptl-communicate 桥接/纸带注入/DSP restore/dir 显式）无落实方
 4. 经济主体无账本账户（开户路径缺失）
 
 ### 1.3 目标
@@ -47,7 +47,7 @@ export interface AgentAssemblerDeps {
   runner: WorkLoopRunner;                    // 共享实例（N-C3 裁决：runner 内按 agentInstanceId 分 FIFO 天然支持多 agent；八件构造输入由装配器调用方组装注入）
   workDir: string;                           // 装配产物目录（记忆域/快照/日志根）
   comms?: {                                  // 通讯桥接（可选——无则 agent 无 comms）
-    transport: CommsTransport;               // pit-communicate 桥接注入
+    transport: CommsTransport;               // ptl-communicate 桥接注入
     identity: { agentId: string; tenantId: string; sessionId: string };
   };
   now?: () => number;
@@ -180,10 +180,10 @@ export class SqliteLedgerAdapter implements LedgerPort {
 | ③ | TTL sweeper | AgentRuntime 生命周期内定时清扫（默认每小时，可配）：draft 且 ttlExpiresAt 过期 → archived；dispose 清理定时器；**draft→promote 竞态**：归档与 promote 之间目标消失 → 明确报错路径 |
 | ④ | 审核窗口 | **配置透传 + onDecision 回调出口（砍定时器，YAGNI）**：AuditChain 加 onDecision 回调（v1 透传 decision）——D 的组合链驱动窗口与 merge，不回来改 C |
 | ⑤ | 方言解析 | sdk.memory.write 包装内**预检**：parseDialect 只做错误检测与警告（不替换 content——ruleRef EBNF 校验是权威）；**markdown = draft-only 方言**（写入恒草稿 + 明确反馈，写进 MemorySpec 文档） |
-| ⑥ | pit-communicate 真实桥接 + 纸带注入 | CommsTransport 适配器（mailbox 发送/接收/activePeers，**强制 delivery=auto**——agent↔agent 不可走 manual 人工门）；**收件缓冲（N-I4 + 第三轮 ack 语义）**：comms-inbox.jsonl（workDir 下，持久化、容量默认 100，溢出 drop-oldest）——消息入队带 `mergedAtSeq`；并入时 WorkContext.messages 追加 user 消息（来源标记 `peer:<id>`）；**ack**：checkpoint seq ≥ mergedAtSeq 落盘后删除（防 resume 回滚后消息丢失）；resume 重并入未 ack 条目按 msgId 去重（防重复） |
+| ⑥ | ptl-communicate 真实桥接 + 纸带注入 | CommsTransport 适配器（mailbox 发送/接收/activePeers，**强制 delivery=auto**——agent↔agent 不可走 manual 人工门）；**收件缓冲（N-I4 + 第三轮 ack 语义）**：comms-inbox.jsonl（workDir 下，持久化、容量默认 100，溢出 drop-oldest）——消息入队带 `mergedAtSeq`；并入时 WorkContext.messages 追加 user 消息（来源标记 `peer:<id>`）；**ack**：checkpoint seq ≥ mergedAtSeq 落盘后删除（防 resume 回滚后消息丢失）；resume 重并入未 ack 条目按 msgId 去重（防重复） |
 | ⑦ | DSP restore 顺序 | **snapshot 生产者 = runner onCheckpoint 钩子（N-I2 交付项：runner 加 onCheckpoint 注册（按 agentInstanceId 过滤 + dispose 反注册）+ checkpoint.created payload 加 seq；时序 = save 后 emit）** → DspBuilder.snapshot(seq, "realtime")；DspBuilder 加 `loadSnapshot(seq)`；首次 run 无快照 → 回退新鲜检索（防御） |
 | ⑧ | AuditChain/DspBuilder dir 显式 | 装配时传入 workDir 下子目录——杜绝 process.cwd() 兜底 |
-| ⑨ | 身份映射 | IdentityMap 落 workDir 为**权威源**（装配时注册 agentId → tenant/session，deps.comms.identity 仅作装配输入）；sessionId 刷新回调（pit-communicate session_start 时） |
+| ⑨ | 身份映射 | IdentityMap 落 workDir 为**权威源**（装配时注册 agentId → tenant/session，deps.comms.identity 仅作装配输入）；sessionId 刷新回调（ptl-communicate session_start 时） |
 | ⑩ | comms dedup prune（补漏项） | resume 时 `CommsChannel.pruneDedup(seq)`（与 ② 同钩子——comms.ts 自注"调用方：resume 时"） |
 
 **未接线（明确留给 D）**：审核→merge 组合链端到端（AuditChain onDecision → PublicDomainStore.submitWriteBack 的驱动）；市场竞价接入；多货币账本语义。
@@ -239,7 +239,7 @@ export class SqliteLedgerAdapter implements LedgerPort {
 
 1. **arena SqliteLedger**：node:sqlite（DatabaseSync）——依赖 Node 22+；SqliteLedgerAdapter 包装的接口映射需核对（open/credit/debit 签名差异）
 2. **MachineRuntime 的 nextCheckpointSeq 供给**：①⑦ 依赖引擎暴露下一 checkpoint seq（既有 checkpointEvery 机制——需确认暴露方式，必要时 runner 侧加 getter）
-3. **pit-communicate bridge**：mailbox 按 (tenant, session) 寻址——transport 适配器需要 session 上下文（IdentityMap 已建）；delivery mode 强制 auto（agent↔agent）
+3. **ptl-communicate bridge**：mailbox 按 (tenant, session) 寻址——transport 适配器需要 session 上下文（IdentityMap 已建）；delivery mode 强制 auto（agent↔agent）
 4. **WorkContext.messages 追加的注入点**：runner 的执行循环内（委托式 = 任务文本注入点；本地式 = messages 直接追加）——两轨注入语义差异
 5. **TTL sweeper 与 checkpoint 的交互**：清扫动作本身是否进 Trace（记忆系统 §9 观测）——v1 记录审计事件即可
 6. **AgentInstanceStore**：AgentInstanceRecord 的存储位置（core repository？新 store？）——复用 core/storage/repository（getInstance 等既有接口，加装配写入路径）

@@ -1,12 +1,12 @@
 // test/unit/commands-startbg-register.test.ts — task 5 修复验证:
 // execStartBg（TUI 命令栏 /start --bg 路径）启动成功后必须登记注册表，
-// 字段与 cmdStartBg 一致，使 TUI 启动的会话可被 pit restore 恢复。
+// 字段与 cmdStartBg 一致，使 TUI 启动的会话可被 ptl restore 恢复。
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-// Mock spawnSync to control hasTmux/hasPitSession/startPitSession/getPanePid
+// Mock spawnSync to control hasTmux/hasPtlSession/startPtlSession/getPanePid
 const mockSpawnSync = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", () => ({ spawnSync: mockSpawnSync }));
 
@@ -51,7 +51,7 @@ describe("execStartBg — TUI 命令栏启动路径登记注册表", () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  it("startPitSession 成功后 markStarted 写入注册表（字段与 cmdStartBg 一致）", async () => {
+  it("startPtlSession 成功后 markStarted 写入注册表（字段与 cmdStartBg 一致）", async () => {
     // tmux -V → 有 tmux；has-session → 会话不存在；new-session → 成功；display-message → pid
     mockSpawnSync.mockImplementation((cmd: string, args: string[]) => {
       if (cmd === "tmux" && args[0] === "-V") return { status: 0, stdout: "tmux 3.6" };
@@ -76,7 +76,7 @@ describe("execStartBg — TUI 命令栏启动路径登记注册表", () => {
     expect(typeof entry?.startedAt).toBe("number");
   });
 
-  it("startPitSession 失败时不登记注册表", async () => {
+  it("startPtlSession 失败时不登记注册表", async () => {
     mockSpawnSync.mockImplementation((cmd: string, args: string[]) => {
       if (cmd === "tmux" && args[0] === "-V") return { status: 0, stdout: "tmux 3.6" };
       if (cmd === "tmux" && args[0] === "has-session") return { status: 1 };

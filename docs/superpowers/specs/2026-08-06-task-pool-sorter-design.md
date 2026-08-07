@@ -209,7 +209,7 @@ interface SorterSdkPort {
 
 ### 7.3 /lab 命令（落点裁决 I6：slash 命令，非 pit CLI）
 
-**落点修正**：仓库无 `pit lab` 命令树（pit 只有 tui 面板）；既有 lab 命令先例 = agent-lab 扩展内的 `/lab` slash 命令（`extensions/agent-lab/src/commands/register.ts`，`/lab scheduler dispatch` 同款）。命令走 slash 命令 + engine 注入（与 §7.1 引擎一致，避免第二份状态机 SQL 实现）。
+**落点修正**：仓库无 `ptl lab` 命令树（pit 只有 tui 面板）；既有 lab 命令先例 = agent-lab 扩展内的 `/lab` slash 命令（`extensions/agent-lab/src/commands/register.ts`，`/lab scheduler dispatch` 同款）。命令走 slash 命令 + engine 注入（与 §7.1 引擎一致，避免第二份状态机 SQL 实现）。
 
 - `/lab task publish <templateId> --param k=v [--label x]`——实例化 + 入池
 - `/lab task list [--status pending]` / `/lab task status <id>`
@@ -253,7 +253,7 @@ interface SorterSdkPort {
 | I3 | task_templates 与 task_types 同键双注册表无同步规则 | 裁决：v1 不联动，两表独立，id 同域纯为未来预留 |
 | I4 | outputRef "实现时定"自相矛盾 | 裁决：仅事件留痕，tasks 表不存；SDK 形状 string |
 | I5 | void 返回守卫失败不可见；stale 与执行超时无关系不变量 | 端口返回判别式 {ok}/ {ok:false,error}；钉死 staleMs > execution.timeoutMs + 裕量 |
-| I6 | §7.3 落点错（pit lab 命令树不存在） | 改 /lab slash 命令（commands/register.ts 既有模式 + engine 注入） |
+| I6 | §7.3 落点错（ptl lab 命令树不存在） | 改 /lab slash 命令（commands/register.ts 既有模式 + engine 注入） |
 | I7 | escalated 纯终态黑洞无运维出口 | /lab task requeue（escalated/rejected → pending 清 rejects[]） |
 
 ### Minor（13 项，计划阶段消化）

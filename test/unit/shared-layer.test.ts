@@ -35,8 +35,8 @@ describe("resolveBundledDir", () => {
     const pkgRoot = path.join(root, "node_modules", "@earendil-works", "pi-coding-agent");
     const extDir = path.join(pkgRoot, "extensions");
     fs.mkdirSync(path.join(pkgRoot, "dist", "ptl"), { recursive: true });
-    fs.mkdirSync(path.join(extDir, "pit-control"), { recursive: true });
-    fs.writeFileSync(path.join(extDir, "pit-control", "index.ts"), "x");
+    fs.mkdirSync(path.join(extDir, "ptl-control"), { recursive: true });
+    fs.writeFileSync(path.join(extDir, "ptl-control", "index.ts"), "x");
 
     const moduleUrl = pathToFileURL(path.join(pkgRoot, "dist", "ptl", "shared-layer.js")).href;
     expect(resolveBundledDir(moduleUrl)).toBe(extDir);

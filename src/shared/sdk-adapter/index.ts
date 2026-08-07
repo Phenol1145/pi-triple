@@ -132,6 +132,6 @@ export const SDK_ADAPTER_VERSION = "1.0.0";
  *   2. 文档约定复检 → diff 新旧版 docs/skills.md "Locations" 段与
  *      docs/extensions.md "Extension Locations" 段；有变化则同步更新
  *      docs/ptl/authoring.md（技能/扩展放置规范）
- *   3. pit doctor + pit shared status 验证挂载链路
+ *   3. ptl doctor + ptl shared status 验证挂载链路
  */
 export const SDK_COMPAT_RANGE = "^0.82.1";

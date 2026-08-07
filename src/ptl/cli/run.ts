@@ -1,5 +1,5 @@
 /**
- * pit/run — pit 主流程（由入口 pit.ts 延迟加载：node:sqlite builtin 警告需先于
+ * ptl/run — ptl 主流程（由入口 ptl.ts 延迟加载：node:sqlite builtin 警告需先于
  * 本模块求值安装过滤，故主逻辑与入口分离）。
  */
 
@@ -158,7 +158,7 @@ export async function main() {
     try { (await import("../version.js")).maybePrintUpdateHint(); } catch { /* 静默 */ }
   }
 
-  // --help 全局处理：pit --help → 全量；pit <cmd> --help → 单命令
+  // --help 全局处理：ptl --help → 全量；ptl <cmd> --help → 单命令
   if (flags.help === "true") {
     if (command) printCommandHelp(command);
     else printHelp();
@@ -167,7 +167,7 @@ export async function main() {
 
   // --version 全局处理：parseArgs 将 --version 解析为 flag（command 为空），在此提前输出版本号
   if (flags.version === "true") {
-    console.log(`pit v${getVersion()}`);
+    console.log(`ptl v${getVersion()}`);
     return;
   }
 
@@ -270,7 +270,7 @@ export async function main() {
     case "programs":
     case "dev": {
       const msg = getDeprecatedMigration(command);
-      console.log(`  \x1b[33m⚠️  pit ${command} ${msg}\x1b[0m`);
+      console.log(`  \x1b[33m⚠️  ptl ${command} ${msg}\x1b[0m`);
       process.exit(1);
     }
     case "flow":
@@ -285,7 +285,7 @@ export async function main() {
     case "agent":
       if (subcommand === "run") await cmdAgentRun(flags, passthrough);
       else if (subcommand === "clean") cmdAgentClean(flags, passthrough);
-      else { console.log("  用法: pit agent run|clean ..."); console.log("  pit agent run <template> <task> [--workspace temp|main]"); console.log("  pit agent clean <agentId>"); }
+      else { console.log("  用法: ptl agent run|clean ..."); console.log("  ptl agent run <template> <task> [--workspace temp|main]"); console.log("  ptl agent clean <agentId>"); }
       break;
     case "help":
     case "-h":
@@ -301,11 +301,11 @@ export async function main() {
     case "version":
     case "--version":
     case "-v":
-      console.log(`pit v${getVersion()}`);
+      console.log(`ptl v${getVersion()}`);
       break;
     default:
       console.log(`  未知命令: ${command}`);
-      console.log("  运行 pit help 查看帮助");
+      console.log("  运行 ptl help 查看帮助");
       process.exit(1);
   }
 }

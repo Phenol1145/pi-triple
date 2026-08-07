@@ -4,8 +4,8 @@ import {
   buildSessionMenu,
   bareTmuxName,
   SESSION_MENU,
-} from "../../src/ptl/tui-pit/session-menu.js";
-import type { SessionMenuHandlers } from "../../src/ptl/tui-pit/session-menu.js";
+} from "../../src/ptl/tui-ptl/session-menu.js";
+import type { SessionMenuHandlers } from "../../src/ptl/tui-ptl/session-menu.js";
 import type { SessionRecord } from "../../src/ptl/session/session-provider.js";
 
 function rec(over: Partial<SessionRecord>): SessionRecord {
@@ -99,8 +99,8 @@ describe("buildSessionMenu", () => {
 });
 
 describe("bareTmuxName", () => {
-  it("去掉 pit- 前缀", () => {
-    expect(bareTmuxName("pit-dev-x1k2")).toBe("dev-x1k2");
+  it("去掉 ptl- 前缀", () => {
+    expect(bareTmuxName("ptl-dev-x1k2")).toBe("dev-x1k2");
     expect(bareTmuxName("dev-x1k2")).toBe("dev-x1k2");
   });
 });

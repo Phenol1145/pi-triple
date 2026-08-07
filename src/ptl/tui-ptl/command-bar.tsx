@@ -18,7 +18,7 @@ interface CommandBarProps {
   completions?: Record<string, string[]>;
   /** 可用宽度（终端列数），用于截断长描述 */
   width?: number;
-  /** 自定义命令树（默认 pit 命令树） */
+  /** 自定义命令树（默认 ptl 命令树） */
   commands?: CmdNode[];
 }
 
@@ -71,8 +71,8 @@ const COMMAND_TREE: CmdNode[] = [
       { name: "lab", desc: "开发面板" },
     ],
   },
-  { name: "quit", desc: "退出 pit tui" },
-  { name: "exit", desc: "退出 pit tui（同 quit）" },
+  { name: "quit", desc: "退出 ptl tui" },
+  { name: "exit", desc: "退出 ptl tui（同 quit）" },
   {
     name: "flow", desc: "工作流管理 ▸",
     children: [

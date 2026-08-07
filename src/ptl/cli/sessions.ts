@@ -1,5 +1,5 @@
 /**
- * pit/sessions — cmdStart, cmdPi, cmdStartBg, cmdAttach, cmdSwitch, cmdDetach
+ * ptl/sessions — cmdStart, cmdPi, cmdStartBg, cmdAttach, cmdSwitch, cmdDetach
  */
 
 import { spawnSync } from "node:child_process";
@@ -13,19 +13,19 @@ import {
   configureTmuxServer,
   tmuxSessionName,
   buildTmuxSessionArgs,
-  hasPitSession,
-  startPitSession,
+  hasPtlSession,
+  startPtlSession,
   getPanePid,
   validateSessionName,
-  listPitPanesDetailed,
-  type PitPaneInfo,
+  listPtlPanesDetailed,
+  type PtlPaneInfo,
 } from "../tmux.js";
 import { loadRegistry, markStarted } from "../session-registry.js";
 import { scanSessionFiles, pickRestoreTape, isTapeLive, newestTapeId } from "../session/pi-scan.js";
 import { resolveTemplateAndMigrate, resolveOrFail } from "./onboard.js";
 
 /**
- * pit pi — 原生启动模式（前台直接 spawn pi，无 tmux）
+ * ptl pi — 原生启动模式（前台直接 spawn pi，无 tmux）
  */
 export async function cmdPi(flags: Record<string, string>, passthrough: string[]): Promise<void> {
   const r = await resolveTemplateAndMigrate(flags, passthrough);
@@ -52,7 +52,7 @@ export async function cmdPi(flags: Record<string, string>, passthrough: string[]
 }
 
 /**
- * pit start — 默认 tmux 管理模式：创建 tmux 会话并立即接入。
+ * ptl start — 默认 tmux 管理模式：创建 tmux 会话并立即接入。
  * --bg 时仅后台创建。
  */
 export async function cmdStart(flags: Record<string, string>, passthrough: string[]): Promise<void> {
@@ -74,7 +74,7 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
   }
 
   if (!hasTmux()) {
-    console.log("  \x1b[31m❌ tmux 未安装 — pit start 需要 tmux\x1b[0m");
+    console.log("  \x1b[31m❌ tmux 未安装 — ptl start 需要 tmux\x1b[0m");
     if (process.platform === "darwin") console.log("  安装: brew install tmux");
     else if (process.platform === "linux") console.log("  安装: sudo apt install tmux");
     console.log("  原生前台启动（无 tmux）: \x1b[36mpit pi\x1b[0m");
@@ -88,9 +88,9 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
   }
 
   if (!process.stdout.isTTY) {
-    console.log("  \x1b[31m❌ pit start（接入模式）需要交互终端\x1b[0m");
-    console.log("  纯后台:   pit start --bg --name <name>");
-    console.log("  原生前台: pit pi");
+    console.log("  \x1b[31m❌ ptl start（接入模式）需要交互终端\x1b[0m");
+    console.log("  纯后台:   ptl start --bg --name <name>");
+    console.log("  原生前台: ptl pi");
     process.exit(1);
   }
 
@@ -157,7 +157,7 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
   const pid = getPanePid(session);
   if (!pid) {
     console.log(`  \x1b[31m❌ 会话 "${name}" 启动后立即退出\x1b[0m`);
-    console.log("  排查: pit pi --template " + alias + "  （前台模式查看启动错误）");
+    console.log("  排查: ptl pi --template " + alias + "  （前台模式查看启动错误）");
     process.exit(1);
   }
   const now = Date.now();
@@ -175,7 +175,7 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
     env: { ...process.env, TERM: process.env.TERM ?? "xterm-256color" },
   });
   if (result.status !== 0) {
-    console.log(`  \x1b[31m❌ 接入会话失败（pi 可能立即退出，请前台运行排查: pit pi --template ${alias}）\x1b[0m`);
+    console.log(`  \x1b[31m❌ 接入会话失败（pi 可能立即退出，请前台运行排查: ptl pi --template ${alias}）\x1b[0m`);
   }
   process.exit(result.status ?? 0);
 }
@@ -201,9 +201,9 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
   }
   configureTmuxServer();
 
-  if (hasPitSession(name)) {
+  if (hasPtlSession(name)) {
     console.log(`  ⚠️  会话 "${name}" 已在运行`);
-    console.log(`  接入: pit attach ${name}`);
+    console.log(`  接入: ptl attach ${name}`);
     return;
   }
 
@@ -220,13 +220,13 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
     extraArgs: passthrough.filter((a) => a !== "-c" && a !== "--continue"),
   });
 
-  const result = startPitSession(launch, name, true);
+  const result = startPtlSession(launch, name, true);
 
   if (result.status === 0) {
     spawnSync("sleep", ["1"]);
-    if (!hasPitSession(name)) {
+    if (!hasPtlSession(name)) {
       console.log(`  \x1b[31m❌ 会话 "${name}" 启动后立即退出\x1b[0m`);
-      console.log("  排查: pit pi --template " + alias + "  （前台模式查看启动错误）");
+      console.log("  排查: ptl pi --template " + alias + "  （前台模式查看启动错误）");
       process.exit(1);
     }
     const pid = getPanePid(result.session);
@@ -248,14 +248,14 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
 }
 
 export function cmdAttach(name: string): void {
-  if (!name) { console.log("  用法: pit attach <name>"); return; }
+  if (!name) { console.log("  用法: ptl attach <name>"); return; }
   if (!hasTmux()) { console.log("  \x1b[31m❌ tmux 未安装\x1b[0m"); process.exit(1); }
 
   const session = tmuxSessionName(name);
   const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
   if (check.status !== 0) {
     console.log(`  \x1b[31m❌ 会话 "${name}" 不存在\x1b[0m`);
-    console.log("  运行 pit ls 查看可用会话");
+    console.log("  运行 ptl ls 查看可用会话");
     process.exit(1);
   }
 
@@ -267,7 +267,7 @@ export function cmdAttach(name: string): void {
 }
 
 export function cmdSwitch(name: string): void {
-  if (!name) { console.log("  用法: pit switch <name>"); return; }
+  if (!name) { console.log("  用法: ptl switch <name>"); return; }
   if (!process.env.TMUX) {
     cmdAttach(name);
     return;
@@ -312,14 +312,14 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
   const targets = resolveRestoreTargets(passthrough, dataDir);
   if (targets.length === 0) {
     console.log(passthrough.length > 0
-      ? `  \x1b[31m❌ 注册表中无指定会话（pit ls 查看 × 状态）\x1b[0m`
+      ? `  \x1b[31m❌ 注册表中无指定会话（ptl ls 查看 × 状态）\x1b[0m`
       : "  无待恢复会话（注册表为空）");
     return;
   }
 
   const { buildPiLaunch } = await import("../launcher.js");
   // tmux panes 快照只取一次（isTapeLive 默认参数会每次重新 spawn tmux 查询，N 个 target 产生 2×N 次子进程调用）
-  const panes: Map<string, PitPaneInfo> = hasTmux() ? listPitPanesDetailed() : new Map();
+  const panes: Map<string, PtlPaneInfo> = hasTmux() ? listPtlPanesDetailed() : new Map();
   let ok = 0;
   let failed = 0;
   for (const { name, entry } of targets) {
@@ -346,7 +346,7 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
         extraArgs: entry.extraArgs,
         resumeSession,
       });
-      const result = startPitSession(launch, name, true);
+      const result = startPtlSession(launch, name, true);
       if (result.status !== 0) {
         console.log(`  \x1b[31m❌ 恢复 ${name} 失败: ${result.stderr}\x1b[0m`);
         failed++;
@@ -362,5 +362,5 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
     }
   }
   console.log(`\n  ${failed === 0 ? "\x1b[32m✅" : "\x1b[33m⚠️"} 恢复完成: ${ok} 成功${failed ? `，${failed} 失败` : ""}\x1b[0m`);
-  if (ok > 0) console.log("  接入: pit attach <name>");
+  if (ok > 0) console.log("  接入: ptl attach <name>");
 }

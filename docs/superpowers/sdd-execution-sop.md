@@ -1,6 +1,6 @@
 # SDD 执行 SOP（经验固化——2026-08-03）
 
-> 从 pit-update/flow-runtime/memory-system/agent-assembly 四个子项目 + 经济层 D1 的执行经验固化。配合固化 agents：`sdd.sdd-implementer` / `sdd.sdd-reviewer` / `sdd.design-adversary`。
+> 从 ptl-update/flow-runtime/memory-system/agent-assembly 四个子项目 + 经济层 D1 的执行经验固化。配合固化 agents：`sdd.sdd-implementer` / `sdd.sdd-reviewer` / `sdd.design-adversary`。
 
 ## 派发（implementer）
 

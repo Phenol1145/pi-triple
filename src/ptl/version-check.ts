@@ -1,8 +1,8 @@
 /**
- * pit/version-check — pit 本体 + pi SDK 更新检查（CLI 侧）
+ * ptl/version-check — ptl 本体 + pi SDK 更新检查（CLI 侧）
  *
  * 缓存文件 dataDir/version-check.json 与 extensions/_shared/version-check.ts 共用格式：
- *   { checkedAt: string(ISO), pit?: string, piSdk?: string }
+ *   { checkedAt: string(ISO), ptl?: string, piSdk?: string }
  * 约定：CLI 启动提示只读缓存（零网络）；扩展侧兜底查询并写缓存。
  */
 
@@ -18,7 +18,7 @@ const PI_SDK_PACKAGE = "@earendil-works/pi-coding-agent";
 
 export interface VersionCheckCache {
   checkedAt: string;
-  pit?: string;
+  ptl?: string;
   piSdk?: string;
 }
 
@@ -87,18 +87,18 @@ export async function fetchLatestPiSdkVersion(shell: Shell = (cmd, args) => spaw
   return v || undefined;
 }
 
-export async function checkForUpdates(deps: { fetchImpl?: typeof fetch; shell?: Shell } = {}): Promise<{ pit?: string; piSdk?: string }> {
+export async function checkForUpdates(deps: { fetchImpl?: typeof fetch; shell?: Shell } = {}): Promise<{ ptl?: string; piSdk?: string }> {
   if (process.env.PI_OFFLINE || process.env.PI_SKIP_VERSION_CHECK) return {};
   const cache = readCache();
   if (cache && isCacheFresh(cache)) {
-    return { pit: cache.pit, piSdk: cache.piSdk };
+    return { ptl: cache.ptl, piSdk: cache.piSdk };
   }
-  const [pit, piSdk] = await Promise.all([
+  const [ptl, piSdk] = await Promise.all([
     fetchLatestPitVersion(deps.fetchImpl).catch(() => undefined),
     fetchLatestPiSdkVersion(deps.shell).catch(() => undefined),
   ]);
-  const report: { pit?: string; piSdk?: string } = {};
-  if (pit) report.pit = pit;
+  const report: { ptl?: string; piSdk?: string } = {};
+  if (ptl) report.ptl = ptl;
   if (piSdk) report.piSdk = piSdk;
   try {
     writeCache({ checkedAt: new Date().toISOString(), ...report });

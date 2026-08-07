@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `pit update` 成为全量更新命令（pi SDK + Pi-Triple 本体 GitHub Release 拉包 + 扩展 + 共享层），并在 pi 会话内（扩展 notify）与 CLI 启动时显示更新可用提示。
+**Goal:** `ptl update` 成为全量更新命令（pi SDK + Pi-Triple 本体 GitHub Release 拉包 + 扩展 + 共享层），并在 pi 会话内（扩展 notify）与 CLI 启动时显示更新可用提示。
 
 **Architecture:** 本体更新走 GitHub Release（`releases/latest` → tarball → sha256 校验 → `npm install -g`）；更新提示双通道：扩展 `extensions/_shared/version-check.ts`（会话内 `ctx.ui.notify`）+ CLI 读共享缓存文件（`dataDir/version-check.json`，24h TTL）stderr 提示。pi 源码完全不修改（R0）。
 
@@ -15,10 +15,10 @@
 - 尊重 `PI_OFFLINE` / `PI_SKIP_VERSION_CHECK`（任一设置则跳过检查与提示）
 - GitHub API 请求带 `User-Agent` 头 + `AbortSignal.timeout(10_000)`；所有检查类异常**静默吞掉**（catch → undefined/空）
 - 仓库常量 `PIT_REPO = "Phenol1145/pi-triple"`（两侧各一份常量，值相同）
-- `pit update` 阶段语义：默认/`--all` = ①+②+③+④ 全量；`--extensions` = ①+③（向后兼容）；`--pi-only` = 仅①；`--dry-run` = 只检查报告不下载不安装
+- `ptl update` 阶段语义：默认/`--all` = ①+②+③+④ 全量；`--extensions` = ①+③（向后兼容）；`--pi-only` = 仅①；`--dry-run` = 只检查报告不下载不安装
 - 阶段②失败（网络/校验/安装）**不中断** ③④，打印 ❌ 原因
 - `extensions/_shared/` 内禁止创建 `index.ts`；扩展模块 import 用 `../_shared/xxx.js`
-- 测试：`npx vitest run`（新增测试文件放 `test/unit/`）；扩展严格 tsc：`npx tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck --allowImportingTsExtensions extensions/pit-communicate/index.ts extensions/_shared/version-check.ts`
+- 测试：`npx vitest run`（新增测试文件放 `test/unit/`）；扩展严格 tsc：`npx tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck --allowImportingTsExtensions extensions/ptl-communicate/index.ts extensions/_shared/version-check.ts`
 
 ---
 
@@ -65,7 +65,7 @@ let savedOffline: string | undefined;
 let savedSkip: string | undefined;
 
 beforeAll(() => {
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pit-vc-"));
+  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-vc-"));
   savedDataDir = process.env.DATA_DIR;
   savedOffline = process.env.PI_OFFLINE;
   savedSkip = process.env.PI_SKIP_VERSION_CHECK;
@@ -327,7 +327,7 @@ git commit -m "feat(ptl): version-check — CLI 侧更新检查模块（GitHub r
 
 **Files:**
 - Create: `src/ptl/version.ts`
-- Modify: `src/ptl/pit/main.ts`（`const VERSION = "0.1.0"` → 动态读取）、`src/ptl/pit/run.ts`（main() 中 start/pi 分支前加提示）
+- Modify: `src/ptl/cli/main.ts`（`const VERSION = "0.1.0"` → 动态读取）、`src/ptl/cli/run.ts`（main() 中 start/pi 分支前加提示）
 - Test: `test/unit/version.test.ts`
 
 **Interfaces:**
@@ -358,7 +358,7 @@ describe("maybePrintUpdateHint", () => {
   let tmpRoot: string;
   let stderrSpy: ReturnType<typeof vi.spyOn>;
   beforeAll(() => {
-    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pit-hint-"));
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-hint-"));
     process.env.DATA_DIR = tmpRoot;
     stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -444,14 +444,14 @@ export function maybePrintUpdateHint(): void {
     if (!cache || !isCacheFresh(cache)) return; // CLI 只读缓存，不查询（扩展兜底）
     const hints: string[] = [];
     if (cache.pit && isUpdateAvailable(cache.pit, getPitVersion())) {
-      hints.push(`pit 更新可用: v${cache.pit}（当前 v${getPitVersion()}）`);
+      hints.push(`ptl 更新可用: v${cache.pit}（当前 v${getPitVersion()}）`);
     }
     const piSdk = currentPiSdkVersion();
     if (cache.piSdk && isUpdateAvailable(cache.piSdk, piSdk)) {
       hints.push(`pi SDK 更新可用: v${cache.piSdk}（当前 v${piSdk}）`);
     }
     if (hints.length > 0) {
-      console.error(`\x1b[33m⚠ ${hints.join(" · ")} → 运行 pit update 一次更新全部\x1b[0m`);
+      console.error(`\x1b[33m⚠ ${hints.join(" · ")} → 运行 ptl update 一次更新全部\x1b[0m`);
     }
   } catch {
     /* 提示失败静默 */
@@ -463,7 +463,7 @@ export function maybePrintUpdateHint(): void {
 
 - [ ] **Step 4: 接入 `main.ts`（VERSION 单源）与 `run.ts`（启动提示）**
 
-`src/ptl/pit/main.ts`：删除 `const VERSION = "0.1.0";`，改为：
+`src/ptl/cli/main.ts`：删除 `const VERSION = "0.1.0";`，改为：
 
 ```ts
 import { getPitVersion } from "../version.js";
@@ -472,7 +472,7 @@ export function getVersion(): string { return getPitVersion(); }
 
 （`printBanner` 内 `"v" + VERSION` 改为 `"v" + getVersion()`；`VERSION` 引用全部替换。）
 
-`src/ptl/pit/run.ts`：在 `main()` 中参数解析成功后、`if (flags.help === "true")` 之前插入：
+`src/ptl/cli/run.ts`：在 `main()` 中参数解析成功后、`if (flags.help === "true")` 之前插入：
 
 ```ts
   // 启动更新提示（只读缓存，零网络；仅交互启动类命令）
@@ -491,7 +491,7 @@ Expected: exit 0（无 tsc 错误——`version.ts` 中 `require` 若报错按 S
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/ptl/version.ts src/ptl/pit/main.ts src/ptl/pit/run.ts test/unit/version.test.ts
+git add src/ptl/version.ts src/ptl/cli/main.ts src/ptl/cli/run.ts test/unit/version.test.ts
 git commit -m "feat(ptl): VERSION 单源化（读 package.json）+ start/pi 启动时更新提示（只读缓存）"
 ```
 
@@ -539,7 +539,7 @@ describe("compareVersions / isUpdateAvailable", () => {
 
 describe("resolveInstalledPitVersion", () => {
   it("npm root -g + package.json 读取", () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pit-ver-"));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-ver-"));
     fs.mkdirSync(path.join(tmp, "pi-triple"), { recursive: true });
     fs.writeFileSync(path.join(tmp, "pi-triple", "package.json"), JSON.stringify({ version: "0.7.7" }));
     const shell = vi.fn(() => ({ status: 0, stdout: tmp + "\n" }));
@@ -551,7 +551,7 @@ describe("resolveInstalledPitVersion", () => {
     expect(resolveInstalledPitVersion((() => ({ status: 1, stdout: "" })) as never)).toBeUndefined();
   });
   it("未安装 pi-triple → undefined", () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pit-ver2-"));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-ver2-"));
     const shell = vi.fn(() => ({ status: 0, stdout: tmp + "\n" }));
     expect(resolveInstalledPitVersion(shell as never)).toBeUndefined();
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -561,7 +561,7 @@ describe("resolveInstalledPitVersion", () => {
 describe("checkForUpdates", () => {
   let tmpRoot: string;
   beforeAll(() => {
-    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pit-vce-"));
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-vce-"));
     process.env.DATA_DIR = tmpRoot;
   });
   afterAll(() => {
@@ -570,7 +570,7 @@ describe("checkForUpdates", () => {
   });
 
   it("聚合 GitHub + npm view + 当前版本", async () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pit-vce2-"));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ptl-vce2-"));
     fs.mkdirSync(path.join(tmp, "pi-triple"), { recursive: true });
     fs.writeFileSync(path.join(tmp, "pi-triple", "package.json"), JSON.stringify({ version: "0.1.0" }));
     const fetchImpl = (async () => ({ ok: true, json: async () => ({ tag_name: "v0.2.0" }) })) as unknown as typeof fetch;
@@ -749,11 +749,11 @@ git commit -m "feat(extensions): _shared/version-check — 扩展侧更新检查
 
 ---
 
-### Task 4: pit-communicate 会话内提示接入
+### Task 4: ptl-communicate 会话内提示接入
 
 **Files:**
-- Create: `extensions/pit-communicate/update-hint.ts`
-- Modify: `extensions/pit-communicate/index.ts`（factory 内调用 update-hint）
+- Create: `extensions/ptl-communicate/update-hint.ts`
+- Modify: `extensions/ptl-communicate/index.ts`（factory 内调用 update-hint）
 - Test: `test/unit/update-hint.test.ts`
 
 **Interfaces:**
@@ -766,14 +766,14 @@ git commit -m "feat(extensions): _shared/version-check — 扩展侧更新检查
 
 ```ts
 import { describe, it, expect, vi } from "vitest";
-import { formatUpdateHint } from "../../extensions/pit-communicate/update-hint.js";
+import { formatUpdateHint } from "../../extensions/ptl-communicate/update-hint.js";
 
 describe("formatUpdateHint", () => {
   it("pit 有更新 → 提示行", () => {
     const lines = formatUpdateHint({ pit: "0.2.0", currentPit: "0.1.0" });
     expect(lines.length).toBe(1);
     expect(lines[0]).toContain("pit 更新可用: v0.2.0（当前 v0.1.0）");
-    expect(lines[0]).toContain("pit update");
+    expect(lines[0]).toContain("ptl update");
   });
   it("pi SDK 有更新 → 提示行", () => {
     const lines = formatUpdateHint({ piSdk: "0.84.0", currentPiSdk: "0.83.0" });
@@ -793,11 +793,11 @@ describe("formatUpdateHint", () => {
 Run: `npx vitest run test/unit/update-hint.test.ts`
 Expected: FAIL（模块不存在）
 
-- [ ] **Step 3: 实现 `extensions/pit-communicate/update-hint.ts`**
+- [ ] **Step 3: 实现 `extensions/ptl-communicate/update-hint.ts`**
 
 ```ts
 /**
- * pit-communicate/update-hint — 会话内更新提示（扩展 notify）
+ * ptl-communicate/update-hint — 会话内更新提示（扩展 notify）
  *
  * factory 在 session_start 时 fire-and-forget 调用；任何异常静默。
  */
@@ -814,10 +814,10 @@ export type UpdateReport = {
 export function formatUpdateHint(report: UpdateReport): string[] {
   const lines: string[] = [];
   if (report.pit && report.currentPit && isUpdateAvailable(report.pit, report.currentPit)) {
-    lines.push(`⚠ pit 更新可用: v${report.pit}（当前 v${report.currentPit}）→ 运行 pit update 一次更新全部`);
+    lines.push(`⚠ pit 更新可用: v${report.pit}（当前 v${report.currentPit}）→ 运行 ptl update 一次更新全部`);
   }
   if (report.piSdk && report.currentPiSdk && isUpdateAvailable(report.piSdk, report.currentPiSdk)) {
-    lines.push(`⚠ pi SDK 更新可用: v${report.piSdk}（当前 v${report.currentPiSdk}）→ 运行 pit update 一并升级`);
+    lines.push(`⚠ pi SDK 更新可用: v${report.piSdk}（当前 v${report.currentPiSdk}）→ 运行 ptl update 一并升级`);
   }
   return lines;
 }
@@ -839,7 +839,7 @@ export async function maybeShowUpdateHint(
 }
 ```
 
-- [ ] **Step 4: 接入 factory** `extensions/pit-communicate/index.ts`
+- [ ] **Step 4: 接入 factory** `extensions/ptl-communicate/index.ts`
 
 在 `api.on("session_start", ...)` 回调体内末尾（`cachedCtx = ctx;` 之后即可，不阻塞）追加：
 
@@ -852,22 +852,22 @@ export async function maybeShowUpdateHint(
 
 Run: `npx vitest run test/unit/update-hint.test.ts test/unit/ext-version-check.test.ts`
 Expected: PASS
-Run: `npx tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck --allowImportingTsExtensions extensions/pit-communicate/index.ts`
+Run: `npx tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck --allowImportingTsExtensions extensions/ptl-communicate/index.ts`
 Expected: exit 0
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add extensions/pit-communicate/update-hint.ts extensions/pit-communicate/index.ts test/unit/update-hint.test.ts
-git commit -m "feat(extensions): pit-communicate 会话内更新提示（session_start fire-and-forget notify）"
+git add extensions/ptl-communicate/update-hint.ts extensions/ptl-communicate/index.ts test/unit/update-hint.test.ts
+git commit -m "feat(extensions): ptl-communicate 会话内更新提示（session_start fire-and-forget notify）"
 ```
 
 ---
 
-### Task 5: `pit update` 阶段② 本体更新（GitHub Release 拉包）
+### Task 5: `ptl update` 阶段② 本体更新（GitHub Release 拉包）
 
 **Files:**
-- Modify: `src/ptl/pit/admin.ts`（`handleUpdate` 扩展）
+- Modify: `src/ptl/cli/admin.ts`（`handleUpdate` 扩展）
 - Test: `test/unit/update-release.test.ts`
 
 **Interfaces:**
@@ -881,7 +881,7 @@ git commit -m "feat(extensions): pit-communicate 会话内更新提示（session
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { buildAssetUrl, parseLatestRelease, verifySha256 } from "../../src/ptl/pit/admin.js";
+import { buildAssetUrl, parseLatestRelease, verifySha256 } from "../../src/ptl/cli/admin.js";
 
 describe("buildAssetUrl", () => {
   it("构造下载 URL", () => {
@@ -922,7 +922,7 @@ Expected: FAIL（admin.js 无这些导出）
 
 - [ ] **Step 3: 实现阶段② 纯函数 + 流程**
 
-在 `src/ptl/pit/admin.ts` 顶部 import 区追加：
+在 `src/ptl/cli/admin.ts` 顶部 import 区追加：
 
 ```ts
 import crypto from "node:crypto";
@@ -1014,11 +1014,11 @@ async function updatePitSelf(): Promise<boolean> {
 }
 ```
 
-> `new URL("../../../package.json", import.meta.url)` 相对 `src/ptl/pit/admin.ts` 上溯三级 = 包根（dist/ptl/pit/admin.js 同样三级）。
+> `new URL("../../../package.json", import.meta.url)` 相对 `src/ptl/cli/admin.ts` 上溯三级 = 包根（dist/ptl/pit/admin.js 同样三级）。
 
 - [ ] **Step 4: 改造 `handleUpdate`（阶段语义 + 接入阶段②）**
 
-`src/ptl/pit/admin.ts` 的 `handleUpdate` 开头改为：
+`src/ptl/cli/admin.ts` 的 `handleUpdate` 开头改为：
 
 ```ts
 export async function handleUpdate(flags: Record<string, string>): Promise<void> {
@@ -1052,7 +1052,7 @@ pi SDK 段改造（dry-run 只报告）：
   if (curVer === latestVer) {
     console.log("  \x1b[32m✅ pi 已是最新版\x1b[0m");
   } else if (dryRun) {
-    console.log(`  \x1b[33m⚠ pi 有更新（v${latestVer}）→ 运行 pit update 升级\x1b[0m`);
+    console.log(`  \x1b[33m⚠ pi 有更新（v${latestVer}）→ 运行 ptl update 升级\x1b[0m`);
   } else {
     console.log("  升级中…");
     const r = spawnSync("npm", ["install", "-g", `@earendil-works/pi-coding-agent@${latestVer}`], { stdio: "inherit" });
@@ -1073,8 +1073,8 @@ Expected: exit 0
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/ptl/pit/admin.ts test/unit/update-release.test.ts
-git commit -m "feat(ptl): pit update 阶段② — 本体 GitHub Release 拉包（sha256 校验 + npm install -g）+ --dry-run"
+git add src/ptl/cli/admin.ts test/unit/update-release.test.ts
+git commit -m "feat(ptl): ptl update 阶段② — 本体 GitHub Release 拉包（sha256 校验 + npm install -g）+ --dry-run"
 ```
 
 ---
@@ -1095,12 +1095,12 @@ Expected: 全绿（新增 4 个测试文件全过，既有 629 不回归）
 node dist/ptl/pit.js update --all
 ```
 
-Expected: `✅ 内置扩展已同步: _shared, pit-communicate, ...`（`_shared/version-check.ts`、`pit-communicate/update-hint.ts`、`pit-communicate/index.ts` 同步）
+Expected: `✅ 内置扩展已同步: _shared, ptl-communicate, ...`（`_shared/version-check.ts`、`ptl-communicate/update-hint.ts`、`ptl-communicate/index.ts` 同步）
 
 - [ ] **Step 3: 仓库 = 共享层零差异**
 
 ```bash
-for e in _shared pit-communicate; do diff -rq extensions/$e ~/.pi-triple/data/shared/extensions/$e; done
+for e in _shared ptl-communicate; do diff -rq extensions/$e ~/.pi-triple/data/shared/extensions/$e; done
 ```
 
 Expected: 无输出（零差异）
@@ -1122,13 +1122,13 @@ Expected: 显示 pi SDK 当前/最新、`[dry-run] 将检查 Pi-Triple 本体`�
 
 | # | 操作 | 预期 |
 |---|---|---|
-| 1 | 新开 pi 会话（`pit start`） | 无更新提示（当前 0.1.0 == 最新）；`stderr` 无输出 |
-| 2 | 发布 v0.1.1（git tag + npm pack + gh release）后新开会话 | 会话内 notify：`⚠ pit 更新可用: v0.1.1（当前 v0.1.0）→ 运行 pit update 一次更新全部`；`pit start` stderr 同行提示 |
-| 3 | `pit update --dry-run` | 报告本体 v0.1.1 可用 |
-| 4 | `pit update` | 4 阶段全跑：pi SDK / 本体（下载+sha256+npm install -g）/ 扩展 / 共享层 |
-| 5 | 更新后 `pit --version` | 显示 v0.1.1 |
+| 1 | 新开 pi 会话（`ptl start`） | 无更新提示（当前 0.1.0 == 最新）；`stderr` 无输出 |
+| 2 | 发布 v0.1.1（git tag + npm pack + gh release）后新开会话 | 会话内 notify：`⚠ pit 更新可用: v0.1.1（当前 v0.1.0）→ 运行 ptl update 一次更新全部`；`ptl start` stderr 同行提示 |
+| 3 | `ptl update --dry-run` | 报告本体 v0.1.1 可用 |
+| 4 | `ptl update` | 4 阶段全跑：pi SDK / 本体（下载+sha256+npm install -g）/ 扩展 / 共享层 |
+| 5 | 更新后 `ptl --version` | 显示 v0.1.1 |
 | 6 | 新开会话 | 无更新提示（已最新） |
-| 7 | `PI_SKIP_VERSION_CHECK=1 pit start` | 无任何提示 |
+| 7 | `PI_SKIP_VERSION_CHECK=1 ptl start` | 无任何提示 |
 
 - [ ] **Step 7: 收尾**
 
@@ -1151,7 +1151,7 @@ git status --short   # 确认干净
 
 **占位符扫描：** 无 TBD/TODO；所有代码步骤含完整实现。
 
-**类型一致性：** `compareVersions`/`isUpdateAvailable` 在 Task 1/3 各自定义（独立文件，签名一致）；Task 4 `formatUpdateHint` 消费 Task 3 的 `UpdateReport` 形状（{pit?, piSdk?, currentPit?, currentPiSdk?}）一致；Task 5 import Task 1 的 `compareVersions`/`PIT_REPO`（`../version-check.js` 相对 `src/ptl/pit/admin.ts` 正确）。
+**类型一致性：** `compareVersions`/`isUpdateAvailable` 在 Task 1/3 各自定义（独立文件，签名一致）；Task 4 `formatUpdateHint` 消费 Task 3 的 `UpdateReport` 形状（{pit?, piSdk?, currentPit?, currentPiSdk?}）一致；Task 5 import Task 1 的 `compareVersions`/`PIT_REPO`（`../version-check.js` 相对 `src/ptl/cli/admin.ts` 正确）。
 
 **已知注意点（已内联处理）：**
 - Task 2 Step 3 的 `require` 在 ESM 不可用 → 步骤内已给替代方案（顶层 import spawnSync）

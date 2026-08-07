@@ -32,7 +32,7 @@
  └─ X 只是宿主已有且无需隔离？ ────────────────→ 宿主机（不动）
 ```
 
-**已迁入 dev 的开源工具**（Dockerfile.dev §7）：`agent-reach`、`yt-dlp`、`instsci`、`chatgpt-share`（单文件脚本，`tools/dev/agent-reach-chatgpt/`，系统级 `/usr/local/bin`）。
+**已迁入 dev 的开源工具**（Dockerfile.dev §7/§7b）：`agent-reach`、`yt-dlp`、`instsci`、`chatgpt-share`（单文件脚本，`tools/dev/agent-reach-chatgpt/`，系统级 `/usr/local/bin`）；`bf`/`bfc`（Brainfuck 解释器/编译器：apt 装 `beef`+`tcc`，自写 `tools/dev/bfc/` 脚本，系统级 `/usr/local/bin`）。
 **保留宿主机的非开源工具**（用户裁决）：`kimiim-cli`、`obsidian`（及其 git 同步）、`claude`、`qodercli`。
 
 ---

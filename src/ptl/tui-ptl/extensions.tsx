@@ -74,7 +74,7 @@ export function ExtensionsPage({ width, height: _h }: ExtensionsPageProps) {
             />
           </>
         ) : (
-          <Text dimColor>  Run pit shared init to populate</Text>
+          <Text dimColor>  Run ptl shared init to populate</Text>
         )}
       </Box>
 
@@ -97,13 +97,13 @@ export function ExtensionsPage({ width, height: _h }: ExtensionsPageProps) {
 
         <Box marginTop={1}>
           <Text dimColor>
-            Install/remove extensions via: pit install &lt;source&gt; [--shared]
+            Install/remove extensions via: ptl install &lt;source&gt; [--shared]
           </Text>
         </Box>
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>共享层扩展自动对所有模板可用 · pit install 安装新扩展</Text>
+        <Text dimColor>共享层扩展自动对所有模板可用 · ptl install 安装新扩展</Text>
       </Box>
     </Box>
   );

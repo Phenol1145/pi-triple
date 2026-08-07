@@ -3,7 +3,7 @@
 **日期**：2026-08-03
 **状态**：设计定稿（5 轮对抗性评审 CONVERGED——合计 11C/25I/12M 全部裁决落地）
 **父文档**：`docs/superpowers/2026-08-03-market-economy-overview.md`
-**依赖**：子项目 A（pit-flow 运行时扩展，已合并）、B（记忆系统，已合并）、C（装配层，已合并）、arena 遗留
+**依赖**：子项目 A（ptl-flow 运行时扩展，已合并）、B（记忆系统，已合并）、C（装配层，已合并）、arena 遗留
 **范围**：完整经济语义（Q1-B）
 
 ---
@@ -122,7 +122,7 @@ announce（code）→ persist_task（effect：任务落库 + escrow_max 冻结�
   → apply_settlement（effect：escrow 划付/负 settle 直付/税/elo 双写/燃烧/事件——幂等 taskId）
 ```
 
-### 5.2 pit-flow 引擎扩展
+### 5.2 ptl-flow 引擎扩展
 
 1. **占位扇出节点**（`type: "fanout"`）：`maxFanout`（默认 32）运行时逐项激活（图保持静态 + 首轮候选快照 resume）——D1 实证裁决；候选 = 上游 shortlist 输出（≤ maxFanout 已截断）；**首轮执行候选快照进 checkpoint**（resume 用快照不重算）；激活前 N 分支，**no-op 分支不产元素**；失败隔离。
 2. **effect 节点**（`type: "effect"`）：确定性副作用执行器（EffectRegistry，CodeRegistry 同构）；**幂等存储 = `flow_effects` 表**（`(flowRunId, nodeId, idempotencyKey) → {status, resultSummary, ts}`）；**内部整体单事务原子**（共享 DatabaseSync；幂等记录同事务——部分失败不存在）；重试 skip 返回结果摘要。
@@ -208,7 +208,7 @@ announce（code）→ persist_task（effect：任务落库 + escrow_max 冻结�
 
 ## 13 隐藏依赖与风险
 
-- **pit-flow 三扩展是最大工程块**——任务排序最先行。
+- **ptl-flow 三扩展是最大工程块**——任务排序最先行。
 - **凭证燃烧与遥测口径**：遥测 → 燃烧折算点。
 - **elo 域爆炸**：稀疏存储；刷域 v1 不防。
 - **合谋残余**：N=5+中位数+同组织互斥+校准任务四重防线；跨组织合谋靠公开竞价稀释+审计+校准捕获——文档化接受。

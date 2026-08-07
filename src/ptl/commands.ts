@@ -1,7 +1,7 @@
 /**
  * Pi-Triple 核心命令逻辑（纯函数，不 console.log）
  *
- * pit.ts print/json 模式和 TUI 命令栏都调用这些函数。
+ * ptl.ts print/json 模式和 TUI 命令栏都调用这些函数。
  * 每个函数返回 CommandResult，由调用方决定渲染方式。
  */
 
@@ -18,13 +18,13 @@ import { sharedStatus } from "./shared-layer.js";
 import { ERR } from "./output.js";
 import {
   hasTmux,
-  hasPitSession,
-  listPitSessions,
-  listPitPanesDetailed,
+  hasPtlSession,
+  listPtlSessions,
+  listPtlPanesDetailed,
   sessionsForTenant,
-  killPitSession,
+  killPtlSession,
   formatAge,
-  startPitSession,
+  startPtlSession,
   getPanePid,
 } from "./tmux.js";
 import { loadRegistry, markStarted, markStopped } from "./session-registry.js";
@@ -52,7 +52,7 @@ export async function execTemplateLs(): Promise<CommandResult> {
   const templates = listTemplates(config);
 
   if (templates.length === 0) {
-    return { ok: true, message: "(无模板，运行 pit template new 创建)", data: { templates: [] } };
+    return { ok: true, message: "(无模板，运行 ptl template new 创建)", data: { templates: [] } };
   }
 
   const lines: string[] = [];
@@ -88,7 +88,7 @@ export async function execTemplateNew(alias?: string): Promise<CommandResult> {
     return {
       ok: false,
       message: "",
-      error: { code: ERR.INTERACTIVE_REQUIRED, message: "请提供模板别名: pit template new <alias>" },
+      error: { code: ERR.INTERACTIVE_REQUIRED, message: "请提供模板别名: ptl template new <alias>" },
     };
   }
 
@@ -150,7 +150,7 @@ export async function execTemplateNew(alias?: string): Promise<CommandResult> {
 
 export async function execTemplateRm(input: string): Promise<CommandResult> {
   if (!input) {
-    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: pit template rm <alias|uuid>" } };
+    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: ptl template rm <alias|uuid>" } };
   }
 
   const config = loadConfig();
@@ -177,7 +177,7 @@ export async function execTemplateRm(input: string): Promise<CommandResult> {
     return {
       ok: false,
       message: "",
-      error: { code: ERR.HANDOFF_REQUIRED, message: `模板 "${alias}" 有 ${running.length} 个运行中的会话 (${running.map((s) => s.replace(/^pit-/, "")).join(", ")})，先执行: pit stop --all 或逐个停止` },
+      error: { code: ERR.HANDOFF_REQUIRED, message: `模板 "${alias}" 有 ${running.length} 个运行中的会话 (${running.map((s) => s.replace(/^ptl-/, "")).join(", ")})，先执行: ptl stop --all 或逐个停止` },
     };
   }
 
@@ -233,8 +233,8 @@ export async function execStatus(): Promise<CommandResult> {
 
 export async function execLs(): Promise<CommandResult> {
   const config = loadConfig();
-  const tmuxSessions = listPitSessions();
-  const panes = listPitPanesDetailed();
+  const tmuxSessions = listPtlSessions();
+  const panes = listPtlPanesDetailed();
   const registry = loadRegistry(resolveDataDir(config));
 
   const liveByName = new Map(tmuxSessions.map((s) => [s.name, s]));
@@ -247,8 +247,8 @@ export async function execLs(): Promise<CommandResult> {
     const status = classifySession(
       {
         exists: !!live,
-        pid: live ? panes.get(`pit-${name}`)?.pid : undefined,
-        currentCommand: live ? panes.get(`pit-${name}`)?.currentCommand : undefined,
+        pid: live ? panes.get(`ptl-${name}`)?.pid : undefined,
+        currentCommand: live ? panes.get(`ptl-${name}`)?.currentCommand : undefined,
       },
       entry ?? null,
     );
@@ -269,7 +269,7 @@ export async function execLs(): Promise<CommandResult> {
   rows.sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name) : a.status.localeCompare(b.status)));
 
   if (rows.length === 0) {
-    return { ok: true, message: "  无后台会话\n  启动: pit start --bg --name coding", data: { sessions: [] } };
+    return { ok: true, message: "  无后台会话\n  启动: ptl start --bg --name coding", data: { sessions: [] } };
   }
 
   const MARK: Record<string, string> = { running: "●", empty: "○", orphan: "×" };
@@ -284,37 +284,37 @@ export async function execLs(): Promise<CommandResult> {
 export async function execStop(name: string, flags: Record<string, string> = {}): Promise<CommandResult> {
   const dataDir = resolveDataDir(loadConfig());
   if (flags["stale"] === "true") {
-    const panes = listPitPanesDetailed();
-    const tmuxNames = listPitSessions();
+    const panes = listPtlPanesDetailed();
+    const tmuxNames = listPtlSessions();
     const stale: string[] = [];
     for (const s of tmuxNames) {
-      const pid = panes.get(`pit-${s.name}`)?.pid;
+      const pid = panes.get(`ptl-${s.name}`)?.pid;
       if (!isPidAlive(pid)) stale.push(s.name);
     }
-    for (const n of stale) { killPitSession(n); markStopped(n, dataDir); }
+    for (const n of stale) { killPtlSession(n); markStopped(n, dataDir); }
     return { ok: true, message: stale.length === 0 ? "  无空壳会话" : stale.map((s) => `  ✅ 已清理空壳 ${s}`).join("\n"), data: { stale } };
   }
   if (flags["orphans"] === "true") {
     const registry = loadRegistry(dataDir);
-    const orphans = Object.values(registry.sessions).filter((e) => !hasPitSession(e.name)).map((e) => e.name);
+    const orphans = Object.values(registry.sessions).filter((e) => !hasPtlSession(e.name)).map((e) => e.name);
     for (const n of orphans) markStopped(n, dataDir);
     return { ok: true, message: orphans.length === 0 ? "  无孤儿条目" : orphans.map((n) => `  ✅ 已清理孤儿 ${n}`).join("\n"), data: { orphans } };
   }
   if (!name) {
-    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: pit stop <name> | --stale | --orphans" } };
+    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: ptl stop <name> | --stale | --orphans" } };
   }
   if (!hasTmux()) {
     return { ok: false, message: "", error: { code: ERR.TMUX_NOT_INSTALLED, message: "tmux 未安装" } };
   }
 
   if (name === "--all") {
-    const pits = listPitSessions();
+    const pits = listPtlSessions();
     if (pits.length === 0) {
       return { ok: true, message: "  无后台会话", data: { stopped: [] } };
     }
     const stopped: string[] = [];
     for (const s of pits) {
-      killPitSession(s.name);
+      killPtlSession(s.name);
       markStopped(s.name, dataDir);
       stopped.push(s.name);
     }
@@ -325,7 +325,7 @@ export async function execStop(name: string, flags: Record<string, string> = {})
     };
   }
 
-  if (killPitSession(name)) {
+  if (killPtlSession(name)) {
     markStopped(name, dataDir);
     return { ok: true, message: `  ✅ 已停止 "${name}"`, data: { stopped: [name] } };
   }
@@ -352,8 +352,8 @@ export async function execStartBg(
   const alias = getTemplateAlias(templateId, config);
   const sessionName = name || `${alias}-${Date.now().toString(36)}`;
 
-  if (hasPitSession(name)) {
-    return { ok: false, message: "", error: { code: "SESSION_EXISTS", message: `会话 "${name}" 已在运行。接入: pit attach ${name}` } };
+  if (hasPtlSession(name)) {
+    return { ok: false, message: "", error: { code: "SESSION_EXISTS", message: `会话 "${name}" 已在运行。接入: ptl attach ${name}` } };
   }
 
   const templateConfig = config.templates[templateId] ?? {};
@@ -367,7 +367,7 @@ export async function execStartBg(
     extraArgs,
   });
 
-  const result = startPitSession(launch, sessionName, true);
+  const result = startPtlSession(launch, sessionName, true);
   if (result.status === 0) {
     const pid = getPanePid(result.session);
     markStarted({
@@ -383,7 +383,7 @@ export async function execStartBg(
     }, resolveDataDir(config));
     return {
       ok: true,
-      message: `✅ 后台会话 "${sessionName}" 已启动\n接入: pit attach ${sessionName}`,
+      message: `✅ 后台会话 "${sessionName}" 已启动\n接入: ptl attach ${sessionName}`,
       data: { name: sessionName, templateId, alias },
     };
   }
@@ -396,7 +396,7 @@ export async function execSharedStatus(): Promise<CommandResult> {
   const st = sharedStatus(sharedDir);
 
   if (!st.exists) {
-    return { ok: true, message: "  共享层未初始化。运行: pit shared init", data: { exists: false } };
+    return { ok: true, message: "  共享层未初始化。运行: ptl shared init", data: { exists: false } };
   }
 
   return {

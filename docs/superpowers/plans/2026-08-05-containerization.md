@@ -220,7 +220,7 @@
 - Modify: `Dockerfile.sandbox`（安装 pi+PTL+扩展）
 - Create: `scripts/sandbox-debug-entry.sh`（调试会话入口）
 
-- [ ] **Step 1: 镜像内嵌**——pi 可执行+PTL（dist/ptl）+扩展（pit-communicate/pit-control）；不持 LLM 密钥（用户裁决——按需临时注入操作流文档化：docker exec 注入 env，用完即撤）
+- [ ] **Step 1: 镜像内嵌**——pi 可执行+PTL（dist/ptl）+扩展（ptl-communicate/ptl-control）；不持 LLM 密钥（用户裁决——按需临时注入操作流文档化：docker exec 注入 env，用完即撤）
 - [ ] **Step 2: 调试入口脚本**——启动 PTL 会话（tmux 在容器内）
 - [ ] **Step 3: commit** `feat(sandbox): 内嵌 pi+PTL 自修改模式（不持密钥按需注入，F/WP3）`
 
@@ -285,12 +285,12 @@
 **Files:**
 - Create: `src/pth/fallback/requests.ts`（Redis 队列）
 - Modify: `src/pth/gateway/`（路由：POST /api/v1/fallback-requests、GET 列表、POST /:id/close）
-- Create: `src/ptl/bridge/request.ts`、`src/ptl/bridge/respond.ts`（pit hub request/requests/respond）
+- Create: `src/ptl/bridge/request.ts`、`src/ptl/bridge/respond.ts`（ptl hub request/requests/respond）
 - Test: `test/unit/fallback-requests.test.ts`（新建）
 
 - [ ] **Step 1: pth 队列**——`fallback_requests` Redis 结构 `{requestId, slotHint, description, urgency, createdAt, status(open|closed), closedBy?}`
 - [ ] **Step 2: 手动建单**——`POST /api/v1/fallback-requests`（自动生产者留 E——spec §5.4）
-- [ ] **Step 3: PTL 命令**——`pit hub request`（建单）/`pit hub requests`（列表）/`pit hub respond <id> <dir>`（走 components 上传 API+requestId 关联→自动闭合）
+- [ ] **Step 3: PTL 命令**——`ptl hub request`（建单）/`ptl hub requests`（列表）/`ptl hub respond <id> <dir>`（走 components 上传 API+requestId 关联→自动闭合）
 - [ ] **Step 4: 测试**——建单/列表/respond 闭合/审计断言
 - [ ] **Step 5: commit** `feat(pth,ptl): fallback_requests 回退请求通道——手动建单+respond 闭合闭环（F/WP4）`
 
@@ -298,11 +298,11 @@
 
 **Files:**
 - Modify: `src/pth/gateway/`（只读路由：sessions/trace/events）
-- Create: `src/ptl/bridge/observe.ts`（pit hub observe）
+- Create: `src/ptl/bridge/observe.ts`（ptl hub observe）
 - Test: `test/unit/hub-observe.test.ts`（新建）
 
 - [ ] **Step 1: pth 只读路由**——`GET /api/v1/observe/sessions|sessions/:id|trace/:id|events`；**依赖标注（评审 I1）**：会话/trace 用 Redis 会话痕迹（WP5 前先行交付）；**EventLog 查询子项经常驻系统会话代理——依赖 Task 23/24，拆分为 WP5 收尾时交付（并入 Task 28 验收）**，本子项不在本 Task 验收范围
-- [ ] **Step 2: PTL 命令**——`pit hub observe <what>`（print/json 双模式）
+- [ ] **Step 2: PTL 命令**——`ptl hub observe <what>`（print/json 双模式）
 - [ ] **Step 3: 测试**——路由+权限（Bearer+tenant 隔离）断言
 - [ ] **Step 4: commit** `feat(pth,ptl): hub observe——远程会话/trace/事件观测（F/WP4）`
 
@@ -310,7 +310,7 @@
 
 **Files:**
 - Create: `src/pth/gateway/routes-debug.ts`（WebSocket 接入 sandbox 调试会话）
-- Create: `src/ptl/bridge/debug.ts`（pit hub debug）
+- Create: `src/ptl/bridge/debug.ts`（ptl hub debug）
 - Test: `test/unit/hub-debug.test.ts`（新建）
 
 - [ ] **Step 1: WebSocket 交互通道**——pth 网关 ↔ sandbox 调试会话（Task 14 入口）；双向输入输出（vs hub run 的 SSE 单向）；**先核实现有 `/ws` 路由用途（server.ts:39 已有 WS 路由——评审 N3：复用现有 WS 注册新增 /ws/debug 子路径，避免冲突）**

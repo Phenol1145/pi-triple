@@ -1,5 +1,5 @@
 /**
- * pit/mode — mode resolution + JSON routing + print dispatch
+ * ptl/mode — mode resolution + JSON routing + print dispatch
  */
 
 import { emitJson, emitJsonError } from "../output.js";
@@ -15,9 +15,9 @@ import { PthClient } from "../bridge/client.js";
 import { execSessionLs } from "../commands/session.js";
 import { execTraceLs } from "../commands/trace.js";
 
-type PitMode = "print" | "json";
+type PtlMode = "print" | "json";
 
-export function resolveMode(command: string, flags: Record<string, string>): PitMode {
+export function resolveMode(command: string, flags: Record<string, string>): PtlMode {
   if (flags.json === "true") return "json";
   return "print";
 }
@@ -54,7 +54,7 @@ const JSON_ROUTERS: Record<string, (sub: string | undefined, passthrough: string
   hub: async (sub) => {
     if (sub === "programs") {
       const client = PthClient.fromConfig();
-      if (!client) return { ok: false, error: { code: "NOT_CONFIGURED", message: "未配置 PTH 连接（pit config set pth.url/pth.token）" } };
+      if (!client) return { ok: false, error: { code: "NOT_CONFIGURED", message: "未配置 PTH 连接（ptl config set pth.url/pth.token）" } };
       try {
         const programs = await client.list();
         return { ok: true, data: { programs } };

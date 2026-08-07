@@ -25,7 +25,7 @@
 │ 定位：pi 的"多模板会话管理器 + 本地工作流引擎 + PTH 客户端" │
 │ 入口：pit CLI（src/ptl/pit.ts）· TUI（Ink）· tmux   │
 │ 核心：launcher（构建 pi 启动参数）→ spawn 真实 pi     │
-│       tmux 会话管理 · 纸带 session 操作 · pit-flow    │
+│       tmux 会话管理 · 纸带 session 操作 · ptl-flow    │
 │       hub 桥（PTH 客户端）· lab-data（raw SQL 读库）  │
 │ 不运行 agent 本体（真实 pi 进程 × tmux 承载）          │
 └──────────────────────────────────────────────────┘
@@ -53,10 +53,10 @@
 |---|---|---|---|
 | **agent-lab** | agent 经济引擎（WorkLoop/市场/调度/优化器/任务池/记忆） | PTL-symlink + **PTH-dynimport**（main.ts:96-110 注入常驻会话） | 活跃（持续增长） |
 | agent-lab-bidder | `place_bid` 工具（globalThis BidBoard 单例） | PTL-symlink 仅 | 兼容垫片（deprecated-for-bidding）；**相对 import `../agent-lab/src/` 强耦合** |
-| pit-communicate | 跨会话通信（文件邮箱 + 审核 + 审计） | PTL-symlink 仅 | 冻结；**spec 依赖 agent-lab comms 未接线** |
-| pit-control | 会话内 tmux 控制（/control） | PTL-symlink 仅 | 冻结 |
-| pit-providers | provider 后端（providers.json + failover） | PTL-symlink 仅 | 活跃单点 |
-| workflow | 会话内 pit-flow 接口（/flow + 工具） | PTL-symlink 仅 | 活跃（全 shell 外调 CLI） |
+| ptl-communicate | 跨会话通信（文件邮箱 + 审核 + 审计） | PTL-symlink 仅 | 冻结；**spec 依赖 agent-lab comms 未接线** |
+| ptl-control | 会话内 tmux 控制（/control） | PTL-symlink 仅 | 冻结 |
+| ptl-providers | provider 后端（providers.json + failover） | PTL-symlink 仅 | 活跃单点 |
+| workflow | 会话内 ptl-flow 接口（/flow + 工具） | PTL-symlink 仅 | 活跃（全 shell 外调 CLI） |
 | _shared/ | 5 个共享模块（paths/presence/registry/…） | 随 symlink 进入但不被加载 | 供 communicate/control 共用 |
 
 **加载机制**：`src/ptl/shared-layer.ts` —— bundled 扩展 cp 到共享层 → 逐模板 symlink 注入 → `ensureTemplateLinks` 每次启动强制补链（删 symlink 会复活）。PTH 侧另以 extensionFactories 注入 agent-lab。
@@ -119,7 +119,7 @@ L3 语义记忆 = agent-lab 文件系统模式（entries/anchors/counters，原�
 | 1. PTH 主路径 | gateway → session.prompt | **pi SDK AgentSession 回合循环** | 真实（sandbox bash 转发） |
 | 2. subagent 委托 | interceptor（model select） | pi SDK 自己执行 | pi SDK 原生 |
 | 3. agent-lab execute | /lab execute、定时、taskpool | WorkLoopRunner → pi-default-loop → Delegation V2 | **stub**（且系统会话无委托监听 → 半瘫） |
-| 4. PTL 本地 | pit start / agent run / flow | 真实 pi 进程（tmux 承载） | 真实（本地） |
+| 4. PTL 本地 | ptl start / agent run / flow | 真实 pi 进程（tmux 承载） | 真实（本地） |
 
 **真相**：agent 真实执行 = pi SDK 会话层（PTH 主路径）+ 本地 pi 进程（PTL）。agent-lab 只贡献模型选择/竞价。
 

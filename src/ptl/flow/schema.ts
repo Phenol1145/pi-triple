@@ -1,5 +1,5 @@
 /**
- * pit-flow 图定义 schema + validate
+ * ptl-flow 图定义 schema + validate
  */
 
 import { parseExpr } from "./expr.js";

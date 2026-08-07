@@ -10,7 +10,7 @@ export interface AgentsMdCheck {
 export function checkTemplateAgentsMd(templateDir: string): AgentsMdCheck {
   const target = path.join(templateDir, "AGENTS.md");
   if (!fs.existsSync(target)) {
-    return { ok: false, detail: "AGENTS.md 缺失（运行 pit template new 或启动会话补写）" };
+    return { ok: false, detail: "AGENTS.md 缺失（运行 ptl template new 或启动会话补写）" };
   }
   const content = fs.readFileSync(target, "utf-8");
   if (content.includes("<templateId>") || content.includes("<alias>")) {

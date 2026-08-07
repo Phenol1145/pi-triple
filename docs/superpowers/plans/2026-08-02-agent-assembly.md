@@ -528,6 +528,6 @@ export class CommsBridge {
 ## Self-Review 记录
 
 - **Spec 覆盖**：§2 装配流程（T8）/§2.3 MemorySpec（T1）/§2.4 开户续跑（T2+T8）/§2.5 记忆域模型与规则链（T3+T4+T5）/§3 AgentRuntime（T7）/§3.2 MemoryHost（T5）/§3.3 LedgerPort（T2）/§4 契约 ①-⑩（T5 ①③⑤、T6 ①②⑦ 钩子、T7 ⑦、T9 ⑥⑩、T8 ⑧⑨）/§5 测试策略（T10）/§4.1 类型出处（T1）
-- **已知留白（实施中注意）**：T6 runner 测试的 fixture 复杂度（可缩减为最小断言——brief 注明）；T4 种子 id 约定（rule:fact 等——以 PublicDomainBootstrap 实现为准，测试与实现同步）；T8 agentId 生成（装配器生成 UUID——opts 不支持外部指定，幂等冲突靠 getAgent 预检）；pit-communicate 真实传输桥接（T9 是适配器接口 + inbox——真实 mailbox 传输在 D 或后续专项接入，spec §8.3 承认）
+- **已知留白（实施中注意）**：T6 runner 测试的 fixture 复杂度（可缩减为最小断言——brief 注明）；T4 种子 id 约定（rule:fact 等——以 PublicDomainBootstrap 实现为准，测试与实现同步）；T8 agentId 生成（装配器生成 UUID——opts 不支持外部指定，幂等冲突靠 getAgent 预检）；ptl-communicate 真实传输桥接（T9 是适配器接口 + inbox——真实 mailbox 传输在 D 或后续专项接入，spec §8.3 承认）
 - **类型一致性**：AgentRef/MemorySpec/AssembleOptions/ROUND_SENTINEL（T1）→ T4/T5/T8；LedgerPort（T2）→ T8；listOfficialEntries（T3）→ T5；RuleBootstrap.resolveRule（T4）→ T5；MemoryHost（T5）→ T7/T8；runner 钩子（T6）→ T7；AgentRuntime（T7）→ T8/T10；CommsBridge（T9）→ T10。签名跨任务一致
 - **依赖序**：T1 →（T2∥T3∥T6）→ T4（T3）→ T5（T1+T3+T4）→ T7（T5+T6）→ T8（T2+T7）→ T9（T7）→ T10（全部）

@@ -8,12 +8,12 @@ import type { PiTripleConfig } from "../../src/ptl/config.js";
 // toSessionRecords 依赖 tmux 运行态：mock tmux 模块（保留 formatAge 真实实现），无真实 tmux 依赖
 const tmuxMocks = vi.hoisted(() => ({
   hasTmux: vi.fn(),
-  listPitSessions: vi.fn(),
-  listPitPanesDetailed: vi.fn(),
+  listPtlSessions: vi.fn(),
+  listPtlPanesDetailed: vi.fn(),
 }));
 vi.mock("../../src/ptl/tmux.js", async (importOriginal) => {
   const mod = await importOriginal<typeof import("../../src/ptl/tmux.js")>();
-  return { ...mod, hasTmux: tmuxMocks.hasTmux, listPitSessions: tmuxMocks.listPitSessions, listPitPanesDetailed: tmuxMocks.listPitPanesDetailed };
+  return { ...mod, hasTmux: tmuxMocks.hasTmux, listPtlSessions: tmuxMocks.listPtlSessions, listPtlPanesDetailed: tmuxMocks.listPtlPanesDetailed };
 });
 
 const HEADER = '{"type":"session","version":3,"id":"aaaaaaaa-1111-4111-8111-111111111111","timestamp":"2026-07-28T16:35:58.667Z","cwd":"/tmp/w1","parentSession":"/tmp/w0/source.jsonl"}';
@@ -86,9 +86,9 @@ describe("pi-scan", () => {
     expect(r.warning).toBeTruthy();
   });
 
-  it("isTapeLive：pane 名 pit-<id8> 或 currentCommand 含完整 id", () => {
+  it("isTapeLive：pane 名 ptl-<id8> 或 currentCommand 含完整 id", () => {
     const panes = new Map<string, any>([
-      ["pit-aaaaaaaa", { pid: 123, currentCommand: "pi --session aaaaaaaa-1111-4111-8111-111111111111" }],
+      ["ptl-aaaaaaaa", { pid: 123, currentCommand: "pi --session aaaaaaaa-1111-4111-8111-111111111111" }],
     ]);
     expect(isTapeLive("aaaaaaaa-1111-4111-8111-111111111111", panes)).toBe(true);
     expect(isTapeLive("bbbbbbbb-2222-4222-8222-222222222222", panes)).toBe(false);
@@ -99,8 +99,8 @@ describe("toSessionRecords 状态判定（tmux mock）", () => {
   let root: string;
   beforeEach(() => {
     tmuxMocks.hasTmux.mockReset();
-    tmuxMocks.listPitSessions.mockReset();
-    tmuxMocks.listPitPanesDetailed.mockReset();
+    tmuxMocks.listPtlSessions.mockReset();
+    tmuxMocks.listPtlPanesDetailed.mockReset();
     root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-scan-records-"));
     fs.mkdirSync(path.join(root, "sessions", "t1"), { recursive: true });
     fs.writeFileSync(path.join(root, "sessions", "t1", "2026-07-28T16-35-58-667Z_aaaaaaaa-1111-4111-8111-111111111111.jsonl"), HEADER + "\n" + EVENT + "\n");
@@ -121,8 +121,8 @@ describe("toSessionRecords 状态判定（tmux mock）", () => {
 
   it("tmux 在 + pid 存活 → running（detail 兼容：前端占用/空闲/运行命令）", () => {
     tmuxMocks.hasTmux.mockReturnValue(true);
-    tmuxMocks.listPitSessions.mockReturnValue([{ name: "aaaaaaaa", windows: 1, created: new Date(), attached: 0, activityAgeMs: 5000 }]);
-    tmuxMocks.listPitPanesDetailed.mockReturnValue(new Map([["pit-aaaaaaaa", { pid: process.pid, currentCommand: "pi" }]]));
+    tmuxMocks.listPtlSessions.mockReturnValue([{ name: "aaaaaaaa", windows: 1, created: new Date(), attached: 0, activityAgeMs: 5000 }]);
+    tmuxMocks.listPtlPanesDetailed.mockReturnValue(new Map([["ptl-aaaaaaaa", { pid: process.pid, currentCommand: "pi" }]]));
     const recs = toSessionRecords(scanSessionFiles(root));
     expect(recs).toHaveLength(1);
     expect(recs[0]!.status).toBe("running");
@@ -133,8 +133,8 @@ describe("toSessionRecords 状态判定（tmux mock）", () => {
 
   it("空壳（tmux 在但 pane pid 已死）→ stopped，不再误显运行中", () => {
     tmuxMocks.hasTmux.mockReturnValue(true);
-    tmuxMocks.listPitSessions.mockReturnValue([{ name: "aaaaaaaa", windows: 1, created: new Date(), attached: 0, activityAgeMs: 5000 }]);
-    tmuxMocks.listPitPanesDetailed.mockReturnValue(new Map([["pit-aaaaaaaa", { pid: -1, currentCommand: "zsh" }]]));
+    tmuxMocks.listPtlSessions.mockReturnValue([{ name: "aaaaaaaa", windows: 1, created: new Date(), attached: 0, activityAgeMs: 5000 }]);
+    tmuxMocks.listPtlPanesDetailed.mockReturnValue(new Map([["ptl-aaaaaaaa", { pid: -1, currentCommand: "zsh" }]]));
     const recs = toSessionRecords(scanSessionFiles(root));
     expect(recs).toHaveLength(1);
     expect(recs[0]!.status).toBe("stopped");

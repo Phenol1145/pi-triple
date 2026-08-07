@@ -344,7 +344,7 @@ export function renameTemplate(templateId: string, newAlias: string, config?: Pi
   return true;
 }
 
-// ─── 配置键读写（pit config get/set/unset）─────────────────────
+// ─── 配置键读写（ptl config get/set/unset）─────────────────────
 
 /** 模板可写字段 */
 const TEMPLATE_WRITABLE = new Set([

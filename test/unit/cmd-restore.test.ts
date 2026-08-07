@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { markStarted } from "../../src/ptl/session-registry.js";
-import { resolveRestoreTargets } from "../../src/ptl/pit/sessions.js";
+import { resolveRestoreTargets } from "../../src/ptl/cli/sessions.js";
 
 describe("cmdRestore 目标解析", () => {
   let root: string;

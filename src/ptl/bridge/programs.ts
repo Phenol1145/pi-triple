@@ -1,16 +1,16 @@
 /**
- * bridge/programs.ts — pit programs 命令
+ * bridge/programs.ts — ptl programs 命令
  *
  * 列出 PTH 上已提交的程序。
  */
 import { PthClient } from "./client.js";
-import { printBanner } from "../pit/main.js";
+import { printBanner } from "../cli/main.js";
 
 export async function cmdPrograms(_flags: Record<string, string>): Promise<void> {
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: pit config set pth.url <url>  &&  pit config set pth.token <token>");
+    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
     process.exit(1);
   }
 
@@ -21,7 +21,7 @@ export async function cmdPrograms(_flags: Record<string, string>): Promise<void>
     console.log("  \x1b[1mPTH 程序列表\x1b[0m");
 
     if (programs.length === 0) {
-      console.log("\n  暂无程序。提交: pit hub submit <dir>");
+      console.log("\n  暂无程序。提交: ptl hub submit <dir>");
     } else {
       console.log("");
       console.log(`  \x1b[2m${"NAME".padEnd(24)}VERSION  UPDATED\x1b[0m`);

@@ -1,9 +1,9 @@
 /**
- * pit/commands/dispatch — 共享命令执行层
+ * ptl/commands/dispatch — 共享命令执行层
  *
- * CLI（pit.ts）与 TUI（tui-pit/app.tsx）共用的单一命令分发：
+ * CLI（ptl.ts）与 TUI（tui-ptl/app.tsx）共用的单一命令分发：
  * - 命令映射、参数处理、exec 调用只存在此处
- * - 进程内不安全/复杂的命令 → handoff（spawn `pit <新命令名>` 子进程）
+ * - 进程内不安全/复杂的命令 → handoff（spawn `ptl <新命令名>` 子进程）
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -73,26 +73,26 @@ export function resolveDispatch(cmd: string, args: string[]): DispatchTarget | n
     case "help":
       return { kind: "exec", fn: helpCommand };
     case "pi":
-      return { kind: "handoff", cmd: "pit", args: ["pi", ...args] };
+      return { kind: "handoff", cmd: "ptl", args: ["pi", ...args] };
     case "attach":
-      return { kind: "handoff", cmd: "pit", args: ["attach", ...args] };
+      return { kind: "handoff", cmd: "ptl", args: ["attach", ...args] };
     case "switch":
-      return { kind: "handoff", cmd: "pit", args: ["switch", ...args] };
+      return { kind: "handoff", cmd: "ptl", args: ["switch", ...args] };
     case "hub":
-      if (HUB_SUBCOMMANDS.has(sub)) return { kind: "handoff", cmd: "pit", args: ["hub", sub, ...rest] };
+      if (HUB_SUBCOMMANDS.has(sub)) return { kind: "handoff", cmd: "ptl", args: ["hub", sub, ...rest] };
       return null;
     case "tui":
-      if (TUI_PANELS.has(sub)) return { kind: "handoff", cmd: "pit", args: ["tui", sub] };
+      if (TUI_PANELS.has(sub)) return { kind: "handoff", cmd: "ptl", args: ["tui", sub] };
       return null;
     case "flow":
-      if (FLOW_SUBCOMMANDS.has(sub)) return { kind: "handoff", cmd: "pit", args: ["flow", sub, ...rest] };
+      if (FLOW_SUBCOMMANDS.has(sub)) return { kind: "handoff", cmd: "ptl", args: ["flow", sub, ...rest] };
       return null;
     default:
       return null;
   }
 }
 
-// ─── 内联命令实现（自 tui-pit/app.tsx 迁入，单一来源）────────
+// ─── 内联命令实现（自 tui-ptl/app.tsx 迁入，单一来源）────────
 
 function renameTemplateCommand(oldName: string, newName: string): Promise<CommandResult> {
   const cfg = loadConfig();

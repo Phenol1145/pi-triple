@@ -54,14 +54,14 @@
 - 铁律（速查）：
   - 写扩展/技能 → PTL 共享层（~/.pi-triple/data/shared/）或模板本地，绝不写 ~/.agents/skills/（体制外）
   - 删模板内共享层 symlink ≠ 卸载（下次启动复活）
-  - 不要与 bundled 扩展同名（pit update --all 会覆盖）
+  - 不要与 bundled 扩展同名（ptl update --all 会覆盖）
 ```
 
 **内容来源管理**：AGENTS.md 正文维护在仓库（`docs/ptl/templates/AGENTS.md.tpl`），安装/升级模板时由 PTL 渲染 `<templateId>/<alias>` 占位符写入模板目录。这样内容可版本化、可随仓库演进。
 
 **A2. 模板 PROMPT.md 去留**：机制保留（launcher 已实现），本次不启用——AGENTS.md 已覆盖需求，避免双系统维护。后续若有模板级"系统提示替换"需求（SYSTEM.md 语义）再启用。
 
-**A3. 验证**：`pit doctor` / 新会话首轮自我认知确认；写一条检查项确认 AGENTS.md 存在且被 pi 加载。
+**A3. 验证**：`ptl doctor` / 新会话首轮自我认知确认；写一条检查项确认 AGENTS.md 存在且被 pi 加载。
 
 ### 部分 B：agent-lab 调度模式
 

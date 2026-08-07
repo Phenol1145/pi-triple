@@ -1,5 +1,5 @@
 /**
- * pit-flow engine — 执行循环
+ * ptl-flow engine — 执行循环
  *
  * v1: 单链串行（makeRunFlow / makeResumeFlow）
  * v2: 波次并行（makeRunFlowV2 / makeResumeFlowV2）
@@ -138,7 +138,7 @@ async function executeLoop(
   const latestCP = store.latestCheckpoint(runId);
   if (latestCP && meta.graphVersion !== latestCP.graphVersion) {
     console.warn(
-      `[pit-flow] Warning: meta.graphVersion (${meta.graphVersion}) != latest checkpoint.graphVersion (${latestCP.graphVersion}). State may be from an older graph version.`,
+      `[ptl-flow] Warning: meta.graphVersion (${meta.graphVersion}) != latest checkpoint.graphVersion (${latestCP.graphVersion}). State may be from an older graph version.`,
     );
   }
 
@@ -800,7 +800,7 @@ async function executeWaveLoop(
           result = {
             output: "",
             exitCode: -1,
-            signal: /ENOENT/.test(msg) ? "spawn 失败：pi CLI 未安装或不在 PATH 中（运行 pit doctor 检查）" : msg,
+            signal: /ENOENT/.test(msg) ? "spawn 失败：pi CLI 未安装或不在 PATH 中（运行 ptl doctor 检查）" : msg,
           };
         }
         const nodeFinishedAt = Date.now();

@@ -2,15 +2,15 @@
  * tmux.ts — Pi-Triple tmux 操作共享模块
  *
  * 所有 tmux 会话管理函数集中于此，确保：
- * - 单一命名规则事实源（"pit-" 前缀）
+ * - 单一命名规则事实源（"ptl-" 前缀）
  * - 统一环境变量注入（PI_*, AGENT_LAB_*）
- * - 精确匹配（=pit-<name>）vs 前缀匹配语义明确
+ * - 精确匹配（=ptl-<name>）vs 前缀匹配语义明确
  */
 import { spawnSync } from "node:child_process";
 
 // ─── Types ───────────────────────────────────────────────────
 
-export interface PitSession {
+export interface PtlSession {
   name: string;
   windows: number;
   created: Date;
@@ -18,11 +18,11 @@ export interface PitSession {
   activityAgeMs?: number;   // 最后活动距今 ms（新）
 }
 
-export interface PitPanes {
+export interface PtlPanes {
   [sessionName: string]: string; // pane_start_command
 }
 
-export interface PitPaneInfo {
+export interface PtlPaneInfo {
   pid?: number;
   currentCommand?: string;
 }
@@ -48,7 +48,7 @@ export function configureTmuxServer(): void {
 
 /** 用户命名 → tmux 会话名（唯一前缀源） */
 export function tmuxSessionName(name: string): string {
-  return `pit-${name}`;
+  return `ptl-${name}`;
 }
 
 /** 会话名消毒：合法 [A-Za-z0-9._-]；非法返回错误消息，合法返回 null */
@@ -68,8 +68,8 @@ export function formatAge(ms: number): string {
 
 // ─── Session Listing / Query ─────────────────────────────────
 
-/** 列出所有 pit-* 会话 */
-export function listPitSessions(): PitSession[] {
+/** 列出所有 ptl-* 会话 */
+export function listPtlSessions(): PtlSession[] {
   if (!hasTmux()) return [];
   const result = spawnSync(
     "tmux",
@@ -80,11 +80,11 @@ export function listPitSessions(): PitSession[] {
   return (result.stdout ?? "")
     .trim()
     .split("\n")
-    .filter((l) => l.startsWith("pit-"))
+    .filter((l) => l.startsWith("ptl-"))
     .map((l) => {
       const [full, win, created, attached, activity] = l.split(":");
       return {
-        name: full.replace(/^pit-/, ""),
+        name: full.replace(/^ptl-/, ""),
         windows: parseInt(win ?? "1", 10),
         created: new Date(parseInt(created ?? "0", 10) * 1000),
         attached: parseInt(attached ?? "0", 10),
@@ -93,26 +93,26 @@ export function listPitSessions(): PitSession[] {
     });
 }
 
-/** 一次调用拿所有 pit-* 会话 pane 启动命令（仅列 pit- 前缀） */
-export function listPitPanes(): PitPanes {
+/** 一次调用拿所有 ptl-* 会话 pane 启动命令（仅列 ptl- 前缀） */
+export function listPtlPanes(): PtlPanes {
   if (!hasTmux()) return {};
   const r = spawnSync("tmux", ["list-panes", "-a", "-F", "#{session_name}|#{pane_start_command}"], { encoding: "utf-8" });
-  const panes: PitPanes = {};
+  const panes: PtlPanes = {};
   for (const line of (r.stdout ?? "").trim().split("\n")) {
     const [session, cmd] = line.split("|");
-    if (session && session.startsWith("pit-") && cmd) panes[session] = cmd;
+    if (session && session.startsWith("ptl-") && cmd) panes[session] = cmd;
   }
   return panes;
 }
 
-/** 一次调用拿所有 pit-* 会话 pane 的 pid + 当前命令（additive：不动 listPitPanes） */
-export function listPitPanesDetailed(): Map<string, PitPaneInfo> {
-  const out = new Map<string, PitPaneInfo>();
+/** 一次调用拿所有 ptl-* 会话 pane 的 pid + 当前命令（additive：不动 listPtlPanes） */
+export function listPtlPanesDetailed(): Map<string, PtlPaneInfo> {
+  const out = new Map<string, PtlPaneInfo>();
   if (!hasTmux()) return out;
   const r = spawnSync("tmux", ["list-panes", "-a", "-F", "#{session_name}|#{pane_pid}|#{pane_current_command}"], { encoding: "utf-8" });
   for (const line of (r.stdout ?? "").trim().split("\n")) {
     const [session, pid, cmd] = line.split("|");
-    if (!session || !session.startsWith("pit-")) continue;
+    if (!session || !session.startsWith("ptl-")) continue;
     out.set(session, { pid: pid ? parseInt(pid, 10) || undefined : undefined, currentCommand: cmd || undefined });
   }
   return out;
@@ -121,7 +121,7 @@ export function listPitPanesDetailed(): Map<string, PitPaneInfo> {
 /** 按模板别名获取运行中会话列表（B3 修复：前缀匹配而非精确匹配） */
 export function sessionsForTenant(templateAlias: string): string[] {
   if (!hasTmux()) return [];
-  const prefix = `pit-${templateAlias}-`;
+  const prefix = `ptl-${templateAlias}-`;
   const result = spawnSync(
     "tmux",
     ["list-sessions", "-F", "#{session_name}"],
@@ -133,15 +133,15 @@ export function sessionsForTenant(templateAlias: string): string[] {
     .filter((l) => l.startsWith(prefix));
 }
 
-/** 检查指定名称的会话是否存在（精确匹配 =pit-<name>） */
-export function hasPitSession(name: string): boolean {
+/** 检查指定名称的会话是否存在（精确匹配 =ptl-<name>） */
+export function hasPtlSession(name: string): boolean {
   if (!hasTmux()) return false;
   const r = spawnSync("tmux", ["has-session", "-t", `=${tmuxSessionName(name)}`], { encoding: "utf-8" });
   return r.status === 0;
 }
 
 /** 终止指定会话（精确匹配） */
-export function killPitSession(name: string): boolean {
+export function killPtlSession(name: string): boolean {
   if (!hasTmux()) return false;
   const r = spawnSync("tmux", ["kill-session", "-t", `=${tmuxSessionName(name)}`], { encoding: "utf-8" });
   return r.status === 0;
@@ -149,7 +149,7 @@ export function killPitSession(name: string): boolean {
 
 /** 指定会话 pane 的主进程 pid（创建后调用）
  * 注：不用 `=` 精确前缀 — tmux 3.6b 的 display-message 对 `=name` 目标静默返回空；
- * 裸 `pit-<name>` 先精确匹配，安全（会话名唯一 + 消毒后无歧义）。 */
+ * 裸 `ptl-<name>` 先精确匹配，安全（会话名唯一 + 消毒后无歧义）。 */
 export function getPanePid(sessionName: string): number | null {
   if (!hasTmux()) return null;
   const r = spawnSync("tmux", ["display-message", "-p", "-t", sessionName, "#{pane_pid}"], { encoding: "utf-8" });
@@ -185,7 +185,7 @@ export function buildTmuxSessionArgs(
  * 返回 spawnSync 结果（status 0 = 成功）。
  * 修复 B4：所有启动路径经由 buildTmuxSessionArgs，确保 PI_/AGENT_LAB_ env 注入一致。
  */
-export function startPitSession(
+export function startPtlSession(
   launch: { cmd: string; args: string[]; env: Record<string, string>; cwd: string },
   name: string,
   detach: boolean,
