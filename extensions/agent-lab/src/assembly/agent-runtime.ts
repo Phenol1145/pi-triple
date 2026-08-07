@@ -41,6 +41,8 @@ import type { DspBuilder, DspInput } from "../memory/dsp.ts";
 import type { MemoryHost } from "./memory-host.ts";
 import type { LedgerPort } from "./ledger-port.ts";
 import type { CommsBridge } from "./comms-bridge.ts";
+import type { SqliteTaskStore } from "../taskpool/tasks.ts";
+import { mountSorterSdk } from "../taskpool/sdk.ts";
 import { ROUND_SENTINEL } from "./types.ts";
 
 export interface AgentRuntimeDeps {
@@ -55,6 +57,8 @@ export interface AgentRuntimeDeps {
   checkpointStore?: CheckpointStore;
   /** C 接线包（plan Task 10）：comms 桥（收件缓冲 drain/ack + 身份注册产物）；装配器构造注入。 */
   bridge?: CommsBridge;
+  /** 适配增补（Task 6）：任务池 store——sorter? SDK 端口（reject/submit）挂载来源；可选，缺省不挂。 */
+  taskStore?: SqliteTaskStore;
 }
 
 export interface AgentRunRequest {
@@ -152,10 +156,14 @@ export class AgentRuntime {
     if (this.sdkAttached) return;
     this.sdkAttached = true;
     if (typeof this.deps.runner.onSdkBuilt === "function") {
-      this.unregisterSdkHook = this.deps.runner.onSdkBuilt((sdk) => this.deps.memory.attachSdk(sdk));
+      this.unregisterSdkHook = this.deps.runner.onSdkBuilt((sdk) => {
+        this.deps.memory.attachSdk(sdk);
+        this.mountSorterPort(sdk); // Task 6：sorter? 端口挂载（store 缺失防御性不挂）
+      });
     } else {
       this.sdkStub ??= {} as WorkLoopSDK;
       this.deps.memory.attachSdk(this.sdkStub);
+      this.mountSorterPort(this.sdkStub);
     }
     if (typeof this.deps.runner.onCheckpoint === "function") {
       this.unregisterCheckpointHook = this.deps.runner.onCheckpoint((info) => {
@@ -164,6 +172,16 @@ export class AgentRuntime {
         this.deps.bridge?.ack(info.seq); // 契约⑥ ack：mergedAtSeq ≤ seq → inbox 删除（项 4 清理侧）
       });
     }
+  }
+
+  /** Task 6：sorter? 端口挂载——agent 工作会话内 reject/submit（判别式返回，裁决 I5）。
+   *  依赖注入 taskStore（装配器构造）；防御性：store 缺失不挂。agentId = 本运行时绑定 agent。 */
+  private mountSorterPort(sdk: WorkLoopSDK): void {
+    mountSorterSdk(sdk, {
+      // 可选依赖缺省不挂（mountSorterSdk 内部 falsy 判定；同 memory-host attachSdk comms 先例）
+      store: this.deps.taskStore ?? (undefined as unknown as SqliteTaskStore),
+      agentId: () => this.agentId,
+    });
   }
 
   /**
