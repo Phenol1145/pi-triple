@@ -97,7 +97,7 @@ pi-platform/（monorepo）
 
 ```
 ptl env create <alias>               # fresh：全新空配方（无预设模板）
-ptl env fork <alias> --from <src>    # fork：复制现有 template 配方
+ptl env fork <新别名> <源别名>      # fork：复制现有 template 配方（两位置参数——--from 是 VALUED_FLAG 会被吞，用位置参数）
 ptl env list                         # 列出环境
 ptl env show <alias>                 # 查看环境配方详情
 ptl env set <alias> --key value      # 修改配方（model/skills/extensions 等）
