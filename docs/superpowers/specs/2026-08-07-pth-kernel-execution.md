@@ -174,6 +174,8 @@ export class TaskLoop {
 }
 ```
 
+> **v1 裁剪标注（fix wave 评审确认）**：v1 裁剪：机械认领全部候选（无 assess 智能判断）——空转防护（整批零认领 → reject assessed-as-unfit）兜底；assess（llm.complete 自检候选是否可完成）留 v2 注入。
+
 ## 6. 任务级工作区（workspace.ts）
 
 ```ts
@@ -265,6 +267,8 @@ export function suggest(stats: LoadStats): BatchSuggestion {
 /lab batch suggest         统计建议（加/减/维持 + 理由 + 数据）
 /lab batch stats           负载统计原始数据
 ```
+
+> **v1 交付范围标注（fix wave 评审确认）**：v1 交付底层原语（BatchManager.spawnBatch/killBatch/listBatches/suggest + stats.collectStats/suggest）；/lab 命令注册（batch add/remove/status/suggest/stats）移交 PTH 装配层。
 
 ## 10. 与 C/A spec 的接口
 
