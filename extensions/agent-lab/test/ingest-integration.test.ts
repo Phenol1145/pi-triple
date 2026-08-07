@@ -1,5 +1,5 @@
 // 端到端集成（spec §9）：真实 docs 树 → DocsSource → IngestPipeline（真实 MemoryStore/Pipeline）
-// → 锚点检索 → 热度旁路 → 周期流派发。PI 风格隔离目录。
+// → 锚点检索 → 热度旁路 → 周期流向任务池发布。PI 风格隔离目录。
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, rmSync, readFileSync, existsSync } from "node:fs";
@@ -12,7 +12,11 @@ import { DocsSource } from "../src/ingest/docs-source.ts";
 import { ensureIngestRule } from "../src/ingest/rule.ts";
 import { IngestPipeline, pointerEntryId } from "../src/ingest/pipeline.ts";
 import { runIngestCycleOnce } from "../src/ingest/cycle.ts";
-import type { DispatchRequest } from "../src/scheduler/runner-types.ts";
+import { DatabaseSync } from "node:sqlite";
+import { CoreRepository } from "../src/core/storage/repository.ts";
+import { SqliteTemplateRegistry } from "../src/taskpool/templates.ts";
+import { SEMANTIC_SPLIT_TEMPLATE } from "../src/taskpool/semantic-split.ts";
+import { SqliteTaskStore } from "../src/taskpool/tasks.ts";
 
 function fixtureDocs(): string {
   const docs = mkdtempSync(path.join(tmpdir(), "ingest-docs-"));
@@ -36,6 +40,16 @@ test("端到端：摄入→幂等→增量→检索→热度→派发", async ()
   const docsDir = fixtureDocs();
   const { memDir, store, ruleId, memPipeline } = freshMem();
   const pipeline = new IngestPipeline({ source: new DocsSource(docsDir), store, memPipeline, ruleId });
+
+  // 任务池（第 6 节 publish 目标）
+  const poolDir = mkdtempSync(path.join(tmpdir(), "ingest-taskpool-"));
+  const poolDb = new DatabaseSync(path.join(poolDir, "t.db"));
+  poolDb.exec("PRAGMA journal_mode=WAL");
+  poolDb.exec("PRAGMA busy_timeout=5000");
+  new CoreRepository(poolDb);
+  const registry = new SqliteTemplateRegistry(poolDb);
+  registry.register({ ...SEMANTIC_SPLIT_TEMPLATE, createdAt: Date.now() });
+  const taskStore = new SqliteTaskStore({ db: poolDb, appendEvent: () => "inserted", traceId: "ingest-int" });
 
   // 1. 首轮：全部 created
   const s1 = pipeline.run();
@@ -66,14 +80,18 @@ test("端到端：摄入→幂等→增量→检索→热度→派发", async ()
   assert.ok(existsSync(counterFile));
   assert.equal(JSON.parse(readFileSync(counterFile, "utf-8")).hitCount, 2);
 
-  // 6. 周期流：改文档后单轮 → 为变更文档派发语义分解任务
-  const calls: DispatchRequest[] = [];
+  // 6. 周期流：改文档后单轮 → 向池 publish 语义分解任务（路由职责交给分选器）
   appendFileSync(path.join(docsDir, "guide.md"), "\n再改一次。\n");
-  await runIngestCycleOnce({ pipeline, dispatch: async (req) => { calls.push(req); }, intervalMs: 60_000 });
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0]!.task.includes("guide.md"));
-  assert.equal(calls[0]!.labels?.strategy, "weighted");
+  await runIngestCycleOnce({ pipeline, pool: { registry, store: taskStore }, intervalMs: 60_000 });
+  const published = taskStore.list({ status: "pending" });
+  assert.equal(published.length, 1);
+  assert.equal(published[0]!.templateId, "semantic-split");
+  assert.ok(published[0]!.text.includes("guide.md"));
+  assert.ok(published[0]!.labels.includes("memory-maintenance"));
+  assert.ok(published[0]!.labels.includes("semantic-split"));
 
+  poolDb.close();
+  rmSync(poolDir, { recursive: true, force: true });
   rmSync(docsDir, { recursive: true, force: true });
   rmSync(memDir, { recursive: true, force: true });
 });
