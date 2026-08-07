@@ -94,6 +94,22 @@ services:
       timeout: 3s
       retries: 5
 
+  # PTH kernel 存储层（Spec C）：postgres 数据世界地基。
+  # 凭据外置（compose 注入，非镜像硬编码）；健康检查由 pi-platform depends_on 消费。
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=pth
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pth-dev-password}
+      - POSTGRES_DB=pth
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pth -d pth"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # ── G 阶段：dev 容器（多语言开发工作区——PTL 工具环境 + 用户开发/学习研究）──
   # 定位：sandbox=运行产物中间态（无网无密钥不可信）；dev=开发/调试/成品保留（可信出网）。
   # 非开源工具（kimiim-cli/obsidian 等 Mach-O）保留本机，不入容器（用户裁决）。
@@ -142,6 +158,7 @@ volumes:
   sessions:
   agent-lab:
   redis-data:
+  postgres-data:
   dev-home:
   dev-artifacts:
 
