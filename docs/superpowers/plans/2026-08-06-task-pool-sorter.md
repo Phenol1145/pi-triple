@@ -14,8 +14,7 @@
 - 测试命令：`cd extensions/agent-lab && node --experimental-strip-types --test test/<file>.test.ts`；全量 `npm test`（weighted-scorer-bootstrap 2 个**既有**失败忽略）
 - **双路径 schema 迁移（M1）**：新表进 CORE_SCHEMA（新库直建）；`selector_json` 列需 `_applyCoreMigrations` 的 `PRAGMA table_info` 守卫 ALTER（旧库）——两者都要做，只做 ALTER 会漏新库
 - 事件 id 用 `randomUUID()`（uuid 型唯一——撞 content_hash 会抛错，M3）
-- 事务用 `withSharedTransaction(db, fn)`（src/core/tx-utils.ts）
-- 状态机守卫：认领带 `status='pending'` 守卫 + `changes()===1` 判定；reject/submit 带 `status='claimed' AND claimed_by=?` 守卫
+- 状态机守卫：认领带 `status='pending'` 守卫 + `changes()===1` 判定；reject/submit/requeue/reflow/escalate 全部条件 UPDATE（WHERE 含状态守卫）+ `changes()===1`（裁决 I7 TOCTOU——守卫入 SQL，单语句隐式事务原子；`withSharedTransaction` 仅供未来多语句事务场景）
 - **不变量**：staleMs（10 分钟）> executionTimeoutMs（5 分钟）+ 裕量——池派发包装层 withTimeout 强制超时（复用 `src/scheduler/with-timeout.ts`）
 - requeue（人工）：escalated/rejected → pending，**清 rejects[] + claims_count 归零**；reflow（自动）：rejected → pending，**保留 rejects[]**（排除名单持续生效）
 - 端口判别式返回：`{ ok: true } | { ok: false; error: string }`
@@ -440,7 +439,7 @@ git commit -m "feat(agent-lab): 任务模板注册表——幂等注册/查询/�
     - `submit(agentId, taskId, outputRef): "submitted" | "not-found" | "not-claimed-by-you"`
     - `requeue(taskId): "requeued" | "not-found" | "not-requeueable"`（清 rejects[] + claims_count=0）
     - `reflow(taskId): "reflowed" | "not-found" | "not-rejected"`（保留 rejects[]）
-    - `escalate(taskId, reason): "escalated" | "not-found" | "not-escalatable"`
+    - `escalate(taskId, reason): "escalated" | "not-found" | "not-escalatable"`（源态：rejected/pending/claimed——claimed 供 claims_count≥3 阈值升级，调用方保证非在途）
   - 事件：task.published / task.claimed / task.rejected / task.submitted / task.completed / task.requeued / task.reflowed / task.escalated（eventId=randomUUID，identity.traceId=deps.traceId ?? "taskpool"）
 
 - [ ] **Step 1: Write the failing test**
@@ -555,7 +554,7 @@ test("requeue 清 rejects + 重置计数；reflow 保留 rejects", () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("escalate 仅从 rejected/pending 可入；requeue 可恢复", () => {
+test("escalate 仅从 rejected/pending/claimed 可入；requeue 可恢复", () => {
   const { dir, db, store } = fresh();
   const t = pub(store);
   assert.equal(store.escalate(t.id, "no-candidate"), "escalated");
@@ -563,6 +562,21 @@ test("escalate 仅从 rejected/pending 可入；requeue 可恢复", () => {
   assert.equal(store.escalate(t.id, "again"), "not-escalatable");
   assert.equal(store.requeue(t.id), "requeued");
   assert.equal(store.get(t.id)!.status, "pending");
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("escalate 支持 claimed 源态（claims_count≥3 阈值升级，裁决 N1）", () => {
+  const { dir, db, store } = fresh();
+  const t = pub(store);
+  store.claim("agent-a", t.id);
+  store.reject("agent-a", t.id, "r1");
+  store.claim("agent-b", t.id);
+  store.reject("agent-b", t.id, "r2");
+  store.claim("agent-c", t.id); // claims_count=3
+  assert.equal(store.escalate(t.id, "claims-exceeded"), "escalated"); // claimed 源态可升级
+  assert.equal(store.get(t.id)!.status, "escalated");
+  assert.equal(store.get(t.id)!.claimsCount, 3);
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -675,7 +689,9 @@ export class SqliteTaskStore {
     if (!t) return "not-found";
     if (t.status !== "claimed" || t.claimedBy !== agentId) return "not-claimed-by-you";
     const rejects = [...t.rejects, { agentId, reason, at: Date.now() }];
-    this.db.prepare(`UPDATE tasks SET status='rejected', rejects=? WHERE id=?`).run(JSON.stringify(rejects), taskId);
+    // 守卫入 SQL（裁决 I7 TOCTOU）：条件 UPDATE + changes()===1，防 precheck 与 UPDATE 之间被 reclaimStale 翻回 pending
+    const r = this.db.prepare(`UPDATE tasks SET status='rejected', rejects=? WHERE id=? AND status='claimed' AND claimed_by=?`).run(JSON.stringify(rejects), taskId, agentId);
+    if (r.changes !== 1) return "not-claimed-by-you";
     this.emit("task.rejected", { taskId, agentId, reason });
     return "rejected";
   }
@@ -685,7 +701,9 @@ export class SqliteTaskStore {
     if (!t) return "not-found";
     if (t.status !== "claimed" || t.claimedBy !== agentId) return "not-claimed-by-you";
     const now = Date.now();
-    this.db.prepare(`UPDATE tasks SET status='completed', completed_at=? WHERE id=?`).run(now, taskId);
+    // 守卫入 SQL（裁决 I7 TOCTOU）
+    const r = this.db.prepare(`UPDATE tasks SET status='completed', completed_at=? WHERE id=? AND status='claimed' AND claimed_by=?`).run(now, taskId, agentId);
+    if (r.changes !== 1) return "not-claimed-by-you";
     this.emit("task.submitted", { taskId, agentId, outputRef });
     this.emit("task.completed", { taskId, agentId });
     return "submitted";
@@ -696,7 +714,7 @@ export class SqliteTaskStore {
     const t = this.get(taskId);
     if (!t) return "not-found";
     if (t.status !== "escalated" && t.status !== "rejected") return "not-requeueable";
-    this.db.prepare(`UPDATE tasks SET status='pending', claimed_by=NULL, claimed_at=NULL, claims_count=0, rejects='[]' WHERE id=?`).run(taskId);
+    this.db.prepare(`UPDATE tasks SET status='pending', claimed_by=NULL, claimed_at=NULL, claims_count=0, rejects='[]' WHERE id=? AND status IN ('escalated','rejected')`).run(taskId);
     this.emit("task.requeued", { taskId });
     return "requeued";
   }
@@ -706,7 +724,7 @@ export class SqliteTaskStore {
     const t = this.get(taskId);
     if (!t) return "not-found";
     if (t.status !== "rejected") return "not-rejected";
-    this.db.prepare(`UPDATE tasks SET status='pending', claimed_by=NULL, claimed_at=NULL WHERE id=?`).run(taskId);
+    this.db.prepare(`UPDATE tasks SET status='pending', claimed_by=NULL, claimed_at=NULL WHERE id=? AND status='rejected'`).run(taskId);
     this.emit("task.reflowed", { taskId });
     return "reflowed";
   }
@@ -715,8 +733,9 @@ export class SqliteTaskStore {
   escalate(taskId: string, reason: string): OpResult {
     const t = this.get(taskId);
     if (!t) return "not-found";
-    if (t.status !== "rejected" && t.status !== "pending") return "not-escalatable";
-    this.db.prepare(`UPDATE tasks SET status='escalated', claimed_by=NULL, claimed_at=NULL WHERE id=?`).run(taskId);
+    // 源态：rejected / pending（无候选升级）/ claimed（claims_count≥3 阈值升级——裁决 N1，调用方保证派发已返回、非在途）
+    if (t.status !== "rejected" && t.status !== "pending" && t.status !== "claimed") return "not-escalatable";
+    this.db.prepare(`UPDATE tasks SET status='escalated', claimed_by=NULL, claimed_at=NULL WHERE id=? AND status IN ('rejected','pending','claimed')`).run(taskId);
     this.emit("task.escalated", { taskId, reason });
     return "escalated";
   }
@@ -756,7 +775,7 @@ function rowToTask(row: Record<string, unknown>): TaskRecord {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd extensions/agent-lab && node --experimental-strip-types --test test/taskpool-tasks.test.ts`
-Expected: PASS（6 用例）
+Expected: PASS（7 用例）
 
 - [ ] **Step 5: Commit**
 
@@ -786,6 +805,7 @@ git commit -m "feat(agent-lab): 任务池数据层——publish/claim/reject/sub
     - `reflowRound(now?: number, thresholds?: { reflowAgeMs?: number; escalateAgeMs?: number }): { reflowed: number; escalated: number }`（裁决 I1 双触发 + B2 pending 无候选 + N3 统一判据）
     - `reclaimStale(staleMs: number, now?: number): number`（claimed 超时 → pending 的条数；**保留 claims_count**）
     - `agentsWithSelector(): Array<{ agentId: string; selector: SelectorRule }>`
+    - `autoReject(agentId: string, taskId: string, reason: string): string`（自动拒绝，走 store.reject 守卫——供 SorterCycle 派发失败时调用）
 
 - [ ] **Step 1: Write the failing test**
 
@@ -836,17 +856,24 @@ test("setSelector/getSelector + 持久化", () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("candidates 匹配 + 排除已拒 agent + 升序", () => {
+test("candidates 匹配 + 排除已拒 agent + 升序（裁决 I8：reflow 后排除名单真实生效）", () => {
   const { dir, db, store, engine } = fresh();
   engine.setSelector("agent-a", { labelPatterns: ["^memory-maintenance$"] });
+  engine.setSelector("agent-b", { labelPatterns: ["^memory-maintenance$"] });
   const t1 = store.publish(task(["memory-maintenance"], "任务一"));
   const t2 = store.publish(task(["other"], "任务二"));
   const t3 = store.publish(task(["memory-maintenance"], "任务三"));
   assert.deepEqual(engine.candidates("agent-a").map((t) => t.id), [t1.id, t3.id]); // t2 不匹配
-  // agent-a 拒绝过 t1 → 排除
+  // agent-a 拒绝过 t1 → 排除；reflow 回 pending 后排除名单仍生效
   store.claim("agent-a", t1.id);
   store.reject("agent-a", t1.id, "缺工具");
+  assert.equal(store.reflow(t1.id), "reflowed"); // 保留 rejects 回 pending
+  assert.equal(store.get(t1.id)!.status, "pending");
+  assert.equal(store.get(t1.id)!.rejects.length, 1);
+  // agent-a 的 candidates 不含 t1（排除名单生效，而非状态过滤）
   assert.deepEqual(engine.candidates("agent-a").map((t) => t.id), [t3.id]);
+  // agent-b 未在排除名单 → 可见 t1
+  assert.deepEqual(engine.candidates("agent-b").map((t) => t.id), [t1.id, t3.id]);
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -868,22 +895,28 @@ test("claimTopN 原子认领前 n 个", () => {
 test("reflowRound：时间维触发 rejected 回流 + 无候选升级 + pending 无候选升级", () => {
   const { dir, db, store, engine } = fresh();
   engine.setSelector("agent-a", { labelPatterns: ["^m$"] });
-  const now = 1_000_000;
+  const now = Date.now();
 
   // 场景1：rejected 但仍有未排除匹配者 → reflow（时间维触发，保留排除）
   const r1 = store.publish(task(["m"], "r1"));
   store.claim("agent-a", r1.id);
   store.reject("agent-a", r1.id, "缺工具");
-  // r1 的 rejects 最后 at = now（reject 时 Date.now()——不可控）；改为直接构造：绕过，用 escalateAge 判定
-  // 为确定性：手动 set now 不可行（Date.now() 内部），改为断言 reflowRound 不抛且返回数字
+  // 手动把 rejects 最后一项的 at 改旧（age = now - rejects[last].at > reflowAgeMs）
+  const row = db.prepare(`SELECT rejects FROM tasks WHERE id=?`).get(r1.id) as { rejects: string };
+  const rejects = JSON.parse(row.rejects) as Array<{ agentId: string; reason: string; at: number }>;
+  rejects[rejects.length - 1]!.at = now - 20 * 60_000;
+  db.prepare(`UPDATE tasks SET rejects=? WHERE id=?`).run(JSON.stringify(rejects), r1.id);
 
-  // 场景2：pending 从未认领 + 无匹配 agent → 升级
+  // 场景2：pending 从未认领 + 无匹配 agent → 升级（手动把 created_at 改旧）
   const p1 = store.publish(task(["unmatched-label"], "p1"));
-  const res = engine.reflowRound(now + 40 * 60_000, { reflowAgeMs: 10 * 60_000, escalateAgeMs: 30 * 60_000 });
-  assert.equal(typeof res.reflowed, "number");
-  assert.equal(typeof res.escalated, "number");
-  // p1 无匹配 agent（无 selector 匹配 unmatched-label）+ claims_count=0 → escalated
-  assert.equal(store.get(p1.id)!.status, "escalated");
+  db.prepare(`UPDATE tasks SET created_at=? WHERE id=?`).run(now - 60 * 60_000, p1.id);
+
+  const res = engine.reflowRound(now, { reflowAgeMs: 10 * 60_000, escalateAgeMs: 30 * 60_000 });
+  assert.equal(store.get(r1.id)!.status, "pending"); // 时间维触发 reflow（保留排除）
+  assert.equal(store.get(r1.id)!.rejects.length, 1);
+  assert.equal(res.reflowed, 1);
+  assert.equal(store.get(p1.id)!.status, "escalated"); // 无匹配 + claims_count=0 + age 超阈值
+  assert.equal(res.escalated, 1);
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -935,7 +968,7 @@ export interface SelectorRule { labelPatterns: string[]; textPattern?: string }
 export function matchesSelector(task: Pick<TaskRecord, "labels" | "text">, sel: SelectorRule): boolean {
   const labelsOk = sel.labelPatterns.length === 0 || sel.labelPatterns.some((re) => {
     let ok = false;
-    try { ok = new RegExp(re).test(task.labels.join(" ")); } catch { ok = false; }
+    try { ok = task.labels.some((l) => new RegExp(re).test(l)); } catch { ok = false; }
     return ok;
   });
   if (!labelsOk) return false;
@@ -1030,13 +1063,28 @@ export class SorterEngine {
       .filter(({ selector }) => matchesSelector(t, selector))
       .length;
   }
+
+  /** 自动拒绝（供 SorterCycle 派发失败时调用，裁决 I2）：内部走 store.reject 守卫，原因进排除名单。 */
+  autoReject(agentId: string, taskId: string, reason: string): string {
+    return this.store.reject(agentId, taskId, reason);
+  }
+
+  /** 取任务（cycle 判定用，裁决 B1）：委托 store.get。 */
+  getTask(taskId: string): TaskRecord | undefined {
+    return this.store.get(taskId);
+  }
+
+  /** 升级（cycle claims_count 阈值用，裁决 B1）：委托 store.escalate。 */
+  escalate(taskId: string, reason: string): string {
+    return this.store.escalate(taskId, reason);
+  }
 }
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd extensions/agent-lab && node --experimental-strip-types --test test/taskpool-engine.test.ts`
-Expected: PASS（6 用例）
+Expected: PASS（7 用例）
 
 - [ ] **Step 5: Commit**
 
@@ -1134,6 +1182,24 @@ test("单轮：派发 failed → 自动 reject（dispatch-failed）", async () =
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("单轮：派发永不 resolve → withTimeout 超时（裁决 N4/I1）→ 自动 reject", async () => {
+  const { dir, db, store, engine } = fresh();
+  engine.setSelector("agent-a", { labelPatterns: ["^m$"] });
+  const t = store.publish(task(["m"], "hang"));
+  const res = await runSorterCycleOnce({
+    engine,
+    dispatch: () => new Promise(() => {}), // 永不 resolve
+    intervalMs: 60_000,
+    executionTimeoutMs: 50, // 小超时让测试快速通过
+  });
+  assert.equal(res.failed, 1);
+  const got = store.get(t.id)!;
+  assert.equal(got.status, "rejected");
+  assert.equal(got.rejects[0]!.reason, "dispatch-failed");
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("单轮：无候选不派发不报错", async () => {
   const { dir, db, store, engine } = fresh();
   const calls: DispatchRequest[] = [];
@@ -1165,6 +1231,7 @@ Expected: FAIL（ERR_MODULE_NOT_FOUND：cycle.ts 不存在）
 // 周期驱动（spec §6.3）：机械层与智能层的交接——认领 + 派发唤醒 + 失败收敛 + 回流/回收。
 // 派发包装层用 withTimeout 强制超时（裁决 N4：executionTimeoutMs 默认 5min，不变量 staleMs > executionTimeoutMs）。
 
+import { randomUUID } from "node:crypto";
 import type { LabEvent } from "../core/contracts.ts";
 import { withTimeout, isTimeoutFailure } from "../scheduler/with-timeout.ts";
 import type { DispatchRequest, DispatchResult } from "../scheduler/runner-types.ts";
@@ -1210,12 +1277,20 @@ export async function runSorterCycleOnce(deps: SorterCycleDeps, nowMs: number = 
         agentId,
         executionTimeoutMs,
       };
-      const result = await deps.dispatch(req);
-      const failed = result.status === "failed" || result.status === "abstained" || result.status === "fallback" || isTimeoutFailure(result as never);
+      // 裁决 N4：派发包装层 withTimeout 强制超时（executionTimeoutMs 默认 5 分钟）
+      const result = await withTimeout(deps.dispatch(req), executionTimeoutMs);
+      const failed = result.status !== "completed" || isTimeoutFailure(result as never);
       if (failed) {
         deps.appendEvent?.({ eventId: randomUUID(), eventType: "task.dispatch_failed", schemaVersion: "1", timestamp: now(), identity: { traceId: req.traceId }, payload: { taskId: t.id, agentId, status: result.status } });
         deps.engine.autoReject(agentId, t.id, "dispatch-failed"); // 裁决 I2：进排除名单
         out.failed++;
+      }
+      // 裁决 B1（claims_count≥3 阈值升级）：派发已返回（非在途）后判定——claimed 源态经 store.escalate（Task 3 已支持）
+      const after = deps.engine.getTask(t.id);
+      if (after && after.status === "claimed" && after.claimsCount >= 3) {
+        deps.appendEvent?.({ eventId: randomUUID(), eventType: "task.claims_exceeded", schemaVersion: "1", timestamp: now(), identity: { traceId: req.traceId }, payload: { taskId: t.id, agentId, claimsCount: after.claimsCount } });
+        deps.engine.escalate(t.id, "claims-exceeded");
+        out.escalated++;
       }
     }
   }
@@ -1242,7 +1317,7 @@ export function startSorterCycle(deps: SorterCycleDeps): { stop(): void } {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd extensions/agent-lab && node --experimental-strip-types --test test/taskpool-cycle.test.ts`
-Expected: PASS（4 用例）
+Expected: PASS（5 用例）
 
 - [ ] **Step 5: Commit**
 
@@ -1256,7 +1331,7 @@ git commit -m "feat(agent-lab): 分选器周期——认领→派发（direct+[t
 ### Task 6: sorter? SDK 端口 + 装配接线
 
 **Files:**
-- Modify: `extensions/agent-lab/src/core/contracts.ts`（WorkLoopSDK 加 `sorter?: SorterSdkPort` 可选字段）
+- Modify: `extensions/agent-lab/src/workloop/contracts.ts`（WorkLoopSDK 加 `sorter?: SorterSdkPort` 可选字段——裁决 I4：WorkLoopSDK 在 workloop/contracts.ts:109 而非 core/contracts.ts；core/contracts.ts 放 LabEvent/AgentInstanceRecord）
 - Create: `extensions/agent-lab/src/taskpool/sdk.ts`（`SorterSdkPort` + `mountSorterSdk`）
 - Modify: `extensions/agent-lab/src/assembly/agent-runtime.ts`（接线：attachSdk 时挂载 sorter 端口）
 - Test: `extensions/agent-lab/test/taskpool-sdk.test.ts`
@@ -1377,7 +1452,7 @@ export function mountSorterSdk(sdk: SorterSdkTarget, deps: SorterSdkDeps): void 
 }
 ```
 
-`src/core/contracts.ts` WorkLoopSDK 加可选字段（照 memory?/comms? 先例）：
+`src/workloop/contracts.ts` WorkLoopSDK 加可选字段（照 memory?/comms? 先例——裁决 I4）：
 
 ```typescript
 import type { SorterSdkPort } from "../taskpool/sdk.ts"; // type-only
@@ -1385,6 +1460,8 @@ import type { SorterSdkPort } from "../taskpool/sdk.ts"; // type-only
   /** 任务池能力（2026-08-06 挂载；可选纯类型扩展，未挂载 = undefined，零行为变更）。 */
   sorter?: SorterSdkPort;
 ```
+
+类型导入方向：workloop/contracts.ts → taskpool/sdk.ts 为 type-only import（运行时零依赖，与 memory?/comms? 先例同模式——contracts.ts 侧 `import type`）。
 
 装配接线（`src/assembly/agent-runtime.ts`）：参照 memory.attachSdk 先例，在 attachSdkOnce 的回调里追加 sorter 挂载——具体以装配层现有结构为准（agent-runtime 依赖注入 sorter deps；无 host 类时在 attachSdkOnce 内直接 mountSorterSdk(sdk, deps)）。装配接线以最小改动为准：若 agent-runtime 无法直接拿 store，则在装配入口（create-scheduler-runtime 或等价处）挂载。
 
@@ -1478,17 +1555,17 @@ export function renderSelectorSet(agentId: string, sel: { labelPatterns: string[
 // deps 增加：
 taskPool?: () => { registry: SqliteTemplateRegistry; store: SqliteTaskStore; engine: SorterEngine } | undefined;
 
-// argv 分发块（参照 sub === "dispatch" 先例）：
-} else if (sub === "task") {
+// argv 分发块（裁决 I3：cmd = argv[0]，与 register.ts 顶层分发一致——/lab task publish <templateId> → argv=["task","publish","<templateId>"]）
+} else if (cmd === "task") {
   const tp = taskPool?.();
   if (!tp) { ctx.ui.notify("Task pool unavailable — enable agent-lab task pool first", "error"); return; }
-  const action = argv[2];
+  const action = argv[1];
   if (action === "publish") {
-    const templateId = argv[3];
+    const templateId = argv[2];
     if (!templateId) { ctx.ui.notify("用法: /lab task publish <templateId> --param k=v [--label x]", "error"); return; }
     const params: Record<string, string> = {};
     const extraLabels: string[] = [];
-    for (let i = 4; i < argv.length; i++) {
+    for (let i = 3; i < argv.length; i++) {
       if (argv[i] === "--param" && argv[i + 1]) { const [k, ...v] = argv[i + 1]!.split("="); params[k!] = v.join("="); i++; }
       else if (argv[i] === "--label" && argv[i + 1]) { extraLabels.push(argv[i + 1]!); i++; }
     }
@@ -1502,13 +1579,13 @@ taskPool?: () => { registry: SqliteTemplateRegistry; store: SqliteTaskStore; eng
     const rows = tp.store.list(status ? { status } : {});
     ctx.ui.notify(renderTaskList(rows), "info");
   } else if (action === "status") {
-    const id = argv[3];
+    const id = argv[2];
     if (!id) { ctx.ui.notify("用法: /lab task status <id>", "error"); return; }
     const t = tp.store.get(id);
     if (!t) { ctx.ui.notify(`任务不存在: ${id}`, "error"); return; }
     ctx.ui.notify(renderTaskStatus(t), "info");
   } else if (action === "requeue") {
-    const id = argv[3];
+    const id = argv[2];
     if (!id) { ctx.ui.notify("用法: /lab task requeue <id>", "error"); return; }
     const r = tp.store.requeue(id);
     if (r !== "requeued") { ctx.ui.notify(`requeue 失败: ${r}`, "error"); return; }
@@ -1516,10 +1593,10 @@ taskPool?: () => { registry: SqliteTemplateRegistry; store: SqliteTaskStore; eng
   } else {
     ctx.ui.notify("用法: /lab task publish|list|status|requeue", "error");
   }
-} else if (sub === "agent" && argv[2] === "selector") {
+} else if (cmd === "agent" && argv[1] === "selector") {
   const tp = taskPool?.();
   if (!tp) { ctx.ui.notify("Task pool unavailable", "error"); return; }
-  const agentId = argv[3];
+  const agentId = argv[2];
   if (!agentId) { ctx.ui.notify("用法: /lab agent selector <agentId> --labels <regex...> [--text <regex>]", "error"); return; }
   const labelIdx = argv.indexOf("--labels");
   const textIdx = argv.indexOf("--text");
@@ -1531,7 +1608,7 @@ taskPool?: () => { registry: SqliteTemplateRegistry; store: SqliteTaskStore; eng
 }
 ```
 
-注：本任务的命令层接线在 register.ts 的 deps 注入需改注册入口（create-runtime 等传递 taskPool），以最小改动为准——若 deps 注入过重，任务可拆出"注册命令"与"注入点"两步，但需保持本任务内完成。
+注：本任务的命令层接线在 register.ts 的 deps 注入需改注册入口——真实调用点是 `extensions/agent-lab/src/index.ts:874` 的 `registerCommands(pi, {...})`（裁决 I6/I10 更正：非 create-runtime）。deps 加 `taskPool?: () => { registry: SqliteTemplateRegistry; store: SqliteTaskStore; engine: SorterEngine } | undefined`；真实 store 构造用 `sharedStore.raw`（index.ts 已有）并包装 `(e) => events.append(e)`（EventLog.append 是实例方法，传引用需 bind 包装——裁决 I6）。
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1552,6 +1629,7 @@ git commit -m "feat(agent-lab): /lab task publish/list/status/requeue + /lab age
 **Files:**
 - Modify: `extensions/agent-lab/src/ingest/cycle.ts`（`runIngestCycleOnce` 改为向池 publish）
 - Modify: `extensions/agent-lab/test/ingest-cycle.test.ts`（同步迁移断言）
+- Modify: `extensions/agent-lab/test/ingest-integration.test.ts`（第 6 节同步迁移——现用旧签名 `runIngestCycleOnce({ pipeline, dispatch, intervalMs })` 且断言 `labels?.strategy === "weighted"`，迁移后断言池中任务形状——裁决 B2）
 - Test: `extensions/agent-lab/test/ingest-cycle-migrated.test.ts`（新增迁移断言）
 
 **Interfaces:**
@@ -1774,6 +1852,35 @@ test("全链路：拒绝→回流→无候选升级→requeue 恢复", async () 
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("并发双认领：两个连接同时 claim 同一任务，恰好一个成功（裁决 I9）", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "taskpool-int-"));
+  const db1 = new DatabaseSync(path.join(dir, "t.db"));
+  db1.exec("PRAGMA journal_mode=WAL");
+  db1.exec("PRAGMA busy_timeout=5000");
+  new CoreRepository(db1);
+  const store1 = new SqliteTaskStore({ db: db1, appendEvent: () => "inserted", traceId: "int1" });
+  const t = store1.publish({ templateId: "semantic-split", text: "x", labels: [], params: {}, createdBy: "ptl" });
+
+  // 第二个连接（模拟另一运行时/进程，同一 WAL 文件）
+  const db2 = new DatabaseSync(path.join(dir, "t.db"));
+  db2.exec("PRAGMA busy_timeout=5000");
+  new CoreRepository(db2);
+  const store2 = new SqliteTaskStore({ db: db2, appendEvent: () => "inserted", traceId: "int2" });
+
+  const results = await Promise.all([
+    store1.claim("agent-1", t.id),
+    store2.claim("agent-2", t.id),
+  ]);
+  const okCount = results.filter((r) => r === "claimed").length;
+  assert.equal(okCount, 1); // 恰好一个成功
+  const winner = results[0] === "claimed" ? "agent-1" : "agent-2";
+  assert.equal(store1.get(t.id)!.claimedBy, winner);
+  assert.equal(store1.get(t.id)!.claimsCount, 1);
+  db1.close();
+  db2.close();
+  rmSync(dir, { recursive: true, force: true });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1788,7 +1895,7 @@ Expected: FAIL（barrel/engine/cycle 部分缺失或行为不符）
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd extensions/agent-lab && node --experimental-strip-types --test test/taskpool-integration.test.ts`
-Expected: PASS（2 用例）
+Expected: PASS（3 用例）
 
 - [ ] **Step 5: 全量回归**
 
@@ -1809,7 +1916,31 @@ git commit -m "feat(agent-lab): 任务池域 barrel + 端到端集成——模�
 
 ## Self-Review 记录
 
-1. **Spec 覆盖**：§2 目标 1（模板注册表）→ Task 2；目标 2（任务池状态机）→ Task 3/4；目标 3（分选器）→ Task 4/5；目标 4（sorter? 端口）→ Task 6；目标 5（投递接线）→ Task 7/8；§4.3 semantic-split → Task 2 + Task 8；§5.2 全转移（含 N1 claimed→escalated、N2 requeue 重置、I2 dispatch-failed、B2 pending 无候选）→ Task 3/4/5；§6.1 匹配规则 → Task 4；§6.3 周期+超时包装 → Task 5；§7.1 判别式端口 → Task 6；§7.3 /lab 命令 → Task 7；§8 边界（模型前置 mock、stale 不变量、escalated requeue 出口）→ Task 5/6/9。**无缺口。**
-2. **占位符扫描**：无 TBD/TODO；无草稿脚手架残留（Task 5 的 autoReject 已在 Task 4 定义并配测试、派发失败路径已干净实现；Task 7 的 --label 收集已用独立数组；Task 6/9 的 SDK 端口已正确类型化）。
-3. **类型一致性**：`TaskStatus`/`TaskRecord`/`SelectorRule`/`SorterCycleDeps`/`SorterSdkPort`/`InstantiateResult` 跨任务签名一致；`runIngestCycleOnce` 在 Task 8 迁移后签名变化（pipeline+pool）——Task 9 集成测使用新签名；`SorterEngine.autoReject` 在 Task 4 定义、Task 5 使用（已注明 Task 4 补方法）；`Store.publish` 输入形状跨 Task 3/9 一致。
-4. **既有代码依赖**：事件用 `randomUUID`（M3）；事务用 `withSharedTransaction`（认领原子性）——Task 3 claim 用 UPDATE 守卫 + changes()===1，单语句事务天然原子，无需显式事务包装（sqlite 单语句隐式事务）；`matchesSelector` 正则异常 try/catch 兜底（非法正则不崩周期）。
+1. **Spec 覆盖**：§2 目标 1（模板注册表）→ Task 2；目标 2（任务池状态机）→ Task 3/4；目标 3（分选器）→ Task 4/5；目标 4（sorter? 端口）→ Task 6；目标 5（投递接线）→ Task 7/8；§4.3 semantic-split → Task 2 + Task 8；§5.2 全转移（含 N1 claimed→escalated、N2 requeue 重置、I2 dispatch-failed、B2 pending 无候选）→ Task 3/4/5；§6.1 匹配规则 → Task 4；§6.3 周期+超时包装 → Task 5；§7.1 判别式端口 → Task 6；§7.3 /lab 命令 → Task 7；§8 边界（模型前置 mock、stale 不变量、escalated requeue 出口）→ Task 5/6/9。
+2. **占位符扫描**：无 TBD/TODO；无草稿脚手架残留。
+3. **类型一致性**：`TaskStatus`/`TaskRecord`/`SelectorRule`/`SorterCycleDeps`/`SorterSdkPort`/`InstantiateResult` 跨任务签名一致；`runIngestCycleOnce` 在 Task 8 迁移后签名变化（pipeline+pool）——Task 9 集成测使用新签名；`SorterEngine.autoReject/getTask/escalate` 在 Task 4 定义（含测试）、Task 5 使用；`Store.publish` 输入形状跨 Task 3/9 一致。
+4. **既有代码依赖**：事件用 `randomUUID`（M3）；Task 3 各转移守卫入 SQL（WHERE 条件 + changes()===1，裁决 I7 TOCTOU——claim/reject/submit/requeue/reflow/escalate 全部条件 UPDATE，单语句隐式事务原子）；`matchesSelector` 逐标签 test（锚定正则语义正确）+ try/catch 兜底。
+
+## 对抗性审核记录（qwen-token-plan-cn/qwen3.8-max，2026-08-06）
+
+计划层对抗性审核：**5 Blocker + 10 Important + 9 Minor，全部落代码核实**。已全部修复：
+
+| # | 发现 | 修复 |
+|---|---|---|
+| B1 | claims_count≥3 → escalated 转移缺失（Self-Review 误报覆盖） | Task 3 escalate 支持 claimed 源态 + Task 5 cycle ⑥ 派发返回后判定 + 阈值测试 |
+| B2 | Task 8 漏迁移 ingest-integration.test.ts（签名变更砸红回归） | Task 8 Files 补该测试的同步迁移 |
+| B3 | matchesSelector 用 join(" ") 导致锚定正则失效（^b$ 对 "a b" 为 false） | 改为逐标签 some(l => re.test(l)) |
+| B4 | reflowRound 测试时间基错（1970 epoch vs Date.now()） | 改 Date.now() 基 + 手动老化 rejects/created_at |
+| B5 | autoReject 测试在 Task 4 但实现缺失 | Task 4 实现补 autoReject + getTask + escalate（含 Produces 声明） |
+| I1 | 派发无 withTimeout 包装（spec N4 落空） | Task 5 补 withTimeout 包装 + 永不 resolve 超时测试 |
+| I2 | 池空触发语义偏差（rejected 恒受 age 门） | 见 spec §5.3 双触发语义——计划 reflowRound 保持 age 门为统一时间维触发，池空豁免列入 spec 注释（裁决：v1 以时间门为准，池空豁免随任务池精化） |
+| I3 | Task 7 argv 下标整体错位（cmd=argv[0] 顶层分发） | 全部改 cmd/action/id 逐级取位 |
+| I4 | WorkLoopSDK 在 workloop/contracts.ts 非 core/contracts.ts | 文件路径改正 + type-only import 方向说明 |
+| I5 | Task 6 装配接线模糊零测试 | 注记钉死真实调用点 index.ts:874 + attachSdk 先例；接线以最小改动为准 |
+| I6 | SqliteTaskStore 构造点未定义 | Task 7 注记钉死 index.ts 的 taskPool 工厂（sharedStore.raw）+ EventLog append bind 包装 |
+| I7 | reject/submit TOCTOU（JS 预检 + 无条件 UPDATE） | 守卫入 SQL：条件 UPDATE + changes()===1（全转移统一） |
+| I8 | candidates 测试未真测排除名单 | 测试补 reflow 后排除断言（见 Task 4 测试调整） |
+| I9 | 并发双认领测试缺失 | Task 9 集成补（两个 store 实例断言单成功） |
+| I10 | 命令块零接线测试 + 注入入口指错 | 注记钉死 index.ts:874；命令解析纯函数化列入执行期（渲染纯函数已测） |
+
+**Minor（9 项）**：用例计数（Task 3→7、Task 4→7、Task 5→5 已同步）；cycle.ts 补 randomUUID import（Task 5 注记）；isTimeoutFailure 强转简化；Global Constraints 事务表述修正；role 硬编码 memory-maintenance 注释声明；setSelector 对不存在 agent 静默（命令层预检，执行期）；escalated payload reason 断言（Task 9）；reclaimStale 计数按 changes（执行期）；/lab task list 状态枚举校验（执行期）。
