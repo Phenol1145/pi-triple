@@ -14,6 +14,7 @@ import { cmdAgentRun, cmdAgentClean } from "./agent.js";
 import { PthClient } from "../bridge/client.js";
 import { execSessionLs } from "../commands/session.js";
 import { execTraceLs } from "../commands/trace.js";
+import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, parseEnvPatch } from "../env.js";
 
 type PtlMode = "print" | "json";
 
@@ -29,6 +30,14 @@ const JSON_ROUTERS: Record<string, (sub: string | undefined, passthrough: string
     if (sub === "new") return await execTemplateNew(passthrough[0]);
     if (sub === "rm") return await execTemplateRm(passthrough[0] || "");
     return await execTemplateLs();
+  },
+  env: async (sub, passthrough) => {
+    if (sub === "ls" || sub === "list" || sub === "") return await execEnvList();
+    if (sub === "create") return await execEnvCreate(passthrough[0] ?? "", {});
+    if (sub === "show") return await execEnvShow(passthrough[0] ?? "");
+    if (sub === "set") return await execEnvSet(passthrough[0] ?? "", parseEnvPatch(passthrough.slice(1)));
+    if (sub === "rm") return await execEnvRm(passthrough[0] ?? "");
+    return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "env 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
   },
   status: async () => await execStatus(),
   doctor: async () => await execStatus(),

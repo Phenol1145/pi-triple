@@ -234,6 +234,11 @@ export async function main() {
       doPrintCommand(tr);
       break;
     }
+    case "env": {
+      const er = await dispatchCommand("env", subcommand ? [subcommand, ...passthrough] : passthrough);
+      doPrintCommand(er);
+      break;
+    }
     case "update":
       await handleUpdate(flags);
       break;

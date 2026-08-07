@@ -18,6 +18,7 @@ import {
   execSessionAttach, execSessionStop, parseFlags,
 } from "./session.js";
 import { execTraceLs, execTraceShow, execTraceTimeline } from "./trace.js";
+import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, parseEnvPatch } from "../env.js";
 
 // ─── 类型 ────────────────────────────────────────────────────
 
@@ -39,6 +40,13 @@ export function resolveDispatch(cmd: string, args: string[]): DispatchTarget | n
       if (sub === "new") return { kind: "exec", fn: () => execTemplateNew(rest[0]) };
       if (sub === "rm") return { kind: "exec", fn: () => execTemplateRm(rest[0] ?? "") };
       if (sub === "rename") return { kind: "exec", fn: () => renameTemplateCommand(rest[0] ?? "", rest[1] ?? "") };
+      return null;
+    case "env":
+      if (sub === "ls" || sub === "list" || sub === "") return { kind: "exec", fn: () => execEnvList() };
+      if (sub === "create") return { kind: "exec", fn: () => execEnvCreate(rest[0] ?? "", {}) };
+      if (sub === "show") return { kind: "exec", fn: () => execEnvShow(rest[0] ?? "") };
+      if (sub === "set") return { kind: "exec", fn: () => execEnvSet(rest[0] ?? "", parseEnvPatch(rest.slice(1))) };
+      if (sub === "rm") return { kind: "exec", fn: () => execEnvRm(rest[0] ?? "") };
       return null;
     case "status":
       return { kind: "exec", fn: () => execStatus() };
