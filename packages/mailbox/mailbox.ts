@@ -66,7 +66,20 @@ export class Mailbox {
     const msgs: PitMessage[] = [];
     try {
       for (const entry of fs.readdirSync(this.pendingDir, { withFileTypes: true })) {
-        if (entry.isDirectory()) continue; // 跳过 file-xxx/ 目录
+        if (entry.isDirectory()) {
+          // 文件消息（sendFile 写入的 file-<id>/ 目录）：读 meta.json 恢复消息
+          // （e2e 暴露的集成缺口：旧实现跳过目录 → 文件消息无读回路径，
+          //   accept 的 file 分支成为死代码）
+          if (!entry.name.startsWith("file-")) continue;
+          try {
+            const raw = JSON.parse(fs.readFileSync(path.join(this.pendingDir, entry.name, "meta.json"), "utf-8"));
+            const msg = validateMessage(raw);
+            if (msg) msgs.push(msg);
+          } catch {
+            // 部分写入或损坏，跳过
+          }
+          continue;
+        }
         if (!entry.name.startsWith("msg-") || !entry.name.endsWith(".json")) continue;
         try {
           const raw = JSON.parse(fs.readFileSync(path.join(this.pendingDir, entry.name), "utf-8"));
@@ -112,7 +125,17 @@ export class Mailbox {
       fs.renameSync(src, dst);
       return true;
     } catch {
-      return false;
+      // 文件消息（sendFile 写入的 file-<id>/ 目录）：整目录移动
+      // （与 gc() 对 accepted/rejected 中 file-* 目录的清理设计一致；
+      //   e2e 暴露的集成缺口：旧实现只移 msg-<id>.json，文件消息无此文件）
+      const fileSrc = path.join(this.pendingDir, `file-${msgId}`);
+      const fileDst = path.join(targetDir, `file-${msgId}`);
+      try {
+        fs.renameSync(fileSrc, fileDst);
+        return true;
+      } catch {
+        return false;
+      }
     }
   }
 
