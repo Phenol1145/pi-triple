@@ -1,0 +1,58 @@
+# vm 内核设计草案（进行中，未定稿）
+
+- 日期：2026-08-07
+- 状态：**草案**（brainstorming 进行中，多项待裁决——设计尚未收敛，勿作为 spec 依据）
+- 触发：Prime Agent 启发 + 交叉 brainstorm panel（deepseek-v4-flash / deepseek-v4-pro / qwen3.8-max）+ 结构审计
+
+---
+
+## 1. 设计动机
+
+Prime Agent（Prime Intellect 2026-08-05）的核心范式：**"只有一个工具"**——persistent IPython kernel 统一承载 skills/MCP/context/rlm()，工具调用变成程序设计（Programmatic Tool Calling, PTC）。我们将其映射到 pi-platform：vm context 作为统一执行内核。
+
+## 2. 已收敛的形态（用户指示，已确认）
+
+```
+vm 内核 = 唯一的执行面（统一解释执行）
+  ├─ pi 的 extension → 改写为 TS 可复用编程片段（代码库，不再经 ExtensionAPI 加载）
+  ├─ pi 的 skill（SKILL.md）→ 可执行的 TS 模块（代码库）
+  ├─ 记忆系统（L3 语义记忆 + WM 工作记忆）→ 能力注入（代码库）
+  ├─ task 动词（peek/claim/reject/submit/execute）→ 能力注入（代码库）
+  └─ 统一存储后端 → 一个存储（形态待裁决）
+       ↓
+  vm context 统一解释执行（persistent kernel，TypeScript）
+```
+
+**关键范式转变**：extension 机制从"独立加载的扩展"退场为"代码库里的可复用 TS 片段"，由 vm 内核统一解释执行。这与结构审计发现的"CLI 化迁移路线（扩展机制退场）"方向一致。
+
+## 3. 技术底座（已确认可行）
+
+- **vm 模块**（node:vm）：`vm.createContext()` 创建持久上下文（= IPython kernel 等价物），`vm.runInContext(code, context)` 反复执行，状态保留在 context 对象（= kernel state）
+- **TypeScript 执行**：`stripTypeScriptTypes()`（Node 22.6+，pi 已在用 `--experimental-strip-types`）TS→JS 后喂给 vm——零新依赖
+- **能力注入模型**：context 默认空，只注入白名单能力（联邦动词/记忆/WM），不注入 fs/child_process/net——比"沙箱化任意代码"更可靠（语言层面无能力，而非运行时对抗）
+- **持久性分层**：vm context（进程内热态）↔ WM（sqlite，会话级持久）↔ 转录（JSONL，任务级档案）
+
+## 4. 已裁决的设计点
+
+| # | 决策 | 内容 |
+|---|---|---|
+| 1 | 生命周期载体 | WM 挂会话（非任务）——保分析者综合阶段；张力显式化："WM 是机械托底的状态载体，不是思考本身" |
+| 2 | C 执行语义 | 逐条判别式失败不中断（非原子批——原子性在跨时间尺度操作上是幻觉，且违反六状态机） |
+| 3 | peek 前置 | peek（只读不锁定）先于 claim/reject——"认领即承诺"；修正了"claim 后自检"的旧模型 |
+| 4 | 经济闸门 | 缓行（货币系统未落地前只做动词族不做计费） |
+| 5 | 定位 | **给 PTH 用**（非 PTL）；在 pi-platform 内运行（不本地直接跑） |
+
+## 5. 未裁决的开放问题（brainstorming 待继续）
+
+1. **挂载点**：审计结论 = PTH 会话层（agent-engine.ts:613-621 sdkCreateSession / sdk-adapter），vm 内核 = PTH 会话执行基座，代码落 src/pth（或 src/shared）——但用户最新指示（统一 extension 为代码库）可能改变挂载形态，待确认
+2. **"一个 tool"的形态**：修正后 = 不是 PTH customTool，而是"唯一执行面"（extension 退场为代码库，vm 统一解释执行）——精确形态待定稿
+3. **统一存储后端**：形态未定（SQLite 统一 vs 文件 vs 双后端统一访问层）——用户提出"统一之前开发的记忆系统 + pi 自身 skill/extension + 统一存储后端"，存储统一是核心
+4. **PTH 与 agent-lab 关系**：agent-lab 本身是被 PTH 托管的 extension——vm 内核统一 extension 后，agent-lab 的模块（taskpool/memory/scheduler）也变代码库？agent-lab.db 并入统一存储？——待用户裁决
+5. **vm 内核与 pi SDK AgentSession 的关系**：真实执行在 pi SDK 会话层（审计发现）——vm 内核接管回合循环（选项 A）的精确机制待定
+
+## 6. 相关参考
+
+- 结构审计：`docs/superpowers/explorations/2026-08-07-structure-recon/structure-audit.md`（6 scout 综合）
+- 侦察报告：`docs/superpowers/explorations/2026-08-07-structure-recon/scout-1..6-*.md`
+- Prime Agent 会话：`/tmp/chatgpt-6a75a876.md`
+- 交叉 brainstorm panel：`docs/superpowers/explorations/2026-08-07-prime-agent-panel/`（proposal-*.md / cross-*.md / alignment.md / adjudication.md）
