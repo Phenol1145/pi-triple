@@ -68,7 +68,9 @@ export async function runSorterCycleOnce(deps: SorterCycleDeps, nowMs: number = 
   // ④ 回流轮（双触发）⑤ stale 回收
   const rf = deps.engine.reflowRound(now(), { reflowAgeMs: deps.reflowAgeMs, escalateAgeMs: deps.escalateAgeMs });
   out.reflowed = rf.reflowed;
-  out.escalated = rf.escalated;
+  // 修复轮 1：out.escalated += rf.escalated——循环内 claims≥3 阈值升级已 out.escalated++，
+  // 此处若用赋值会把它清掉（即使 rf.escalated===0）；reflowed/reclaimed 无循环内增量源，保持赋值。
+  out.escalated += rf.escalated;
   out.reclaimed = deps.engine.reclaimStale(staleMs, now());
   return out;
 }
