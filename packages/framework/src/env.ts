@@ -8,13 +8,17 @@
  * - set：配方字段合并（TemplateConfig: model/provider/thinking/tools/
  *   excludeTools/systemPrompt/skills/extensions/workLoop/instantiation）
  * - rm：复用 execTemplateRm（运行中会话保护 + 级联删除）
+ * - fork：复制源配方引用（model/skills/extensions 等字段继承，实体不复制，独立可改）
  *
  * 全部返回 CommandResult（ok/message/data），对齐 commands.ts 的 execTemplate 系列。
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import {
   loadConfig, resolveTemplateId,
   listTemplates, saveConfig, ERR,
+  createTemplate, getTemplateAlias, resolveDataDir,
 } from "@pi-triple/shared";
 import { execTemplateNew, execTemplateRm, type CommandResult } from "./commands.js";
 
@@ -143,4 +147,93 @@ export async function execEnvSet(alias: string, patch: Record<string, unknown> =
 /** 删除环境（复用 execTemplateRm：运行中会话保护 + 级联删除） */
 export async function execEnvRm(alias: string): Promise<CommandResult> {
   return execTemplateRm(alias);
+}
+
+/**
+ * 派生环境（fork）：复制源模板的完整配方引用，不复制实体。
+ *
+ * 语义（spec §6.1）：
+ * - 配方字段（TemplateConfig 全字段：model/provider/thinking/tools/excludeTools/
+ *   systemPrompt/skills/extensions/workLoop/instantiation）浅复制到新 template 记录——
+ *   引用共享，实体（扩展/skill 文件、共享层）不复制
+ * - 独立性：配方落在新记录上，后续 set 新环境只改自己的字段，不影响源
+ * - 建目录 + 共享层链接 + AGENTS.md + migrate：与 execTemplateNew 相同流程
+ *
+ * 返回 {id, alias, recipe}（--json 可编程）。
+ */
+export async function execEnvFork(newAlias: string, srcAlias: string): Promise<CommandResult> {
+  if (!newAlias || !srcAlias) {
+    return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: "用法: ptl env fork <新别名> <源别名>" } };
+  }
+  const config = loadConfig();
+  const resolved = resolveTemplateId(srcAlias, config);
+  if (!resolved.ok) {
+    return { ok: false, message: "", error: { code: ERR.TENANT_NOT_FOUND, message: `环境 "${srcAlias}" 不存在` } };
+  }
+  const src = config.templates[resolved.id]!;
+  // 复制配方引用（recipeOf 只取已定义配方字段；浅复制——数组/对象引用共享，实体不复制）
+  const recipe = recipeOf(src as unknown as Record<string, unknown>);
+  return materializeEnv(newAlias, recipe);
+}
+
+/**
+ * 建模板实体：createTemplate(配方) + 目录 + 共享层链接 + AGENTS.md + migrate。
+ * 镜像 execTemplateNew 的建模板流程（其内部逻辑未导出且硬编码空配方，
+ * fork 需带配方创建，故在此内联——后续可提取公共 helper 收敛两处）。
+ */
+async function materializeEnv(alias: string, recipe: Record<string, unknown>): Promise<CommandResult> {
+  const config = loadConfig();
+  const dataDir = resolveDataDir(config);
+
+  try {
+    const id = createTemplate(alias, recipe, config);
+    const templateDir = path.join(dataDir, "pi-config", id);
+
+    // 显式创建模板目录：共享层缺失时 templateDir 无其他创建者
+    fs.mkdirSync(templateDir, { recursive: true });
+
+    const displayAlias = getTemplateAlias(id, config);
+
+    // Check shared layer
+    let sharedMsg = "";
+    let sharedLinked = false;
+    const sharedDirPath = path.resolve(process.cwd(), config.sharedDir);
+    if (fs.existsSync(sharedDirPath)) {
+      const { linkTemplateToShared } = await import("./shared-layer.js");
+      linkTemplateToShared(templateDir, sharedDirPath);
+      sharedLinked = true;
+      sharedMsg = "\n  ✅ 已链接共享层";
+    }
+
+    // 写入 AGENTS.md 认知注入（pi 原生机制）
+    const { ensureTemplateAgents } = await import("@pi-triple/shared");
+    const agentsWritten = ensureTemplateAgents(templateDir, id, displayAlias);
+    if (agentsWritten) sharedMsg += "\n  ✅ 已写入 AGENTS.md（PTL 认知注入）";
+
+    // Auto-migrate if pi config exists
+    let migrated = false;
+    if (!fs.existsSync(path.join(templateDir, "settings.json"))) {
+      const { migrate } = await import("./migrate.js");
+      await migrate({ templateId: id });
+      migrated = true;
+    }
+
+    return {
+      ok: true,
+      message: `  ✅ 环境已派生: ${displayAlias} (${id.slice(0, 8)}…)${sharedMsg}`,
+      data: {
+        id,
+        alias: displayAlias,
+        recipe: recipeOf(config.templates[id] as unknown as Record<string, unknown>),
+        migrated,
+        sharedLinked,
+        agentsMd: agentsWritten,
+      },
+    };
+  } catch (err: any) {
+    if (err.message?.startsWith("别名")) {
+      return { ok: false, message: "", error: { code: ERR.INTERACTIVE_REQUIRED, message: err.message } };
+    }
+    throw err;
+  }
 }
