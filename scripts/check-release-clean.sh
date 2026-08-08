@@ -7,7 +7,9 @@
 # .pi-subagents：pi-subagents 工具运行痕迹（transcript.jsonl 含 ~/.pi-triple 绝对路径与完整对话历史），
 #   已由 extensions/.gitignore 从打包中排除（根本修复）；此处关键词为第二道防线。
 # transcript\.jsonl：只匹配痕迹工件名，不匹配合法的 transcript-store 源码文件名。
-KEYWORDS="zlib|bfc|lifelab|pi-config|providers\.json|/sessions/|/workspaces/|\.pi-platform|superpowers|\.pi-triple|\.pi-subagents|transcript\.jsonl"
+# Dockerfile\.dev|docker-compose|tools/dev|scripts/：dev 容器是私有研究环境（用户明确声明不进发行包），
+#   与 bfc/lifelab 同级关键词加固——防未来 files 白名单改动把 dev 工具链带进发行包。
+KEYWORDS="zlib|bfc|lifelab|pi-config|providers\.json|/sessions/|/workspaces/|\.pi-platform|superpowers|\.pi-triple|\.pi-subagents|transcript\.jsonl|Dockerfile\.dev|docker-compose|tools/dev|scripts/"
 OUT=$(npm pack --dry-run 2>&1)
 if [ -z "$OUT" ]; then
   echo "❌ npm pack --dry-run 无输出（命令失败？）"
