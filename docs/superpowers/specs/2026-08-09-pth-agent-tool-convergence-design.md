@@ -63,22 +63,32 @@ memory.write 保留封装（防 LLM 写坏数据）
 待办：禁止 pg_catalog/pg_* 系统表探测；batch 侧执行器接线
 ```
 
-### 2.5 工具联动——程序内一体化（无需跨工具传值）
+### 2.5 工具联动——程序内一体化 + ts 核内结果注册表（用户裁决）
 ```
 场景：memory.sql 结果 → context.write → 后续使用
 终态答案：程序内直接完成（能力函数同上下文）：
   const rows = await memory.query(...)
   await context.write({ key: "funcs", value: rows })   ← 对象直传，零文本往返
-补充（跨程序/引用场景）：结果注册表（result_N 自动存，ref 引用）为 v2
+
+结果注册表（用户裁决：ts 核内实现——声明为 ts 对象）：
+  results 对象（vm context 预置——普通 JS 对象）：
+    · 每步工具执行后自动注册：results["result_N"] = { tool, value, stdout, at }
+    · ts 程序直接引用：const prev = results.result_1     ← 对象直传，零文本
+    · 程序内也可写：results.my_marker = {...}            ← 内部管理语义
+  实现：TsInterpreter context 预置 results → agent-loop 工具执行后经注册接口写入
 ```
 
-### 2.6 ts kernel 位置与能力桥
+### 2.6 ts kernel 位置（用户最终声明 2026-08-09）
 ```
-现状裁决：ts vm 在 PTH 侧（能力本地注入——零延迟）
-矛盾澄清：若 ts 也迁 sandbox → 需能力桥（上行协议：sandbox→PTH 能力调用，
-          共享密钥认证 + 白名单端点；PLATFORM_URL 已注入 sandbox）
-安全等价性：能力滥用面等价（白名单是真实边界）；架构 2 物理隔离更强
-结论：位置保持架构 1（PTH 侧）；能力桥协议预留（不实现）
+ts 核【保留在 PTH 侧】——定位为【内部管理语言（internal management language）】：
+  · 不只组合工具——还能【编辑 agent 自身状态】
+  · agent 状态 = ts 核内对象集合（results / context / ...）
+  · 后续工具/程序直接读写这些对象（不经 LLM 文本往返）
+  · 能力桥不需要（ts 在 PTH 侧——能力本地直达）；
+    python/bash 继续走 sandbox 化（kernel-host 池）
+
+能力桥协议：不再需要（ts 保留 PTH 侧）；python/bash 的 sandbox 化照常
+（下行 SandboxKernel 已落地；上行能力桥无使用场景）
 ```
 
 ## 3. 数据世界访问金字塔（确认）
@@ -97,6 +107,7 @@ REPL kernel       ❌ 完全隔离（sandbox 无网络无凭据——py/bash）
 ```
 ① 能力函数进 vm（终态核心）：
    - memory.query（与 memory.sql 同源受限执行器）+ context.read/write 注入 capability
+   - **results 结果注册表（ts 核内对象——用户裁决）**：vm context 预置 + agent-loop 注册接口
    - ts 程序 API 文档进 system prompt（参数/返回/示例）
    - AGENT_TOOLS 收缩：移除 llm.complete/web.fetchText/fs.readText/fs.list/memory.sql/memory.write
      （保留 ts/python.execute/bash.execute/done）
