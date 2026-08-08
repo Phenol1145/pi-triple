@@ -8,7 +8,7 @@
 | **入口** | `ptl` CLI | `pth` server（HTTP/SSE/WebSocket） |
 | **运行时** | pi 进程 × tmux | AgentEngine + Redis + BullMQ + PostgreSQL |
 | **适用** | 本地工作站 · 交互式调试 · 个人/小组 | 服务器部署 · 程序化 API · 集中治理 · 任务流水线 |
-| **来源** | `src/ptl/` | `src/pth/` |
+| **来源** | `packages/framework/`（PTL CLI+TUI） | `src/pth/` |
 | **文档** | [PTL 架构](./docs/ptl/architecture.md) · [创作指南](./docs/ptl/authoring.md) | [PTH 架构](./docs/pth/architecture.md) · [**Kernel 体系**](./docs/pth/kernel.md) · [API](./docs/pth/api.md) |
 
 > 📐 **文档中心**：[`docs/README.md`](./docs/README.md)（全部文档索引）· 架构单一真相源：[`ARCHITECTURE.md`](./ARCHITECTURE.md)
