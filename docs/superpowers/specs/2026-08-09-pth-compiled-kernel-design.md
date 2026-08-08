@@ -67,14 +67,15 @@ sandbox 侧（编译类代码同样不可信——执行隔离与 python/bash �
   · 构建产物落工作区（共享卷）——与解释类同一路径约定
 ```
 
-## 6. 首发语言选择（Go——理由）
+## 6. 首发语言（用户裁决 2026-08-09：C 替代 Go）
 
 ```
-① go run 单文件零配置（无 go.mod 也可跑）——最接近"脚本"体验
-② 编译快（秒级）——增量缓存后毫秒
-③ 静态类型 + goroutine——重计算/并行的好载体
-④ 沙箱镜像小（Go 工具链 ~200MB vs Rust ~2GB）
-备选：C（gcc 通用）/ Rust（cargo 增量强但镜像大）
+C（gcc/clang——用户裁决）：
+① 工具链最通用（gcc 无处不在；clang 兼容）
+② 编译快（单文件秒级）——增量缓存后毫秒
+③ 调试生态成熟（gdb/lldb——调试协议 v1 的天然载体）
+④ 镜像小（gcc ~100MB vs Rust ~2GB）
+备选：Go（go run 零配置）/ Rust（cargo 增量强但镜像大）
 ```
 
 ## 7. 编译类 vs 解释类协议对照
@@ -104,7 +105,7 @@ sandbox 侧（编译类代码同样不可信——执行隔离与 python/bash �
 | # | 点 | 建议 |
 |---|----|------|
 | 1 | v1 定位：重计算单元（ts 编排，无程序内工具调用） | ✅ 采纳 |
-| 2 | 首发语言 Go（单文件零配置/编译快/镜像小） | ✅ 采纳 |
+| 2 | 首发语言 C（gcc/clang 通用/调试生态成熟） | ✅ 采纳（用户裁决——Go 备选） |
 | 3 | sandbox 侧工具链（隔离与 python/bash 一致） | ✅ 采纳 |
 | 4 | 缓存参数（50 个二进制/500MB/LRU） | 确认 |
 | 5 | 元工具命名：go.execute vs 统一 compile.execute {lang} | 确认 |
@@ -112,7 +113,7 @@ sandbox 侧（编译类代码同样不可信——执行隔离与 python/bash �
 ## 10. 落地阶段
 
 ```
-Phase A：CompiledKernel 核心（Go）
+Phase A：CompiledKernel 核心（C/gcc）
   - compile-run 管道（sha256 缓存/LRU/诊断回填）
   - build/run 分离 + 文件即状态约定
   - 单测：增量缓存命中/未命中/编译错误/运行超时/产物清单
