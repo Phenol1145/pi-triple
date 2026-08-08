@@ -14,5 +14,11 @@ export default defineConfig({
     environment: "node",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
     testTimeout: 90_000,
+    // testcontainers 并发资源竞争（Docker Desktop 多 postgres 并发启动超时）——
+    // 实测 maxWorkers=4 稳定全绿（1390 tests）；并发过高时 testcontainers 偶发启动失败
+    maxWorkers: 4,
+    poolOptions: {
+      maxWorkers: 4,
+    },
   },
 });
