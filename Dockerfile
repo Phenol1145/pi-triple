@@ -4,6 +4,8 @@ FROM node:22-slim AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json tsconfig.json ./
+# npm workspaces（packages/*）——@pi-triple/infra 等 workspace 包链接必需
+COPY packages/ ./packages/
 RUN npm ci
 
 COPY src/ ./src/
@@ -19,9 +21,13 @@ WORKDIR /app
 ENV DATA_DIR=/data
 
 COPY package.json package-lock.json ./
+# file: 依赖目标（@pi-triple/* workspace 包——npm ci 链接必需）
+COPY packages/ ./packages/
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
+# PTL（packages/framework——仓库拆分后 pit.js 归属 framework 包）
+COPY --from=builder /app/packages/framework/dist /app/packages/framework/dist
 
 COPY config/ ./config/
 # F/WP2 Task 8: supervisor.sh（A/B rebuild）从镜像移除（.rebuild-request 机制废弃，spec §3.4）；

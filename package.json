@@ -31,9 +31,9 @@
     "ptl:dev": "tsx packages/framework/src/pit.ts"
   },
   "dependencies": {
-    "@pi-triple/framework": "^0.1.0",
-    "@pi-triple/infra": "^0.1.0",
-    "@pi-triple/shared": "^0.1.0",
+    "@pi-triple/framework": "file:packages/framework",
+    "@pi-triple/infra": "file:packages/infra",
+    "@pi-triple/shared": "file:packages/shared",
     "@earendil-works/pi-ai": "^0.82.1",
     "@earendil-works/pi-coding-agent": "^0.82.1",
     "@fastify/websocket": "^11.0.0",

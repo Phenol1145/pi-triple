@@ -11,6 +11,7 @@ services:
       - agent-dir:/data/agent-dir
       - sessions:/data/sessions
       - agent-lab:/data/agent-lab
+      - dev-artifacts:/data/artifacts   # 产物归档区（与 dev 共享——成品保留）
     environment:
       - REDIS_URL=redis://redis:6379
       # PTH kernel 存储层（Spec C）：postgres 数据世界（凭据 compose 注入，与 postgres 服务一致）

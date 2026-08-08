@@ -22,6 +22,6 @@
   ],
   "author": "Pi-Triple",
   "dependencies": {
-    "@pi-triple/shared": "^0.1.0"
+    "@pi-triple/shared": "file:../shared"
   }
 }

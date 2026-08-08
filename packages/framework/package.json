@@ -11,7 +11,7 @@
     "dist"
   ],
   "dependencies": {
-    "@pi-triple/shared": "^0.1.0",
-    "@pi-triple/infra": "^0.1.0"
+    "@pi-triple/shared": "file:../shared",
+    "@pi-triple/infra": "file:../infra"
   }
 }
