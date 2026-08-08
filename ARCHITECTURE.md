@@ -38,56 +38,45 @@ Pi-Triple 是基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-co
 ```
 pi-platform/
 ├── src/
-│   ├── shared/                    # 双产品共享（SDK 隔离层）
-│   │   ├── sdk-adapter/           #   pi SDK 唯一导入点（硬约束）
-│   │   ├── model-router/          #   模型自动检测 + failover 链
-│   │   ├── workspace/             #   工作目录隔离（服务端推导路径）
-│   │   ├── platform/              #   跨 OS 适配器（posix / win32）
-│   │   ├── observability/         #   pino 日志
-│   │   └── credential-provider.ts #   API key 提供
-│   │
-│   ├── ptl/                       # Pi-Triple-Lite
-│   │   ├── pit.ts                 #   CLI 入口（bin: ptl）
-│   │   ├── cli/                   #   命令模块（args/main/mode/sessions/onboard/config-cmd/admin）
-│   │   ├── flow/                  #   ★ ptl-flow 波次工作流引擎（见下）
-│   │   ├── bridge/                #   ★ PTL→PTH 桥（submit/run/dev/programs + ustar 打包）
-│   │   ├── lab-data/              #   ★ lab 遥测数据层（SQLite：runs/arena/events）
-│   │   ├── config.ts              #   配置系统（v2 UUID+alias，模板）
-│   │   ├── tmux.ts                #   tmux 会话管理（命名/构建/存活/csi-u）
-│   │   ├── launcher.ts            #   pi 进程启动参数构建
-│   │   ├── shared-layer.ts        #   共享扩展层（symlink + manifest + prune）
-│   │   ├── doctor.ts / migrate.ts #   环境诊断 / ~/.pi/agent 迁移
-│   │   ├── tui-ptl/               #   ptl tui（Dashboard/Templates/Sessions/Extensions/Config）
-│   │   ├── tui-lab/               #   lab ui（Telemetry/Arena/Events/Compare/Config）
-│   │   └── tui-shared/            #   TUI 组件库 + Screen 布局模板 + 层级命令栏
-│   │
-│   └── pth/                       # Pi-Triple-Heavy
-│       ├── main.ts                #   服务器入口（bin: pth）
-│       ├── core/                  #   AgentEngine · SessionPool · AsyncIterableBridge
-│       ├── gateway/               #   Fastify 路由（sessions/programs/self）+ auth + SSE
-│       ├── programs/              #   ★ ProgramStore（桥的服务端：上传/版本/运行）
-│       ├── workflow/              #   BullMQ 工作流编排（orchestrator + worker）
-│       ├── tools/                 #   工具治理（allowlist + 审计 + 指标 + SPI）
-│       ├── storage/               #   Redis 存储（session/settings store）
-│       ├── self-modify/           #   热加载（L1）+ A/B 重建（L3）
-│       └── observability/         #   Prometheus 指标 + 审计日志
+│   ├── pth/                       # Pi-Triple-Heavy（服务器端 + 任务内核）
+│   │   ├── main.ts                #   服务器入口（kernel 装配 + 路由 + 指标）
+│   │   ├── core/                  #   AgentEngine · SessionPool · AsyncIterableBridge
+│   │   ├── gateway/               #   Fastify 路由（sessions/programs/kernel/self）+ auth + SSE
+│   │   ├── programs/              #   ★ ProgramStore（桥的服务端：上传/版本/运行）
+│   │   ├── workflow/              #   BullMQ 工作流编排（orchestrator + worker）
+│   │   ├── tools/ · storage/      #   工具治理（allowlist+审计+指标）· Redis 存储
+│   │   ├── self-modify/           #   热加载（L1）+ A/B 重建（L3）
+│   │   ├── kernel/                #   ★★ 任务内核（任务池/REPL/记忆/链/日志——见 docs/pth/kernel.md）
+│   │   │   ├── assembly.ts        #   装配层（createKernelRuntime + watchdog + resolver 轮询）
+│   │   │   ├── execution/         #   TaskLoop · BatchManager/Process · TaskResolver · Refiner
+│   │   │   ├── interpreter/       #   KernelManager · PyKernel · BashKernel · TS VM · toolstore
+│   │   │   ├── storage/           #   PostgreSQL（tasks/memory_entries/transcripts/audit）
+│   │   │   ├── logger.ts · templates.ts
+│   │   └── observability/         #   kernel-metrics（四层）· resource-provider（跨 OS）
+│   └── sandbox/ · types/          #   沙箱入口 · 类型声明
 │
-├── extensions/                    # bundled 扩展（6 个，共享层 symlink 注入）
-│   ├── ptl-providers/             #   统一 provider 后端（声明式 JSON + 多 Key failover）
-│   ├── ptl-communicate/           #   跨会话通信（文件邮箱 + 审核模式）
-│   ├── ptl-control/               #   会话内控制（/control start/stop/switch...）
+├── packages/                      # npm 拆分（pnpm workspace 式目录）
+│   ├── framework/                 #   ★ PTL CLI + TUI（bin: ptl）
+│   │   └── src/{cli,commands,flow,bridge,lab-data,session,tui-ptl,tui-lab,tui-shared}
+│   ├── shared/                    #   双产品共享（config/tmux/presence/registry/session-registry）
+│   ├── infra/                     #   基础设施（sdk-adapter/model-router/platform/workspace）
+│   │   └── src/sdk-paths.ts       #   ★ 凭据路径唯一出口（resolveSdkConfigPaths）
+│   ├── mailbox/ · extensions-in-container/
+│
+├── extensions/                    # bundled 扩展（8 个，共享层 symlink 注入）
+│   ├── pit-providers/             #   统一 provider 后端（声明式 JSON + 多 Key failover）
+│   ├── pit-control/ · mailbox/    #   会话内控制 · 跨会话通信
 │   ├── workflow/                  #   ★ pi 内流程编排（/flow 命令 + flow_run 工具）
-│   ├── agent-lab/                 #   ★ agent 经济引擎（状态机 WorkLoop/市场/调度/优化/实验，见 §扩展生态）
-│   └── agent-lab-bidder/          #   市场竞价工具（place_bid → agent-lab 竞价）
+│   ├── agent-lab/ + agent-lab-bidder/  # ★ agent 经济引擎 + 竞价工具
+│   ├── pth-tasks/                 #   ★ PTH 任务交互（/pthtask 命令族）
+│   └── extensions-in-container/   #   dev 容器内扩展集合
 │
-├── examples/                      # 示例
-│   ├── echo-agent/                #   桥测试用最小 agent 程序
-│   ├── pr-review/                 #   ptl-flow 串行 + human gate 示例
-│   ├── arena-review/              #   ptl-flow 并行 fan-out + reducer 示例
-│   └── custom-{route,tool,store}/ #   PTH 扩展点示例
-│
-├── test/                          # 614 个测试（vitest）+ agent-lab 子套件 1288（node:test）
-├── docs/{ptl,pth}/                # 分产品详细架构文档
+├── examples/                      # 示例（echo-agent / pr-review / arena-review / custom-*）
+├── test/                          # 1247 个测试（vitest，149 文件 + 扩展 157）
+├── docs/                          # 文档中心（docs/README.md 索引）
+│   ├── pth/                       #   architecture.md / kernel.md / api.md / deployment.md
+│   └── ptl/                       #   architecture.md / authoring.md
+├── ARCHITECTURE.md                # ★ 架构总览（单一真相源）
 ├── Dockerfile · docker-compose.yaml
 └── tsconfig.json · vitest.config.ts
 ```
@@ -159,21 +148,25 @@ Gateway（Fastify + auth + SSE）
 - **WorkflowOrchestrator**（`workflow/`）：服务端 BullMQ 工作流（`agent`/`human-approval` 步骤可用，`parallel`/`condition` 为 stub）。⚠️ 与 PTL 的 **ptl-flow** 是两个独立概念：前者是服务器集中编排，后者是本地波次引擎
 - **ToolPlatform**（`tools/`）：pi 内置工具的治理外壳（allowlist + 审计 + 指标），不重写工具
 - **存储**：Redis append-only entry + snapshot 模型；`SessionStore`/`SettingsStore`/`CredentialProvider` 接口可替换后端
+- **Kernel 任务体系**（`kernel/` + `gateway/routes-kernel.ts`）：★ agent 任务运行时——任务池（发布/认领/执行/submit-reject 闭环）· 多语言持久 REPL（PyKernel 管道 JSON-RPC **230x** / BashKernel 持久会话 / TS VM 沙箱白名单）· 记忆闭环（快照→LLM 提炼→tool-function 源码+spec 双通道持久化→state 召回）· TaskResolver 任务链（payload.flow 自带路由：transform/decompose/branch/loop/wait/terminal）· 四层监控（`/metrics`：L0 基建/L1 kernel/L2 任务/L3 产出 35+ 指标）+ KernelLogger 结构化日志（链路 ctx）。详见 [`docs/pth/kernel.md`](./docs/pth/kernel.md)
 
-详见 [`docs/pth/architecture.md`](./docs/pth/architecture.md) · [`docs/pth/api.md`](./docs/pth/api.md) · [`docs/pth/deployment.md`](./docs/pth/deployment.md)。
+详见 [`docs/pth/architecture.md`](./docs/pth/architecture.md) · [`docs/pth/kernel.md`](./docs/pth/kernel.md) · [`docs/pth/api.md`](./docs/pth/api.md) · [`docs/pth/deployment.md`](./docs/pth/deployment.md)。
 
 ---
 
-## 扩展生态（6 个 bundled）
+## 扩展生态（8 个 bundled）
 
 | 扩展 | 能力 |
 |------|------|
-| **ptl-providers** | 声明式 provider 注册（`~/.pi-triple/providers.json`）；多 Key 池 + 401/403 failover；`/keys` 统一管理；零代码加 provider |
-| **ptl-communicate** | 跨 pi 会话消息（文件邮箱）；`/ptl send/ask/inbox/share`；manual/auto/hybrid 审核；不可变审计日志 |
-| **ptl-control** | pi 内管理 tmux 会话；`/control start/stop/ls/switch/detach/ui/name/status` |
+| **pit-providers** | 声明式 provider 注册（`~/.pi-triple/providers.json`）；多 Key 池 + 401/403 failover；`/keys` 统一管理；零代码加 provider |
+| **mailbox**（@pi-triple/mailbox） | 跨 pi 会话消息（文件邮箱，原 pit-communicate）；`/ptl send/ask/inbox/share`；manual/auto/hybrid 审核；不可变审计日志 |
+| **pit-control** | pi 内管理 tmux 会话；`/control start/stop/ls/switch/detach/ui/name/status` |
 | **workflow** | pi 内编排 ptl-flow；`/flow` 命令 + `flow_run/flow_status/flow_ls` 工具 + gate 通知（shell 调 `ptl flow` CLI） |
 | **agent-lab** | ★ **agent 经济引擎**：WorkLoop 状态机引擎（图灵机模型：有限控制/记忆域/纸带，MachineRuntime 驱动 + 转移级 checkpoint/Trace）+ 市场竞拍（arena）→ 调度器（定义/实例/fallback 路由 + 参数模型）→ 优化器（提案/canary/发布闭环）+ 实验运行时；共享 SQLite（lab_events/runs/credit_tx/checkpoints）；`/lab` 全套子命令；ptl 侧 TraceProvider 注册制消费（TUI Dashboard/`ptl trace ls`）。架构见 [`extensions/agent-lab/docs/ARCHITECTURE.md`](./extensions/agent-lab/docs/ARCHITECTURE.md) |
 | **agent-lab-bidder** | 市场竞价工具（`place_bid` 工具 → agent-lab 竞价）；⚠️ ADR-0001 后核心竞价经 market-bid-loop 原生运行，place_bid 已标 deprecated-for-bidding（保留兼容） |
+| **pth-tasks** | PTH 任务交互层：会话内 `/pthtask publish|ls|status|batch`（发布/列表/状态/控制 batch）+ 薄 skill（任务描述写法/状态语义/排障） |
+| **mailbox** | 跨会话通信（`packages/mailbox` 的分发实现） |
+| **extensions-in-container** | dev 容器内扩展集合 |
 
 共享层机制：bundled 扩展安装到 `~/.pi-triple/data/shared/extensions/`，逐项 symlink 注入各模板目录（一处更新全局可见）；`.bundled-manifest` 标记平台托管，`ptl update --all` 覆盖式同步。
 
@@ -186,13 +179,13 @@ Gateway（Fastify + auth + SSE）
 ```
 ~/.pi-triple/
 ├── pi-triple.json            # v2 配置（UUID+alias），全局唯一；cwd 的 pi-triple.json 为项目级覆盖
-├── providers.json            # provider 声明（ptl-providers 消费）
+├── providers.json            # provider 声明（pit-providers 消费）
 └── data/
     ├── pi-config/<uuid>/     # 模板 pi 配置（extensions/skills/settings/models/auth/agent-lab）
     ├── sessions/<uuid>/      # pi session 文件
     ├── workspaces/<uuid>/    # agent 工作目录
     ├── shared/               # 共享扩展/技能 + agent-lab.db
-    ├── mailbox/<uuid>/       # ptl-communicate 邮箱
+    ├── mailbox/<uuid>/       # mailbox 邮箱
     └── flows/<runId>/        # ★ ptl-flow 运行态
         ├── graph.json · meta.json · state.json
         ├── checkpoints/ · waves/ · graph.history/
