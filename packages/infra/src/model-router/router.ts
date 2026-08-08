@@ -1,6 +1,7 @@
 import { ModelRuntime, type ModelRuntimeInstance } from "../sdk-adapter/index.js";
 import type { CredentialProvider } from "../credential-provider.js";
 import type { Logger } from "../observability/logger.js";
+import { resolveSdkConfigPaths } from "../sdk-paths.js";
 
 type ResolvedModel = ReturnType<ModelRuntimeInstance["getModel"]>;
 
@@ -28,7 +29,7 @@ export class ModelRouter {
   ) {}
 
   async initialize(): Promise<void> {
-    this.runtime = await ModelRuntime.create();
+    this.runtime = await ModelRuntime.create({ allowModelNetwork: false, ...resolveSdkConfigPaths() });
     for (const provider of this.config.failoverOrder) {
       const key = await this.credentials.getApiKey("platform", provider);
       if (key) {

@@ -22,4 +22,5 @@ export {
   ModelRouter,
   type ModelRouterConfig,
 } from "./model-router/router.js";
+export { resolveSdkConfigPaths, type SdkConfigPaths } from "./sdk-paths.js";
 export * from "./sdk-adapter/index.js";
