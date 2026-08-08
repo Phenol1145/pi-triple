@@ -64,17 +64,45 @@ TaskLoop（intent 模式）——Spec B §5 预留环节落地：
 └────────────────────────────────────────────────┘
 ```
 
-### 工具动作协议（LLM ↔ 执行器）
+### 工具动作协议（LLM ↔ 执行器，已定稿 2026-08-08）
 ```
-LLM 输出（每步一条 JSON 动作）：
-  { "tool": "python.execute" | "bash.execute" | "ts" | "llm.complete" | "web.fetchText" | "fs.readText" | "fs.list" | "state.recallFunctions" | "state.recallInsights" | "done", "args": {...} }
-执行器执行 → 结果（Observation 结构）回填 → 下一步
-"done" 动作携带最终产出 { result, summary }
+消息结构（对话形态，每步一轮）：
+  [system] 角色人设 + 工具协议说明（JSON schema）+ 输出要求
+  [user]   任务描述
+  [assistant] { "thought": "推理说明（仅记录）", "action": { "tool": "<tool-id>", "args": {...} } }
+  [user]   ── 工具结果回填（Observation 转文本）──
+  ...循环...
+  [assistant] { "action": { "tool": "done", "args": { "result": {...}, "summary": "..." } } }
 ```
 
-- 动作解析失败（非 JSON/未知 tool）→ 重试一次（PTH_AGENT_RETRY_PARSE）→ 仍失败 terminal reject
-- 上下文预算：每步回填截断（复用截断策略），超预算强制 done（PTH_AGENT_MAX_TOKENS 可选）
-- 超时：整循环 PTH_AGENT_TIMEOUT_MS（默认 120s）→ reject
+工具清单（与 capability 白名单 + memory 对齐，零新能力）：
+| tool | args | 说明 |
+|------|------|------|
+| python.execute | { code } | REPL 通道 |
+| bash.execute | { command } | REPL 通道 |
+| ts | { code } | vm 内联代码 |
+| llm.complete | { user, system?, model? } | 子 LLM 调用（模型可覆盖） |
+| web.fetchText | { url } | 只读网络 |
+| fs.readText / fs.list | { path } / { dir? } | toolstore 文件通道 |
+| state.recallFunctions / recallInsights | { query? } | 记忆召回（只读） |
+| memory.retrieve | { anchors, kinds?, limit? } | 记忆检索 |
+| memory.write | { id?, kind, anchors, content } | 记忆主动沉淀（LLM 自觉维护） |
+| done | { result, summary? } | 终止 + 最终产出 |
+
+结果回填：Observation 转文本（ok/value/stdout/stderr/truncated），截断保护复用现有策略。
+
+解析与校验（容错链）：剥离围栏 → 提取首个 JSON → 校验 tool 白名单 → args 匹配 → 失败重试 1 次（PTH_AGENT_RETRY_PARSE）→ 仍失败 terminal reject（action-parse-failed）。
+
+循环控制：done 正常终止；steps >= PTH_AGENT_MAX_STEPS（10）强制 done；总时长 > PTH_AGENT_TIMEOUT_MS（120s）reject；连续 N 次相同动作（tool+args 指纹）强制 done/reject（防死锁）。
+
+verify（可选，PTH_AGENT_VERIFY=on）：done 前追加验证轮（LLM 输出 { pass, reason }）→ fail 允许重试（PTH_AGENT_VERIFY_RETRY 默认 1）。
+
+可观测性：每步日志（step/tool/thought 前 50 字/durationMs/tokens）+ 指标（pth_agent_steps_total{tool} / pth_agent_loop_duration_seconds）+ transcript 完整轨迹（refine 快照更丰富）。
+
+实现位置：src/pth/kernel/execution/agent-loop.ts（LLMAgentLoop.run + tools/agent-tools.ts 工具表 + parse-agent-action.ts 解析纯函数）
+```
+
+- LLM 输出（每步一条 JSON 动作）：
 
 ### 角色 prompt 接入（人设个性化）
 ```
