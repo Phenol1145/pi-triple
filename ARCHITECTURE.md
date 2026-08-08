@@ -11,7 +11,7 @@ Pi-Triple 是基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-co
 | 运行时 | 真实 pi 进程 × tmux | AgentEngine + Redis + BullMQ |
 | 交互 | 本地终端 · TUI · 手动 | HTTP / SSE / WebSocket · 程序化 |
 | 适用 | 个人/小组 · 交互式调试 | 团队/联邦 · 集中治理 · 弹性伸缩 |
-| 源码 | `src/ptl/` | `src/pth/` |
+| 源码 | `packages/framework/` | `src/pth/` |
 
 两者共享 `src/shared/`（SDK 适配、模型路由、工作目录、跨 OS 适配、日志），并通过 **PTL→PTH 桥**（`ptl hub submit/run`）打通：PTL 本地开发的 agent 程序可打包提交到 PTH 以联邦模式运行。
 
@@ -24,7 +24,7 @@ Pi-Triple 是基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-co
                 ┌───────────────────────┴───────────────────────┐
                 │                                               │
         ┌───────▼────────┐                              ┌───────▼────────┐
-        │   src/ptl/     │   ptl hub submit / ptl hub run       │   src/pth/     │
+        │ packages/framework │ ptl hub submit / ptl hub run │     src/pth/     │
         │  ptl CLI + TUI │ ──────────── 桥 ───────────→ │  Fastify 网关   │
         │  pi × tmux     │        (bridge/)             │  AgentEngine   │
         │  ptl-flow 引擎  │                              │  Redis + BullMQ │
@@ -94,7 +94,7 @@ PTL **不实现自己的 agent runtime**——它启动真正的 pi 进程，每
 - `ptl start`（默认 tmux 管理）/ `ptl pi`（原生前台逃生舱）
 - 关键模块：`tmux.ts` · `launcher.ts` · `cli/sessions.ts`
 
-### 2. ptl-flow 波次工作流引擎（`src/ptl/flow/`）
+### 2. ptl-flow 波次工作流引擎（`packages/framework/src/flow/`）
 
 LangGraph 风格的本地工作流引擎，声明式 JSON 图（节点 + 条件边 + 环），**波次并行（BSP）执行** + **运行中热修改**是两大特性。
 
@@ -113,7 +113,7 @@ LangGraph 风格的本地工作流引擎，声明式 JSON 图（节点 + 条件�
 
 命令：`ptl flow run/status/show/ls/validate/graph/rm` + `approve/reject/resume` + `set/edit/propose/discard`。
 
-### 3. PTL→PTH 桥（`src/ptl/bridge/`）
+### 3. PTL→PTH 桥（`packages/framework/src/bridge/`）
 
 把 PTL 本地开发的 agent 程序（`agent.json` manifest + skills + systemPrompt）打包提交到 PTH 运行。
 
@@ -122,13 +122,13 @@ LangGraph 风格的本地工作流引擎，声明式 JSON 图（节点 + 条件�
 - `pipe.ts` 将程序的 systemPrompt + skills 注入 pi 启动参数
 - 服务端：`src/pth/programs/store.ts`（INCR 版本 + tar 安全解包 + GC）+ `gateway/routes-programs.ts`
 
-### 4. lab 遥测数据层（`src/ptl/lab-data/`）
+### 4. lab 遥测数据层（`packages/framework/src/lab-data/`）
 
 `ptl tui lab` TUI 的数据底座。SQLite（WAL + busy_timeout）：共享 `runs` DB（跨模板调用遥测）+ per-template arena/events/config。模块：`telemetry.ts` · `arena.ts` · `events.ts` · `open-db.ts` · `schema.ts`。
 
 ### 5. 双 TUI + 共享组件（`tui-ptl/` · `tui-lab/` · `tui-shared/`）
 
-两个 Ink TUI 共用统一 `Screen` 布局模板（Head/Content/Tips）与组件库（DataTable/SelectList/ConfirmDialog/SparkLine/BarChart/层级 CommandBar）。退出统一走 `/quit`。规范见 `src/ptl/tui-shared/README.md`。
+两个 Ink TUI 共用统一 `Screen` 布局模板（Head/Content/Tips）与组件库（DataTable/SelectList/ConfirmDialog/SparkLine/BarChart/层级 CommandBar）。退出统一走 `/quit`。规范见 `packages/framework/src/tui-shared/README.md`。
 
 ---
 

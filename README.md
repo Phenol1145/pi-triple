@@ -246,7 +246,7 @@ cd /tmp && ptl template ls  # 冒烟测试
 - **PTH 无 TUI**：适合服务器/API 场景（→ PTL 本地调试 + PTL→PTH 桥）
 - **tmux**：Unix-only（Windows 支持规划中）
 - **PTH 进程限制**：BullMQ worker 在主进程（Phase 1 技术债）
-- **ptl-communicate**：单机通信，不支持跨机器
+- **mailbox**：单机通信，不支持跨机器
 - **任务 text 需代码形态**：自然语言任务支持规划中（纯文本验收任务反复 reject 的教训）
 
 ## License
