@@ -24,6 +24,11 @@ services:
   # F/WP3 Task 11：sandbox 转发客户端 env（共享密钥 compose 注入，非镜像硬编码）
       - SANDBOX_URL=http://sandbox:8080
       - SANDBOX_SHARED_SECRET=${SANDBOX_SHARED_SECRET:-sandbox-dev-secret}
+    # kernel sandbox SPEC §3.3：REPL kernel 执行层落 sandbox 侧（持久 kernel 宿主池）
+    # 模式切换：PTH_PYTHON_MODE/PTH_BASH_MODE = sandbox-kernel（生产默认）| kernel（本地调试）
+      - PTH_PYTHON_MODE=${PTH_PYTHON_MODE:-sandbox-kernel}
+      - PTH_BASH_MODE=${PTH_BASH_MODE:-sandbox-kernel}
+      - PTH_SANDBOX_KERNEL_URL=http://sandbox:8080
     # F/WP3 Task 13：sandbox 失效降级阈值（连续 N 次转发失败置 degraded；默认 3，可 env 覆盖）
       - SANDBOX_DEGRADED_THRESHOLD=${SANDBOX_DEGRADED_THRESHOLD:-3}
     # 路径约定统一（F/WP3 Task 12）：pth 侧 WorkspaceManager basePath = <DATA_DIR>/workspaces

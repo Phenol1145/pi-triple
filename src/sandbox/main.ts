@@ -6,9 +6,12 @@
  */
 
 import { buildExecApp } from "./exec-api.js";
+import { registerKernelHost } from "./kernel-host.js";
 
 const port = parseInt(process.env.PORT ?? "8080", 10);
 const app = buildExecApp();
+// kernel sandbox SPEC：kernel 宿主与 exec API 同端口（internal 网络内 PTH 可达）
+registerKernelHost(app, {});
 
 try {
   await app.listen({ port, host: "0.0.0.0" });

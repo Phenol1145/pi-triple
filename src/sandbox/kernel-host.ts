@@ -32,10 +32,10 @@ export interface KernelHostOptions {
 
 const VALID_LANGS: KernelLang[] = ["python", "bash"];
 
-export function buildKernelHostApp(opts: KernelHostOptions = {}): FastifyInstance {
+/** 插件式注册：把 kernel 宿主路由挂到已有 Fastify app（sandbox main 与 exec API 同端口） */
+export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions = {}): void {
   const getSecret = opts.getSecret ?? (() => process.env.SANDBOX_SHARED_SECRET);
   const poolSize = opts.poolSize ?? 4;
-  const app = Fastify({ logger: false });
 
   const pools: Record<KernelLang, KernelPool> = {
     python: new KernelPool({ lang: "python", max: poolSize, onStderr: opts.onStderr }),
@@ -57,7 +57,10 @@ export function buildKernelHostApp(opts: KernelHostOptions = {}): FastifyInstanc
     return false;
   }
 
-  app.get("/health", async () => ({ status: "ok" }));
+  // /health 由 exec API 注册（组合模式）——独立 app（buildKernelHostApp）时自备
+  if (!app.hasRoute({ method: "GET", url: "/health" })) {
+    app.get("/health", async () => ({ status: "ok" }));
+  }
 
   app.post("/kernel/acquire", async (req, reply) => {
     if (!enforceAuth(req, reply)) return;
@@ -134,7 +137,12 @@ export function buildKernelHostApp(opts: KernelHostOptions = {}): FastifyInstanc
     if (!enforceAuth(req, reply)) return;
     return { pools: [pools.python.status(), pools.bash.status()] };
   });
+}
 
+/** 独立 app（测试用）——与 main.ts 同构：exec 与 kernel 路由同端口 */
+export function buildKernelHostApp(opts: KernelHostOptions = {}): FastifyInstance {
+  const app = Fastify({ logger: false });
+  registerKernelHost(app, opts);
   return app;
 }
 

@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { KernelPool } from "../../src/sandbox/kernel-pool.js";
 import { buildKernelHostApp } from "../../src/sandbox/kernel-host.js";
 import type { FastifyInstance } from "fastify";
@@ -153,5 +156,29 @@ describe("kernel host 协议（buildKernelHostApp）", () => {
   it("非法 lang → 400", async () => {
     const r = await app.inject({ method: "POST", url: "/kernel/acquire", payload: { lang: "ruby" }, headers: auth() });
     expect(r.statusCode).toBe(400);
+  });
+});
+
+describe("sandbox main 组合形态（exec + kernel 同端口共存）", () => {
+  it("同一 app 挂 /exec 与 /kernel/* 路由", async () => {
+    process.env.SANDBOX_SHARED_SECRET = SECRET;
+    const { buildExecApp } = await import("../../src/sandbox/exec-api.js");
+    const { registerKernelHost } = await import("../../src/sandbox/kernel-host.js");
+    const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-combo-"));
+    const app = buildExecApp({ workspacesRoot: wsRoot });
+    registerKernelHost(app, {});
+    await app.ready();
+
+    const exec = await app.inject({ method: "POST", url: "/exec", payload: { cmd: "echo combo-ok" }, headers: auth() });
+    expect(exec.statusCode).toBe(200);
+    expect(exec.json().stdout).toContain("combo-ok");
+
+    const acq = await app.inject({ method: "POST", url: "/kernel/acquire", payload: { lang: "python" }, headers: auth() });
+    expect(acq.statusCode).toBe(200);
+    const { kernelId } = acq.json();
+    const ex = await app.inject({ method: "POST", url: "/kernel/execute", payload: { kernelId, code: "combo = 'kernel-ok'\n_result = combo" }, headers: auth() });
+    expect(ex.json().value).toBe("kernel-ok");
+    await app.close();
+    delete process.env.SANDBOX_SHARED_SECRET;
   });
 });
