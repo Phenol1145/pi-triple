@@ -72,7 +72,6 @@ SandboxKernel 模式（生产）：实现同一 Interpreter 接口：
 ```
 
 ## 4. 安全边界（最终形态）
-
 | 层 | 边界 |
 |----|------|
 | 容器 | sandbox 无密钥无出网（internal 网络）——**恶意代码拿不到凭据** |
@@ -81,6 +80,42 @@ SandboxKernel 模式（生产）：实现同一 Interpreter 接口：
 | 协议 | 共享密钥认证 + fail-closed |
 
 对比 Prime Agent（裸 IPython 无沙箱）：PTH 的"受信指挥层 + 无密钥执行层"是本质性更强的隔离。
+
+## 4.5 敏感信息处理（用户强调——API key 等凭据）
+
+### 敏感信息清单与流向（实测 2026-08-08）
+| 项 | 位置 | PTH 侧 | sandbox 侧 | 任务代码可达性 |
+|----|------|--------|-----------|---------------|
+| LLM API key | auth.json（PI_CODING_AGENT_DIR） | ✅ ModelRuntime 读 | ❌ 不注入 | ts vm：✗（无文件/无 process）；sandbox python/bash：✗（无文件） |
+| DATABASE_URL（含 pg 密码） | env（batch 连 pg 必需） | ✅ | ❌ | ts vm：✗；**本地模式 python/bash：⚠️ 可读**（进程继承 env）；sandbox 模式：✗ |
+| USTC_PAN_TOKEN 等用户 token | env（宿主） | ✅（宿主进程） | ❌ | 同上 |
+| SANDBOX_SHARED_SECRET | env（sandbox 认证自身） | ✅（客户端） | ✅（服务端） | ✗（不注入 kernel 进程 env） |
+
+### 约束（spec 强约束）
+```
+① sandbox 容器零敏感信息：
+   - 镜像构建：不 COPY 任何配置/密钥；Dockerfile 无 ARG/ENV 凭据
+   - 运行时 env：compose 只注入 SANDBOX_SHARED_SECRET（沙盒自身认证）+ 非敏感配置；
+     明确禁止 ANTHROPIC_API_KEY/DATABASE_URL/用户 token 进入 sandbox 服务
+② kernel 宿主协议不接受 env 注入：
+   - /kernel/execute 请求体无 env 字段（区别于 /exec 的 env 增量）
+   - 若未来需要 env：白名单 key 校验（拒绝 KEY/TOKEN/SECRET/PASSWORD/URL 模式）
+③ PTH 侧最小暴露：
+   - auth.json 只被 ModelRuntime 读（resolveSdkConfigPaths 显式路径——已落地）
+   - ts vm 无 process/fs（语言层无能力——已隔离）
+   - batch 进程 env 仅保留运行必需（DATABASE_URL 连 pg 必需；其余用户 token 尽量宿主级）
+④ 本地模式风险标注（开发形态接受）：
+   - 无 sandbox 时 python/bash 在宿主侧，进程继承 env——任务代码理论上可读 env
+   - 生产必须切 sandbox-kernel 模式（隔离消除）；本地仅限开发/试运行
+```
+
+### 验证手段
+```
+- 镜像扫描：门禁脚本检查 Dockerfile.sandbox 无凭据字面量
+- 协议单测：/kernel/execute 拒绝 env 字段；敏感 key 名过滤测试
+- 运行期检查：sandbox 容器 env 白名单断言（启动时校验无 KEY/TOKEN/SECRET/PASSWORD）
+- 端到端验证：sandbox 模式下 python.execute("import os; os.environ") 返回空/无敏感项
+```
 
 ## 5. 与现有体系的关系
 
