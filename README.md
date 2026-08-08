@@ -224,7 +224,7 @@ cd /tmp && ptl template ls  # 冒烟测试
 | PTH 任务交互扩展 | `extensions/pth-tasks/` — /pthtask 命令族 + 薄 skill |
 | PTH 自定义工具/路由/存储 | `src/pth/` — 接口替换见 [PTH 架构 #扩展方式](./docs/pth/architecture.md) |
 | PTH 任务内核扩展 | `src/pth/kernel/` — 见 [Kernel 体系](./docs/pth/kernel.md) |
-| PTL 加 CLI 命令 | `src/ptl/cli/admin.ts` + 注册到 `src/ptl/pit.ts` switch |
+| PTL 加 CLI 命令 | `packages/framework/src/cli/` 命令模块 + 注册到 `packages/framework/src/pit.ts` |
 | TUI 新页面 | 遵循 [Screen 布局模板](./packages/framework/src/tui-shared/README.md) 5 条规则 |
 
 ### 设计原则
