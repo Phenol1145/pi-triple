@@ -3,7 +3,15 @@
 > 状态：SPEC v1.0 —— 已裁决（2026-08-08：多语言持久 REPL + Observation 协议 + per-worker kernel + 纯 stdlib runtime）
 > 日期：2026-08-08
 > 愿景（用户）：REPL 是 LLM 与计算机交互的最终形态；不同语言在不同领域有长处；方案需在保证性能的同时兼容不同工具链。
-> 关联：docs/superpowers/specs/2026-08-08-pth-interpreter-persistence-design.md（持久化层——本草案的执行器底座）
+> 关联：[解释器持久化设计](./2026-08-08-pth-interpreter-persistence-design.md)（持久化层——本草案的执行器底座）
+
+> **整理说明（2026-08-09）**
+>
+> 文档性质：已裁决设计，正文同时保留 v1 本地形态、v2 池化推演和形成设计时的开放问题。
+>
+> 实施映射：TS/Python/Bash 的本地持久 Kernel、KernelManager、Observation、懒启动和 reset 已存在；共享池未观察到落地。
+>
+> 阅读关系：后续 [kernel sandbox SPEC](./2026-08-08-pth-kernel-sandbox-design.md) 将共享池的目标归属调整为 sandbox 侧；本文的性能数字主要是解释器微基准。参见[综合总览](./2026-08-09-pth-kernel-design-synthesis.md)。
 
 ## 1. 问题
 

@@ -2,6 +2,14 @@
 
 > 日期：2026-08-08 · 状态：已批准（用户裁决） · 关联：[LLM agent 执行设计](./2026-08-08-pth-llm-agent-execution-design.md) · [kernel sandbox 设计](./2026-08-08-pth-kernel-sandbox-design.md)
 
+> **整理说明（2026-08-09）**
+>
+> 文档性质：已批准的目标设计。
+>
+> 实施映射：当前代码未观察到 Environment 注册表、`payload.route.env`、引用计数、环境快照目录或 GC 循环的主体实现。
+>
+> 阅读关系：本文组合此前的 agent loop、TaskResolver、REPL snapshot 与 sandbox 目标；不是当前运行链已经具备的能力。参见[Kernel 设计综合总览](./2026-08-09-pth-kernel-design-synthesis.md)。
+
 ## 1. 背景与动机
 
 递归调用（rlm 式）需要 fresh/fork 两种模式，统一在**环境（Environment）**概念下：

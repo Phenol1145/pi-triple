@@ -2,6 +2,14 @@
 
 > 日期：2026-08-08 · 状态：已批准（用户裁决 5/5） · 关联：[任务链 SPEC](./2026-08-08-pth-task-resolver-design.md) · [REPL SPEC](./2026-08-08-pth-multilang-repl-design.md) · [性能计量 SPEC](./2026-08-08-pth-perf-metrics-design.md)
 
+> **整理说明（2026-08-09）**
+>
+> 文档性质：已批准的分阶段设计，并包含 Phase 1 后的实验记录。
+>
+> 实施映射：基础 agent loop、动作解析和工具表已存在；完整 kind 分化、verify、四级模型覆盖及 Phase 2/3 内容未观察到完整落地。
+>
+> 阅读关系：本文将 REPL、capability、角色和 Refine 组合为意图任务路径；其中性能数字是特定实验结果。参见[Kernel 设计综合总览](./2026-08-09-pth-kernel-design-synthesis.md)。
+
 ## 1. 背景与动机
 
 PTH 的构建初衷：**任务池是给 LLM 驱动的 agent 干活的**——任务 = 意图/工单，worker = LLM 主导的 agent（理解 → 规划 → 执行 → 验证 → 交付）。

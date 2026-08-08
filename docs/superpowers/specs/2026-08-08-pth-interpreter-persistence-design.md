@@ -4,6 +4,14 @@
 > 日期：2026-08-08
 > 背景：agent 完成一轮工作后进入 refine 模式，把本轮可能有用的信息/工具函数持久化；agent 持久化状态通过解释器召回。扁平化设计——状态不驻留在 agent 实体，全部落入记忆系统。
 
+> **整理说明（2026-08-09）**
+>
+> 文档性质：已裁决设计，正文保留了多项方案分析和建议。
+>
+> 实施映射：三 Kernel snapshot、Refiner、memory 中的 tool-function/task-insight/refine-report 以及 recall 能力已经存在；protobuf 快照、完整文件双通道、`state.export` 与依赖图未观察到完整落地。
+>
+> 阅读关系：多语言 REPL 将本设计从 TS 状态扩展到 Python/Bash；Environment SPEC 又将 snapshot 用于目标生命周期。参见[Kernel 设计综合总览](./2026-08-09-pth-kernel-design-synthesis.md)。
+
 ## 0. 设计原则：pickle 哲学映射
 
 参考 Python `pickle` 库的设计取舍（统一化数据存储）：

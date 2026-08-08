@@ -1,7 +1,13 @@
 # Prime Agent 调研与 PTH 对照（参考文档）
 
 > 日期：2026-08-08 · 类型：exploration（外部参考） · 来源：ChatGPT 分享会话（gpt-5-6-thinking 调研，2026-08-07）
-> 关联：[LLM agent 执行设计](./2026-08-08-pth-llm-agent-execution-design.md)
+> 关联：[LLM agent 执行设计](../specs/2026-08-08-pth-llm-agent-execution-design.md)
+
+> **整理说明（2026-08-09）**
+>
+> 文档性质：外部参考 exploration，不是 PTH 的规范性设计。
+>
+> 使用边界：本文用于记录 PTC、递归 agent、continual harness 和分层记忆的参照；其中“已对齐”“更安全”等比较判断不能覆盖 PTH SPEC 或当前代码事实。参见[Kernel 设计综合总览](../specs/2026-08-09-pth-kernel-design-synthesis.md)。
 
 ## 1. Prime Agent 是什么
 

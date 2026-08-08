@@ -2,6 +2,12 @@
 
 > 日期：2026-08-08 · 类型：exploration · 关联：[任务链 SPEC](../specs/2026-08-08-pth-task-resolver-design.md) · [REPL SPEC](../specs/2026-08-08-pth-multilang-repl-design.md)
 
+> **整理说明（2026-08-09）**
+>
+> 文档性质：特定试运行环境中的单次实验记录，不是通用运维规范。
+>
+> 使用边界：执行结果、PG 大小和耗时只描述当时环境；文中通过 Bash 执行维护命令的事实用于观察系统能力，不代表正式授权模型。参见[Kernel 设计综合总览](../specs/2026-08-09-pth-kernel-design-synthesis.md)。
+
 ## 背景
 
 PG 专项优化启动前盘点：PTH 试运行环境的 PostgreSQL 全部为默认参数（shared_buffers=128MB / work_mem=4MB / max_connections=100 / jit=on），tasks 表 78 行 17MB（30x 膨胀）。

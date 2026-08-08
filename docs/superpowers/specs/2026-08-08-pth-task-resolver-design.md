@@ -2,7 +2,15 @@
 
 > 状态：SPEC v1.0 —— 已裁决（2026-08-08：嵌套表达式/默认跳过+wait:true/子任务不继承/payload 标记 verified）
 > 日期：2026-08-08
-> 关联：docs/superpowers/plans/2026-08-08-pth-task-chain.md（v1 钩子方案，本草案取代其架构部分）
+> 关联：[任务链实施计划](../plans/2026-08-08-pth-task-chain.md)（v1 钩子方案，本草案取代其架构部分）
+
+> **整理说明（2026-08-09）**
+>
+> 文档性质：已裁决设计；文末开放问题保留了形成设计时的分析过程。
+>
+> 实施映射：`resolver-core.ts`、`task-resolver.ts`、嵌套条件表达式、`wait` 字段和主进程轮询已存在。
+>
+> 阅读关系：本 SPEC 取代旧计划中的钩子式架构描述；Environment SPEC 后续在任务路由上增加了尚未落地的环境维度。参见[Kernel 设计综合总览](./2026-08-09-pth-kernel-design-synthesis.md)。
 
 ## 1. 背景与目标
 

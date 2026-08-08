@@ -1,6 +1,14 @@
 # PTH 日志体系设计（分层 + 结构化 + 链路追踪）
 
 > 状态：SPEC v1.0 —— 已裁决（2026-08-08）
+>
+> **整理说明（2026-08-09）**
+>
+> 文档性质：已裁决的日志设计。
+>
+> 实施映射：KernelLogger、组件 child logger、batch IPC 转发和 Kernel stderr 接线已存在；本文仍保留实施时的原始路线描述。
+>
+> 阅读关系：日志负责事件叙事，性能计量 SPEC 负责时序聚合。参见[Kernel 设计综合总览](./2026-08-09-pth-kernel-design-synthesis.md)。
 > 背景：体系复杂度提升（PTH 主进程/batch 子进程/kernel 子进程/TaskResolver/Refiner/PTL），
 > 当前日志非结构化混流（console.error 裸文本 + stdio inherit + kernel stderr 忽略）——排障困难。
 

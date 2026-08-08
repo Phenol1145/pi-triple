@@ -2,6 +2,14 @@
 
 > 日期：2026-08-08 · 状态：已批准（用户裁决） · 关联：[LLM agent 执行设计](./2026-08-08-pth-llm-agent-execution-design.md) · [REPL SPEC](./2026-08-08-pth-multilang-repl-design.md)
 
+> **整理说明（2026-08-09）**
+>
+> 文档性质：已批准的目标设计。
+>
+> 实施映射：当前 sandbox 已有一次性 Bash exec API；持久 `kernel-host`、`SandboxKernel` 适配器和 sandbox 共享池未观察到主体实现。
+>
+> 阅读关系：本文更新了多语言 REPL SPEC 中“共享池放在何处”的目标结论；当前代码仍对应本地 per-worker Kernel。参见[Kernel 设计综合总览](./2026-08-09-pth-kernel-design-synthesis.md)。
+
 ## 1. 背景与动机
 
 用户裁决：**REPL kernel（PyKernel/BashKernel）应该落在 sandbox 侧**（隔离容器），之前的 REPL kernel 池化设计也是如此——**池化的正确归属是 sandbox 侧的共享 kernel 池**。
