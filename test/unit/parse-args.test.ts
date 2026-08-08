@@ -36,6 +36,16 @@ describe("parseArgs", () => {
     expect(r.flags.bg).toBe("true");
   });
 
+  it("模板参数（url/anchors/entryId 等）作为 valued flags 完整保留", () => {
+    const r = parseArgs(["hub", "kernel", "tasks", "add", "--template", "recon-doc", "--url", "https://go.dev/blog/waza-talk", "--anchors", "go,concurrency", "--entryId", "go-waza-talk", "--kind", "research-note", "--tags", "memory"]);
+    expect(r.flags.url).toBe("https://go.dev/blog/waza-talk");
+    expect(r.flags.anchors).toBe("go,concurrency");
+    expect(r.flags.entryId).toBe("go-waza-talk");
+    expect(r.flags.kind).toBe("research-note");
+    expect(r.flags.tags).toBe("memory");
+    expect(r.flags.template).toBe("recon-doc");
+  });
+
   it("ptl shared status → status 是 subcommand", () => {
     const r = parseArgs(["shared", "status"]);
     expect(r.command).toBe("shared");

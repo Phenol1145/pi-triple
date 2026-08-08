@@ -398,6 +398,28 @@ export class PthClient {
     return (await res.json()) as { id: string; status: string } & Record<string, unknown>;
   }
 
+  /** 模板发布任务（kernel 侧渲染） */
+  async publishTemplateTask(
+    template: string,
+    params: Record<string, unknown>,
+    opts: { createdBy?: string; tags?: string[] } = {},
+  ): Promise<{ id: string; status: string } & Record<string, unknown>> {
+    const res = await this.request("/api/v1/kernel/tasks", {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ template, params, createdBy: opts.createdBy ?? process.env.USER ?? "ptl", tags: opts.tags }),
+    });
+    if (!res.ok) await this.throwError(res, "模板发布任务失败");
+    return (await res.json()) as { id: string; status: string } & Record<string, unknown>;
+  }
+
+  /** 模板列表 */
+  async listTemplates(): Promise<Array<{ id: string; name: string; description: string; params: Array<{ key: string; required: boolean; description: string }> }>> {
+    const res = await this.request("/api/v1/kernel/templates", { method: "GET", headers: this.headers() });
+    if (!res.ok) await this.throwError(res, "模板列表失败");
+    return (await res.json()) as Array<{ id: string; name: string; description: string; params: Array<{ key: string; required: boolean; description: string }> }>;
+  }
+
   /** 任务列表（kernel tasks 表） */
   async listTasks(opts: { limit?: number } = {}): Promise<Array<Record<string, unknown>>> {
     const q = opts.limit ? `?limit=${opts.limit}` : "";

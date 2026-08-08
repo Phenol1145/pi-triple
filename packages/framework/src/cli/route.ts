@@ -17,7 +17,7 @@ import { cmdHubRequest, cmdHubRequests } from "../bridge/request.js";
 import { cmdHubRespond } from "../bridge/respond.js";
 import { cmdHubObserve } from "../bridge/observe.js";
 import { cmdHubDebug } from "../bridge/debug.js";
-import { cmdKernelStatus, cmdKernelTasksAdd, cmdKernelTasksLs, cmdKernelBatchAdd, cmdKernelBatchRemove } from "../bridge/kernel.js";
+import { cmdKernelStatus, cmdKernelTasksAdd, cmdKernelTasksLs, cmdKernelBatchAdd, cmdKernelBatchRemove, cmdKernelTemplatesLs } from "../bridge/kernel.js";
 import { printNamespaceHelp } from "./main.js";
 
 // ─── TUI ───────────────────────────────────────────────────
@@ -144,6 +144,10 @@ export const defaultHubHandlers: HubHandlers = {
         if (rest[0] === "ls") return cmdKernelTasksLs(flags);
         console.log("  用法: ptl hub kernel tasks add \"<描述>\" [--tags a,b] | ls [--limit n]");
         return;
+      case "templates":
+        if (rest[0] === "ls" || rest.length === 0) return cmdKernelTemplatesLs(rest, flags);
+        console.log("  用法: ptl hub kernel templates ls");
+        return;
       case "batch":
         if (rest[0] === "add") return cmdKernelBatchAdd(rest.slice(1), flags);
         if (rest[0] === "remove") return cmdKernelBatchRemove(rest.slice(1), flags);
@@ -154,6 +158,8 @@ export const defaultHubHandlers: HubHandlers = {
       default:
         console.log([
           "  ptl hub kernel tasks add \"<描述>\" [--tags a,b]   发布 PTH 任务",
+          "  ptl hub kernel tasks add --template <id> --key v… 模板发布",
+          "  ptl hub kernel templates ls                       模板列表",
           "  ptl hub kernel tasks ls [--limit n]              任务列表",
           "  ptl hub kernel batch add [n]                     启动 batch",
           "  ptl hub kernel batch remove [n]                  停止 batch",

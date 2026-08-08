@@ -31,9 +31,39 @@ function parseTags(flags: Record<string, string>): string[] | undefined {
 }
 
 export async function cmdKernelTasksAdd(passthrough: string[], flags: Record<string, string>): Promise<void> {
+  // 模板发布：ptl hub kernel tasks add --template recon-doc --url X --anchors a,b
+  if (flags.template) {
+    const client = requireClient();
+    const params: Record<string, unknown> = {};
+    const templateId = flags.template;
+    // 收集模板参数（--key value 形式，排除已知 flags）
+    const known = new Set(["template", "tags", "limit", "dry-run"]);
+    for (const [k, v] of Object.entries(flags)) {
+      if (!known.has(k)) params[k] = v;
+    }
+    if (flags.anchors) params.anchors = flags.anchors.split(",").map((a) => a.trim()).filter(Boolean);
+    try {
+      const task = await client.publishTemplateTask(templateId, params, {
+        createdBy: process.env.USER ?? "ptl",
+        tags: parseTags(flags),
+      });
+      printBanner();
+      console.log(`  \x1b[1m[模板 ${templateId}] 任务已发布\x1b[0m`);
+      console.log(`    id:     ${task.id}`);
+      console.log(`    status: ${task.status}`);
+      console.log("  查看: \x1b[36mptl hub kernel tasks ls\x1b[0m");
+      return;
+    } catch (err: any) {
+      console.log(`\x1b[31m❌ 模板发布失败: ${err.message}\x1b[0m`);
+      console.log("  模板列表: ptl hub kernel templates ls");
+      process.exit(1);
+    }
+  }
+
   const desc = passthrough.join(" ");
   if (!desc) {
     console.log("  用法: ptl hub kernel tasks add \"<任务描述>\" [--tags a,b]");
+    console.log("        ptl hub kernel tasks add --template <id> --url <x> [--anchors a,b] [--section S]");
     process.exit(1);
   }
   const client = requireClient();
@@ -52,6 +82,32 @@ export async function cmdKernelTasksAdd(passthrough: string[], flags: Record<str
     console.log("  查看: \x1b[36mptl hub kernel tasks ls\x1b[0m  状态: \x1b[36mptl hub kernel status\x1b[0m");
   } catch (err: any) {
     console.log(`\x1b[31m❌ 发布任务失败: ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
+export async function cmdKernelTemplatesLs(_passthrough: string[], _flags: Record<string, string>): Promise<void> {
+  const client = requireClient();
+  try {
+    const templates = await client.listTemplates();
+    printBanner();
+    console.log("  \x1b[1mPTH 任务模板\x1b[0m");
+    if (templates.length === 0) {
+      console.log("\n  暂无模板。");
+    } else {
+      console.log("");
+      for (const t of templates) {
+        console.log(`  \x1b[1m${t.id}\x1b[0m  ${t.name}`);
+        console.log(`      ${t.description}`);
+        const params = t.params.map((p) => `${p.key}${p.required ? "*" : "?"}`).join(" ");
+        if (params) console.log(`      参数: ${params}`);
+      }
+      console.log("");
+      console.log("  发布: \x1b[36mptl hub kernel tasks add --template <id> --key value...\x1b[0m");
+    }
+    console.log("");
+  } catch (err: any) {
+    console.log(`\x1b[31m❌ 模板列表失败: ${err.message}\x1b[0m`);
     process.exit(1);
   }
 }
