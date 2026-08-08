@@ -60,6 +60,9 @@ const HELP_GROUPS: HelpGroup[] = [
       ["hub respond <id> <dir>", "构建构件闭合回退请求"],
       ["hub observe <sessions|session|trace> [--json]", "远程观测（Redis 会话痕迹）"],
       ["hub debug [sandbox|<sessionId>]", "WebSocket 交互式接入 sandbox 调试区"],
+      ["hub kernel tasks add|ls", "发布/列出 PTH 任务"],
+      ["hub kernel batch add|remove", "控制 batch 扩缩容"],
+      ["hub kernel status", "kernel 运行状态全景"],
     ],
   },
   {

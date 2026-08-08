@@ -379,4 +379,78 @@ export class PthClient {
     } catch { /* ignore */ }
     throw new Error(`${prefix}: HTTP ${res.status}${body ? " — " + body : ""}`);
   }
+
+  // ── kernel 任务/批次（任务工具 Task 3）────────────────────
+
+  /** 发布 PTH 任务（kernel tasks 表） */
+  async publishTask(input: {
+    title: string;
+    text: string;
+    createdBy: string;
+    tags?: string[];
+  }): Promise<{ id: string; status: string } & Record<string, unknown>> {
+    const res = await this.request("/api/v1/kernel/tasks", {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) await this.throwError(res, "发布任务失败");
+    return (await res.json()) as { id: string; status: string } & Record<string, unknown>;
+  }
+
+  /** 任务列表（kernel tasks 表） */
+  async listTasks(opts: { limit?: number } = {}): Promise<Array<Record<string, unknown>>> {
+    const q = opts.limit ? `?limit=${opts.limit}` : "";
+    const res = await this.request(`/api/v1/kernel/tasks${q}`, { method: "GET", headers: this.headers() });
+    if (!res.ok) await this.throwError(res, "任务列表失败");
+    return (await res.json()) as Array<Record<string, unknown>>;
+  }
+
+  /** 启动 n 个 batch */
+  async batchAdd(count = 1): Promise<{ spawned: number; batches: Array<{ id: string; pid: number }> }> {
+    const res = await this.request("/api/v1/kernel/batch/add", {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ count }),
+    });
+    if (!res.ok) await this.throwError(res, "启动 batch 失败");
+    return (await res.json()) as { spawned: number; batches: Array<{ id: string; pid: number }> };
+  }
+
+  /** 停止 n 个 batch */
+  async batchRemove(count = 1): Promise<{ stopped: number }> {
+    const res = await this.request("/api/v1/kernel/batch/remove", {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ count }),
+    });
+    if (!res.ok) await this.throwError(res, "停止 batch 失败");
+    return (await res.json()) as { stopped: number };
+  }
+
+  /** batch 列表 */
+  async batchList(): Promise<Array<Record<string, unknown>>> {
+    const res = await this.request("/api/v1/kernel/batch", { method: "GET", headers: this.headers() });
+    if (!res.ok) await this.throwError(res, "batch 列表失败");
+    return (await res.json()) as Array<Record<string, unknown>>;
+  }
+
+  /** kernel 运行状态全景（监控面板铺垫） */
+  async kernelStatus(): Promise<{
+    kernel: { connected: boolean };
+    batches: Array<Record<string, unknown>>;
+    tasks: Record<string, number>;
+    watchdog: { crashLog: Array<Record<string, unknown>> };
+    collectedAt: number;
+  }> {
+    const res = await this.request("/api/v1/kernel/status", { method: "GET", headers: this.headers() });
+    if (!res.ok) await this.throwError(res, "kernel 状态获取失败");
+    return (await res.json()) as {
+      kernel: { connected: boolean };
+      batches: Array<Record<string, unknown>>;
+      tasks: Record<string, number>;
+      watchdog: { crashLog: Array<Record<string, unknown>> };
+      collectedAt: number;
+    };
+  }
 }

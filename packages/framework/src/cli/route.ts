@@ -17,6 +17,7 @@ import { cmdHubRequest, cmdHubRequests } from "../bridge/request.js";
 import { cmdHubRespond } from "../bridge/respond.js";
 import { cmdHubObserve } from "../bridge/observe.js";
 import { cmdHubDebug } from "../bridge/debug.js";
+import { cmdKernelStatus, cmdKernelTasksAdd, cmdKernelTasksLs, cmdKernelBatchAdd, cmdKernelBatchRemove } from "../bridge/kernel.js";
 import { printNamespaceHelp } from "./main.js";
 
 // ─── TUI ───────────────────────────────────────────────────
@@ -122,6 +123,7 @@ export type HubHandlers = {
   respond: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
   observe: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
   debug: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  kernel: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
 };
 
 export const defaultHubHandlers: HubHandlers = {
@@ -134,6 +136,31 @@ export const defaultHubHandlers: HubHandlers = {
   respond: cmdHubRespond,
   observe: cmdHubObserve,
   debug: cmdHubDebug,
+  kernel: async (passthrough, flags) => {
+    const [sub, ...rest] = passthrough;
+    switch (sub) {
+      case "tasks":
+        if (rest[0] === "add") return cmdKernelTasksAdd(rest.slice(1), flags);
+        if (rest[0] === "ls") return cmdKernelTasksLs(flags);
+        console.log("  用法: ptl hub kernel tasks add \"<描述>\" [--tags a,b] | ls [--limit n]");
+        return;
+      case "batch":
+        if (rest[0] === "add") return cmdKernelBatchAdd(rest.slice(1), flags);
+        if (rest[0] === "remove") return cmdKernelBatchRemove(rest.slice(1), flags);
+        console.log("  用法: ptl hub kernel batch add [n] | remove [n]");
+        return;
+      case "status":
+        return cmdKernelStatus(rest, flags);
+      default:
+        console.log([
+          "  ptl hub kernel tasks add \"<描述>\" [--tags a,b]   发布 PTH 任务",
+          "  ptl hub kernel tasks ls [--limit n]              任务列表",
+          "  ptl hub kernel batch add [n]                     启动 batch",
+          "  ptl hub kernel batch remove [n]                  停止 batch",
+          "  ptl hub kernel status                            运行状态全景",
+        ].join("\n"));
+    }
+  },
 };
 
 /** ptl hub <submit|run|programs|dev> — 分发到 bridge 命令；无/未知子命令打印命名空间帮助。 */
@@ -170,6 +197,9 @@ export async function cmdHub(
       break;
     case "debug":
       await handlers.debug(passthrough, flags);
+      break;
+    case "kernel":
+      await handlers.kernel(passthrough, flags);
       break;
     default:
       printNamespaceHelp("hub");

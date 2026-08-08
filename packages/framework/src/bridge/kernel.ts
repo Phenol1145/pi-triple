@@ -1,0 +1,135 @@
+/**
+ * bridge/kernel.ts — ptl hub kernel 命令族（任务工具 Task 3）
+ *
+ * PTL 作为交互层：经 PthClient HTTP 访问 PTH gateway /kernel/* 路由，
+ * 发布任务 / 查状态 / 控制 batch / 运行状态全景（监控面板铺垫）。
+ *
+ *   ptl hub kernel tasks add "<描述>" [--tags x,y]
+ *   ptl hub kernel tasks ls [--limit n]
+ *   ptl hub kernel batch add [n]
+ *   ptl hub kernel batch remove [n]
+ *   ptl hub kernel status
+ */
+import { PthClient } from "./client.js";
+import { printBanner } from "../cli/main.js";
+
+function requireClient(): PthClient {
+  const client = PthClient.fromConfig();
+  if (!client) {
+    console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
+    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
+    process.exit(1);
+  }
+  return client;
+}
+
+/** 解析 --tags a,b 与 --limit n 等 flags（hub 侧 flags 已由 dispatch 解析为 Record） */
+function parseTags(flags: Record<string, string>): string[] | undefined {
+  const tags = flags.tags;
+  if (!tags) return undefined;
+  return tags.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+export async function cmdKernelTasksAdd(passthrough: string[], flags: Record<string, string>): Promise<void> {
+  const desc = passthrough.join(" ");
+  if (!desc) {
+    console.log("  用法: ptl hub kernel tasks add \"<任务描述>\" [--tags a,b]");
+    process.exit(1);
+  }
+  const client = requireClient();
+  try {
+    const task = await client.publishTask({
+      title: desc.slice(0, 80),
+      text: desc,
+      createdBy: process.env.USER ?? "ptl",
+      tags: parseTags(flags),
+    });
+    printBanner();
+    console.log("  \x1b[1m任务已发布\x1b[0m");
+    console.log(`    id:     ${task.id}`);
+    console.log(`    status: ${task.status}`);
+    console.log(`    title:  ${task.title}`);
+    console.log("  查看: \x1b[36mptl hub kernel tasks ls\x1b[0m  状态: \x1b[36mptl hub kernel status\x1b[0m");
+  } catch (err: any) {
+    console.log(`\x1b[31m❌ 发布任务失败: ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
+export async function cmdKernelTasksLs(flags: Record<string, string>): Promise<void> {
+  const client = requireClient();
+  const limit = flags.limit ? parseInt(flags.limit, 10) || 20 : 20;
+  try {
+    const tasks = await client.listTasks({ limit });
+    printBanner();
+    console.log("  \x1b[1mPTH 任务列表\x1b[0m");
+    if (tasks.length === 0) {
+      console.log("\n  暂无任务。发布: \x1b[36mptl hub kernel tasks add \"<描述>\"\x1b[0m");
+    } else {
+      console.log("");
+      console.log(`  \x1b[2m${"ID".padEnd(12)}${"STATUS".padEnd(12)}TITLE\x1b[0m`);
+      for (const t of tasks) {
+        const id = String(t.id ?? "").slice(0, 10).padEnd(12);
+        const status = String(t.status ?? "?").padEnd(12);
+        console.log(`  \x1b[1m${id}\x1b[0m${status}${String(t.title ?? "")}`);
+      }
+    }
+    console.log("");
+  } catch (err: any) {
+    console.log(`\x1b[31m❌ 任务列表失败: ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
+export async function cmdKernelBatchAdd(passthrough: string[], _flags: Record<string, string>): Promise<void> {
+  const n = Math.min(Math.max(parseInt(passthrough[0] ?? "1", 10) || 1, 1), 10);
+  const client = requireClient();
+  try {
+    const res = await client.batchAdd(n);
+    printBanner();
+    console.log(`  \x1b[1m已启动 ${res.spawned} 个 batch\x1b[0m`);
+    for (const b of res.batches) console.log(`    ${b.id.slice(0, 8)}  pid=${b.pid}`);
+    console.log("  状态: \x1b[36mptl hub kernel status\x1b[0m");
+  } catch (err: any) {
+    console.log(`\x1b[31m❌ 启动 batch 失败: ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
+export async function cmdKernelBatchRemove(passthrough: string[], _flags: Record<string, string>): Promise<void> {
+  const n = Math.min(Math.max(parseInt(passthrough[0] ?? "1", 10) || 1, 10), 10);
+  const client = requireClient();
+  try {
+    const res = await client.batchRemove(n);
+    printBanner();
+    console.log(`  \x1b[1m已停止 ${res.stopped} 个 batch\x1b[0m`);
+  } catch (err: any) {
+    console.log(`\x1b[31m❌ 停止 batch 失败: ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
+export async function cmdKernelStatus(_passthrough: string[], _flags: Record<string, string>): Promise<void> {
+  const client = requireClient();
+  try {
+    const s = await client.kernelStatus();
+    printBanner();
+    console.log("  \x1b[1mPTH kernel 运行状态\x1b[0m");
+    console.log("");
+    console.log(`  kernel: ${s.kernel.connected ? "\x1b[32mconnected\x1b[0m" : "\x1b[31mdisconnected\x1b[0m"}`);
+    console.log(`  batches: ${s.batches.length} 个`);
+    for (const b of s.batches) {
+      const id = String(b.id ?? "").slice(0, 8);
+      const pid = String(b.pid ?? "?");
+      const alive = b.alive ? "\x1b[32m●\x1b[0m" : "\x1b[31m●\x1b[0m";
+      const workers = Array.isArray(b.workers) ? b.workers.length : 0;
+      console.log(`    ${alive} ${id}  pid=${pid}  工人=${workers}  idle=${Math.round(Number(b.idleRatio ?? 1) * 100)}%`);
+    }
+    console.log(`  tasks: pending=${s.tasks.pending ?? 0} claimed=${s.tasks.claimed ?? 0} completed=${s.tasks.completed ?? 0} rejected=${s.tasks.rejected ?? 0} total=${s.tasks.total ?? 0}`);
+    console.log(`  watchdog crashes: ${s.watchdog.crashLog.length}`);
+    console.log(`  collected: ${new Date(s.collectedAt ?? Date.now()).toISOString()}`);
+  } catch (err: any) {
+    console.log(`\x1b[31m❌ kernel 状态获取失败: ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
