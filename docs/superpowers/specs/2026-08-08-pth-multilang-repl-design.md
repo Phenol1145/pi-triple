@@ -217,6 +217,79 @@ if (!a.ok) { const fix = await python.execute("import numpy; _result = numpy.lin
 
 **Kernel 归属**：per-batch 共享（7 worker 共用 1 个 pyKernel？）vs per-worker（隔离好但进程多）。v1：per-worker（隔离=任务安全），v2 优化共享。
 
+### 5.1 并发矛盾：持久 kernel 是单进程串行的（★核心）
+
+持久 kernel（管道协议）虽然 0.1ms/次，但**同一进程同一时刻只能执行一个 cell**——并发请求排队。
+7 worker 同时调 python.execute → 队列竞争。优化分层：
+
+```
+Worker 层（7 个 TaskLoop 并发）
+    │  各自持有 kernel 句柄
+    ▼
+KernelManager（路由/调度层）★新增
+    │  按 language + workerId 路由
+    ▼
+Kernel 池层
+    ├─ tsKernel ×N    （node:vm——天然串行，每 worker 独立 context）
+    ├─ pyKernel 池     （N 个持久 python 进程，负载均衡）★核心优化
+    └─ bashKernel 池   （N 个持久 shell 会话）
+```
+
+### 5.2 Python Kernel 池（进程池化）
+
+| 方案 | 形态 | 并发度 | 内存（10 batch） | 隔离 |
+|---|---|---|---|---|
+| v1 per-worker | 每 worker 1 进程 | 70 并发 | 70×28 ≈ 2GB | 天然（各用各的） |
+| **v2 共享池** | min(worker, CPU核) 进程 | 10 并发（0.1ms/次） | 10×28 ≈ 280MB | 需隔离命名空间 |
+
+**池化关键——隔离命名空间**（v2 核心机制）：
+```python
+# 进程复用但状态不串味：每个 cell 用独立命名空间执行
+ns = {}
+exec(code, ns)          # 隔离：变量不进全局
+_result = ns.get("_result")
+# 需要持久（跨 cell 状态）时：显式写 global 共享区
+#   或 v2 用"任务级会话"：同任务同命名空间，任务间新命名空间
+```
+
+**负载均衡**：空闲优先路由（KernelManager 记每个 kernel 的 in-flight 数）——
+哪个空闲给哪个；全忙则排队（池大小 = 并发上限）。
+
+### 5.3 请求队列与并发控制
+
+```
+每个 kernel 内部：FIFO 队列 + 单执行循环
+  ┌─ 请求1 ─┐
+  │ 请求2    │ → kernel 串行执行（天然安全）
+  └─ 请求3 ─┘
+KernelManager 层：空闲优先路由
+  → 并发 = 池大小，排队深度有界
+```
+
+**队列上限**：每 kernel 队列 max 8（超限返回 busy 错误——上游重试/降级，防堆积）。
+
+### 5.4 超时与僵尸防护（并发安全核心）
+
+```
+每请求超时（默认 30s）→ 超时 kill 该 kernel 进程 → 池自动补新进程
+→ 单个死循环 cell 不拖垮整个池（持久 kernel 最怕死循环）
+```
+
+**冷备**：池维持 min 空闲（如 2 个空闲）——超时 kill 后立即补位，不中断负载。
+
+### 5.5 资源对比与结论
+
+| 方案 | Python 进程数 | 内存 | 吞吐 |
+|---|---|---|---|
+| 现状（spawn） | 波动 | 峰值 28MB×并发 | 12ms/次（慢） |
+| v1 per-worker 持久 | 70 | 2GB | 0.1ms×70 并发 |
+| **v2 共享池** | 10 | 280MB | 0.1ms×10 并发（远超 spawn） |
+
+**结论**：
+1. 0.1ms/次的持久 kernel 即使 10 并发也远超 12ms/次的 spawn 无限并发——**池化是内存优化，不是吞吐瓶颈**
+2. 真正的并发瓶颈在 **pg 连接池**（每 batch 独立 pool ~10 连接，15-20 batch 触顶 100）——高并发首要优化目标
+3. 演进：v1 per-worker 落地 → v2 池化（内存）+ pg 共享连接池（吞吐）
+
 ## 6. 与现有体系的关系
 
 | 组件 | 变更 |
@@ -247,6 +320,7 @@ if (!a.ok) { const fix = await python.execute("import numpy; _result = numpy.lin
 | 性能回归 | 持久管道 < 1ms（vs spawn 阈值） |
 | Observation 协议 | 三语言统一结构；截断边界（恰好上限/超限/超大 64KB→摘要）；结构化序列化失败降级 |
 | 集成 | 任务内三语言协作（numpy 计算 + bash 查文件 + ts 逻辑）+ Observation 作为下游输入 |
+| **并发（新增）** | 多 worker 同调 kernel：队列串行正确性（结果不乱）；池路由负载均衡（空闲优先）；超时 kill 后冷备补位；隔离命名空间（同进程不同 cell 状态不串味） |
 | 持久化协同 | snapshot（py globals / bash cwd / ts context）→ refine → 召回 |
 
 ## 9. 实施路线
@@ -254,7 +328,8 @@ if (!a.ok) { const fix = await python.execute("import numpy; _result = numpy.lin
 - **T1**：PyKernel（管道 JSON-RPC + 超时 + reset + **_result 返回值通道**）——替换 PythonInterpreter 实现，接口不变
 - **T1b**：Observation 协议（统一结构 + 截断策略 + truncated 标记 + ExecuteOptions 扩展）——types.ts + 三 kernel 输出规范化
 - **T2**：BashKernel（持久会话 + cwd/env 保留 + reset）
-- **T3**：KernelManager 路由（language 参数 + 统一 execute + @output 全局策略解析）——TaskLoop/任务代码透明
+- **T3**：KernelManager 路由（language 参数 + 统一 execute + @output 全局策略解析）——TaskLoop/任务代码透明；**队列（FIFO + 上限）+ 超时 kill + 冷备补位**
+- **T3b**（v2）：Kernel 池化——共享池 min(worker, CPU) + 空闲优先路由 + 隔离命名空间（任务级会话）
 - **T4**：三 kernel snapshot 实现（py globals 遍历 + bash session + ts 已有）——接持久化层
 - **T5**：端到端实测——任务用三语言协作 + Observation 回流（_obs 注入）+ refine 沉淀 + 召回闭环
 - **T6**（v2）：REPL 调试面（kernel 端口暴露/人类可连）、kernel 共享优化、toolstore 文件通道接入、会话级 ReAct 循环（Observation 历史入 prompt）
@@ -268,3 +343,4 @@ if (!a.ok) { const fix = await python.execute("import numpy; _result = numpy.lin
 5. **与 xeus 的关系**：本方案 = 轻量自研（零 C++/ZMQ，管道协议）；xeus 作为 v2 可替换 py 内核的选项（如果需标准 Jupyter 协议）——是否保留这个升级路径？
 6. **Observation 默认策略**：默认 maxStdout=2KB 是否合适？（小任务够；大数据任务需要显式调大——@output 指令）
 7. **_obs 注入语义**：上一步 Observation 注入下一步 context——注入完整对象还是摘要？（v1 完整，v2 摘要+引用）
+8. **池化触发时机（新）**：v2 共享池何时启用？——每 batch 内存 >500MB（约 18+ batch）或实测队列等待 >10ms 时？（建议：资源监控触发，默认 v1 per-worker 不变）
