@@ -5,14 +5,16 @@
 ## 1. 定位：ts REPL 标准扩展包（用户裁决）
 
 ```
-ts 核已吸收的能力（memory/context/results）+ 新增 perf —— 统一封装为一个标准扩展包：
+ts 核已吸收的能力（memory/context/results）+ 新增 perf/model/obs —— 统一封装为一个标准扩展包：
   src/pth/kernel/extensions/
     index.ts         扩展注册机制 + 统一注入 + 文档聚合
     memory.ts        memory.query/write（受限 SQL + 封装写入——已实现，迁入整理）
     context.ts       context/results 对象（ts 核内工作台/结果注册表——已实现，迁入整理）
+    model.ts         model 会话内模型切换（新增——用户补充）
     perf.ts          perf 性能调优（新增）
     perf-params.ts   配置中心（env 加载 + 运行时 set）
     perf-store.ts    策略存储（toolstore 文件）
+    obs.ts           obs 可监控数据调查（新增——用户补充）
 ```
 
 ## 2. 扩展注册机制（新扩展 = 一个模块 + 注册）
@@ -25,6 +27,43 @@ interface TsReplExtension {
 }
 // buildCapabilities 遍历注册表：能力注入 + AGENT_CAPABILITY_DOC 自动生成
 // （文档不再手写维护——扩展自声明）
+```
+
+## 2.5 model 扩展（会话内模型切换——用户补充）
+
+```
+ts 核内 model 对象（会话级状态——"ts 核 = agent 状态"裁决延伸）：
+  { current: { provider, model }, history: [{model, at, reason}], usage: {input, output} }
+
+能力函数：
+  model.set({ provider?, model? })  → 切换会话当前模型（写 ts 核对象）
+  model.get()                       → 当前模型
+  model.usage()                     → 本会话 token 消耗（模型维度）
+
+agent-loop complete() 选择链（每轮读 ts 核 model 对象——readObject 已有）：
+  显式 llm.complete model > model 对象 current > env PTH_AGENT_MODEL（降级）
+
+场景：简单步 flash / 复杂推理切 pro / 验证切 verify 模型 / 失败重试换模型 / usage 控制成本
+边界：v1 仅 agent 循环 LLM 调用；refine/verify 独立模型不跟随（v2 可配）
+```
+
+## 2.6 obs 扩展（可监控数据调查——用户补充）
+
+```
+能力面（ts 程序内）：
+  obs.tasks { status?, role?, since?, limit? } → 任务池调查（状态分布/耗时/拒绝原因/claims）
+  obs.metrics { pattern?, since? }             → 指标查询（pth_* 系列——kernel-metrics 60+）
+  obs.batches { }                              → 批次调查（存活/worker/tasks/空闲比）
+  obs.kernels { }                              → 内核池调查（inFlight/idle/缓存命中）
+  obs.search { query }                         → 事件/审计检索（pg audit/transcripts）
+
+与 perf 分工（读写分离）：obs=读（发生了什么）/ perf=写（怎么改）
+闭环：obs 发现问题 → perf 出策略 → obs 验证效果
+
+数据源（batch 子进程视角）：
+  obs.tasks/search → pg（queryReadOnly 同源执行器封装）
+  obs.metrics/batches → 主进程 registry/BatchManager（IPC 请求-响应通道——新增）
+  obs.kernels → sandbox kernel-host /status（batch 已知 sandbox URL 直查）
 ```
 
 ## 3. perf 扩展（性能调优能力面）
@@ -100,3 +139,7 @@ Phase 4：（v2）参数持久化（ALTER SYSTEM 语义）+ 更多组件参数�
 | 4 | 配置中心：env 启动加载 + 运行时 set（SET 语义）；v2 持久化 |
 | 5 | 策略存储 toolstore 文件；应用 = 参数 set + actions 投递任务池 |
 | 6 | perf.set 权限：agent 全量 / 任务代码白名单受限 |
+| 7 | model 扩展：会话内模型切换（ts 核内对象 + 选择链动态层）——能力函数先行 |
+| 8 | obs 扩展：可监控数据调查（obs.tasks/metrics/batches/kernels/search）——与 perf 读写分离 |
+| 9 | obs 数据源：tasks/search 走 pg；metrics/batches 走 IPC 请求通道；kernels 直查宿主 |
+| 7 | model 扩展：会话内模型切换（ts 核内对象 + 选择链动态层）——能力函数先行 |
