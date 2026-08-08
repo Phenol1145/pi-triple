@@ -62,6 +62,31 @@ RUN uv tool install "instsci @ git+https://github.com/rimagination/instsci"
 USER root
 COPY --chmod=755 tools/dev/agent-reach-chatgpt/chatgpt-share /usr/local/bin/chatgpt-share
 
+# ── 7b) Brainfuck 工具（beef 解释器 + tcc 编译器 + 本地脚本 bf/bfc）──
+#   beef（Debian 官方 Brainfuck 解释器）/ tcc（Tiny C 编译器——bf→C 真编译出可执行）
+#   bf（beef 友好入口 shim：-p/-c 直传、文件、stdin 管道）/ bfc（自写 bf→C 翻译器，
+#   纯 Python stdlib，配合 tcc 生成可执行文件——tools/dev/bfc/）
+#   apt → 系统级（root）；脚本 → /usr/local/bin（root，无用户态状态，不被 dev-home 卷遮蔽）
+USER root
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends beef tcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY --chmod=755 tools/dev/bfc/bf /usr/local/bin/bf
+COPY --chmod=755 tools/dev/bfc/bfc /usr/local/bin/bfc
+
+# ── 7c) lifelab 生命模拟研究工作台（Rust 编译链 + 交互依赖）──
+#   lifelab 源码在宿主挂载 /works/labs/lifelab（非镜像内）；镜像重建后
+#   执行 install.sh 恢复 wheel/包：docker compose exec dev bash /works/labs/lifelab/install.sh
+#   gcc/binutils：Rust 链接必需——容器的 /usr/bin/cc 被 tcc 占用（§7b），
+#   不支持 Rust 的 -Wl,-Bstatic，项目里 core/.cargo/config.toml 已钉死 linker=gcc
+#   maturin：PyO3 wheel 构建工具（jovyan 用户级 uv tool）；ipywidgets：notebook 交互
+USER root
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends gcc binutils fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+USER jovyan
+RUN uv tool install maturin
+USER root
+RUN pip install --no-cache-dir ipywidgets
+
 # ── 8) 成品保留区 + 工作区目录 ──
 USER root
 RUN mkdir -p /data/artifacts /works && chown -R jovyan:users /data/artifacts /works

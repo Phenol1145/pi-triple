@@ -129,7 +129,7 @@ services:
     user: "0:0"
     entrypoint: [
       "/bin/bash", "-lc",
-      "mkdir -p /home/jovyan/go && chown -R jovyan:users /home/jovyan/.local /home/jovyan/.nvm /home/jovyan/.cargo /home/jovyan/.rustup /home/jovyan/go /data/artifacts /data/workspaces && exec su jovyan -s /bin/bash -c 'export PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin:/home/jovyan/.local/bin:/home/jovyan/.nvm/current/bin:/usr/local/go/bin:/home/jovyan/.cargo/bin; start-notebook.sh'"
+      "mkdir -p /home/jovyan/go && chown -R jovyan:users /home/jovyan/.local /home/jovyan/.nvm /home/jovyan/.cargo /home/jovyan/.rustup /home/jovyan/go /home/jovyan/.config /home/jovyan/.cache /home/jovyan/.jupyter /home/jovyan/.ipython /data/artifacts /data/workspaces && exec su jovyan -s /bin/bash -c 'export PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin:/home/jovyan/.local/bin:/home/jovyan/.nvm/current/bin:/usr/local/go/bin:/home/jovyan/.cargo/bin; python3 -c \"import lifelab\" 2>/dev/null || (echo \"[entrypoint] lifelab 缺失，自动重装…\" && bash /works/labs/lifelab/install.sh); start-notebook.sh'"
     ]
     ports:
       - "127.0.0.1:8888:8888"        # jupyter（仅本机）——WeKnora searxng 也占 8888，冲突时改 JUPYTER_PORT
@@ -140,11 +140,12 @@ services:
       - ${HOME}/ai-teach-jupyter:/works/ai-teach-jupyter:rw
       - ${HOME}/pi-platform:/works/pi-platform:rw
       - ${HOME}/docs:/works/docs:rw
+      - ${HOME}/lifelab:/works/labs/lifelab:rw
       - ${HOME}/Projects:/works/Projects:rw
       - ${HOME}/go:/works/go:rw
       - ${HOME}/.agents:/home/jovyan/.agents:ro   # agent-reach skill/配置（只读——含凭据，用户自行挂载）
     environment:
-      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-}
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-TokenForJupyter}
     networks:
       - default
     restart: unless-stopped
