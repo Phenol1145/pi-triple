@@ -35,7 +35,9 @@ const VALID_LANGS: KernelLang[] = ["python", "bash"];
 /** 插件式注册：把 kernel 宿主路由挂到已有 Fastify app（sandbox main 与 exec API 同端口） */
 export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions = {}): void {
   const getSecret = opts.getSecret ?? (() => process.env.SANDBOX_SHARED_SECRET);
-  const poolSize = opts.poolSize ?? 4;
+  // 池容量：env PTH_KERNEL_POOL_SIZE 优先（compose 注入——需 >= 并发 worker 数），option 次之
+  const envSize = Number(process.env.PTH_KERNEL_POOL_SIZE);
+  const poolSize = opts.poolSize ?? (Number.isFinite(envSize) && envSize > 0 ? envSize : 4);
 
   const pools: Record<KernelLang, KernelPool> = {
     python: new KernelPool({ lang: "python", max: poolSize, onStderr: opts.onStderr }),
