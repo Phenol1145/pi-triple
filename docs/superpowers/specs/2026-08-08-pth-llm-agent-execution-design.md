@@ -113,18 +113,57 @@ verify（可选，PTH_AGENT_VERIFY=on）：done 前追加验证轮（LLM 输出 
 角色 = agent 循环的人设模板（不再零消费）
 ```
 
-## 5. REPL 作为 LLM 的工具
+## 5. REPL 作为 LLM 的工具（PTH 式 PTC——多 REPL 程序化组合）
 
+### 设计定位（PTH 拓展 Prime Agent 理念）
+Prime Agent：单 persistent IPython，一切能力塞进一个环境（PTC = 在 Python 内写程序组合）。
+PTH 拓展：**多 REPL kernel 分离**（ts vm 沙箱 / python 进程 / bash 进程，各自独立隔离）——
+**LLM 在 ts vm（总指挥环境）写程序，程序内调度各 kernel**：
+
+```ts
+// PTC 程序示例：单程序组合 PythonKernel + BashKernel
+const py = await python.execute("def fib(n): ...\n_result = fib(25)");
+const b = await bash.execute(`echo ${py.value} | grep -q . && echo verified`);
+return { fib25: py.value, verified: b.stdout.includes("verified") };
 ```
-调用者变化：任务代码（现状）→ LLM agent 循环（目标）
-  capability 白名单【完全复用】（python/bash/ts/llm/web/fs/state）
-  多步迭代示例：
-    LLM: { tool: "python.execute", args: "def fib(n):...\n_result = fib(25)" }
-    → observe: {"value": 75025}
-    LLM: { tool: "bash.execute", args: "echo 75025 | wc -c" }   # 交叉验证
-    → observe: {"stdout": "6"}
-    LLM: { tool: "done", args: { result: { fib25: 75025 }, summary: "..." } }
+
+| 对比 | Prime | PTH（拓展） |
+|------|-------|------------|
+| REPL | 单 IPython | **三 REPL 分离**（ts/python/bash） |
+| 组合方式 | 一切在 Python 内 | **LLM 在 ts vm 写程序调度各 kernel** |
+| 隔离 | 无沙箱 | **vm 白名单指挥层 + 独立 kernel 进程** |
+
+### 跨语言持久化与 PTC 的关系（设计意图）
+**snapshot 聚合三 kernel + refine 跨语言提炼 + 召回重放 = PTC 的支撑体系**：
+- 任务完成后 snapshot 聚合 ts 变量/函数 + python globals + bash cwd/env
+- refine 提炼 tool-function（源码+spec）**跨语言保存**——python 写的函数被后续任务用 ts 程序调度
+- 召回 eval 重放或按 spec 重建——跨语言复用（已验证：fibonacci/factorial 跨任务召回）
+- 记忆沉淀粒度从"单语言产物"升级为"跨语言工作流片段"（ts 壳 + python 内核 + bash 验证）
+
+### 工具协议（act 阶段，PTC 程序模式）
 ```
+LLM 每轮输出：
+  { "action": { "tool": "ts", "args": { "code": "<ts 程序>" } } }   ← PTC 主形态（vm 内组合多 kernel）
+  { "action": { "tool": "python.execute", "args": { "code": "..." } } }  ← 单 kernel 细粒度（简单步骤）
+  { "action": { "tool": "done", "args": { "result": {...}, "summary": "..." } } }  ← 终止
+
+prompt 指导：优先写完整 ts 程序组合多个 kernel（一步完成多步）；复杂中间步骤可用单 kernel 工具。
+收益：LLM 调用 3 次→1-2 次/任务（压测：时间/token 省 ~40%）。
+```
+
+其余工具清单（bash.execute/llm/web/fs/state/memory——capability 白名单复用，调用者从任务代码换成 LLM）：
+| tool | args | 说明 |
+|------|------|------|
+| python.execute | { code } | REPL 通道（程序内亦可 subprocess 组合 bash） |
+| bash.execute | { command } | REPL 通道 |
+| ts | { code } | **PTC 主形态**：vm 内程序化调度各 kernel |
+| llm.complete | { user, system?, model? } | 子 LLM 调用（模型可覆盖） |
+| web.fetchText | { url } | 只读网络 |
+| fs.readText / fs.list | { path } / { dir? } | toolstore 文件通道 |
+| state.recallFunctions / recallInsights | { query? } | 记忆召回（只读） |
+| memory.retrieve | { anchors, kinds?, limit? } | 记忆检索 |
+| memory.write | { id?, kind, anchors, content } | 记忆主动沉淀（LLM 自觉维护） |
+| done | { result, summary? } | 终止 + 最终产出 |
 
 ## 6. worker 模型
 
