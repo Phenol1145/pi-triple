@@ -1,6 +1,6 @@
 # PTH 性能计量设计草案（Kernel/REPL 层可观测性）
 
-> 状态：DRAFT v0.2 —— 待评审（v0.2：分层指标 + ResourceProvider 跨 OS 抽象）
+> 状态：SPEC v1.0 —— 已定稿（2026-08-08：四层 35 项指标 + ResourceProvider 跨 OS 抽象 + 全部开放问题已裁决）
 > 日期：2026-08-08
 > 背景：工具链已具备多语言持久 REPL + refine 管线 + 任务链。性能计量是"仪表盘"——现有 prom-client 只覆盖会话层（prompt/token/tool），kernel/REPL/任务层零计量。本草案补齐。
 
@@ -293,18 +293,22 @@ pth_tasks_pending
 
 **T-fin**：/kernel/metrics JSON 摘要 + 端到端验证（curl /metrics 全指标）
 
-## 8. 开放问题
+## 8. 开放问题（已全部裁决）
 
-1. **Histogram buckets**：kernel 延迟跨度大（0.1ms-30s）——分层 buckets？（kernel 细 [0.001,0.01,0.1,1,5] / 任务粗 [0.5,2,5,15,60,300]）
-2. **采样 vs 全量**：全量计量（prom-client 内存可控）vs 采样？
-3. **label 基数**：kind 白名单防爆炸（7 角色×3 语言×5 状态可控）
-4. **计量侵入度**：包装器优先（KernelManager/TaskLoop/llm-fn 都是统一入口，天然包装点）
-5. **告警阈值**：v1 只计量不告警，阈值留监控面板
-6. **LLM 出网字节**（L0-③）：fetch 包装计量 tx 字节——llm-fn 内部 fetch 可包，但 web.fetchText 也出网？（v1 只计 llm-fn，web 留 v2）
-7. **pg/redis 连接吞吐数据源**：pg_stat_activity 无字节数——v1 只计连接数（active），字节数从 fetch 包装拿 LLM 侧；pg/redis 字节留 v2（需要 pg_stat_database 差值）
+1. **Histogram buckets**：✅ 分层 buckets——kernel 细 [0.001,0.01,0.1,1,5,30] / 任务粗 [0.5,2,5,15,60,300]；**buckets 可配置**（metrics 构造参数传入，不硬编码）
+2. **采样 vs 全量**：✅ 全量事件（Counter/Histogram 调用即记）+ Gauge 周期采样；**采样周期可配置**（默认 5s，env `PTH_METRICS_INTERVAL_MS`）
+3. **label 基数**：✅ 白名单枚举（language 3 / role 7 / status 6 / reason 前缀 5 / kind 白名单 7 类——总计 <50 序列）
+4. **计量侵入度**：✅ 包装器优先（KernelManager/TaskLoop/llm-fn 统一入口天然包装点）
+5. **告警阈值**：✅ v1 只计量不告警，阈值留监控面板
+6. **LLM 出网字节**：✅ v1 只计 llm-fn，web 留 v2
+7. **pg/redis 连接吞吐**：✅ v1 只计连接数（active），字节留 v2
 
-**已裁决（本轮）**：
-- 任务全周期起点 = created_at（查库差值，无额外埋点）
+**已裁决（v0.2-v0.3）**：
+- GPU：接口先定义 N/A，实现按环境（darwin/linux/容器/nvidia 矩阵）
+- 网络：进程级按连接类型分 label（pg/redis/llm）
+- OS 抽象：ResourceProvider 接口 + 环境实现
+- 内存：RSS/Heap/External 三项
+- 任务全周期起点 = created_at（查库差值）
 - 拒绝原因 label = 前缀分类归一（execution-failed/execution-crashed/assessed-unfit/timeout/other）
-- 任务链指标 #21 = 现在定义占位（TaskResolver 落地后填）
-- L1/L2/L3 共 21 项全要（总计 35 项含 L0）
+- 任务链指标 = 占位定义
+- L1/L2/L3 共 21 项全要（35 总计含 L0）
