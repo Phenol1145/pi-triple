@@ -260,6 +260,21 @@ PTH_AGENT_MODEL_<ROLE>   按角色覆盖
 - 10 batch 场景：内存可控（~2.6GB），但峰值 70 路 LLM 并发——**真实瓶颈从计算/内存变成 LLM 吞吐/限速**
 - 扩缩容未来增强：基于 LLM in-flight 并发（而非仅 pending 数）的扩容信号（PTH_BATCH_SCALE 预留）
 
+### PTC 程序模式实测（P1 落地后，2026-08-09）
+
+端到端 5 个 NL 任务全成功（试运行环境 + deepseek-v4-flash）：
+
+| 维度 | JSON 动作（旧） | PTC 程序模式（新） |
+|------|----------------|-------------------|
+| 单任务耗时 | 3-4.6s | **3.33s**（平方列表任务） |
+| 步数 | 3+ 步/任务 | **2-3 步**（ts 程序一步组合多 kernel） |
+| tokens(input)/5 任务 | 5406 | **5100** |
+| 组合模式 | 多步 JSON 动作 | **step=1 tool=ts ok=true (36ms)**——LLM 第一步直接写 ts 程序（python 算+bash 验证组合） |
+| 修正路径 | 动作级重试 | **程序写错 → 下一步单工具修正 → 完成**（迭代修正兜底工作） |
+
+实测日志证据：`agent step=1 tool=ts ok=true` → `step=2 done` → `steps=2`（组合一次完成）；
+一个任务 `step=1 tool=ts ok=false`（程序 bug）→ `step=2 python.execute` 修正 → `steps=3` 完成。
+
 ## 10. 落地节奏
 
 ```
