@@ -133,6 +133,48 @@ export function createResourceProvider(opts?: {
 
 **采集点**：`createLlmFn` 是唯一 LLM 入口（任务代码 llm.complete + refine 都走它）——包装一次全覆盖。
 
+### L1 Kernel/REPL 层（8 项）——"执行引擎健康吗"（已裁决：全要）
+
+| # | 指标 | 类型 | label | 回答的问题 | 采集点 |
+|---|---|---|---|---|---|
+| 1 | `pth_kernel_exec_duration_seconds` | Histogram | language | 单次 REPL 执行多快？P95 漂移？ | KernelManager.execute 包装 |
+| 2 | `pth_kernel_exec_total` | Counter | language, ok | 成功率 | 同 1 |
+| 3 | `pth_kernel_truncated_total` | Counter | language, field | Observation 截断频率 | 同 1（truncated 标记时） |
+| 4 | `pth_kernel_processes` | Gauge | language | 常驻进程数？泄漏？ | PyKernel/BashKernel 构造/销毁 |
+| 5 | `pth_kernel_queue_depth` | Gauge | language | 请求排队深度？并发竞争？ | kernel 内部 pending.length |
+| 6 | `pth_kernel_timeout_kill_total` | Counter | language | 死循环/卡死频率？ | 超时 kill 路径 |
+| 7 | `pth_kernel_restart_total` | Counter | language | 重启频率？ | kill 后 spawn |
+| 8 | `pth_kernel_snapshot_duration_seconds` | Histogram | language | refine 快照采集耗时？ | snapshot() 包装 |
+
+**叙事**：执行慢(P95↑) → 队列深度（排队？）vs 进程数（少 worker？）vs 超时 kill（卡死？）——三选一定位。
+
+### L2 任务层（7 项）——"流水线通不通"（已裁决：全要）
+
+| # | 指标 | 类型 | label | 回答的问题 | 采集点 |
+|---|---|---|---|---|---|
+| 9 | `pth_task_cycle_duration_seconds` | Histogram | — | 发布→completed 全周期？端到端 SLA | **created_at 差值**（已裁决——查库即可，无额外埋点） |
+| 10 | `pth_task_stage_duration_seconds` | Histogram | stage | 瓶颈在哪段？claim/execute/submit/refine | TaskLoop.execute 各步打点 |
+| 11 | `pth_task_status_total` | Counter | status | completed/rejected/escalated 分布？ | task-store submit/reject/escalate |
+| 12 | `pth_task_claim_retry_total` | Counter | — | 认领重试（claims_count>1）？空转？ | claimTopN 竞态 |
+| 13 | `pth_task_pending` | Gauge | — | 积压数？ | 周期 SQL（/kernel/status 复用） |
+| 14 | `pth_batch_count` | Gauge | — | 运行中 batch 数？扩缩容依据 | BatchManager.listBatches |
+| 15 | `pth_task_rejected_reason_total` | Counter | reason | 拒绝原因分布？ | **前缀分类归一**（已裁决：execution-failed/execution-crashed/assessed-unfit/timeout/other） |
+
+**叙事**：rejected 率高 → reason 分布（代码坏 vs 超时 vs 分选误判）；周期长 → stage 分布。
+
+### L3 业务产出层（6 项）——"体系在积累吗"（已裁决：全要）
+
+| # | 指标 | 类型 | label | 回答的问题 | 采集点 |
+|---|---|---|---|---|---|
+| 16 | `pth_refine_duration_seconds` | Histogram | — | refine LLM 调用耗时？ | Refiner.refine |
+| 17 | `pth_refine_yield` | Histogram | kind | 每任务提炼多少函数/洞察？提炼量=0 → 质量报警 | Refiner 完成时 |
+| 18 | `pth_refine_degraded_total` | Counter | reason | 降级频率（LLM 失败/解析失败）？ | Refiner catch/降级路径 |
+| 19 | `pth_memory_entries` | Gauge | kind | 记忆区增长（tool-function/insight）？ | 周期 SQL |
+| 20 | `pth_memory_retrieve_total` | Counter | hit | 召回命中率？（recall 有效性） | state.recall 包装 |
+| 21 | `pth_chain_generated_total` | Counter | — | 任务链下游生成数？ | **占位定义**（已裁决：TaskResolver 落地后填值，面板先建图） |
+
+**叙事**：提炼量 0 → 降级率（模型问题？）vs 快照空（autoExport 失效？）；召回 miss 高 → 记忆增长（没沉淀 vs 锚点不匹配）。
+
 #### L0 采集架构
 
 ```
@@ -234,14 +276,22 @@ pth_tasks_pending
 
 ## 7. 实施路线
 
+**L0 基础设施（已详设）**
 - **L0-T1**：ResourceProvider 抽象（接口 + createResourceProvider 环境选择 + darwin 实现 + 测试）
 - **L0-T2**：运行时/CPU/内存 Gauge（uptime/eventloop/memory 内嵌 + provider CPU）+ 周期采样
 - **L0-T3**：llm-fn 包装（token/calls/latency 计量——唯一 LLM 入口）
 - **L0-T4**：网络连接计量（pg/redis/llm 连接数 + 吞吐 label）+ GPU 占位（N/A）
-- **L1-T1**：kernel-metrics.ts——KernelManager.execute 包裹（延迟/成功/截断）+ 进程/队列/超时计量
-- **L2-T1**：task-metrics.ts——TaskLoop 阶段打点 + task-store 状态计数
-- **L3-T1**：refine-metrics.ts + storage-metrics.ts——refine 成本/降级 + 记忆增长/命中
-- **T-fin**：/kernel/metrics JSON 摘要 + 端到端验证（curl /metrics 全指标）
+
+**L1 kernel（已详设）**
+- **L1-T1**：KernelManager.execute 包装（#1-3 延迟/成功/截断）+ 进程/队列/超时/重启（#4-7）+ snapshot 耗时（#8）
+
+**L2 任务（已详设）**
+- **L2-T1**：TaskLoop 阶段打点（#9-10：created_at 差值 + stage）+ task-store 状态/原因（#11/15：前缀分类归一）+ 认领重试（#12）+ 周期 Gauge（#13-14）
+
+**L3 产出（已详设）**
+- **L3-T1**：Refiner 计量（#16-18）+ 记忆增长/召回命中（#19-20）+ 链占位（#21）
+
+**T-fin**：/kernel/metrics JSON 摘要 + 端到端验证（curl /metrics 全指标）
 
 ## 8. 开放问题
 
@@ -252,3 +302,9 @@ pth_tasks_pending
 5. **告警阈值**：v1 只计量不告警，阈值留监控面板
 6. **LLM 出网字节**（L0-③）：fetch 包装计量 tx 字节——llm-fn 内部 fetch 可包，但 web.fetchText 也出网？（v1 只计 llm-fn，web 留 v2）
 7. **pg/redis 连接吞吐数据源**：pg_stat_activity 无字节数——v1 只计连接数（active），字节数从 fetch 包装拿 LLM 侧；pg/redis 字节留 v2（需要 pg_stat_database 差值）
+
+**已裁决（本轮）**：
+- 任务全周期起点 = created_at（查库差值，无额外埋点）
+- 拒绝原因 label = 前缀分类归一（execution-failed/execution-crashed/assessed-unfit/timeout/other）
+- 任务链指标 #21 = 现在定义占位（TaskResolver 落地后填）
+- L1/L2/L3 共 21 项全要（总计 35 项含 L0）
