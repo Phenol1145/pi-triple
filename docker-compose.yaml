@@ -103,6 +103,23 @@ services:
   # 凭据外置（compose 注入，非镜像硬编码）；健康检查由 pi-platform depends_on 消费。
   postgres:
     image: postgres:16-alpine
+    # PG 专项调优（2026-08-08，16GB 机器）：默认参数对 PTH 负载不足——
+    # shared_buffers 128MB→2GB（数据全缓存）/ work_mem 4MB→16MB / effective_cache_size 12GB（索引扫描）
+    # maintenance_work_mem 256MB（VACUUM/索引）/ max_connections 100→200（多 batch 直连余量）/ jit off（小查询）
+    # 注：连接池专项（PgBouncer 事务级 pooling）为后续演进，届时 max_connections 可回调
+    command:
+      - "-c"
+      - "shared_buffers=2GB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "effective_cache_size=12GB"
+      - "-c"
+      - "maintenance_work_mem=256MB"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "jit=off"
     environment:
       - POSTGRES_USER=pth
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pth-dev-password}
