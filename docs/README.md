@@ -26,6 +26,7 @@
 | [PTH Kernel 体系](./pth/kernel.md) | ★ 任务池 · 多语言 REPL · 记忆闭环 · 监控日志 |
 | [PTH API 参考](./pth/api.md) | HTTP/SSE/WebSocket 端点 |
 | [PTH 部署指南](./pth/deployment.md) | 本地 + Docker 部署 |
+| [Kernel 更新策略评估](./superpowers/explorations/2026-08-10-pth-kernel-update-strategy.md) | 容器/宿主边界 · A/B 资源实测 · 更新模式 · 镜像构建优化 |
 
 ## 设计文档（specs）
 
