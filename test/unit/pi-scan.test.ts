@@ -71,19 +71,19 @@ describe("pi-scan", () => {
     expect(newestTapeId("t1", now + 10_000, files)).toBeUndefined();
   });
 
-  it("pickRestoreTape：sessionId 优先；文件已消失回退模板最新", () => {
+  it("pickRestoreTape：sessionId 优先；文件已消失回退模板最新", async () => {
     const now = Date.now();
     fs.writeFileSync(path.join(root, "sessions", "t1", "x.jsonl"), `{"type":"session","version":3,"id":"aaaa","timestamp":"2026-07-28T00:00:00.000Z","cwd":"/w"}\n`);
     const files = scanSessionFiles(root);
-    expect(pickRestoreTape(files, { templateId: "t1", sessionId: "aaaa" }, () => false).resumeSession).toBe("aaaa");
+    expect((await pickRestoreTape(files, { templateId: "t1", sessionId: "aaaa" }, () => false)).resumeSession).toBe("aaaa");
     // sessionId 文件不存在 → 回退最新
-    expect(pickRestoreTape(files, { templateId: "t1", sessionId: "gone" }, () => false).resumeSession).toBe("aaaa");
+    expect((await pickRestoreTape(files, { templateId: "t1", sessionId: "gone" }, () => false)).resumeSession).toBe("aaaa");
   });
 
-  it("pickRestoreTape：纸带正被其他会话使用 → 警告且不 resume", () => {
+  it("pickRestoreTape：纸带正被其他会话使用 → 警告且不 resume", async () => {
     fs.writeFileSync(path.join(root, "sessions", "t1", "x.jsonl"), `{"type":"session","version":3,"id":"aaaa","timestamp":"2026-07-28T00:00:00.000Z","cwd":"/w"}\n`);
     const files = scanSessionFiles(root);
-    const r = pickRestoreTape(files, { templateId: "t1", sessionId: "aaaa" }, () => true);
+    const r = await pickRestoreTape(files, { templateId: "t1", sessionId: "aaaa" }, () => true);
     expect(r.resumeSession).toBeUndefined();
     expect(r.warning).toBeTruthy();
   });

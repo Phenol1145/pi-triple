@@ -332,7 +332,7 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
       let warning: string | undefined;
       if (flags["new"] !== "true") {
         const files = scanSessionFiles(config);
-        const r = pickRestoreTape(files, entry, async (id) => isTapeLive(id, panes));
+        const r = await pickRestoreTape(files, entry, async (id) => isTapeLive(id, panes));
         resumeSession = r.resumeSession;
         warning = r.warning;
       }

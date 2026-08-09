@@ -56,7 +56,7 @@ export function SessionsPage({
   const [menuRecord, setMenuRecord] = useState<SessionRecord | null>(null);
 
   // 数据源：await listAllSessions()（含已停止会话 + 状态列）
-  useEffect(() => { setSessions(await listAllSessions()); }, [refreshKey]);
+  useEffect(() => { (async () => { setSessions(await listAllSessions()); })(); }, [refreshKey]);
   const refreshSessions = () => setRefreshKey((k) => k + 1);
 
   const config = loadConfig();

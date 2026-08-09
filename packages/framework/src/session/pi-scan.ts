@@ -118,15 +118,15 @@ export function newestTapeId(templateId: string, sinceMs: number, files: PiSessi
 }
 
 /** restore 纸带选择：注册表 sessionId 优先（存在且未被占用）→ 模板最新 → 无 */
-export function pickRestoreTape(
+export async function pickRestoreTape(
   files: PiSessionFile[],
   entry: { templateId: string; sessionId?: string },
-  isLive: (id: string) => boolean,
-): { resumeSession?: string; warning?: string } {
+  isLive: (id: string) => boolean | Promise<boolean>,
+): Promise<{ resumeSession?: string; warning?: string }> {
   const tplFiles = files.filter((f) => f.templateId === entry.templateId);
   if (entry.sessionId) {
     if (tplFiles.some((f) => f.id === entry.sessionId)) {
-      if (isLive(entry.sessionId)) {
+      if (await isLive(entry.sessionId)) {
         return { warning: `纸带 ${entry.sessionId.slice(0, 8)}… 正在其他会话运行，本次全新启动` };
       }
       return { resumeSession: entry.sessionId };

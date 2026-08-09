@@ -40,9 +40,11 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
 
   // 数据（每次刷新重读，简单可靠）
   useEffect(() => {
-    setSessions(await listAllSessions());
-    setTraces(listAllTraces());
-    runQuickHealth().then(setHealth);
+    (async () => {
+      setSessions(await listAllSessions());
+      setTraces(listAllTraces());
+      runQuickHealth().then(setHealth);
+    })();
   }, [refreshKey]);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
