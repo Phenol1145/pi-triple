@@ -23,6 +23,15 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { KernelPool, type KernelLang } from "./kernel-pool.js";
 import { CCompiledKernel } from "../pth/kernel/interpreter/compiled-kernel.js";
 
+/** 编译核统计（/kernel/status 聚合——PTH obs.kernels 可查） */
+export interface CompiledStats {
+  cacheHits: number;
+  coldCompiles: number;
+  avgCompileMs: number;
+  totalMs: number;
+  cacheEntries: number;
+}
+
 export interface KernelHostOptions {
   /** 各语言池容量（默认 4） */
   poolSize?: number;
@@ -141,6 +150,11 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
   //   cc: 编译器变体（gcc|clang|tcc——缺省 auto=cc）；opt: -O0/-O2/-g 组合（缺省 -O0）
   //   编译在沙箱内（工具链 gcc/gdb/strace/valgrind/tcc 已装）——零业务密钥、cwd 白名单
   //   每次调用独立临时工作区（编译-运行管道——非持久进程——天然隔离）
+  // 编译统计聚合（持久缓存 + 监视组件——/kernel/status 暴露）
+  const compiledStats: CompiledStats = { cacheHits: 0, coldCompiles: 0, avgCompileMs: 0, totalMs: 0, cacheEntries: 0 };
+  // 持久缓存目录（独立于 workspaces——隔离安全；env 可配——compose 卷 compiled-cache）
+  const compiledCacheDir = process.env.PTH_COMPILED_CACHE_DIR ?? "/data/compiled-cache/c";
+
   app.post("/kernel/compiled", async (req, reply) => {
     if (!enforceAuth(req, reply)) return;
     const { code, cc, timeoutMs } = (req.body ?? {}) as { code?: string; cc?: string; timeoutMs?: number };
@@ -154,22 +168,33 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
     try {
       const kernel = new CCompiledKernel({
         workDir,
+        cacheDir: compiledCacheDir,     // 持久缓存（跨调用/跨容器重启）
         cc: ccBin,
         compileTimeoutMs: timeoutMs ?? 60_000,
+        onMetric: (m) => {
+          if (m.type === "cache-hit") compiledStats.cacheHits++;
+          else if (m.type === "compile") {
+            compiledStats.coldCompiles++;
+            compiledStats.totalMs += m.durationMs;
+            compiledStats.avgCompileMs = compiledStats.coldCompiles > 0
+              ? Math.round(compiledStats.totalMs / compiledStats.coldCompiles) : 0;
+          }
+          compiledStats.cacheEntries = m.cacheSize ?? compiledStats.cacheEntries;
+        },
       });
       const result = await kernel.execute(code);
       return result;
     } catch (e) {
       return { ok: false, error: { message: `compiled kernel error: ${(e as Error).message}` }, durationMs: 0 };
     } finally {
-      // 工作区清理（编译产物/缓存——一次性管道不留残渣）
+      // 编译运行工作区清理（持久缓存独立目录——保留）
       import("node:fs/promises").then(({ rm }) => rm(workDir, { recursive: true, force: true })).catch(() => {});
     }
   });
 
   app.get("/kernel/status", async (req, reply) => {
     if (!enforceAuth(req, reply)) return;
-    return { pools: [pools.python.status(), pools.bash.status()] };
+    return { pools: [pools.python.status(), pools.bash.status()], compiled: compiledStats };
   });
 }
 

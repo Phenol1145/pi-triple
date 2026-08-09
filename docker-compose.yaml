@@ -5,6 +5,7 @@ services:
       - "3000:3000"
     volumes:
       - workspaces:/data/workspaces
+      - compiled-cache:/data/compiled-cache   # 编译核持久缓存（跨调用/跨容器重启）
       - platform:/data/platform
       - tenants:/data/tenants
       - components:/data/components
@@ -86,11 +87,13 @@ services:
       dockerfile: Dockerfile.sandbox
     volumes:
       - workspaces:/data/workspaces
+      - compiled-cache:/data/compiled-cache   # 编译核持久缓存（跨调用/跨容器重启）
     environment:
       - SANDBOX_SHARED_SECRET=${SANDBOX_SHARED_SECRET:-sandbox-dev-secret}
       - LOG_LEVEL=info
       # kernel 宿主池容量：需 >= 并发 worker 数（batch × 角色）——不足时 acquire 排队超时
       - PTH_KERNEL_POOL_SIZE=${PTH_KERNEL_POOL_SIZE:-16}
+      - PTH_COMPILED_CACHE_DIR=/data/compiled-cache/c
     networks:
       - sandbox-internal
     restart: unless-stopped
@@ -204,6 +207,7 @@ services:
       retries: 3
 
 volumes:
+  compiled-cache:   # 编译核持久缓存（CCompiledKernel cacheDir——独立于 workspaces 隔离安全）
   workspaces:
   platform:
   tenants:
