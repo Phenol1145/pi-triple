@@ -30,6 +30,12 @@ services:
       - PTH_PYTHON_MODE=${PTH_PYTHON_MODE:-sandbox-kernel}
       - PTH_BASH_MODE=${PTH_BASH_MODE:-sandbox-kernel}
       - PTH_SANDBOX_KERNEL_URL=http://sandbox:8080
+      # 内存硬限制：node 堆上限（主进程 + batch 子进程继承）——防大 payload OOM 主机
+      - NODE_OPTIONS=--max-old-space-size=768
+      # batch 轮询 tick 间隔（ms；自驱动后仅空闲退避用）
+      - PTH_BATCH_TICK_MS=${PTH_BATCH_TICK_MS:-1000}
+      # batch 子进程 PG 连接池上限（7 角色并发 ≤7——8 够；防批量 batch 连接失控）
+      - PTH_PG_POOL_MAX=${PTH_PG_POOL_MAX:-8}
     # F/WP3 Task 13：sandbox 失效降级阈值（连续 N 次转发失败置 degraded；默认 3，可 env 覆盖）
       - SANDBOX_DEGRADED_THRESHOLD=${SANDBOX_DEGRADED_THRESHOLD:-3}
     # 路径约定统一（F/WP3 Task 12）：pth 侧 WorkspaceManager basePath = <DATA_DIR>/workspaces
@@ -63,7 +69,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          cpus: "2.0"
+          memory: 2G
+          # 进程数硬限制（防 fork 风暴）：主进程 + batch 子进程（≤4 batch × 7 worker）
+          pids: 512
 
   # F/WP3 Task 10：唯一代码执行 sandbox。egress 锁定 = 仅 internal 网络（无任何外部出口）；
   # 共享密钥 env 注入；资源限额 CPU/内存；非 root（Dockerfile USER node）。
@@ -95,6 +104,8 @@ services:
         limits:
           cpus: "1.0"
           memory: 1G
+          # kernel 池 16 python 进程 + node——进程数硬限制（防池外进程）
+          pids: 256
 
   redis:
     image: redis:7-alpine
@@ -106,6 +117,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+          pids: 64
 
   # PTH kernel 存储层（Spec C）：postgres 数据世界地基。
   # 凭据外置（compose 注入，非镜像硬编码）；健康检查由 pi-platform depends_on 消费。
@@ -139,6 +156,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+          pids: 128
 
   # ── G 阶段：dev 容器（多语言开发工作区——PTL 工具环境 + 用户开发/学习研究）──
   # 定位：sandbox=运行产物中间态（无网无密钥不可信）；dev=开发/调试/成品保留（可信出网）。
