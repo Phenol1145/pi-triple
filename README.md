@@ -103,7 +103,11 @@ curl localhost:33100/metrics   # Prometheus 四层指标
 | 能力 | 说明 | 实测 |
 |------|------|------|
 | **多语言持久 REPL** | PyKernel 管道 JSON-RPC / BashKernel 持久 shell / TS VM 沙箱（能力白名单） | Python 执行 **230x**（0.12ms vs spawn 12ms） |
+| **编译核** | C 首发（gcc/clang/tcc 变体）：编译-运行管道 + sha256 增量缓存（LRU 50）+ 文件即状态 + 诊断回填 | clang 编译 hello-c 真实链路，缓存提速 **3x** |
+| **调试协议** | gdb MI 解析器 + CDebugSession（断点/单步/栈/变量/求值）+ 四级回退链（L0 gdb → L2 bash 核 strace/valgrind） | 容器内断点命中契约验证（breakpoint-hit + frame args） |
+| **标准扩展包** | memory/context/model/perf/obs 五成员（ts 核内能力对象）+ 配置中心（env 快照 + 运行时 SET）+ 策略闭环（publish/apply）+ obs IPC 请求通道 | 端到端：LLM 用 obs 调查发现系统 bug 并报告 |
 | **任务池** | 发布（代码形态）→ 认领 → 执行 → submit/reject 闭环，多 worker batch | 语法错误任务按 reject 处理（不误标 completed） |
+| **Kernel Sandbox** | REPL kernel 池落独立容器（internal 网络零出口 + 零业务密钥 + Bearer 认证 + 非 root + 资源限额） | SUM5050=5050 端到端；os.environ 仅共享密钥 |
 | **记忆闭环** | 任务完成 → LLM 提炼 → tool-function 源码+spec / 洞察 双通道持久化 → 状态召回 | fibonacci → refine → fib(20)=6765 跨任务复用 |
 | **任务链** | `payload.flow` 自带路由（transform/decompose/branch/loop/wait/terminal）+ 递归注销 | developer → 自动生成验收任务 → 双 completed |
 | **工具文件通道** | `fs.readText/list`（toolstore）——LLM 自主 import 工具文件 | fact(10)=3628800 端到端 |
@@ -229,7 +233,7 @@ bash scripts/check-release-clean.sh  # 发行门禁（发布包零用户痕迹�
 - **tmux**：Unix-only（Windows 支持规划中）
 - **PTH 进程限制**：BullMQ worker 在主进程（Phase 1 技术债）
 - **mailbox**：单机通信，不支持跨机器
-- **任务 text 需代码形态**：自然语言任务支持规划中
+- **任务 text 兼容双形态**：代码形态直执行，自然语言走 NL 翻译（PTC 程序模式）
 
 ---
 
