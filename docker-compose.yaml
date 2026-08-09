@@ -100,10 +100,10 @@ services:
     environment:
       - SANDBOX_SHARED_SECRET=${SANDBOX_SHARED_SECRET:-sandbox-dev-secret}
       - LOG_LEVEL=info
-      # kernel 宿主池容量：需 >= 并发 worker 数（batch × 角色）——不足时 acquire 排队超时
-      - PTH_KERNEL_POOL_SIZE=${PTH_KERNEL_POOL_SIZE:-16}
-      # acquire 排队超时（池满拒绝——防 batch 崩溃循环无限卡）；条目 TTL（崩溃泄漏兜底回收）
-      - PTH_KERNEL_ACQUIRE_TIMEOUT_MS=${PTH_KERNEL_ACQUIRE_TIMEOUT_MS:-60000}
+      # kernel 宿主池容量：需 > 并发 worker 数 × 2（python+bash——留余量吸收启动 acquire 竞争——否则池满排队 abort）
+      - PTH_KERNEL_POOL_SIZE=${PTH_KERNEL_POOL_SIZE:-24}
+      # acquire 排队超时（池满拒绝——短超时快速失败不卡 agent 步骤——步骤内自动重试）
+      - PTH_KERNEL_ACQUIRE_TIMEOUT_MS=${PTH_KERNEL_ACQUIRE_TIMEOUT_MS:-10000}
       - PTH_KERNEL_ENTRY_TTL_MS=${PTH_KERNEL_ENTRY_TTL_MS:-1800000}
       - PTH_COMPILED_CACHE_DIR=/data/compiled-cache/c
       - PTH_COMPILED_CACHE_MAX_MB=${PTH_COMPILED_CACHE_MAX_MB:-200}
