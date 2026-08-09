@@ -165,6 +165,26 @@ export async function cmdKernelBatchRemove(passthrough: string[], _flags: Record
   }
 }
 
+export async function cmdKernelBatchWorker(passthrough: string[], _flags: Record<string, string>): Promise<void> {
+  // ptl hub kernel batch worker <action> <batchId> <role> [copies]
+  const [action, batchId, role, copiesRaw] = passthrough;
+  if (!["pause", "resume", "remove", "add"].includes(action ?? "") || !batchId || !role) {
+    console.log("  用法: ptl hub kernel batch worker <pause|resume|remove|add> <batchId> <role> [copies]");
+    process.exit(1);
+  }
+  const client = requireClient();
+  try {
+    const res = await client.workerControl(batchId, action!, role, copiesRaw ? parseInt(copiesRaw, 10) || 1 : undefined);
+    printBanner();
+    console.log(`  \x1b[1mworker ${action} ${role}\x1b[0m @ ${batchId.slice(0, 8)}`);
+    console.log(`    batch: ${res.batchId} · action: ${res.action}${res.copies ? ` · copies: ${res.copies}` : ""}`);
+    console.log("  状态: \x1b[36mptl hub kernel status\x1b[0m");
+  } catch (err: any) {
+    console.log(`\x1b[31m❌ worker 控制失败: ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
 export async function cmdKernelStatus(_passthrough: string[], _flags: Record<string, string>): Promise<void> {
   const client = requireClient();
   try {

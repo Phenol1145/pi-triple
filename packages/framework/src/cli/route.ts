@@ -17,7 +17,7 @@ import { cmdHubRequest, cmdHubRequests } from "../bridge/request.js";
 import { cmdHubRespond } from "../bridge/respond.js";
 import { cmdHubObserve } from "../bridge/observe.js";
 import { cmdHubDebug } from "../bridge/debug.js";
-import { cmdKernelStatus, cmdKernelTasksAdd, cmdKernelTasksLs, cmdKernelBatchAdd, cmdKernelBatchRemove, cmdKernelTemplatesLs } from "../bridge/kernel.js";
+import { cmdKernelStatus, cmdKernelTasksAdd, cmdKernelTasksLs, cmdKernelBatchAdd, cmdKernelBatchRemove, cmdKernelBatchWorker, cmdKernelTemplatesLs } from "../bridge/kernel.js";
 import { printNamespaceHelp } from "./main.js";
 
 // ─── TUI ───────────────────────────────────────────────────
@@ -146,7 +146,8 @@ export const defaultHubHandlers: HubHandlers = {
       case "batch":
         if (rest[0] === "add") return cmdKernelBatchAdd(rest.slice(1), flags);
         if (rest[0] === "remove") return cmdKernelBatchRemove(rest.slice(1), flags);
-        console.log("  用法: ptl hub kernel batch add [n] | remove [n]");
+        if (rest[0] === "worker") return cmdKernelBatchWorker(rest.slice(1), flags);
+        console.log("  用法: ptl hub kernel batch add [n] | remove [n] | worker <pause|resume|remove|add> <batchId> <role> [copies]");
         return;
       case "status":
         return cmdKernelStatus(rest, flags);

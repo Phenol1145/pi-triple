@@ -428,6 +428,17 @@ export class PthClient {
     return (await res.json()) as Array<Record<string, unknown>>;
   }
 
+  /** worker 级控制（pause/resume/remove/add） */
+  async workerControl(batchId: string, action: string, role: string, copies?: number): Promise<Record<string, unknown>> {
+    const res = await this.request(`/api/v1/kernel/batch/${encodeURIComponent(batchId)}/workers`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ action, role, copies }),
+    });
+    if (!res.ok) await this.throwError(res, "worker 控制失败");
+    return (await res.json()) as Record<string, unknown>;
+  }
+
   /** 启动 n 个 batch */
   async batchAdd(count = 1): Promise<{ spawned: number; batches: Array<{ id: string; pid: number }> }> {
     const res = await this.request("/api/v1/kernel/batch/add", {
