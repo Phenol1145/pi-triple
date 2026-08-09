@@ -1,96 +1,14 @@
-# ─────────────────────────────────────────────────────────────
-# dev 容器 —— 多语言开发工作区（G 阶段）
-#   提供给 PTL（外接工具环境）与用户（开发/学习研究）共用
-#   基础：quay.io/jupyter/minimal-notebook（Python 3.13 + conda/mamba）
-#   叠加：Node(nvm) + Go + Rust + uv + 数据科学包 + PTL 开源工具
-#   使用：docker compose up -d dev → http://127.0.0.1:8888
-# ─────────────────────────────────────────────────────────────
-FROM quay.io/jupyter/minimal-notebook:python-3.13
+# Dev 镜像（开发模式——tsx watch 热重启——基于生产镜像 + devDeps）
+# 生产镜像 omit=dev（无 tsx/typescript）——dev 镜像补全量依赖
+FROM pi-platform-pi-platform:latest
 
-# ── 1) 系统工具（apt——root）──
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git-lfs gh jq curl wget tmux vim ripgrep sqlite3 ffmpeg tesseract-ocr z3 \
-    && rm -rf /var/lib/apt/lists/* \
-    && git lfs install --system
+WORKDIR /app
 
-# ── 2) Node（nvm——多版本管理，jovyan 用户装——家目录属主正确）──
-USER jovyan
-ENV NVM_DIR=/home/jovyan/.nvm
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash \
-    && . "$NVM_DIR/nvm.sh" && nvm install --lts && nvm alias default 'lts/*' \
-    && ln -sf "$NVM_DIR/versions/node/$(ls $NVM_DIR/versions/node | head -1)" "$NVM_DIR/current"
-ENV PATH=/home/jovyan/.nvm/current/bin:$PATH
+# devDeps 安装（tsx/typescript 等——生产镜像 omit=dev 缺失）
+# manifest 复用生产镜像的（已 COPY）——只需 npm ci 全量
+RUN npm ci
 
-# ── 3) Go（官方 tarball——root 装 /usr/local/go，构建时需出网）──
-USER root
-ARG GO_VERSION=1.24.2
-RUN ARCH=$(uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/') \
-    && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" \
-    | tar -C /usr/local -xzf -
-ENV PATH=/usr/local/go/bin:$PATH
-ENV GOPATH=/home/jovyan/go
-ENV PATH=/home/jovyan/go/bin:$PATH
+USER node
 
-# ── 4) Rust（rustup——jovyan 用户装）──
-USER jovyan
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH=/home/jovyan/.cargo/bin:$PATH
-
-# ── 5) uv（多 Python 版本管理——jovyan 用户装）──
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH=/home/jovyan/.local/bin:$PATH
-
-# ── 6) 数据科学常用包（conda base env——root 写 /opt/conda）──
-USER root
-RUN mamba install -y -c conda-forge \
-        pandas numpy matplotlib seaborn scikit-learn scipy \
-    && mamba clean -ai
-
-# ── 7) PTL 外接工具（开源集——用户裁决：非开源保留本机）──
-#   yt-dlp（PyPI）/ agent-reach（GitHub Panniantong）/ instsci（GitHub rimagination）
-#   / chatgpt-share（本地单文件脚本——agent-reach 的 ChatGPT 分享会话解码后端）
-#   pip → /opt/conda（root）；uv tool → ~/.local/share/uv（jovyan——分两层）
-RUN pip install --no-cache-dir yt-dlp \
-    && pip install --no-cache-dir "agent-reach @ git+https://github.com/Panniantong/agent-reach@main"
-USER jovyan
-RUN uv tool install "instsci @ git+https://github.com/rimagination/instsci"
-# chatgpt-share：单文件纯 stdlib、无用户态状态 → 系统级 /usr/local/bin（root）。
-# 不放 $HOME：dev-home 卷覆盖挂载会遮蔽镜像里的 $HOME 文件；也不涉及属主坑。
-# 注意：重建镜像会重置 agent-reach 的 chatgpt_share 渠道补丁（site-packages 重新 pip 装），
-# 重建后重跑 tools/dev/agent-reach-chatgpt/patch-agent-reach.sh 恢复渠道注册。
-USER root
-COPY --chmod=755 tools/dev/agent-reach-chatgpt/chatgpt-share /usr/local/bin/chatgpt-share
-
-# ── 7b) Brainfuck 工具（beef 解释器 + tcc 编译器 + 本地脚本 bf/bfc）──
-#   beef（Debian 官方 Brainfuck 解释器）/ tcc（Tiny C 编译器——bf→C 真编译出可执行）
-#   bf（beef 友好入口 shim：-p/-c 直传、文件、stdin 管道）/ bfc（自写 bf→C 翻译器，
-#   纯 Python stdlib，配合 tcc 生成可执行文件——tools/dev/bfc/）
-#   apt → 系统级（root）；脚本 → /usr/local/bin（root，无用户态状态，不被 dev-home 卷遮蔽）
-USER root
-RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends beef tcc libc6-dev \
-    && rm -rf /var/lib/apt/lists/*
-COPY --chmod=755 tools/dev/bfc/bf /usr/local/bin/bf
-COPY --chmod=755 tools/dev/bfc/bfc /usr/local/bin/bfc
-
-# ── 7c) lifelab 生命模拟研究工作台（Rust 编译链 + 交互依赖）──
-#   lifelab 源码在宿主挂载 /works/labs/lifelab（非镜像内）；镜像重建后
-#   执行 install.sh 恢复 wheel/包：docker compose exec dev bash /works/labs/lifelab/install.sh
-#   gcc/binutils：Rust 链接必需——容器的 /usr/bin/cc 被 tcc 占用（§7b），
-#   不支持 Rust 的 -Wl,-Bstatic，项目里 core/.cargo/config.toml 已钉死 linker=gcc
-#   maturin：PyO3 wheel 构建工具（jovyan 用户级 uv tool）；ipywidgets：notebook 交互
-USER root
-RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends gcc binutils fonts-noto-cjk \
-    && rm -rf /var/lib/apt/lists/*
-USER jovyan
-RUN uv tool install maturin
-USER root
-RUN pip install --no-cache-dir ipywidgets
-
-# ── 8) 成品保留区 + 工作区目录 ──
-USER root
-RUN mkdir -p /data/artifacts /works && chown -R jovyan:users /data/artifacts /works
-USER jovyan
-
-WORKDIR /works
-EXPOSE 8888
+# 启动命令在 docker-compose.dev.yaml 覆盖（tsx watch src/pth/main.ts）
