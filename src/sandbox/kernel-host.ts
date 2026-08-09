@@ -21,6 +21,7 @@
 import Fastify from "fastify";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { KernelPool, type KernelLang } from "./kernel-pool.js";
+import { CCompiledKernel } from "../pth/kernel/interpreter/compiled-kernel.js";
 
 export interface KernelHostOptions {
   /** 各语言池容量（默认 4） */
@@ -133,6 +134,37 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
     }
     pools[poolLang(kernelId)].release(kernelId);
     return { ok: true };
+  });
+
+  // ── 编译核（2026-08-09 Phase B：C 编译-运行管道落 sandbox 侧）────────────
+  // POST /kernel/compiled {code, cc?, opt?, timeoutMs?} → InterpreterResult
+  //   cc: 编译器变体（gcc|clang|tcc——缺省 auto=cc）；opt: -O0/-O2/-g 组合（缺省 -O0）
+  //   编译在沙箱内（工具链 gcc/gdb/strace/valgrind/tcc 已装）——零业务密钥、cwd 白名单
+  //   每次调用独立临时工作区（编译-运行管道——非持久进程——天然隔离）
+  app.post("/kernel/compiled", async (req, reply) => {
+    if (!enforceAuth(req, reply)) return;
+    const { code, cc, timeoutMs } = (req.body ?? {}) as { code?: string; cc?: string; timeoutMs?: number };
+    if (typeof code !== "string" || code.length === 0) {
+      reply.code(400).send({ error: "code required" });
+      return;
+    }
+    // 编译器变体白名单（显式 > 默认 cc）——防任意命令注入面（编译器路径固定）
+    const ccBin = cc === "gcc" ? "gcc" : cc === "clang" ? "clang" : cc === "tcc" ? "tcc" : undefined;
+    const workDir = `/data/workspaces/.compiled-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    try {
+      const kernel = new CCompiledKernel({
+        workDir,
+        cc: ccBin,
+        compileTimeoutMs: timeoutMs ?? 60_000,
+      });
+      const result = await kernel.execute(code);
+      return result;
+    } catch (e) {
+      return { ok: false, error: { message: `compiled kernel error: ${(e as Error).message}` }, durationMs: 0 };
+    } finally {
+      // 工作区清理（编译产物/缓存——一次性管道不留残渣）
+      import("node:fs/promises").then(({ rm }) => rm(workDir, { recursive: true, force: true })).catch(() => {});
+    }
   });
 
   app.get("/kernel/status", async (req, reply) => {
