@@ -439,6 +439,28 @@ export class PthClient {
     return (await res.json()) as Record<string, unknown>;
   }
 
+  /** 启动 n 个 batch（支持 profile：role/copies/weights——⑤强化/均衡模式） */
+  async batchAddProfile(count = 1, opts: { role?: string; copies?: number; weights?: string } = {}): Promise<{ spawned: number; mode: string; batches: Array<{ id: string; pid: number; workers?: string[] }> }> {
+    const body: Record<string, unknown> = { count };
+    if (opts.role) { body.role = opts.role; if (opts.copies) body.copies = opts.copies; }
+    else if (opts.weights) {
+      // "developer:3,analyst:2" → {developer:3, analyst:2}
+      const w: Record<string, number> = {};
+      for (const part of opts.weights.split(",")) {
+        const [role, n] = part.trim().split(":");
+        if (role) w[role] = n ? Number(n) : 1;
+      }
+      body.weights = w;
+    }
+    const res = await this.request("/api/v1/kernel/batch/add", {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) await this.throwError(res, "启动 batch 失败");
+    return (await res.json()) as { spawned: number; mode: string; batches: Array<{ id: string; pid: number; workers?: string[] }> };
+  }
+
   /** 启动 n 个 batch */
   async batchAdd(count = 1): Promise<{ spawned: number; batches: Array<{ id: string; pid: number }> }> {
     const res = await this.request("/api/v1/kernel/batch/add", {

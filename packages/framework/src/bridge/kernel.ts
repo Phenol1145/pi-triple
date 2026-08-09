@@ -137,14 +137,19 @@ export async function cmdKernelTasksLs(flags: Record<string, string>): Promise<v
   }
 }
 
-export async function cmdKernelBatchAdd(passthrough: string[], _flags: Record<string, string>): Promise<void> {
+export async function cmdKernelBatchAdd(passthrough: string[], flags: Record<string, string>): Promise<void> {
+  // ptl hub kernel batch add [n] [--role developer] [--copies 2] [--weights developer:3,analyst:2]
   const n = Math.min(Math.max(parseInt(passthrough[0] ?? "1", 10) || 1, 1), 10);
   const client = requireClient();
   try {
-    const res = await client.batchAdd(n);
+    const res = await client.batchAddProfile(n, {
+      role: flags.role,
+      copies: flags.copies ? parseInt(flags.copies, 10) : undefined,
+      weights: flags.weights,
+    });
     printBanner();
-    console.log(`  \x1b[1m已启动 ${res.spawned} 个 batch\x1b[0m`);
-    for (const b of res.batches) console.log(`    ${b.id.slice(0, 8)}  pid=${b.pid}`);
+    console.log(`  \x1b[1m已启动 ${res.spawned} 个 batch（${res.mode}）\x1b[0m`);
+    for (const b of res.batches) console.log(`    ${b.id.slice(0, 8)}  pid=${b.pid}  workers=[${b.workers?.join(",") ?? "?"}]`);
     console.log("  状态: \x1b[36mptl hub kernel status\x1b[0m");
   } catch (err: any) {
     console.log(`\x1b[31m❌ 启动 batch 失败: ${err.message}\x1b[0m`);
