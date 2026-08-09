@@ -30,6 +30,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/packages/framework/dist /app/packages/framework/dist
 
 COPY config/ ./config/
+# 扩展代码库 + 策略 + 命名编译单元（/data/toolstore——compose 卷持久化；空卷首挂复制镜像内容）
+COPY toolstore/ /data/toolstore/
 # F/WP2 Task 8: supervisor.sh（A/B rebuild）从镜像移除（.rebuild-request 机制废弃，spec §3.4）；
 # drain.sh 保留（优雅停机辅助）。
 COPY scripts/drain.sh ./scripts/

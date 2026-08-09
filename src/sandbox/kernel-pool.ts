@@ -25,6 +25,9 @@ interface PoolEntry {
 
 interface Waiter {
   resolve: (id: string) => void;
+  reject: (err: Error) => void;
+  /** 排队超时计时器（PTH_KERNEL_ACQUIRE_TIMEOUT_MS——超时拒绝防池满无限卡） */
+  timer: NodeJS.Timeout;
 }
 
 export interface KernelPoolOptions {
@@ -33,6 +36,10 @@ export interface KernelPoolOptions {
   max?: number;
   /** 空闲回收 ms（默认 0=宿主自行管理；>0 转给内核空闲回收） */
   idleMs?: number;
+  /** acquire 排队超时 ms（默认 60s——池满超时拒绝防无限卡） */
+  acquireTimeoutMs?: number;
+  /** 池条目 TTL ms（inUse 超时强制回收——batch 崩溃泄漏兜底；0=关闭） */
+  entryTtlMsMs?: number;
   onStderr?: (lang: string, line: string) => void;
 }
 
@@ -44,12 +51,33 @@ export class KernelPool {
   private max: number;
   private idleMs: number;
   private onStderr?: (lang: string, line: string) => void;
+  /** 池条目 TTL（inUse 超时强制回收——batch 崩溃未 release 的泄漏兜底；0=关闭） */
+  private entryTtlMs: number;
+  private acquireTimeoutMs: number;
+  private sweepTimer: NodeJS.Timeout | null = null;
 
   constructor(opts: KernelPoolOptions) {
     this.lang = opts.lang;
     this.max = opts.max ?? 4;
     this.idleMs = opts.idleMs ?? 0;
     this.onStderr = opts.onStderr;
+    this.entryTtlMs = opts.entryTtlMsMs ?? 0;
+    this.acquireTimeoutMs = opts.acquireTimeoutMs ?? 60_000;
+    if (this.entryTtlMs > 0) {
+      this.sweepTimer = setInterval(() => this.sweep(), Math.min(this.entryTtlMs, 60_000));
+      this.sweepTimer.unref?.();
+    }
+  }
+
+  /** 回收超时 inUse 条目（崩溃泄漏兜底）——kernel dispose 释放进程 */
+  private sweep(): void {
+    const now = Date.now();
+    for (const e of this.entries) {
+      if (e.inUse && now - e.lastUsedAt > this.entryTtlMs) {
+        try { e.kernel.dispose(); } catch { /* 容错 */ }
+        e.inUse = false;
+      }
+    }
   }
 
   private find(id: string): PoolEntry | undefined {
@@ -68,7 +96,7 @@ export class KernelPool {
     return new BashKernel({ lazySpawn: true, idleMs: this.idleMs, onStderr: (l) => this.onStderr?.(this.lang, l) });
   }
 
-  /** 获取一个 kernel（空闲优先；容量内新建；满则 FIFO 排队） */
+  /** 获取一个 kernel（空闲优先；容量内新建；满则 FIFO 排队——排队超时拒绝） */
   acquire(): Promise<string> {
     const idle = this.entries.find((e) => !e.inUse);
     if (idle) {
@@ -81,7 +109,15 @@ export class KernelPool {
       this.entries.push(entry);
       return Promise.resolve(entry.id);
     }
-    return new Promise<string>((resolve) => this.waiters.push({ resolve }));
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const i = this.waiters.indexOf(waiter);
+        if (i >= 0) this.waiters.splice(i, 1);
+        reject(new Error(`kernel pool exhausted (${this.lang} ${this.max}/${this.max}) — acquire timeout`));
+      }, this.acquireTimeoutMs);
+      const waiter: Waiter = { resolve, reject, timer };
+      this.waiters.push(waiter);
+    });
   }
 
   /** 归还 kernel（唤醒 FIFO 排队者） */
@@ -92,6 +128,7 @@ export class KernelPool {
     entry.lastUsedAt = Date.now();
     const waiter = this.waiters.shift();
     if (waiter) {
+      clearTimeout(waiter.timer);
       entry.inUse = true;
       waiter.resolve(entry.id);
     }

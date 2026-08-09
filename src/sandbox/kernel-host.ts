@@ -50,9 +50,16 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
   const envSize = Number(process.env.PTH_KERNEL_POOL_SIZE);
   const poolSize = opts.poolSize ?? (Number.isFinite(envSize) && envSize > 0 ? envSize : 4);
 
+  // acquire 排队超时（PTH_KERNEL_ACQUIRE_TIMEOUT_MS 默认 60s——池满拒绝防无限卡）
+  const envAcquireMs = Number(process.env.PTH_KERNEL_ACQUIRE_TIMEOUT_MS);
+  const acquireTimeoutMs = Number.isFinite(envAcquireMs) && envAcquireMs > 0 ? envAcquireMs : 60_000;
+  // 池条目 TTL（PTH_KERNEL_ENTRY_TTL_MS 默认 0=关闭；崩溃泄漏兜底建议 30min）
+  const envTtlMs = Number(process.env.PTH_KERNEL_ENTRY_TTL_MS);
+  const entryTtlMs = Number.isFinite(envTtlMs) && envTtlMs > 0 ? envTtlMs : 0;
+
   const pools: Record<KernelLang, KernelPool> = {
-    python: new KernelPool({ lang: "python", max: poolSize, onStderr: opts.onStderr }),
-    bash: new KernelPool({ lang: "bash", max: poolSize, onStderr: opts.onStderr }),
+    python: new KernelPool({ lang: "python", max: poolSize, acquireTimeoutMs, entryTtlMsMs: entryTtlMs, onStderr: opts.onStderr }),
+    bash: new KernelPool({ lang: "bash", max: poolSize, acquireTimeoutMs, entryTtlMsMs: entryTtlMs, onStderr: opts.onStderr }),
   };
 
   type AuthResult = "ok" | "unauthorized" | "misconfigured";

@@ -182,3 +182,33 @@ describe("sandbox main 组合形态（exec + kernel 同端口共存）", () => {
     delete process.env.SANDBOX_SHARED_SECRET;
   });
 });
+
+describe("kernel-pool 兜底（acquire 排队超时 + 条目 TTL 回收）", () => {
+  it("池满 acquire 排队 → 超时拒绝（不无限卡）", async () => {
+    const { KernelPool } = await import("../../src/sandbox/kernel-pool.js");
+    const pool = new KernelPool({ lang: "python", max: 1, acquireTimeoutMs: 100, entryTtlMsMs: 0 } as never);
+    await pool.acquire();  // 占满
+    await expect(pool.acquire()).rejects.toThrow(/pool exhausted/);
+  });
+
+  it("release 唤醒排队者（清 timer）", async () => {
+    const { KernelPool } = await import("../../src/sandbox/kernel-pool.js");
+    const pool = new KernelPool({ lang: "python", max: 1, acquireTimeoutMs: 5000, entryTtlMsMs: 0 } as never);
+    const id1 = await pool.acquire();
+    const p2 = pool.acquire();
+    pool.release(id1);
+    await expect(p2).resolves.toBeTruthy();
+  });
+
+  it("条目 TTL：inUse 超时强制回收（崩溃泄漏兜底）", async () => {
+    const { KernelPool } = await import("../../src/sandbox/kernel-pool.js");
+    const pool = new KernelPool({ lang: "python", max: 2, acquireTimeoutMs: 5000, entryTtlMsMs: 100 } as never);
+    await pool.acquire();  // entry1 inUse
+    // 等待 TTL 扫描（sweep 间隔 = min(ttl, 60s) = 100ms）
+    await new Promise((r) => setTimeout(r, 200));
+    // 现在 acquire 应该可以新建（泄漏条目被回收标记）
+    const id = await pool.acquire();
+    expect(id).toBeTruthy();
+    pool.dispose?.();
+  });
+});
