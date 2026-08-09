@@ -12,3 +12,6 @@ pi-triple.json
 .DS_Store
 .worktrees/
 *.sha256
+
+# 容器抽象生成物（docker 后端渲染——事实源 pth.deployment.json）
+pth.deploy/

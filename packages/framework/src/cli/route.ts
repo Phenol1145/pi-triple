@@ -17,6 +17,7 @@ import { cmdHubRequest, cmdHubRequests } from "../bridge/request.js";
 import { cmdHubRespond } from "../bridge/respond.js";
 import { cmdHubObserve } from "../bridge/observe.js";
 import { cmdHubDebug } from "../bridge/debug.js";
+import { cmdHubDeploy, cmdHubStatus, cmdHubLogs, cmdHubUpgrade, cmdHubExec } from "../bridge/containers.js";
 import { cmdKernelStatus, cmdKernelTasksAdd, cmdKernelTasksLs, cmdKernelBatchAdd, cmdKernelBatchRemove, cmdKernelBatchWorker, cmdKernelTemplatesLs } from "../bridge/kernel.js";
 import { printNamespaceHelp } from "./main.js";
 
@@ -34,7 +35,7 @@ export function resolveTuiPanel(subcommand: string | undefined): TuiPanel {
 
 // ─── hub ───────────────────────────────────────────────────
 
-export const HUB_COMMANDS = ["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug"] as const;
+export const HUB_COMMANDS = ["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug", "deploy", "status", "logs", "upgrade", "exec"] as const;
 export type HubCommand = (typeof HUB_COMMANDS)[number];
 
 // ─── deprecated（clean break：旧命令仅提示迁移）────────────────
@@ -119,6 +120,11 @@ export type HubHandlers = {
   observe: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
   debug: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
   kernel: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  deploy: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  status: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  logs: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  upgrade: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  exec: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
 };
 
 export const defaultHubHandlers: HubHandlers = {
@@ -131,6 +137,11 @@ export const defaultHubHandlers: HubHandlers = {
   respond: cmdHubRespond,
   observe: cmdHubObserve,
   debug: cmdHubDebug,
+  deploy: cmdHubDeploy,
+  status: cmdHubStatus,
+  logs: cmdHubLogs,
+  upgrade: cmdHubUpgrade,
+  exec: cmdHubExec,
   kernel: async (passthrough, flags) => {
     const [sub, ...rest] = passthrough;
     switch (sub) {
@@ -202,6 +213,21 @@ export async function cmdHub(
       break;
     case "kernel":
       await handlers.kernel(passthrough, flags);
+      break;
+    case "deploy":
+      await handlers.deploy(passthrough, flags);
+      break;
+    case "status":
+      await handlers.status(passthrough, flags);
+      break;
+    case "logs":
+      await handlers.logs(passthrough, flags);
+      break;
+    case "upgrade":
+      await handlers.upgrade(passthrough, flags);
+      break;
+    case "exec":
+      await handlers.exec(passthrough, flags);
       break;
     default:
       printNamespaceHelp("hub");

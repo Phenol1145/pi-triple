@@ -24,8 +24,8 @@ describe("resolveTuiPanel", () => {
 });
 
 describe("HUB_COMMANDS", () => {
-  it("含 submit/run/programs/dev/request/requests/respond/observe/debug", () => {
-    expect(HUB_COMMANDS).toEqual(["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug"]);
+  it("含 submit/run/programs/dev/request/requests/respond/observe/debug + 容器运维族（deploy/status/logs/upgrade/exec）", () => {
+    expect(HUB_COMMANDS).toEqual(["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug", "deploy", "status", "logs", "upgrade", "exec"]);
   });
 });
 

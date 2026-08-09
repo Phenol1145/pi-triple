@@ -63,6 +63,11 @@ const HELP_GROUPS: HelpGroup[] = [
       ["hub kernel tasks add|ls", "发布/列出 PTH 任务"],
       ["hub kernel batch add|remove", "控制 batch 扩缩容"],
       ["hub kernel status", "kernel 运行状态全景"],
+      ["hub deploy [--rebuild]", "容器部署（声明式描述 → docker 后端）"],
+      ["hub status [--service <s>]", "容器服务状态"],
+      ["hub logs <service> [--tail n]", "容器日志"],
+      ["hub upgrade", "重建镜像 + 重启"],
+      ["hub exec <service> -- <cmd>", "容器内执行命令"],
     ],
   },
   {
@@ -130,6 +135,11 @@ const NAMESPACE_HELP: Record<string, Array<[string, string]>> = {
     ["hub respond <id> <dir>", "构建构件闭合回退请求"],
     ["hub observe <sessions|session|trace> [--json]", "远程观测（Redis 会话痕迹）"],
     ["hub debug [sandbox|<sessionId>]", "WebSocket 交互式接入 sandbox 调试区"],
+    ["hub deploy [--rebuild]", "容器部署"],
+    ["hub status [--service <s>]", "容器服务状态"],
+    ["hub logs <service> [--tail n]", "容器日志"],
+    ["hub upgrade", "重建镜像 + 重启"],
+    ["hub exec <service> -- <cmd>", "容器内执行命令"],
   ],
   template: [
     ["template ls", "列出模板（别名 + UUID）"],
