@@ -23,3 +23,7 @@ if [ -n "$HITS" ]; then
 fi
 echo "✅ 发行包干净（无用户痕迹）"
 echo "文件数: $(echo "$OUT" | grep -c 'notice.*B ')"
+
+# v0.7.0 事故补丁：npm pack 可被整仓库手动 tar 绕过（v0.6.0 脏包含 .pi-subagents/
+# .pi-platform-data）——追加整仓库 tar 噪音检查（release-pack.sh --check 同源逻辑）
+bash scripts/release-pack.sh --check
