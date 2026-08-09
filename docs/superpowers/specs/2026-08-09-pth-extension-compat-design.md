@@ -94,6 +94,19 @@ manifest contracts 分别覆盖：
 
 ### 4.1 角色谱系扩展（WorkerRole 注册）
 
+**正交角色谱系的语义（用户补充——PTH 独有设计哲学）**：
+1. **任务类型不重叠**：每个角色能接取的任务类型互斥——assigned_role 确定性路由已实现
+   （candidates 只查自己队列——零竞速抢票——任务类型唯一归属）。
+   **扩展新角色时 labelPatterns 必须与现有角色不重叠**——装载器校验（重叠拒绝）。
+2. **memory 区域不重叠（尽可能）**：角色的记忆域隔离——per-role memory 命名空间
+   （anchor 约定 `role:<role>` 前缀 + memory.query 自动按角色过滤——worker 默认只查自己的区域）。
+   **跨区访问需显式权限**（如 memory-keeper 特许读全部——manifest capabilities 声明）。
+3. **权限不重叠（尽可能）**：能力白名单按角色最小化——worker-cluster 角色定义加
+   `capabilities` 白名单字段（如 scout 无 memory.write / developer 无任务路由权）——
+   缺省全量（兼容）；扩展角色 manifest 声明（`roles[].capabilities`）。
+
+### 4.1 角色谱系扩展（WorkerRole 注册）
+
 PTH 的任务路由是**角色正交**（assigned_role → worker 队列）——谱系默认 7 角色（DEFAULT_ROLES）。
 扩展可注册**新角色**（id/labelPatterns/prompt）——加入正交路由：
 
@@ -102,7 +115,9 @@ PTH 的任务路由是**角色正交**（assigned_role → worker 队列）—�
   "roles": [
     { "id": "data-scientist",
       "labelPatterns": ["data", "ml", "model"],
-      "prompt": "你是数据科学家——负责数据分析、模型训练、统计推断。" }
+      "prompt": "你是数据科学家——负责数据分析、模型训练、统计推断。",
+      "capabilities": ["memory.query", "c.execute", "fs"],       // 权限最小化（缺省全量）
+      "memoryScope": "own" }                                     // own=仅自己区域 / all=跨区特许
   ]
 }
 ```
@@ -110,6 +125,9 @@ PTH 的任务路由是**角色正交**（assigned_role → worker 队列）—�
 - 装载：角色注册表合并（DEFAULT_ROLES + 扩展角色）→ routeTaskRole 的 roles 注入（已参数化）
 - 构成：`PTH_WORKER_ROLES="data-scientist:2"` 可用扩展角色（权重体系天然兼容）
 - 冲突：同 id 已存在 → 拒绝（防覆盖内置角色）
+- **labelPatterns 重叠校验**：与现有角色模式重叠 → 拒绝（任务类型正交保证）
+- **capabilities 白名单**：声明的能力子集注入该角色 worker（缺省全量——兼容）
+- **memoryScope**：own=query 自动过滤 `role:<id>` 命名空间 / all=跨区（特许角色——memory-keeper 等）
 
 ### 4.2 新执行核扩展（kernel 类型注册）
 
