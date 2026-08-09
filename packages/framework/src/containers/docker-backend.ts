@@ -74,6 +74,21 @@ export function renderCompose(dep: Deployment): string {
       lines.push(`      - ${dep.name}_default`);
     }
   }
+  // 顶层 named volumes 声明（收集服务卷里的 named 卷——宿主路径挂载不声明）
+  const namedVols = new Set<string>();
+  for (const svc of Object.values(dep.services)) {
+    for (const v of svc.volumes ?? []) {
+      const name = v.split(":")[0]!;
+      // named volume：非绝对路径、非 .、非 ~（宿主路径挂载不声明）
+      if (name && !name.startsWith("/") && !name.startsWith(".") && !name.startsWith("~") && !name.includes("/")) {
+        namedVols.add(name);
+      }
+    }
+  }
+  if (namedVols.size > 0) {
+    lines.push("volumes:");
+    for (const n of namedVols) lines.push(`  ${n}:`);
+  }
   lines.push("networks:");
   lines.push(`  ${dep.name}_default:`);
   lines.push(`    driver: bridge`);
@@ -144,14 +159,19 @@ export class DockerBackend implements ContainerBackend {
     const file = await this.composeFile(dep);
     const r = run("docker", [...this.base(dep), "-f", file, "--project-name", dep.name, "ps", "--format", "json"]);
     const services: ServiceStatus[] = [];
+    const known = new Set(Object.keys(dep.services));
     if (r.code === 0 && r.stdout.trim()) {
+      // docker compose ps --format json 字段为大写（State/Health/Name/Service/Ports）——兼容读取
       for (const line of r.stdout.trim().split("\n")) {
         try {
           const j = JSON.parse(line) as Record<string, string>;
-          const name = j.Name ?? j.Service ?? "";
-          if (service && name !== service && !name.includes(service)) continue;
+          const svcName = j.Service ?? j.Name ?? "";
+          // 只报部署描述内的服务（描述是事实源——排除 dev 等其他容器）
+          if (!known.has(svcName)) continue;
+          const target = svcName.replace(`${dep.name}-`, "");
+          if (service && target !== service) continue;
           services.push({
-            name: name.replace(`${dep.name}-`, ""),
+            name: target,
             state: mapState(j.State ?? ""),
             health: mapHealth(j.Health ?? ""),
             ports: j.Ports || undefined,
