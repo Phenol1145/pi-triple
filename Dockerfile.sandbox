@@ -71,7 +71,7 @@ ENV PI_CODING_AGENT_DIR=/data/agent-dir
 ENV PLATFORM_URL=http://pi-platform:3000
 
 # 工作区共享卷（compose：workspaces → /data/workspaces，与 pth 同卷同路径——Task 12 约定）
-RUN mkdir -p /data/workspaces /data/agent-dir && chown -R node:node /data/workspaces /data/agent-dir /app
+RUN mkdir -p /data/workspaces /data/agent-dir /data/compiled-cache && chown -R node:node /data/workspaces /data/agent-dir /data/compiled-cache /app
 
 USER node
 
