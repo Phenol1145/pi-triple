@@ -68,6 +68,7 @@ const HELP_GROUPS: HelpGroup[] = [
       ["hub logs <service> [--tail n]", "容器日志"],
       ["hub upgrade", "重建镜像 + 重启"],
       ["hub exec <service> -- <cmd>", "容器内执行命令"],
+      ["hub bench [--task ts|py-calc|...] [--list] [--compare]", "PTH 性能基准（循环①——V8 优化数据）"],
     ],
   },
   {
@@ -140,6 +141,7 @@ const NAMESPACE_HELP: Record<string, Array<[string, string]>> = {
     ["hub logs <service> [--tail n]", "容器日志"],
     ["hub upgrade", "重建镜像 + 重启"],
     ["hub exec <service> -- <cmd>", "容器内执行命令"],
+    ["hub bench [--task x] [--list] [--compare]", "PTH 性能基准"],
   ],
   template: [
     ["template ls", "列出模板（别名 + UUID）"],

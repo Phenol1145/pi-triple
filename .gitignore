@@ -15,3 +15,6 @@ pi-triple.json
 
 # 容器抽象生成物（docker 后端渲染——事实源 pth.deployment.json）
 pth.deploy/
+
+# PTH 性能基准归档（循环①——V8 优化数据积累）
+.perf-bench/
