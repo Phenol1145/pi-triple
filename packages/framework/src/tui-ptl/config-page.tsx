@@ -24,7 +24,6 @@ export function ConfigPage({ width, height: _h }: ConfigPageProps) {
     { name: "REDIS_URL", value: config.redis },
     { name: "PI_CODING_AGENT_DIR", value: path.join(dataDir, "pi-config", config.defaultTemplate) },
     { name: "PI_BIN", value: process.env.PI_BIN ?? "pi" },
-    { name: "AGENT_LAB_DB_PATH", value: path.join(dataDir, "shared", "agent-lab", "agent-lab.db") },
   ];
 
   return (

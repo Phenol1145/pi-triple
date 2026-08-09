@@ -156,8 +156,6 @@ export async function buildPiLaunch(templateId: string, options: {
       PI_TEMPLATE: templateId,
       PI_TEMPLATE_ALIAS: getTemplateAlias(templateId),
       PI_SESSION_ID: sessionId,
-      AGENT_LAB_DB_PATH: path.join(sharedDir, "agent-lab", "agent-lab.db"),
-      AGENT_LAB_CONFIG_DIR: path.join(piConfigDir, "agent-lab"),
       ...(options.agentInstanceId ? { PI_AGENT_INSTANCE_ID: options.agentInstanceId } : {}),
     },
     cwd,

@@ -73,23 +73,6 @@ const COMMAND_TREE: CmdNode[] = [
   },
   { name: "quit", desc: "退出 ptl tui" },
   { name: "exit", desc: "退出 ptl tui（同 quit）" },
-  {
-    name: "flow", desc: "工作流管理 ▸",
-    children: [
-      { name: "run", desc: "启动 <flow.json> [k=v...]" },
-      { name: "status", desc: "状态 <runId>" },
-      { name: "show", desc: "完整输出 <runId>" },
-      { name: "ls", desc: "列出全部" },
-      { name: "approve", desc: "审批通过 <runId>" },
-      { name: "reject", desc: "审批驳回 <runId>" },
-      { name: "resume", desc: "继续暂停任务 <runId>" },
-      { name: "edit", desc: "编辑图定义 <runId>" },
-      { name: "set", desc: "修改图/状态" },
-      { name: "graph", desc: "查看图 + 历史" },
-      { name: "rm", desc: "删除 <runId>" },
-      { name: "validate", desc: "校验定义" },
-    ],
-  },
 ];
 
 const VISIBLE = 6;

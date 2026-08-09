@@ -66,9 +66,8 @@ const HELP_GROUPS: HelpGroup[] = [
     ],
   },
   {
-    title: "工作流与 Agent",
+    title: "Agent",
     commands: [
-      ["flow run|ls|show|approve|…", "工作流编排"],
       ["agent run|clean", "agent 实例"],
     ],
   },
@@ -152,13 +151,6 @@ const NAMESPACE_HELP: Record<string, Array<[string, string]>> = {
   shared: [
     ["shared status", "查看共享层状态"],
     ["shared init", "初始化共享层"],
-  ],
-  flow: [
-    ["flow run <flow.json> [k=v…]", "启动工作流"],
-    ["flow ls [--json]", "列出全部"],
-    ["flow show|status <runId>", "状态/详情"],
-    ["flow approve|reject <runId>", "人工审批"],
-    ["flow validate <flow.json>", "校验定义"],
   ],
   session: [
     ["session ls [--template x] [--workloop pi]", "列出纸带会话"],

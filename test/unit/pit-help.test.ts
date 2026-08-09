@@ -11,7 +11,7 @@ function capture(fn: () => void): string {
 describe("printHelp（分组）", () => {
   it("含全部组标题", () => {
     const out = capture(printHelp);
-    for (const g of ["日常使用", "可视化 TUI", "模板与配置", "远端程序", "工作流与 Agent", "系统与维护"]) {
+    for (const g of ["日常使用", "可视化 TUI", "模板与配置", "远端程序", "Agent", "系统与维护"]) {
       expect(out).toContain(g);
     }
   });

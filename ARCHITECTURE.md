@@ -27,7 +27,7 @@ Pi-Triple 是基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-co
         │ packages/framework │ ptl hub submit / ptl hub run │     src/pth/     │
         │  ptl CLI + TUI │ ──────────── 桥 ───────────→ │  Fastify 网关   │
         │  pi × tmux     │        (bridge/)             │  AgentEngine   │
-        │  ptl-flow 引擎  │                              │  Redis + BullMQ │
+        │  交互层定位     │                              │  Redis + BullMQ │
         └────────────────┘                              └────────────────┘
 ```
 
@@ -57,19 +57,18 @@ pi-platform/
 │
 ├── packages/                      # npm 拆分（pnpm workspace 式目录）
 │   ├── framework/                 #   ★ PTL CLI + TUI（bin: ptl）
-│   │   └── src/{cli,commands,flow,bridge,lab-data,session,tui-ptl,tui-lab,tui-shared}
+│   │   └── src/{cli,commands,bridge,lab-data,session,tui-ptl,tui-lab,tui-shared}
 │   ├── shared/                    #   双产品共享（config/tmux/presence/registry/session-registry）
 │   ├── infra/                     #   基础设施（sdk-adapter/model-router/platform/workspace）
 │   │   └── src/sdk-paths.ts       #   ★ 凭据路径唯一出口（resolveSdkConfigPaths）
 │   ├── mailbox/ · extensions-in-container/
 │
-├── extensions/                    # bundled 扩展（8 个，共享层 symlink 注入）
+├── extensions/                    # bundled 扩展（5 个，共享层 symlink 注入）
 │   ├── pit-providers/             #   统一 provider 后端（声明式 JSON + 多 Key failover）
 │   ├── pit-control/ · mailbox/    #   会话内控制 · 跨会话通信
-│   ├── workflow/                  #   ★ pi 内流程编排（/flow 命令 + flow_run 工具）
-│   ├── agent-lab/ + agent-lab-bidder/  # ★ agent 经济引擎 + 竞价工具
 │   ├── pth-tasks/                 #   ★ PTH 任务交互（/pthtask 命令族）
 │   └── extensions-in-container/   #   dev 容器内扩展集合
+├── archive/                       # 已归档（保留代码不再编译）：framework-flow（workflow 引擎）· agent-lab(+bidder) · workflow-ext
 │
 ├── examples/                      # 示例（echo-agent / pr-review / arena-review / custom-*）
 ├── test/                          # 1247 个测试（vitest，149 文件 + 扩展 157）
@@ -94,24 +93,10 @@ PTL **不实现自己的 agent runtime**——它启动真正的 pi 进程，每
 - `ptl start`（默认 tmux 管理）/ `ptl pi`（原生前台逃生舱）
 - 关键模块：`tmux.ts` · `launcher.ts` · `cli/sessions.ts`
 
-### 2. ptl-flow 波次工作流引擎（`packages/framework/src/flow/`）
+### 2. PTL 交互层定位（2026-08-09 收敛）
 
-LangGraph 风格的本地工作流引擎，声明式 JSON 图（节点 + 条件边 + 环），**波次并行（BSP）执行** + **运行中热修改**是两大特性。
-
-| 概念 | 说明 |
-|------|------|
-| **波次执行** | 同一波内无依赖节点并行 spawn；波末统一合并 state、写波 checkpoint |
-| **触发计数** | 每节点 `firedEpoch`、每边 `consumed[pred→target]`；`f>c` 即有未消费完成 → 激活 |
-| **汇合语义** | 默认 any-join（任一入边激活即触发）；显式 `needs:[...]` 为 AND-join |
-| **Reducer** | 并发写同 key 按 `last-wins` / `append` / `concat` 合并（按 nodeId 序确定性） |
-| **Human gate** | `type:"human"` 节点暂停于 `waiting_human`；`ptl flow approve/reject` 即恢复 |
-| **热修改护栏** | running 中 `set/edit` 排队进 `meta.pendingEdits` 并自动 propose → 引擎在**波边界**停（`editing`）→ `resume` 重校验后应用再继续 |
-| **双锁** | exec lock（执行）+ mutation lock（改图）分离，允许执行中改图 |
-| **失败语义** | drain-on-failure（同波兄弟跑完）；失败节点回滚入边消费，仅外部 resume 重跑；needs-hunger 检测 |
-
-模块：`engine.ts`（波次循环）· `schema.ts`（校验）· `store.ts`（runs/checkpoints/waves/locks）· `expr.ts`（手写表达式）· `template.ts`（`{{state.x}}` 插值）· `reducers.ts` · `edit.ts`（set/edit/approve/reject/propose）· `commands.ts`（CLI）· `pm.ts`（spawn pi）。
-
-命令：`ptl flow run/status/show/ls/validate/graph/rm` + `approve/reject/resume` + `set/edit/propose/discard`。
+PTL 回归轻量交互层：CLI + 双 TUI（dashboard/lab）+ tmux 会话 + 共享扩展层 + PTL→PTH 桥。
+workflow 引擎（ptl-flow）与 agent 经济引擎（agent-lab）已归档至 `archive/`（保留代码不再编译，历史见 git/v0.5.0 release）。
 
 ### 3. PTL→PTH 桥（`packages/framework/src/bridge/`）
 
@@ -145,7 +130,7 @@ Gateway（Fastify + auth + SSE）
 
 - **AgentEngine**：平台主协调器（session 生命周期 + prompt + abort + 驱逐），持 SessionPool/ModelRouter/WorkspaceManager/SessionStore/ToolPlatform
 - **ProgramStore**（`programs/`）：桥的服务端。`POST /api/v1/programs`（上传）· `GET/DELETE /api/v1/programs/:name` · `POST /api/v1/programs/:name/run`（运行，SSE 直推）
-- **WorkflowOrchestrator**（`workflow/`）：服务端 BullMQ 工作流（`agent`/`human-approval` 步骤可用，`parallel`/`condition` 为 stub）。⚠️ 与 PTL 的 **ptl-flow** 是两个独立概念：前者是服务器集中编排，后者是本地波次引擎
+- **WorkflowOrchestrator**（`workflow/`）：服务端 BullMQ 工作流（`agent`/`human-approval` 步骤可用，`parallel`/`condition` 为 stub）。（PTL 侧 flow 引擎已归档——本模块为服务器集中编排）
 - **ToolPlatform**（`tools/`）：pi 内置工具的治理外壳（allowlist + 审计 + 指标），不重写工具
 - **存储**：Redis append-only entry + snapshot 模型；`SessionStore`/`SettingsStore`/`CredentialProvider` 接口可替换后端
 - **Kernel 任务体系**（`kernel/` + `gateway/routes-kernel.ts`）：★ agent 任务运行时——任务池（发布/认领/执行/submit-reject 闭环）· 多语言持久 REPL（PyKernel 管道 JSON-RPC **230x** / BashKernel 持久会话 / TS VM 沙箱白名单）· 记忆闭环（快照→LLM 提炼→tool-function 源码+spec 双通道持久化→state 召回）· TaskResolver 任务链（payload.flow 自带路由：transform/decompose/branch/loop/wait/terminal）· 四层监控（`/metrics`：L0 基建/L1 kernel/L2 任务/L3 产出 35+ 指标）+ KernelLogger 结构化日志（链路 ctx）。详见 [`docs/pth/kernel.md`](./docs/pth/kernel.md)
@@ -161,9 +146,9 @@ Gateway（Fastify + auth + SSE）
 | **pit-providers** | 声明式 provider 注册（`~/.pi-triple/providers.json`）；多 Key 池 + 401/403 failover；`/keys` 统一管理；零代码加 provider |
 | **mailbox**（@pi-triple/mailbox） | 跨 pi 会话消息（文件邮箱，原 pit-communicate）；`/ptl send/ask/inbox/share`；manual/auto/hybrid 审核；不可变审计日志 |
 | **pit-control** | pi 内管理 tmux 会话；`/control start/stop/ls/switch/detach/ui/name/status` |
-| **workflow** | pi 内编排 ptl-flow；`/flow` 命令 + `flow_run/flow_status/flow_ls` 工具 + gate 通知（shell 调 `ptl flow` CLI） |
-| **agent-lab** | ★ **agent 经济引擎**：WorkLoop 状态机引擎（图灵机模型：有限控制/记忆域/纸带，MachineRuntime 驱动 + 转移级 checkpoint/Trace）+ 市场竞拍（arena）→ 调度器（定义/实例/fallback 路由 + 参数模型）→ 优化器（提案/canary/发布闭环）+ 实验运行时；共享 SQLite（lab_events/runs/credit_tx/checkpoints）；`/lab` 全套子命令；ptl 侧 TraceProvider 注册制消费（TUI Dashboard/`ptl trace ls`）。架构见 [`extensions/agent-lab/docs/ARCHITECTURE.md`](./extensions/agent-lab/docs/ARCHITECTURE.md) |
-| **agent-lab-bidder** | 市场竞价工具（`place_bid` 工具 → agent-lab 竞价）；⚠️ ADR-0001 后核心竞价经 market-bid-loop 原生运行，place_bid 已标 deprecated-for-bidding（保留兼容） |
+| ~~workflow~~ | ⚠️ 已归档 `archive/workflow-ext/`（pi 内编排 ptl-flow；`/flow` 命令 + 工具） |
+| ~~agent-lab~~ | ⚠️ 已归档 `archive/agent-lab/`（agent 经济引擎：WorkLoop/arena/调度/优化；代码保留供 0.7/0.8 恢复） |
+| ~~agent-lab-bidder~~ | ⚠️ 已归档 `archive/agent-lab-bidder/`（place_bid 工具；用户保留意向 0.7/0.8 复用） |
 | **pth-tasks** | PTH 任务交互层：会话内 `/pthtask publish|ls|status|batch`（发布/列表/状态/控制 batch）+ 薄 skill（任务描述写法/状态语义/排障） |
 | **mailbox** | 跨会话通信（`packages/mailbox` 的分发实现） |
 | **extensions-in-container** | dev 容器内扩展集合 |
@@ -181,15 +166,11 @@ Gateway（Fastify + auth + SSE）
 ├── pi-triple.json            # v2 配置（UUID+alias），全局唯一；cwd 的 pi-triple.json 为项目级覆盖
 ├── providers.json            # provider 声明（pit-providers 消费）
 └── data/
-    ├── pi-config/<uuid>/     # 模板 pi 配置（extensions/skills/settings/models/auth/agent-lab）
+    ├── pi-config/<uuid>/     # 模板 pi 配置（extensions/skills/settings/models/auth）
     ├── sessions/<uuid>/      # pi session 文件
     ├── workspaces/<uuid>/    # agent 工作目录
-    ├── shared/               # 共享扩展/技能 + agent-lab.db
+    ├── shared/               # 共享扩展/技能
     ├── mailbox/<uuid>/       # mailbox 邮箱
-    └── flows/<runId>/        # ★ ptl-flow 运行态
-        ├── graph.json · meta.json · state.json
-        ├── checkpoints/ · waves/ · graph.history/
-        └── pending.json · exec.lock · mutation.lock
 ```
 
 ### PTH（`{DATA_DIR}`，默认 `.pi-platform-data/`）
@@ -218,16 +199,6 @@ ptl hub run my-agent key=val
   → SSE 双信封 {seq,type,data} 直推 → ptl 解包渲染 → 流结束自动销毁 session
 ```
 
-### B. ptl-flow 波次执行
-
-```
-ptl flow run flow.json k=v
-  → createRun（校验图 + 初始化 state/epoch）→ acquireExecLock
-  → 波循环：findReadyNodes（firedEpoch/consumed）→ 同波并行 spawn pi
-     → 波末 reducer 合并 state + 写波 checkpoint + 推进 firedEpoch
-     → 检查 editRequested 屏障（停于 editing）/ human gate（停于 waiting_human）
-  → 无就绪节点 → done / needs-hunger → failed
-```
 
 ---
 
@@ -240,7 +211,7 @@ ptl flow run flow.json k=v
 | **C5** | Token→tenantId；工作目录路径服务端推导，不信任客户端 |
 | **C7** | Engine 层 prompt/abort/destroy 均校验 tenantId |
 | **C8** | ToolPlatform 是治理外壳，不重写 pi 内置工具 |
-| **PTL 零依赖** | 扩展与 ptl-flow 不引外部包（手写 ustar / expr / fs.watch 替代 chokidar） |
+| **PTL 零依赖** | 扩展与框架不引外部包（手写 ustar / expr / fs.watch 替代 chokidar） |
 | **原子写** | 所有 JSON 写用 tmp+rename |
 | **tmux 传参** | `-e KEY=VAL` flag，禁 shell 字符串拼接 |
 

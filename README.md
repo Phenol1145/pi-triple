@@ -46,7 +46,7 @@ Pi-Triple 是跑在 pi SDK 之上的双产品线平台：**PTL** 面向本地开
 ```text
 PTL（本地 CLI/TUI）          PTH（服务器）
 ─────────────────          ──────────────────────────────
-ptl flow 波次工作流    →     Gateway（HTTP/SSE）
+ptl tui/CLI（交互层）  →     Gateway（HTTP/SSE）
 ptl tui dashboard      →     AgentEngine（联邦会话）
 ptl hub submit/run     →     ProgramStore（程序桥）
                           →     Kernel 任务内核（任务池/REPL/记忆/链）
@@ -92,7 +92,6 @@ curl localhost:33100/metrics   # Prometheus 四层指标
 
 ### PTL
 
-- **ptl-flow 波次工作流引擎**：并行执行 + reducer + human gate + 运行中热修改（`ptl flow run/approve/reject`）
 - **双 Ink TUI**：`ptl tui dashboard` 系统总控 / `ptl tui lab` 模型调试（遥测 SQLite）
 - **tmux 多会话管理**：`ptl start --bg --name coding` 后台启动，`attach/switch` 瞬移切换
 - **共享扩展层**：bundled 扩展 symlink 注入各模板，一处更新全局可见
@@ -118,7 +117,6 @@ curl localhost:33100/metrics   # Prometheus 四层指标
 
 - **统一 provider 后端**：pit-providers 声明式 JSON + 多 Key failover（401/403 自动切换）
 - **跨会话通信**：mailbox 文件邮箱 + manual/auto/hybrid 审核 + 不可变审计日志
-- **agent 经济引擎**：agent-lab WorkLoop 状态机（图灵机模型）+ 市场竞拍 + 调度 + 优化闭环
 - **凭据单一出口**：`resolveSdkConfigPaths()`（PTL/PTH 同源，异机/容器不分叉）
 
 ---
@@ -130,10 +128,9 @@ PTL                         PTH
 ─────                       ──────────────────────────────────
 packages/framework/         src/pth/
   cli/ 命令模块               gateway/   Fastify + auth + SSE
-  flow/ ★ 波次工作流           core/      AgentEngine · SessionPool
-  bridge/ PTL→PTH 桥          programs/  ProgramStore（桥服务端）
-  lab-data/ 遥测 SQLite       kernel/    ★★ 任务内核
-  tui-ptl/ tui-lab/                    assembly（装配/watchdog/resolver 轮询）
+  bridge/ PTL→PTH 桥          core/      AgentEngine · SessionPool
+  lab-data/ 遥测 SQLite       programs/  ProgramStore（桥服务端）
+  tui-ptl/ tui-lab/           kernel/    ★★ 任务内核
 packages/shared/                       execution（TaskLoop·Batch·Resolver·Refiner）
   config · tmux · presence             interpreter（PyKernel·BashKernel·TS VM·toolstore）
 packages/infra/                        storage（PostgreSQL：tasks/memory/transcripts）
@@ -141,7 +138,7 @@ packages/infra/                        storage（PostgreSQL：tasks/memory/trans
   sdk-paths.ts ★ 凭据唯一出口
 ```
 
-**扩展生态（8 个 bundled）**：pit-providers · mailbox · pit-control · workflow · agent-lab · agent-lab-bidder · pth-tasks · extensions-in-container
+**扩展生态（5 个 bundled）**：pit-providers · mailbox · pit-control · pth-tasks · extensions-in-container（workflow/agent-lab 已归档至 archive/）
 
 **技术栈**：Node ≥22 · TypeScript 5.7 · pi SDK 0.82 · React+Ink · tmux · Fastify 5 · ioredis+BullMQ · **PostgreSQL** · pino · prom-client · vitest
 
@@ -206,7 +203,7 @@ bash scripts/check-release-clean.sh  # 发行门禁（发布包零用户痕迹�
 
 ### ✅ 已完成
 
-- [x] PTL：tmux 多会话管理 + 双 TUI + ptl-flow 波次工作流引擎
+- [x] PTL：tmux 多会话管理 + 双 TUI（dashboard/lab）+ PTL→PTH 桥（hub submit + hub kernel）
 - [x] PTL：共享扩展层 + pit-providers 统一 provider 后端 + mailbox 跨会话通信
 - [x] PTL→PTH 桥：`ptl hub submit/run` — agent 程序打包提交到 PTH 运行
 - [x] PTH：多语言持久 REPL（PyKernel 230x / BashKernel / TS VM + KernelManager）

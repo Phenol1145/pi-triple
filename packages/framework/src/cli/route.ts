@@ -59,7 +59,6 @@ export function getDeprecatedMigration(command: string): string | null {
 export type TuiLaunchOpts = { panel: TuiPanel; flags: Record<string, string> };
 export type TuiLauncher = (opts: TuiLaunchOpts) => Promise<void>;
 
-/** 真实 TUI 启动（ink 渲染）。非 TTY 打印提示；lab 面板做模板解析 + AGENT_LAB_* env 注入。 */
 export const defaultTuiLauncher: TuiLauncher = async (opts) => {
   if (!process.stdout.isTTY || !process.stdin.isTTY) {
     console.log("  TUI 需要交互式终端");
@@ -74,7 +73,6 @@ export const defaultTuiLauncher: TuiLauncher = async (opts) => {
     return;
   }
 
-  // lab 面板：解析模板 + 注入 per-tenant AGENT_LAB_* env（与 buildPiLaunch 一致）
   const { LabApp } = await import("../tui-lab/app.js");
   const cfg = loadConfig();
   const flags = opts.flags;
@@ -93,10 +91,7 @@ export const defaultTuiLauncher: TuiLauncher = async (opts) => {
   const templateAlias = getTemplateAlias(templateId, cfg);
   const home = pitHome();
   if (flags.global === "true") {
-    process.env.AGENT_LAB_DB_PATH = path.join(home, "data", "shared", "agent-lab", "agent-lab.db");
   } else {
-    process.env.AGENT_LAB_CONFIG_DIR = path.join(home, "data", "pi-config", templateId, "agent-lab");
-    process.env.AGENT_LAB_DB_PATH = path.join(home, "data", "shared", "agent-lab", "agent-lab.db");
   }
   render(React.createElement(LabApp, { templateId, templateAlias, globalTelemetry: flags.global === "true" }), { exitOnCtrlC: false });
 };

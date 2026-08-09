@@ -8,7 +8,6 @@ import {
   execStatus, execLs, execStop, execSharedStatus,
   type CommandResult,
 } from "../commands.js";
-import { FlowStore } from "../flow/store.js";
 import { printBanner } from "./main.js";
 import { cmdAgentRun, cmdAgentClean } from "./agent.js";
 import { PthClient } from "../bridge/client.js";
@@ -53,14 +52,6 @@ const JSON_ROUTERS: Record<string, JsonRouter> = {
   shared: async (sub) => {
     if (sub === "status") return await execSharedStatus();
     return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "共享层子命令不支持 --json" } };
-  },
-  flow: async (sub) => {
-    if (sub === "ls") {
-      const s = new FlowStore();
-      const runs = s.listRuns();
-      return { ok: true, data: { runs: runs.map((r) => ({ runId: r.runId, name: r.name, status: r.status, stepCount: r.stepCount, createdAt: r.createdAt })) } };
-    }
-    return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "flow 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
   },
   agent: async (sub, passthrough) => {
     if (sub === "run") { await cmdAgentRun({}, passthrough); return { ok: true }; }

@@ -24,7 +24,7 @@ export { SdkDefaultResourceLoader as DefaultResourceLoader };
 
 // F/WP5 Task 27：常驻会话共享事件总线（pi.events 即此实例——见 agent-engine
 // buildSystemSession 传入 DefaultResourceLoader options.eventBus）。pth 主进程
-// emit、agent-lab（常驻会话内扩展）经 pi.events.on 订阅——零引用转发通道。
+// emit（常驻会话内扩展）经 pi.events.on 订阅——零引用转发通道。
 export { createEventBus, type EventBus, type EventBusController } from "@earendil-works/pi-coding-agent";
 
 // ─── 事件类型常量 ─────────────────────────────────────────────
@@ -50,12 +50,12 @@ export interface PlatformAgentSession {
   subscribe(callback: (event: SdkEvent) => void): () => void;
   dispose(): void;
   /**
-   * 绑定扩展运行时并 emit session_start（S3 缺口 2——agent-lab 的 pi.on(session_start) 依赖）。
+   * 绑定扩展运行时并 emit session_start（S3 缺口 2——会话内扩展的 pi.on(session_start) 依赖）。
    * 参考 print-mode 的 bindExtensions 调用：{ mode, commandContextActions, onError }。
    */
   bindExtensions(bindings?: PlatformExtensionBindings): Promise<void>;
   /**
-   * 显式 emit session_shutdown 后 dispose（S3 缺口 3——agent-lab 的 pi.on(session_shutdown) 关 DB 防句柄泄漏）。
+   * 显式 emit session_shutdown 后 dispose（S3 缺口 3——会话内扩展关 DB 防句柄泄漏）。
    * 实证：SDK AgentSession.dispose() 不发 session_shutdown（仅 reload() 路径发）——调用方必须显式触发。
    */
   shutdown(): Promise<void>;
@@ -97,7 +97,7 @@ export async function createSession(
     },
     shutdown: async () => {
       try {
-        // S3 缺口 3：dispose 前显式 emit session_shutdown（agent-lab 关 DB）。
+        // S3 缺口 3：dispose 前显式 emit session_shutdown（会话内扩展关 DB）。
         // 无处理器/旧 SDK 缺方法时静默降级为仅 dispose。
         if (session.hasExtensionHandlers?.("session_shutdown")) {
           await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });

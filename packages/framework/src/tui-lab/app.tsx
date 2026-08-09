@@ -10,7 +10,6 @@ import { openReadOnlyOrNull, sharedDbPath, localDbPath } from "../lab-data/index
 import { useTabs, useRefresh, Screen, useTerminalSize } from "../tui-shared/index.js";
 import { CommandBar, type CmdNode } from "../tui-ptl/command-bar.js";
 import { TelemetryPage } from "./telemetry.js";
-import { ArenaPage } from "./arena.js";
 import { EventsPage } from "./events.js";
 import { ComparePage } from "./compare.js";
 import { LabConfigPage } from "./lab-config.js";
@@ -21,7 +20,7 @@ interface Props {
   globalTelemetry: boolean;
 }
 
-const TABS = ["Telemetry", "Arena", "Events", "Compare", "Config"];
+const TABS = ["Telemetry", "Events", "Compare", "Config"];
 
 /** lab 命令树（精简版） */
 const LAB_COMMANDS: CmdNode[] = [
@@ -115,9 +114,6 @@ export function LabApp({ templateId, templateAlias, globalTelemetry }: Props) {
           templateId={effectiveTenant}
           refreshKey={refreshKey}
         />
-      )}
-      {activeTab === "Arena" && (
-        <ArenaPage db={localDb} refreshKey={refreshKey} templateAlias={templateAlias} />
       )}
       {activeTab === "Events" && (
         <EventsPage db={localDb} refreshKey={refreshKey} />

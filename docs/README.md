@@ -13,7 +13,7 @@
 
 | 文档 | 内容 |
 |------|------|
-| [PTL 架构](./ptl/architecture.md) | 双 TUI · tmux 会话 · flow 引擎 · 桥 |
+| [PTL 架构](./ptl/architecture.md) | 双 TUI · tmux 会话 · 交互层 · PTL→PTH 桥 |
 | [创作指南](./ptl/authoring.md) | 新建技能/扩展的放置与挂载规范 |
 
 ## PTH（Pi-Triple-Heavy）
