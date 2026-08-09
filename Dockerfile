@@ -26,6 +26,8 @@ COPY packages/ ./packages/
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
+# 自修改（v1）：容器带源码只读面（worker readSource 读 src/ 修改 PTH 自己——dist 运行 + src 可读）
+COPY src/ ./src/
 # PTL（packages/framework——仓库拆分后 pit.js 归属 framework 包）
 COPY --from=builder /app/packages/framework/dist /app/packages/framework/dist
 
