@@ -134,6 +134,14 @@ export class PthClient {
   }
 
   /** 统一请求：网络层错误翻译为可操作提示（连接拒绝/DNS/超时等） */
+  /** 公开请求（返回 JSON——jobs 族用；自动带 Bearer 认证头） */
+  async requestJson(path: string, init: RequestInit): Promise<unknown> {
+    const res = await this.request(path, { ...init, headers: { ...this.headers(), ...(init.headers ?? {}) } });
+    if (!res.ok) await this.throwError(res, `HTTP ${res.status}`);
+    const text = await res.text();
+    try { return text ? JSON.parse(text) : {}; } catch { return { raw: text }; }
+  }
+
   private async request(path: string, init: RequestInit): Promise<Response> {
     try {
       return await fetch(`${this.url}${path}`, init);

@@ -19,6 +19,7 @@ import { cmdHubObserve } from "../bridge/observe.js";
 import { cmdHubDebug } from "../bridge/debug.js";
 import { cmdHubDeploy, cmdHubStatus, cmdHubLogs, cmdHubUpgrade, cmdHubExec } from "../bridge/containers.js";
 import { cmdHubBench } from "../bridge/bench.js";
+import { cmdHubJobSubmit, cmdHubJobStatus, cmdHubJobFetch } from "../bridge/jobs.js";
 import { cmdKernelStatus, cmdKernelTasksAdd, cmdKernelTasksLs, cmdKernelBatchAdd, cmdKernelBatchRemove, cmdKernelBatchWorker, cmdKernelTemplatesLs } from "../bridge/kernel.js";
 import { printNamespaceHelp } from "./main.js";
 
@@ -36,7 +37,7 @@ export function resolveTuiPanel(subcommand: string | undefined): TuiPanel {
 
 // ─── hub ───────────────────────────────────────────────────
 
-export const HUB_COMMANDS = ["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug", "deploy", "status", "logs", "upgrade", "exec", "bench"] as const;
+export const HUB_COMMANDS = ["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug", "deploy", "status", "logs", "upgrade", "exec", "bench", "job"] as const;
 export type HubCommand = (typeof HUB_COMMANDS)[number];
 
 // ─── deprecated（clean break：旧命令仅提示迁移）────────────────
@@ -127,6 +128,7 @@ export type HubHandlers = {
   upgrade: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
   exec: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
   bench: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  job: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
 };
 
 export const defaultHubHandlers: HubHandlers = {
@@ -145,6 +147,13 @@ export const defaultHubHandlers: HubHandlers = {
   upgrade: cmdHubUpgrade,
   exec: cmdHubExec,
   bench: cmdHubBench,
+  job: async (passthrough, flags) => {
+    const [sub, ...rest] = passthrough;
+    if (sub === "submit") return cmdHubJobSubmit(rest, flags);
+    if (sub === "status") return cmdHubJobStatus(rest, flags);
+    if (sub === "fetch") return cmdHubJobFetch(rest, flags);
+    console.log("  用法: ptl hub job submit <计划> [--tasks n] | status [id] | fetch <id>");
+  },
   kernel: async (passthrough, flags) => {
     const [sub, ...rest] = passthrough;
     switch (sub) {
@@ -234,6 +243,9 @@ export async function cmdHub(
       break;
     case "bench":
       await handlers.bench(passthrough, flags);
+      break;
+    case "job":
+      await handlers.job(passthrough, flags);
       break;
     default:
       printNamespaceHelp("hub");
