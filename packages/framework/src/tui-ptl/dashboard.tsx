@@ -40,7 +40,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
 
   // 数据（每次刷新重读，简单可靠）
   useEffect(() => {
-    setSessions(listAllSessions());
+    setSessions(await listAllSessions());
     setTraces(listAllTraces());
     runQuickHealth().then(setHealth);
   }, [refreshKey]);

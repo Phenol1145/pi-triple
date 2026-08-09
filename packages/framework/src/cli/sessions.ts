@@ -220,7 +220,7 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
     extraArgs: passthrough.filter((a) => a !== "-c" && a !== "--continue"),
   });
 
-  const result = startPtlSession(launch, name, true);
+  const result = (await backend()).create(launch, name, true);
 
   if (result.status === 0) {
     spawnSync("sleep", ["1"]);
@@ -332,7 +332,7 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
       let warning: string | undefined;
       if (flags["new"] !== "true") {
         const files = scanSessionFiles(config);
-        const r = pickRestoreTape(files, entry, (id) => isTapeLive(id, panes));
+        const r = pickRestoreTape(files, entry, async (id) => isTapeLive(id, panes));
         resumeSession = r.resumeSession;
         warning = r.warning;
       }
@@ -344,7 +344,7 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
         extraArgs: entry.extraArgs,
         resumeSession,
       });
-      const result = startPtlSession(launch, name, true);
+      const result = (await backend()).create(launch, name, true);
       if (result.status !== 0) {
         console.log(`  \x1b[31m❌ 恢复 ${name} 失败: ${result.stderr}\x1b[0m`);
         failed++;
