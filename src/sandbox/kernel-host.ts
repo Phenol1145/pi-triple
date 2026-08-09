@@ -214,7 +214,7 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
   const debugSessions = new Map<string, { session: CDebugSession; lastUsedAt: number }>();
   const debugMaxSessions = Number(process.env.PTH_DEBUG_SESSIONS ?? 4);
   const debugIdleMs = Number(process.env.PTH_DEBUG_IDLE_MS ?? 30 * 60 * 1000);
-  const debugWorkRoot = process.env.PTH_DEBUG_WORKDIR ?? "/data/workspaces/.debug";
+  const debugWorkRoot = process.env.PTH_DEBUG_WORKDIR ?? "/data/workspaces";   // CDebugSession 内部自加 .debug/<id>
 
   const getSession = (id: string): CDebugSession | null => {
     const rec = debugSessions.get(id);
