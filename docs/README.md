@@ -14,6 +14,7 @@
 | 文档 | 内容 |
 |------|------|
 | [PTL 架构](./ptl/architecture.md) | 双 TUI · tmux 会话 · 交互层 · PTL→PTH 桥 |
+| [任务提交指南](./ptl/pth-task-submission.md) | PTL→PTH 四形态提交 · 生命周期 · 结果取回 · 批控 · 排障 |
 | [创作指南](./ptl/authoring.md) | 新建技能/扩展的放置与挂载规范 |
 
 ## PTH（Pi-Triple-Heavy）
