@@ -152,25 +152,39 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
   //   每次调用独立临时工作区（编译-运行管道——非持久进程——天然隔离）
   // 编译统计聚合（持久缓存 + 监视组件——/kernel/status 暴露）
   const compiledStats: CompiledStats = { cacheHits: 0, coldCompiles: 0, avgCompileMs: 0, totalMs: 0, cacheEntries: 0 };
-  // 持久缓存目录（独立于 workspaces——隔离安全；env 可配——compose 卷 compiled-cache）
+  // 编译核参数面（2026-08-09 扩展）：缓存目录/磁盘上限/LRU/超时/并发——env 全可配
   const compiledCacheDir = process.env.PTH_COMPILED_CACHE_DIR ?? "/data/compiled-cache/c";
+  const compiledCacheMaxMb = Number(process.env.PTH_COMPILED_CACHE_MAX_MB ?? 200);
+  const compiledMaxCache = Number(process.env.PTH_COMPILED_MAX_CACHE ?? 50);
+  const compiledTimeoutMs = Number(process.env.PTH_COMPILED_TIMEOUT_MS ?? 60_000);
+  const compiledConcurrency = Number(process.env.PTH_COMPILED_CONCURRENCY ?? 4);
+  let compiledInFlight = 0;   // 并发信号量（防编译风暴 CPU——超限 503 提示重试）
 
   app.post("/kernel/compiled", async (req, reply) => {
     if (!enforceAuth(req, reply)) return;
-    const { code, cc, timeoutMs } = (req.body ?? {}) as { code?: string; cc?: string; timeoutMs?: number };
-    if (typeof code !== "string" || code.length === 0) {
-      reply.code(400).send({ error: "code required" });
+    // 并发信号量：编译是 CPU 密集（gcc 进程）——超限 503（调用方重试/排队语义在 PTH 侧）
+    if (compiledInFlight >= compiledConcurrency) {
+      reply.code(503).send({ error: `compiled concurrency limit (${compiledConcurrency}) reached — retry` });
       return;
     }
-    // 编译器变体白名单（显式 > 默认 cc）——防任意命令注入面（编译器路径固定）
-    const ccBin = cc === "gcc" ? "gcc" : cc === "clang" ? "clang" : cc === "tcc" ? "tcc" : undefined;
-    const workDir = `/data/workspaces/.compiled-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    compiledInFlight++;
+    let workDir = "";
     try {
+      const { code, cc, timeoutMs } = (req.body ?? {}) as { code?: string; cc?: string; timeoutMs?: number };
+      if (typeof code !== "string" || code.length === 0) {
+        reply.code(400).send({ error: "code required" });
+        return;
+      }
+      // 编译器变体白名单（显式 > 默认 cc）——防任意命令注入面（编译器路径固定）
+      const ccBin = cc === "gcc" ? "gcc" : cc === "clang" ? "clang" : cc === "tcc" ? "tcc" : undefined;
+      workDir = `/data/workspaces/.compiled-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const kernel = new CCompiledKernel({
         workDir,
         cacheDir: compiledCacheDir,     // 持久缓存（跨调用/跨容器重启）
         cc: ccBin,
-        compileTimeoutMs: timeoutMs ?? 60_000,
+        compileTimeoutMs: timeoutMs ?? compiledTimeoutMs,
+        maxCache: compiledMaxCache,
+        maxCacheBytes: compiledCacheMaxMb * 1024 * 1024,
         onMetric: (m) => {
           if (m.type === "cache-hit") compiledStats.cacheHits++;
           else if (m.type === "compile") {
@@ -187,8 +201,9 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
     } catch (e) {
       return { ok: false, error: { message: `compiled kernel error: ${(e as Error).message}` }, durationMs: 0 };
     } finally {
+      compiledInFlight--;
       // 编译运行工作区清理（持久缓存独立目录——保留）
-      import("node:fs/promises").then(({ rm }) => rm(workDir, { recursive: true, force: true })).catch(() => {});
+      if (workDir) import("node:fs/promises").then(({ rm }) => rm(workDir, { recursive: true, force: true })).catch(() => {});
     }
   });
 

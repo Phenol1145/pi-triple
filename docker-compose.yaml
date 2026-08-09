@@ -94,6 +94,10 @@ services:
       # kernel 宿主池容量：需 >= 并发 worker 数（batch × 角色）——不足时 acquire 排队超时
       - PTH_KERNEL_POOL_SIZE=${PTH_KERNEL_POOL_SIZE:-16}
       - PTH_COMPILED_CACHE_DIR=/data/compiled-cache/c
+      - PTH_COMPILED_CACHE_MAX_MB=${PTH_COMPILED_CACHE_MAX_MB:-200}
+      - PTH_COMPILED_MAX_CACHE=${PTH_COMPILED_MAX_CACHE:-50}
+      - PTH_COMPILED_TIMEOUT_MS=${PTH_COMPILED_TIMEOUT_MS:-60000}
+      - PTH_COMPILED_CONCURRENCY=${PTH_COMPILED_CONCURRENCY:-4}
     networks:
       - sandbox-internal
     restart: unless-stopped
