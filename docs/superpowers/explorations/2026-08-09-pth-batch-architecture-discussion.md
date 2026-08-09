@@ -92,6 +92,14 @@
 | 编译核专属指标（耗时/缓存命中/变体）| ② CCompiledKernel onMetric 回调 + /kernel/status 聚合（obs.kernels 可查）|
 | debug 指标（attach/断点/step）| ③ DebugSession 可选 onEvent 接口（预留——接线时生效）|
 
+## 裁决补充（2026-08-09 后续）
+
+| # | 裁决 | 内容 |
+|---|------|------|
+| 1 | **⑥ 重计算单元 = 命名编译单元（B 方案——用户最初想法）** | 源码持久化（toolstore compiled-units/）+ 引用加载（c.saveUnit/executeUnit/listUnits）+ 增量重算（sha256 缓存天然处理——源码变→自动重编译）；**作为本体内容** |
+| 2 | **SPEC v2 补充（并行 DAG/静态分析/更多语言）= 扩展开发** | 不作为本体——后续按需扩展 |
+| 3 | v0.6 发布范围 | ④分配策略自动调度 + ⑤batch add --role + ⑥命名编译单元 + 既有一切（编译核/debug/单大 batch/性能优化） |
+
 ## 遗留 / backlog
 
 - [ ] 编译核持久缓存（§9①）——本轮提议未实施
