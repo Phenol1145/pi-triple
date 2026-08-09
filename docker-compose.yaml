@@ -40,6 +40,8 @@ services:
       - PTH_PG_POOL_MAX=${PTH_PG_POOL_MAX:-8}
       # agent 循环步骤上限（模型自主开发——复杂任务需更多步骤）
       - PTH_AGENT_MAX_STEPS=${PTH_AGENT_MAX_STEPS:-30}
+      # agent 单次 LLM 调用超时（官方 deepseek tools 场景慢——90s）
+      - PTH_AGENT_LLM_TIMEOUT_MS=${PTH_AGENT_LLM_TIMEOUT_MS:-90000}
     # F/WP3 Task 13：sandbox 失效降级阈值（连续 N 次转发失败置 degraded；默认 3，可 env 覆盖）
       - SANDBOX_DEGRADED_THRESHOLD=${SANDBOX_DEGRADED_THRESHOLD:-3}
     # 路径约定统一（F/WP3 Task 12）：pth 侧 WorkspaceManager basePath = <DATA_DIR>/workspaces
