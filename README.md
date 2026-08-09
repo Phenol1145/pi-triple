@@ -102,7 +102,10 @@ curl localhost:33100/metrics   # Prometheus 四层指标
 | 能力 | 说明 | 实测 |
 |------|------|------|
 | **多语言持久 REPL** | PyKernel 管道 JSON-RPC / BashKernel 持久 shell / TS VM 沙箱（能力白名单） | Python 执行 **230x**（0.12ms vs spawn 12ms） |
-| **编译核** | C 首发（gcc/clang/tcc 变体）：编译-运行管道 + sha256 增量缓存（LRU 50）+ 文件即状态 + 诊断回填 | clang 编译 hello-c 真实链路，缓存提速 **3x** |
+| **编译核** | C 首发（gcc/clang/tcc 变体）：编译-运行管道 + **持久缓存**（跨调用/跨容器重启——同代码 ~1ms 命中）+ 命名编译单元（c.saveUnit/executeUnit——跨任务复用 + 增量重算） | 缓存恢复端到端验证（cacheHits 3/coldCompiles 0） |
+| **调试核** | gdb MI 全链路（断点/单步/栈/变量/求值——sandbox 端点生产可用）+ 异步停止模型 | 端到端：breakpoint-hit bkptno=1 frame args x=14 → evaluate x+1=15 |
+| **Batch 架构** | **单大 batch 默认**（启动即全量构成——node 基线不重复省 40% 内存）+ **worker 级控制**（pause/resume/remove/add——进程内启停）+ **资源分配策略接口**（balanced/reinforced + 注册表可扩展） | 端到端：remove→pending/add→completed/pause 隔离其他角色 |
+| **自动调度** | descheduler 思想（PTH_AUTOSCALE_MODE=balanced|reinforced——per-role 队列积压自动强化 batch） | reinforced：角色积压超阈值自动 spawn 强化 |
 | **调试协议** | gdb MI 解析器 + CDebugSession（断点/单步/栈/变量/求值）+ 四级回退链（L0 gdb → L2 bash 核 strace/valgrind） | 容器内断点命中契约验证（breakpoint-hit + frame args） |
 | **标准扩展包** | memory/context/model/perf/obs 五成员（ts 核内能力对象）+ 配置中心（env 快照 + 运行时 SET）+ 策略闭环（publish/apply）+ obs IPC 请求通道 | 端到端：LLM 用 obs 调查发现系统 bug 并报告 |
 | **任务池** | 发布（代码形态）→ 认领 → 执行 → submit/reject 闭环，多 worker batch | 语法错误任务按 reject 处理（不误标 completed） |
