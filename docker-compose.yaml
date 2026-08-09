@@ -38,6 +38,8 @@ services:
       - PTH_BATCH_TICK_MS=${PTH_BATCH_TICK_MS:-1000}
       # batch 子进程 PG 连接池上限（7 角色并发 ≤7——8 够；防批量 batch 连接失控）
       - PTH_PG_POOL_MAX=${PTH_PG_POOL_MAX:-8}
+      # agent 循环步骤上限（模型自主开发——复杂任务需更多步骤）
+      - PTH_AGENT_MAX_STEPS=${PTH_AGENT_MAX_STEPS:-30}
     # F/WP3 Task 13：sandbox 失效降级阈值（连续 N 次转发失败置 degraded；默认 3，可 env 覆盖）
       - SANDBOX_DEGRADED_THRESHOLD=${SANDBOX_DEGRADED_THRESHOLD:-3}
     # 路径约定统一（F/WP3 Task 12）：pth 侧 WorkspaceManager basePath = <DATA_DIR>/workspaces
