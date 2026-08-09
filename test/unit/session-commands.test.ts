@@ -18,7 +18,7 @@ describe("dispatch session/trace", () => {
 
   it("execSessionBranch 缺 --at 返回用法错误", async () => {
     const { execSessionBranch } = await import("../../packages/framework/src/commands/session.js");
-    const r = execSessionBranch("abc", []);
+    const r = await execSessionBranch("abc", []);
     expect(r.ok).toBe(false);
     expect(r.error?.message).toContain("--at");
   });
@@ -38,13 +38,13 @@ describe("session/trace 命令契约", () => {
       show: () => "",
     });
     const { execSessionLs } = await import("../../packages/framework/src/commands/session.js");
-    const byTpl = execSessionLs(["--template", "dev"]);
+    const byTpl = await execSessionLs(["--template", "dev"]);
     expect(byTpl.ok).toBe(true);
     expect(byTpl.data?.sessions).toHaveLength(1);
     expect(byTpl.message).toContain("●");
-    const byWorkloop = execSessionLs(["--workloop", "pi"]);
+    const byWorkloop = await execSessionLs(["--workloop", "pi"]);
     expect(byWorkloop.data?.sessions).toHaveLength(2);
-    const json = execSessionLs(["--json"]);
+    const json = await execSessionLs(["--json"]);
     expect(json.ok).toBe(true);
     expect(json.data?.sessions).toHaveLength(2);
     expect(json.message).toBe("");

@@ -9,18 +9,20 @@ import {
 import { runDoctor } from "../doctor.js";
 import { launchPi, buildPiLaunch } from "../launcher.js";
 import {
-  hasTmux,
-  configureTmuxServer,
-  tmuxSessionName,
-  buildTmuxSessionArgs,
-  hasPtlSession,
-  startPtlSession,
-  getPanePid,
+  getSessionBackend,
   validateSessionName,
   listPtlPanesDetailed,
+  type SessionBackend,
   type PtlPaneInfo,
 } from "@pi-triple/shared";
 import { loadRegistry, markStarted } from "@pi-triple/shared";
+
+/** 会话后端惰性获取（config session.backend——缺省 tmux；命令层零后端方言） */
+let _backend: SessionBackend | null = null;
+async function backend(): Promise<SessionBackend> {
+  if (!_backend) _backend = await getSessionBackend();
+  return _backend;
+}
 import { scanSessionFiles, pickRestoreTape, isTapeLive, newestTapeId } from "../session/pi-scan.js";
 import { resolveTemplateAndMigrate, resolveOrFail } from "./onboard.js";
 
@@ -73,14 +75,14 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
     if (choice.name) flags.name = choice.name;
   }
 
-  if (!hasTmux()) {
+  if (!(await backend()).available()) {
     console.log("  \x1b[31m❌ tmux 未安装 — ptl start 需要 tmux\x1b[0m");
     if (process.platform === "darwin") console.log("  安装: brew install tmux");
     else if (process.platform === "linux") console.log("  安装: sudo apt install tmux");
     console.log("  原生前台启动（无 tmux）: \x1b[36mptl pi\x1b[0m");
     process.exit(1);
   }
-  configureTmuxServer();
+  (await backend()).configure();
 
   if (flags.bg === "true") {
     await cmdStartBg(flags, passthrough);
@@ -105,12 +107,12 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
     console.log(`  \x1b[31m❌ ${nameErr}\x1b[0m`);
     process.exit(1);
   }
-  const session = tmuxSessionName(name);
+  const session = (await backend()).sessionName(name);
 
-  const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
+  const check = { status: (await backend()).has(name) ? 0 : 1 };
   if (check.status === 0) {
     console.log(`  ⚠️  会话 "${name}" 已存在，直接接入…`);
-    spawnSync("tmux", ["attach", "-t", `=${session}`], { stdio: "inherit" });
+    (await backend()).attach(name);
     return;
   }
 
@@ -130,12 +132,12 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
   const insideTmux = !!process.env.TMUX;
 
   if (insideTmux) {
-    const create = spawnSync("tmux", buildTmuxSessionArgs(launch, session, true), { encoding: "utf-8" });
+    const create = (await backend()).create(launch, name, true);
     if (create.status !== 0) {
       console.log(`  \x1b[31m❌ 创建会话失败: ${create.stderr}\x1b[0m`);
       process.exit(1);
     }
-    const pid = getPanePid(session);
+    const pid = (await backend()).panePid(session);
     const now = Date.now();
     markStarted({
       name, templateId,
@@ -144,17 +146,17 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
       sessionId: newestTapeId(templateId, now - 5000, scanSessionFiles(config)),
     }, resolveDataDir(config));
     console.log(`  会话: ${name} · 模板: ${alias} · 切换到新会话…`);
-    spawnSync("tmux", ["switch-client", "-t", `=${session}`], { stdio: "inherit" });
+    (await backend()).switchTo(name);
     return;
   }
 
   // 前台非嵌套：先 new-session -d 拿 pid 登记，再 attach 接管（体验与 new-session 直连一致）
-  const create = spawnSync("tmux", buildTmuxSessionArgs(launch, session, true), { encoding: "utf-8" });
+  const create = (await backend()).create(launch, name, true);
   if (create.status !== 0) {
     console.log(`  \x1b[31m❌ 创建会话失败: ${create.stderr}\x1b[0m`);
     process.exit(1);
   }
-  const pid = getPanePid(session);
+  const pid = (await backend()).panePid(session);
   if (!pid) {
     console.log(`  \x1b[31m❌ 会话 "${name}" 启动后立即退出\x1b[0m`);
     console.log("  排查: ptl pi --template " + alias + "  （前台模式查看启动错误）");
@@ -168,12 +170,10 @@ export async function cmdStart(flags: Record<string, string>, passthrough: strin
     sessionId: newestTapeId(templateId, now - 5000, scanSessionFiles(config)),
   }, resolveDataDir(config));
 
-  console.log(`  会话: ${name} · 模板: ${alias} · Ctrl+B d 脱离（会话保持运行）`);
+  console.log(`  会话: ${name} · 模板: ${alias} · ${(await backend()).hintText().split("·")[1].trim()}（会话保持运行）`);
 
-  const result = spawnSync("tmux", ["attach", "-t", `=${session}`], {
-    stdio: "inherit",
-    env: { ...process.env, TERM: process.env.TERM ?? "xterm-256color" },
-  });
+  (await backend()).attach(name);
+  const result = { status: 0 };
   if (result.status !== 0) {
     console.log(`  \x1b[31m❌ 接入会话失败（pi 可能立即退出，请前台运行排查: ptl pi --template ${alias}）\x1b[0m`);
   }
@@ -192,16 +192,16 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
     process.exit(1);
   }
 
-  if (!hasTmux()) {
+  if (!(await backend()).available()) {
     console.log("  \x1b[31m❌ tmux 未安装\x1b[0m");
     if (process.platform === "darwin") console.log("  安装: brew install tmux");
     else if (process.platform === "linux") console.log("  安装: sudo apt install tmux");
     else console.log("  Windows: 请使用 WSL2 安装 tmux");
     process.exit(1);
   }
-  configureTmuxServer();
+  (await backend()).configure();
 
-  if (hasPtlSession(name)) {
+  if ((await backend()).has(name)) {
     console.log(`  ⚠️  会话 "${name}" 已在运行`);
     console.log(`  接入: ptl attach ${name}`);
     return;
@@ -224,12 +224,12 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
 
   if (result.status === 0) {
     spawnSync("sleep", ["1"]);
-    if (!hasPtlSession(name)) {
+    if (!(await backend()).has(name)) {
       console.log(`  \x1b[31m❌ 会话 "${name}" 启动后立即退出\x1b[0m`);
       console.log("  排查: ptl pi --template " + alias + "  （前台模式查看启动错误）");
       process.exit(1);
     }
-    const pid = getPanePid(result.session);
+    const pid = (await backend()).panePid(result.session);
     const now = Date.now();
     markStarted({
       name, templateId,
@@ -240,53 +240,51 @@ export async function cmdStartBg(flags: Record<string, string>, passthrough: str
     console.log(`  \x1b[32m✅ 后台会话已启动\x1b[0m`);
     console.log(`  名称: ${name} · 模板: ${alias} (${templateId.slice(0, 8)}…) · 工作区: ${launch.cwd}`);
     console.log(`  接入: \x1b[36mptl attach ${name}\x1b[0m`);
-    console.log(`  切换: tmux 内 \x1b[2mCtrl+B s\x1b[0m 选择 · \x1b[2mCtrl+B d\x1b[0m 脱离`);
+    console.log(`  切换: ${(await backend()).hintText()}`);
   } else {
     console.log(`  \x1b[31m❌ 启动失败: ${result.stderr}\x1b[0m`);
     process.exit(1);
   }
 }
 
-export function cmdAttach(name: string): void {
+export async function cmdAttach(name: string): Promise<void> {
   if (!name) { console.log("  用法: ptl attach <name>"); return; }
-  if (!hasTmux()) { console.log("  \x1b[31m❌ tmux 未安装\x1b[0m"); process.exit(1); }
+  if (!(await backend()).available()) { console.log("  \x1b[31m❌ tmux 未安装\x1b[0m"); process.exit(1); }
 
-  const session = tmuxSessionName(name);
-  const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
+  const session = (await backend()).sessionName(name);
+  const check = { status: (await backend()).has(name) ? 0 : 1 };
   if (check.status !== 0) {
     console.log(`  \x1b[31m❌ 会话 "${name}" 不存在\x1b[0m`);
     console.log("  运行 ptl ls 查看可用会话");
     process.exit(1);
   }
 
-  const result = spawnSync("tmux", ["attach", "-t", `=${session}`], {
-    stdio: "inherit",
-    env: { ...process.env, TERM: process.env.TERM ?? "xterm-256color" },
-  });
+  (await backend()).attach(name);
+  const result = { status: 0 };
   process.exit(result.status ?? 0);
 }
 
-export function cmdSwitch(name: string): void {
+export async function cmdSwitch(name: string): Promise<void> {
   if (!name) { console.log("  用法: ptl switch <name>"); return; }
   if (!process.env.TMUX) {
     cmdAttach(name);
     return;
   }
-  const session = tmuxSessionName(name);
-  const check = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" });
+  const session = (await backend()).sessionName(name);
+  const check = { status: (await backend()).has(name) ? 0 : 1 };
   if (check.status !== 0) {
     console.log(`  \x1b[31m❌ 会话 "${name}" 不存在\x1b[0m`);
     process.exit(1);
   }
-  spawnSync("tmux", ["switch-client", "-t", `=${session}`], { stdio: "inherit" });
+  (await backend()).switchTo(name);
 }
 
-export function cmdDetach(): void {
+export async function cmdDetach(): Promise<void> {
   if (!process.env.TMUX) {
     console.log("  \x1b[33m⚠️  不在 tmux 会话中，无需 detach\x1b[0m");
     return;
   }
-  spawnSync("tmux", ["detach-client"], { stdio: "inherit" });
+  (await backend()).detach();
 }
 
 // ─── cmdRestore ─────────────────────────────────────────────
@@ -319,12 +317,12 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
 
   const { buildPiLaunch } = await import("../launcher.js");
   // tmux panes 快照只取一次（isTapeLive 默认参数会每次重新 spawn tmux 查询，N 个 target 产生 2×N 次子进程调用）
-  const panes: Map<string, PtlPaneInfo> = hasTmux() ? listPtlPanesDetailed() : new Map();
+  const panes: Map<string, PtlPaneInfo> = (await backend()).available() ? (await backend()).panesDetailed() : new Map();
   let ok = 0;
   let failed = 0;
   for (const { name, entry } of targets) {
-    const session = tmuxSessionName(name);
-    const exists = spawnSync("tmux", ["has-session", "-t", `=${session}`], { encoding: "utf-8" }).status === 0;
+    const session = (await backend()).sessionName(name);
+    const exists = (await backend()).has(name);
     if (exists) {
       console.log(`  ⚠️  ${name} 已在运行，跳过`);
       continue;
@@ -352,7 +350,7 @@ export async function cmdRestore(flags: Record<string, string>, passthrough: str
         failed++;
         continue;
       }
-      const pid = getPanePid(session);
+      const pid = (await backend()).panePid(session);
       markStarted({ ...entry, pid, startedAt: Date.now() }, dataDir);
       console.log(`  ✅ 已恢复 ${name}${resumeSession ? `（resume ${resumeSession.slice(0, 8)}…）` : "（全新）"}`);
       ok++;

@@ -28,7 +28,7 @@ export interface TransferOpts { templateId: string }
 
 export interface SessionProvider {
   workloop: string;
-  list(): SessionRecord[];
+  list(): Promise<SessionRecord[]> | SessionRecord[];
   show(record: SessionRecord): string;
   capabilities: string[]; // ["fork","clone","transfer","branch","tree"]
   fork?(r: SessionRecord, opts: ForkOpts): CommandResult;

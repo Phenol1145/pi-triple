@@ -8,11 +8,13 @@ import type { PiTripleConfig } from "@pi-triple/shared";
 // toSessionRecords 依赖 tmux 运行态：mock tmux 模块（保留 formatAge 真实实现），无真实 tmux 依赖
 const tmuxMocks = vi.hoisted(() => ({
   hasTmux: vi.fn(),
-  listPtlSessions: vi.fn(),
-  listPtlPanesDetailed: vi.fn(),
+  listPtlSessions: vi.fn().mockReturnValue([]),
+  listPtlPanesDetailed: vi.fn().mockReturnValue(new Map()),
 }));
-vi.mock("@pi-triple/shared", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@pi-triple/shared")>();
+// toSessionRecords 走 SessionBackend（tmux-backend 内部从 ./tmux.js import）——
+// mock tmux.js 文件本身（shared/index 的 re-export 与 tmux-backend 的相对 import 共享同一文件）
+vi.mock("../../packages/shared/src/tmux.js", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("../../packages/shared/src/tmux.js")>();
   return { ...mod, hasTmux: tmuxMocks.hasTmux, listPtlSessions: tmuxMocks.listPtlSessions, listPtlPanesDetailed: tmuxMocks.listPtlPanesDetailed };
 });
 
@@ -86,12 +88,12 @@ describe("pi-scan", () => {
     expect(r.warning).toBeTruthy();
   });
 
-  it("isTapeLive：pane 名 ptl-<id8> 或 currentCommand 含完整 id", () => {
+  it("isTapeLive：pane 名 ptl-<id8> 或 currentCommand 含完整 id", async () => {
     const panes = new Map<string, any>([
       ["ptl-aaaaaaaa", { pid: 123, currentCommand: "pi --session aaaaaaaa-1111-4111-8111-111111111111" }],
     ]);
-    expect(isTapeLive("aaaaaaaa-1111-4111-8111-111111111111", panes)).toBe(true);
-    expect(isTapeLive("bbbbbbbb-2222-4222-8222-222222222222", panes)).toBe(false);
+    expect(await isTapeLive("aaaaaaaa-1111-4111-8111-111111111111", panes)).toBe(true);
+    expect(await isTapeLive("bbbbbbbb-2222-4222-8222-222222222222", panes)).toBe(false);
   });
 });
 
@@ -99,8 +101,8 @@ describe("toSessionRecords 状态判定（tmux mock）", () => {
   let root: string;
   beforeEach(() => {
     tmuxMocks.hasTmux.mockReset();
-    tmuxMocks.listPtlSessions.mockReset();
-    tmuxMocks.listPtlPanesDetailed.mockReset();
+    tmuxMocks.listPtlSessions.mockReset().mockReturnValue([]);
+    tmuxMocks.listPtlPanesDetailed.mockReset().mockReturnValue(new Map());
     root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-scan-records-"));
     fs.mkdirSync(path.join(root, "sessions", "t1"), { recursive: true });
     fs.writeFileSync(path.join(root, "sessions", "t1", "2026-07-28T16-35-58-667Z_aaaaaaaa-1111-4111-8111-111111111111.jsonl"), HEADER + "\n" + EVENT + "\n");
@@ -111,19 +113,19 @@ describe("toSessionRecords 状态判定（tmux mock）", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("tmux 不可用 → 全部 stopped（无崩溃）", () => {
+  it("tmux 不可用 → 全部 stopped（无崩溃）", async () => {
     tmuxMocks.hasTmux.mockReturnValue(false);
-    const recs = toSessionRecords(scanSessionFiles(root));
+    const recs = await toSessionRecords(scanSessionFiles(root));
     expect(recs).toHaveLength(1);
     expect(recs[0]!.status).toBe("stopped");
     expect(recs[0]!.summary).toContain("○ 停止");
   });
 
-  it("tmux 在 + pid 存活 → running（detail 兼容：前端占用/空闲/运行命令）", () => {
+  it("tmux 在 + pid 存活 → running（detail 兼容：前端占用/空闲/运行命令）", async () => {
     tmuxMocks.hasTmux.mockReturnValue(true);
     tmuxMocks.listPtlSessions.mockReturnValue([{ name: "aaaaaaaa", windows: 1, created: new Date(), attached: 0, activityAgeMs: 5000 }]);
     tmuxMocks.listPtlPanesDetailed.mockReturnValue(new Map([["ptl-aaaaaaaa", { pid: process.pid, currentCommand: "pi" }]]));
-    const recs = toSessionRecords(scanSessionFiles(root));
+    const recs = await toSessionRecords(scanSessionFiles(root));
     expect(recs).toHaveLength(1);
     expect(recs[0]!.status).toBe("running");
     expect(recs[0]!.summary).toContain("● 运行中");
@@ -131,11 +133,11 @@ describe("toSessionRecords 状态判定（tmux mock）", () => {
     expect(recs[0]!.detail["运行命令"]).toBe("pi");
   });
 
-  it("空壳（tmux 在但 pane pid 已死）→ stopped，不再误显运行中", () => {
+  it("空壳（tmux 在但 pane pid 已死）→ stopped，不再误显运行中", async () => {
     tmuxMocks.hasTmux.mockReturnValue(true);
     tmuxMocks.listPtlSessions.mockReturnValue([{ name: "aaaaaaaa", windows: 1, created: new Date(), attached: 0, activityAgeMs: 5000 }]);
     tmuxMocks.listPtlPanesDetailed.mockReturnValue(new Map([["ptl-aaaaaaaa", { pid: -1, currentCommand: "zsh" }]]));
-    const recs = toSessionRecords(scanSessionFiles(root));
+    const recs = await toSessionRecords(scanSessionFiles(root));
     expect(recs).toHaveLength(1);
     expect(recs[0]!.status).toBe("stopped");
     expect(recs[0]!.summary).toContain("○ 停止");

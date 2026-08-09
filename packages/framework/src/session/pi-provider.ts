@@ -8,7 +8,7 @@ import { loadConfig } from "@pi-triple/shared";
 import type { CommandResult } from "../commands.js";
 import { registerSessionProvider } from "./session-store.js";
 
-function list(): SessionRecord[] {
+async function list(): Promise<SessionRecord[]> {
   const cfg = loadConfig();
   return toSessionRecords(scanSessionFiles(cfg));
 }

@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { buildPiLaunch } from "../launcher.js";
 import { startPtlSession } from "@pi-triple/shared";
 import { loadConfig, getTemplateAlias, resolveDataDir } from "@pi-triple/shared";
-import { configureTmuxServer, tmuxSessionName } from "@pi-triple/shared";
+import { getSessionBackend, type SessionBackend } from "@pi-triple/shared";
 import { WorkspaceManager, detectPlatform } from "@pi-triple/infra";
 import fs from "node:fs";
 
@@ -53,7 +53,7 @@ export async function cmdAgentRun(flags: Record<string, string>, passthrough: st
   mkdirSync(path.join(agentDir, "main"), { recursive: true });
   mkdirSync(path.join(agentDir, "temp"), { recursive: true });
 
-  configureTmuxServer();
+  (await getSessionBackend()).configure();
 
   const launch = await buildPiLaunch(templateId, {
     agentInstanceId: agentId,
@@ -67,16 +67,16 @@ export async function cmdAgentRun(flags: Record<string, string>, passthrough: st
   });
 
   const name = `agent-${agentId.slice(0, 8)}`;
-  const result = startPtlSession(launch, name, true); // detach=true (background)
+  const backend = await getSessionBackend();
+  const result = backend.create(launch, name, true); // detach=true (background)
   if (result.status !== 0) {
     console.log(`  \x1b[31m❌ 会话启动失败: ${result.stderr}\x1b[0m`);
     process.exit(1);
   }
 
-  // 初始 task 注入：等会话就绪后发送
-  const session = tmuxSessionName(name);
+  // 初始 task 注入：等会话就绪后发送（send-keys 收敛进 backend）
   spawnSync("sleep", ["2"], { encoding: "utf-8" });
-  spawnSync("tmux", ["send-keys", "-t", session, task, "Enter"], { encoding: "utf-8" });
+  backend.sendKeys(name, task);
 
   console.log(`  Agent: ${agentId}`);
   console.log(`  会话: ${name}`);

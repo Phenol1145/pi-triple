@@ -20,8 +20,9 @@ export function registerTraceProvider(p: TraceProvider): void {
   if (!traceProviders.some((x) => x.workloop === p.workloop)) traceProviders.push(p);
 }
 
-export function listAllSessions(): SessionRecord[] {
-  return sessionProviders.flatMap((p) => p.list());
+export async function listAllSessions(): Promise<SessionRecord[]> {
+  const lists = await Promise.all(sessionProviders.map((p) => Promise.resolve(p.list())));
+  return lists.flat();
 }
 
 export function listAllTraces(): TraceRecord[] {
@@ -49,8 +50,9 @@ function resolveByPrefix<T extends { id: string }>(
   return { ok: false, reason: "not_found" };
 }
 
-export function resolveSession(input: string): SessionResolveResult {
-  return resolveByPrefix(sessionProviders.flatMap((p) => p.list()), input);
+export async function resolveSession(input: string): Promise<SessionResolveResult> {
+  const lists = await Promise.all(sessionProviders.map((p) => Promise.resolve(p.list())));
+  return resolveByPrefix(lists.flat(), input);
 }
 
 export function resolveTrace(input: string): TraceResolveResult {
@@ -85,12 +87,12 @@ const SESSION_OPS: Record<SessionOp, (p: SessionProvider, r: SessionRecord, o: a
   branch: (p, r, o) => p.branch?.(r, o as BranchOpts),
 };
 
-export function operateSession(
+export async function operateSession(
   op: string,
   id: string,
   opts: ForkOpts | BranchOpts | TransferOpts,
-): CommandResult {
-  const resolved = resolveSession(id);
+): Promise<CommandResult> {
+  const resolved = await resolveSession(id);
   if (!resolved.ok) {
     if (resolved.reason === "ambiguous") {
       return { ok: false, message: "", error: { code: "AMBIGUOUS", message: `会话 "${id}" 匹配 ${resolved.candidates?.length ?? 0} 个，请使用完整 UUID：${resolved.candidates?.map((c) => c.slice(0, 8)).join(", ")}` } };

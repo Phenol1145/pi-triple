@@ -1,5 +1,7 @@
 export * from "./config.js";
 export * from "./tmux.js";
+export * from "./session-backend.js";
+export * from "./tmux-backend.js";
 export * from "./output.js";
 export * from "./warnings.js";
 export * from "./session-registry.js";

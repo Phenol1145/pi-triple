@@ -25,32 +25,32 @@ describe("session-store", () => {
     _resetForTests();
   });
 
-  it("session 与 trace 视图分开", () => {
+  it("session 与 trace 视图分开", async () => {
     registerSessionProvider(makeProvider("pi", ["fork"]));
     registerTraceProvider({ workloop: "bidding", list: () => [{ id: "trace-1", kind: "trace", workloop: "bidding", templateId: "t1", timestamp: "x", summary: "credit -5", detail: {} }], show: () => "trace" });
-    expect(listAllSessions().every((s) => s.kind === "session")).toBe(true);
+    expect((await listAllSessions()).every((s) => s.kind === "session")).toBe(true);
     expect(listAllTraces().every((t) => t.kind === "trace")).toBe(true);
-    expect(listAllSessions()).toHaveLength(1);
+    expect(await listAllSessions()).toHaveLength(1);
     expect(listAllTraces()).toHaveLength(1);
   });
 
-  it("resolveSession 支持完整 UUID 与唯一前缀", () => {
+  it("resolveSession 支持完整 UUID 与唯一前缀", async () => {
     registerSessionProvider(makeProvider("pi", []));
-    const full = resolveSession("aaaaaaaa-1111-4111-8111-111111111111");
+    const full = await resolveSession("aaaaaaaa-1111-4111-8111-111111111111");
     expect(full.ok).toBe(true);
     if (full.ok) expect(full.record.id).toBe("aaaaaaaa-1111-4111-8111-111111111111");
-    const prefix = resolveSession("aaaaaaaa-1111");
+    const prefix = await resolveSession("aaaaaaaa-1111");
     expect(prefix.ok).toBe(true);
-    const none = resolveSession("zzzz");
+    const none = await resolveSession("zzzz");
     expect(none.ok).toBe(false);
     if (!none.ok) expect(none.reason).toBe("not_found");
   });
 
-  it("resolveSession 前缀多命中返回 ambiguous + 候选", () => {
+  it("resolveSession 前缀多命中返回 ambiguous + 候选", async () => {
     registerSessionProvider(makeProvider("pi", [], "aaaaaaaa-1111-4111-8111-111111111111"));
     // 适配：registerSessionProvider 按 workloop 幂等，同 workloop 第二个 provider 不会注册，故用不同 workloop 构造两个共享前缀的会话
     registerSessionProvider(makeProvider("bidding", [], "aaaaaaaa-2222-4222-8222-222222222222"));
-    const r = resolveSession("aaaaaaaa");
+    const r = await resolveSession("aaaaaaaa");
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.reason).toBe("ambiguous");
@@ -58,19 +58,19 @@ describe("session-store", () => {
     }
   });
 
-  it("operateSession 分发到 provider；capabilities 外操作返回 NOT_SUPPORTED", () => {
+  it("operateSession 分发到 provider；capabilities 外操作返回 NOT_SUPPORTED", async () => {
     const p = makeProvider("pi", ["fork"]);
     registerSessionProvider(p);
-    const ok = operateSession("fork", "aaaaaaaa-1111-4111-8111-111111111111", {});
+    const ok = await operateSession("fork", "aaaaaaaa-1111-4111-8111-111111111111", {});
     expect(ok.ok).toBe(true);
-    const no = operateSession("transfer", "aaaaaaaa-1111-4111-8111-111111111111", { templateId: "t2" });
+    const no = await operateSession("transfer", "aaaaaaaa-1111-4111-8111-111111111111", { templateId: "t2" });
     expect(no.ok).toBe(false);
     expect(no.error?.code).toBe("NOT_SUPPORTED");
   });
 
-  it("operateSession 找不到会话返回 SESSION_NOT_FOUND", () => {
+  it("operateSession 找不到会话返回 SESSION_NOT_FOUND", async () => {
     registerSessionProvider(makeProvider("pi", ["fork"]));
-    const r = operateSession("fork", "nope", {});
+    const r = await operateSession("fork", "nope", {});
     expect(r.ok).toBe(false);
     expect(r.error?.code).toBe("SESSION_NOT_FOUND");
   });

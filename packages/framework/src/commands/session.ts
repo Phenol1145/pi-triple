@@ -34,9 +34,9 @@ export function parseFlags(args: string[]): { flags: Record<string, string>; res
 
 // ─── ls ─────────────────────────────────────────────────────
 
-export function execSessionLs(args: string[]): CommandResult {
+export async function execSessionLs(args: string[]): Promise<CommandResult> {
   const { flags } = parseFlags(args);
-  const sessions = listAllSessions();
+  const sessions = await listAllSessions();
   const filtered = sessions.filter((s) =>
     (!flags.template || s.templateAlias === flags.template || s.templateId === flags.template) &&
     (!flags.workloop || s.workloop === flags.workloop));
@@ -53,8 +53,8 @@ export function execSessionLs(args: string[]): CommandResult {
 
 // ─── show ───────────────────────────────────────────────────
 
-export function execSessionShow(id: string): CommandResult {
-  const r = resolveSession(id);
+export async function execSessionShow(id: string): Promise<CommandResult> {
+  const r = await resolveSession(id);
   if (!r.ok) {
     return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在（ptl session ls 查看）` } };
   }
@@ -65,17 +65,17 @@ export function execSessionShow(id: string): CommandResult {
 
 // ─── fork / clone / transfer（委托 operateSession）────────────
 
-export function execSessionFork(id: string, args: string[]): CommandResult {
+export async function execSessionFork(id: string, args: string[]): Promise<CommandResult> {
   const { flags } = parseFlags(args);
   return operateSession("fork", id, { templateId: flags.template });
 }
 
-export function execSessionClone(id: string, args: string[]): CommandResult {
+export async function execSessionClone(id: string, args: string[]): Promise<CommandResult> {
   const { flags } = parseFlags(args);
   return operateSession("clone", id, { templateId: flags.template });
 }
 
-export function execSessionTransfer(id: string, args: string[]): CommandResult {
+export async function execSessionTransfer(id: string, args: string[]): Promise<CommandResult> {
   const { flags } = parseFlags(args);
   if (!flags.template) return { ok: false, message: "", error: { code: "USAGE", message: "用法: ptl session transfer <id> --template <tpl>" } };
   return operateSession("transfer", id, { templateId: flags.template });
@@ -89,12 +89,12 @@ function listNodesFor(id: string): string | null {
   return f ? f.file : null;
 }
 
-export function execSessionBranch(id: string, args: string[]): CommandResult {
+export async function execSessionBranch(id: string, args: string[]): Promise<CommandResult> {
   const { flags } = parseFlags(args);
   if (!flags.at && flags["list-nodes"] !== "true") {
     return { ok: false, message: "", error: { code: "USAGE", message: "用法: ptl session branch <id> --at <nodeId> [--template <tpl>]\n  列出节点: ptl session branch <id> --list-nodes" } };
   }
-  const r = resolveSession(id);
+  const r = await resolveSession(id);
   if (!r.ok) {
     return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在` } };
   }
@@ -110,7 +110,7 @@ export function execSessionBranch(id: string, args: string[]): CommandResult {
 
 // ─── tree（谱系森林，按模板过滤）──────────────────────────────
 
-export function execSessionTree(args: string[]): CommandResult {
+export async function execSessionTree(args: string[]): Promise<CommandResult> {
   const { flags } = parseFlags(args);
   const cfg = loadConfig();
   let files = scanSessionFiles(cfg);
@@ -137,7 +137,7 @@ export function assertResumable(r: SessionRecord): CommandResult | null {
 
 export async function execSessionResume(id: string, args: string[]): Promise<CommandResult> {
   const { flags } = parseFlags(args);
-  const r = resolveSession(id);
+  const r = await resolveSession(id);
   if (!r.ok) {
     return { ok: false, message: "", error: { code: r.reason === "ambiguous" ? "AMBIGUOUS" : "SESSION_NOT_FOUND", message: r.reason === "ambiguous" ? `会话 "${id}" 有多个匹配，请使用完整 UUID` : `会话 "${id}" 不存在` } };
   }
