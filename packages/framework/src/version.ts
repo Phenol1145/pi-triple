@@ -14,14 +14,15 @@ let cachedVersion: string | null = null;
  * 定位仓库根 package.json（monorepo 单源版本）。
  * 源码布局（packages/framework/src/version.ts，上溯 3 级）与构建产物布局
  * （packages/framework/dist/packages/framework/src/version.js，上溯 5 级）层级不同，
- * 故从模块位置向上探测最近一个 name === "pi-triple" 的 package.json，两种布局均命中仓库根。
+ * 故从模块位置向上探测最近一个 name === "@away_from/pi-triple"（旧名 pi-triple 兼容）的
+ * package.json，两种布局均命中仓库根。
  */
 export function resolveRepoRootPackageJson(moduleUrl: string): { name?: string; version?: string } | null {
   let dir = path.dirname(fileURLToPath(moduleUrl));
   for (let i = 0; i < 8; i++) {
     try {
       const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf-8")) as { name?: string; version?: string };
-      if (pkg.name === "pi-triple") return pkg;
+      if (pkg.name === "@away_from/pi-triple" || pkg.name === "pi-triple") return pkg;
     } catch {
       // 该级无 package.json 或不可读——继续上溯
     }
