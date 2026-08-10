@@ -65,7 +65,8 @@ EOF
 )" --tags code
 ```
 
-- 代码任务用 `--tags code` 标记（NL 任务用 `--tags nl` 约定）
+- 任务须带**角色标签**（`--tags code` 等——tag-registry 严格校验：未知标签/歧义/缺标签均 400）；
+  任务池只面向自然语言（nl 标签已废止——全任务走 agent 循环）；代码级直连调试走 `POST /api/v1/kernel/exec`
 - ts 程序内可用能力：`python.execute`/`bash.execute`/`memory`/`context`/`model`/`perf`/`obs`/`fs`/`llm`/`web` + `registerResult`/`readObject`
 - 返回值即任务结果（`outputRef.ref.value`）
 

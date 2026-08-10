@@ -84,7 +84,7 @@ export async function cmdHubLineage(passthrough: string[], flags: Record<string,
 
     case "approve": {
       const id = rest[0];
-      if (!id) { console.error("用法: ptl hub lineage approve <id> [--json '{\"labelPatterns\":[...]}']"); return; }
+      if (!id) { console.error("用法: ptl hub lineage approve <id> [--json '{\"tags\":[...]}']"); return; }
       let overrides: Record<string, unknown> | undefined;
       if (flags.json) {
         try { overrides = JSON.parse(flags.json) as Record<string, unknown>; }

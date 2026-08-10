@@ -29,7 +29,7 @@ PTH（Pi-Triple-Heavy）= **服务器端任务内核**：任务池 → 角色路
 所有角色从 **Origin（generation 0，全能起点）** 分化而来。内置 13 个角色：
 
 ```text
-origin (gen 0 · 全能 · labelPatterns ["*"] · thinking high · accepter writer)
+origin (gen 0 · 全能 · tags ["origin"] · thinking high · accepter writer)
 ├── human-interface (gen 1 · human/interact · writer)
 ├── explorer (gen 1 · explore/survey · 信息类任务族 · medium)
 │   ├── analyst (gen 2 · analysis/research · medium)
@@ -106,7 +106,7 @@ ptl hub lineage approve <proposalId> --id my-role --label-patterns "code,impleme
 curl -s -X POST $PTH_API/api/v1/kernel/lineage/approve -H "content-type: application/json" -d '
   {"proposalId": "diff-xxxx", "overrides": {
      "id": "my-role",
-     "labelPatterns": ["code", "implement"],
+     "tags": ["code", "implement"],
      "thinking": "high",
      "acceptanceRole": "writer"
   }}'
@@ -118,7 +118,7 @@ curl -s -X POST $PTH_API/api/v1/kernel/lineage/reject -H "content-type: applicat
 
 **批准后的上线动作（系统自动完成）**：
 1. 校验 proposal 为 `draft`（否则 409）；角色 id 冲突返回 409
-2. 构造新角色：`generation = 父角色代数 + 1`；labelPatterns 从 subtasks 派生（缺省 `[roleId]`）；prompt 自动生成
+2. 构造新角色：`generation = 父角色代数 + 1`；固定 tags 从 subtasks 派生（缺省 `[roleId]`）；prompt 自动生成
 3. 主进程注册（`registerWorkerRole`——即刻可路由）
 4. 广播 batch（`registerRoleToBatches`——batch 内注册 + 创建 worker——**热上线，即刻接任务**）
 5. 注入 role-doc（worker 读自己文档）
@@ -126,13 +126,16 @@ curl -s -X POST $PTH_API/api/v1/kernel/lineage/reject -H "content-type: applicat
 
 ### 1.5 给任务指定角色（flow role 定向 / tags）
 
-提交任务时路由规则（role-router，**确定性路由到唯一角色**——不再广播抢票）：
+提交任务时路由规则（role-router v2，**确定性路由到唯一角色**——2026-08-10 任务池纯化）：
 
 ```text
 ① payload.flow 显式 role（flow 任务自带路由）→ 最高优先
-② tags 匹配角色 labelPatterns → 语义路由
-③ 无匹配（无主任务）→ hash(taskId) % 角色数 → 确定性分片（负载均衡）
+② tags 精确匹配角色固定标签（tag-registry——分选器唯一标准）
+③ 无匹配 → publish 拒绝（400——hash 分片兜底已废止；未知/歧义标签同样 400）
 ```
+
+严格校验（publish 唯一入口）：未知标签 → 400 带已注册标签表；无角色标签且无 flow → 400；
+多角色歧义 → 400。任务池只面向自然语言（agent 循环）——代码级直连执行走 `POST /api/v1/kernel/exec`。
 
 ```bash
 # 直接发布（tags 语义路由——"code" → developer）
@@ -151,7 +154,7 @@ curl -s -X POST $PTH_API/api/v1/kernel/tasks -H "content-type: application/json"
 curl -s $PTH_API/api/v1/kernel/templates        # 模板列表
 ```
 
-常用标签 → 角色映射（内置 labelPatterns）：
+常用标签 → 角色映射（角色固定标签——tag-registry 精确匹配）：
 
 | 标签 | 路由角色 | 推理深度 | 验收角色 |
 |---|---|---|---|

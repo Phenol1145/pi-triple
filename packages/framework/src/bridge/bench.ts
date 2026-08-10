@@ -36,13 +36,15 @@ interface BenchTask {
 }
 
 export const BENCH_TASKS: BenchTask[] = [
-  { id: "ts-calc", title: "[bench] ts 计算", text: "const s = await (async () => { let sum = 0; for (let i = 1; i <= 100000; i++) sum += i; return sum; })(); ({ sum: s });", tags: ["code", "bench"] },
-  { id: "py-calc", title: "[bench] python 计算", text: "const r = await python.execute(\"print(sum(range(1, 10001)))\"); ({ stdout: r.stdout });", tags: ["code", "bench"] },
-  { id: "bash-cmd", title: "[bench] bash 命令", text: "const r = await bash.execute(\"seq 1 1000 | paste -sd+ | bc\"); ({ out: r.stdout });", tags: ["code", "bench"] },
-  { id: "c-compile", title: "[bench] C 编译", text: "const r = await c.execute(\"gcc\", `#include <stdio.h>\\nint main(){ long long s=0; for(int i=1;i<=100000;i++) s+=i; printf(\\\"%lld\\\\n\\\",s); }`); ({ ok: r.ok });", tags: ["code", "bench"] },
-  { id: "memory-io", title: "[bench] 记忆读写", text: "await memory.write({ kind: 'bench-marker', anchors: ['bench'], content: 'bench-' + Date.now() }); const rows = await memory.query(\"SELECT count(*)::int AS n FROM memory_entries WHERE kind='bench-marker'\"); ({ n: rows[0]?.n });", tags: ["code", "bench"] },
-  { id: "ext-use", title: "[bench] 扩展引用", text: "const r = await ext.use(\"hello-world\", { tool: \"greet\", args: { name: \"bench\" } }); ({ got: r.result });", tags: ["code", "bench"] },
-  { id: "agent-nl", title: "[bench] 自然语言任务", text: "请计算 1 到 100 的和，用 ts 程序完成并返回结果。", tags: ["nl", "bench"] },
+  { id: "ts-calc", title: "[bench] ts 计算", text: "const s = await (async () => { let sum = 0; for (let i = 1; i <= 100000; i++) sum += i; return sum; })(); ({ sum: s });", tags: ["code"] },
+  { id: "py-calc", title: "[bench] python 计算", text: "const r = await python.execute(\"print(sum(range(1, 10001)))\"); ({ stdout: r.stdout });", tags: ["code"] },
+  { id: "bash-cmd", title: "[bench] bash 命令", text: "const r = await bash.execute(\"seq 1 1000 | paste -sd+ | bc\"); ({ out: r.stdout });", tags: ["code"] },
+  { id: "c-compile", title: "[bench] C 编译", text: "const r = await c.execute(\"gcc\", `#include <stdio.h>\\nint main(){ long long s=0; for(int i=1;i<=100000;i++) s+=i; printf(\\\"%lld\\\\n\\\",s); }`); ({ ok: r.ok });", tags: ["code"] },
+  { id: "memory-io", title: "[bench] 记忆读写", text: "await memory.write({ kind: 'bench-marker', anchors: ['bench'], content: 'bench-' + Date.now() }); const rows = await memory.query(\"SELECT count(*)::int AS n FROM memory_entries WHERE kind='bench-marker'\"); ({ n: rows[0]?.n });", tags: ["code"] },
+  { id: "ext-use", title: "[bench] 扩展引用", text: "const r = await ext.use(\"hello-world\", { tool: \"greet\", args: { name: \"bench\" } }); ({ got: r.result });", tags: ["code"] },
+  // 任务池纯化（2026-08-10）：任务池只面向 NL——代码文本由 agent 理解执行；nl/bench 标签废止
+  // （严格校验只认角色标签——createdBy:"bench" 承担来源标识）。代码级直连执行另有 /kernel/exec 通道。
+  { id: "agent-nl", title: "[bench] 自然语言任务", text: "请计算 1 到 100 的和，用 ts 程序完成并返回结果。", tags: ["code"] },
 ];
 
 export interface BenchResult {
