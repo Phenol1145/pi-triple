@@ -1,5 +1,5 @@
 {
-  "name": "pi-triple",
+  "name": "@away_from/pi-triple",
   "version": "0.8.0",
   "type": "module",
   "workspaces": [
