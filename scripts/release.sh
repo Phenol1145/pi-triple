@@ -81,7 +81,9 @@ if [ "$SKIP_TESTS" = "1" ]; then
   say "阶段 3：测试（--skip-tests 跳过）"
 else
   say "阶段 3：测试（vitest 全量）"
-  npx vitest run 2>&1 | tail -3 || fail "测试未全绿"
+  OUT=$(npx vitest run 2>&1 | tail -4) || { echo "$OUT"; fail "测试未全绿"; }
+  echo "$OUT" | grep -E "Tests|Files" | sed 's/^/  /'
+  ok "测试全绿"
 fi
 
 # ── 阶段 4：打包 + 内容断言 ──────────────────────────
