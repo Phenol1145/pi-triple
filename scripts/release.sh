@@ -56,8 +56,8 @@ git fetch origin main -q
 ok "工作区干净 / main / 与 origin 同步（$(git rev-parse --short HEAD)）"
 
 # ── 阶段 1：版本一致性 ────────────────────────────────
-say "阶段 1：版本一致性（根=$ROOT_NAME@$ROOT_VER）"
-[ "$ROOT_NAME" = "@away_from/pi-triple" ] || fail "根包 name 异常：$ROOT_NAME（期望 @away_from/pi-triple）"
+say "阶段 1：版本一致性（根=${ROOT_NAME}@${ROOT_VER}）"
+[ "$ROOT_NAME" = "@away_from/pi-triple" ] || fail "根包 name 异常：${ROOT_NAME}（期望 @away_from/pi-triple）"
 for pkg in "${SUBPACKAGES[@]}"; do
   P="packages/$pkg/package.json"
   N=$(json_get "$P" name); V=$(json_get "$P" version)
@@ -94,7 +94,7 @@ tar xzf "$TGZ" -C "$TMPD" ./package.json
 PKG_NAME=$(json_get "$TMPD/package.json" name)
 PKG_VER=$(json_get "$TMPD/package.json" version)
 rm -rf "$TMPD"
-[ "$PKG_NAME" = "$ROOT_NAME" ] || fail "tgz 内 name=$PKG_NAME ≠ 工作区 $ROOT_NAME（0.8.0 旧包事故防线）"
+[ "$PKG_NAME" = "$ROOT_NAME" ] || fail "tgz 内 name=$PKG_NAME ≠ 工作区 ${ROOT_NAME}（0.8.0 旧包事故防线）"
 [ "$PKG_VER" = "$ROOT_VER" ] || fail "tgz 内 version=$PKG_VER ≠ 工作区 $ROOT_VER"
 ok "$TGZ 内容断言通过（name/version 一致）"
 
