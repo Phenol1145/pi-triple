@@ -19,7 +19,7 @@ import {
   loadConfig, resolveTemplateId,
   listTemplates, saveConfig, ERR,
   createTemplate, getTemplateAlias, resolveDataDir,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 import { execTemplateNew, execTemplateRm, type CommandResult } from "./commands.js";
 
 /** env set 可写配方字段（TemplateConfig 全配方字段；alias 是身份字段，改名走 template rename） */
@@ -206,7 +206,7 @@ async function materializeEnv(alias: string, recipe: Record<string, unknown>): P
     }
 
     // 写入 AGENTS.md 认知注入（pi 原生机制）
-    const { ensureTemplateAgents } = await import("@pi-triple/shared");
+    const { ensureTemplateAgents } = await import("@away_from/shared");
     const agentsWritten = ensureTemplateAgents(templateDir, id, displayAlias);
     if (agentsWritten) sharedMsg += "\n  ✅ 已写入 AGENTS.md（PTL 认知注入）";
 

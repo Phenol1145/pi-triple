@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { launchPi, buildPiLaunch } from "../launcher.js";
-import { loadConfig, resolveTemplateId, getDefaultTemplateId } from "@pi-triple/shared";
+import { loadConfig, resolveTemplateId, getDefaultTemplateId } from "@away_from/shared";
 import type { ProgramManifest } from "./manifest.js";
 
 export async function pipeToProcess(

@@ -1,5 +1,5 @@
 /**
- * @pi-triple/mailbox unit tests（原 pit-communicate，/pit 已改名 /mail）
+ * @away_from/mailbox unit tests（原 pit-communicate，/pit 已改名 /mail）
  * 从包入口 import，mailbox root 用 tmpdir 隔离
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -8,8 +8,8 @@ import path from "node:path";
 import os from "node:os";
 
 // 包入口导入（mailbox 包 + shared 包）
-import { Mailbox, createMessage, validateMessage, Delivery } from "@pi-triple/mailbox";
-import { Presence, Registry } from "@pi-triple/shared";
+import { Mailbox, createMessage, validateMessage, Delivery } from "@away_from/mailbox";
+import { Presence, Registry } from "@away_from/shared";
 
 let root: string;
 

@@ -8,7 +8,7 @@ import {
   getConfigValue,
   setConfigValue,
   unsetConfigValue,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 
 describe("config get/set/unset", () => {
   let tmpHome: string;

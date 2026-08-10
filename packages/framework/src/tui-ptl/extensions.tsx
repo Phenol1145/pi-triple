@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DataTable, theme } from "../tui-shared/index.js";
 import type { ColumnDef } from "../tui-shared/index.js";
-import { loadConfig, resolveDataDir } from "@pi-triple/shared";
+import { loadConfig, resolveDataDir } from "@away_from/shared";
 import { sharedStatus } from "../shared-layer.js";
 
 interface ExtensionsPageProps {

@@ -12,7 +12,7 @@ import { DataTable, useTableSelection, tableWindow } from "../tui-shared/index.j
 import type { ColumnDef } from "../tui-shared/index.js";
 import { SessionMenuPanel } from "./session-menu.js";
 import { listAllSessions, listAllTraces } from "../session/session-store.js";
-import { loadConfig, listTemplates } from "@pi-triple/shared";
+import { loadConfig, listTemplates } from "@away_from/shared";
 import type { SessionRecord, TraceRecord } from "../session/session-provider.js";
 
 interface DashPageProps {

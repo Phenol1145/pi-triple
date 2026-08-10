@@ -2,9 +2,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { SessionRecord } from "./session-provider.js";
-import { getSessionBackend, formatAge, type PtlSession, type PtlPaneInfo } from "@pi-triple/shared";
-import { classifySession } from "@pi-triple/shared";
-import { pitHome, loadConfig } from "@pi-triple/shared";
+import { getSessionBackend, formatAge, type PtlSession, type PtlPaneInfo } from "@away_from/shared";
+import { classifySession } from "@away_from/shared";
+import { pitHome, loadConfig } from "@away_from/shared";
 
 export interface PiSessionFile {
   id: string;

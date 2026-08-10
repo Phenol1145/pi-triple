@@ -9,7 +9,7 @@
  * ESM import 提升使其先于任何模块体执行——故主逻辑延迟加载），再启动主流程。
  */
 
-import { installWarningFilter } from "@pi-triple/shared";
+import { installWarningFilter } from "@away_from/shared";
 installWarningFilter();
 
 // 测试兼容 re-export（args/onboard 无 node:sqlite 链，静态加载安全）

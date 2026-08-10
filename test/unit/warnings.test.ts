@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSqliteExperimentalWarning } from "@pi-triple/shared";
+import { isSqliteExperimentalWarning } from "@away_from/shared";
 
 describe("isSqliteExperimentalWarning", () => {
   it("精确匹配 SQLite 实验警告", () => {

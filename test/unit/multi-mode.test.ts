@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { emitJson, emitJsonError, ERR } from "@pi-triple/shared";
+import { emitJson, emitJsonError, ERR } from "@away_from/shared";
 import {
   execTemplateLs,
   execTemplateRm,

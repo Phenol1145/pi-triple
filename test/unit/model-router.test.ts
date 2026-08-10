@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ModelRouter } from "@pi-triple/infra";
+import { ModelRouter } from "@away_from/infra";
 
 describe("ModelRouter", () => {
   let router: ModelRouter;

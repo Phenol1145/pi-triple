@@ -11,7 +11,7 @@ import {
   execStatus, execLs, execStop, execStartBg, execSharedStatus,
   type CommandResult,
 } from "../commands.js";
-import { loadConfig, resolveTemplateId, renameTemplate } from "@pi-triple/shared";
+import { loadConfig, resolveTemplateId, renameTemplate } from "@away_from/shared";
 import {
   execSessionLs, execSessionShow, execSessionFork, execSessionClone,
   execSessionTransfer, execSessionBranch, execSessionTree, execSessionResume,

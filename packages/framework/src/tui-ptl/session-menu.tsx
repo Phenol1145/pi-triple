@@ -19,9 +19,9 @@ import {
   ConfirmDialog,
 } from "../tui-shared/index.js";
 import type { MenuNode, MenuState, SelectItem } from "../tui-shared/index.js";
-import { listTemplates, loadConfig } from "@pi-triple/shared";
+import { listTemplates, loadConfig } from "@away_from/shared";
 import { scanSessionFiles, listNodes } from "../session/pi-scan.js";
-import { hasTmux, listPtlPanes } from "@pi-triple/shared";
+import { hasTmux, listPtlPanes } from "@away_from/shared";
 import type { SessionRecord } from "../session/session-provider.js";
 
 // ─── 菜单规格（静态；叶子 capability 即过滤键）────────────────

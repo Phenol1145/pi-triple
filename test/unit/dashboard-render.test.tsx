@@ -12,8 +12,8 @@ vi.mock("node:child_process", () => ({
   spawnSync: () => ({ status: 0, stdout: "v0.1.0\n" }),
 }));
 
-vi.mock("@pi-triple/shared", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@pi-triple/shared")>();
+vi.mock("@away_from/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@away_from/shared")>();
   const TEMPLATES = Array.from({ length: 12 }, (_, i) => ({
     id: `tid-${i}`,
     alias: `tpl-${i}`,

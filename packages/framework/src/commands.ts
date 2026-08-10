@@ -12,10 +12,10 @@ import {
   loadConfig, resolveDataDir,
   resolveTemplateId, getTemplateAlias,
   listTemplates, createTemplate, removeTemplate,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 import { runDoctorStructured } from "./doctor.js";
 import { sharedStatus } from "./shared-layer.js";
-import { ERR } from "@pi-triple/shared";
+import { ERR } from "@away_from/shared";
 import {
   hasTmux,
   hasPtlSession,
@@ -26,11 +26,11 @@ import {
   formatAge,
   startPtlSession,
   getPanePid,
-} from "@pi-triple/shared";
-import { loadRegistry, markStarted, markStopped } from "@pi-triple/shared";
-import { classifySession, isPidAlive } from "@pi-triple/shared";
+} from "@away_from/shared";
+import { loadRegistry, markStarted, markStopped } from "@away_from/shared";
+import { classifySession, isPidAlive } from "@away_from/shared";
 import { scanSessionFiles, newestTapeId } from "./session/pi-scan.js";
-import { WorkspaceManager, detectPlatform } from "@pi-triple/infra";
+import { WorkspaceManager, detectPlatform } from "@away_from/infra";
 
 
 // ─── Types ───────────────────────────────────────────────────
@@ -116,7 +116,7 @@ export async function execTemplateNew(alias?: string): Promise<CommandResult> {
     }
 
     // 写入 AGENTS.md 认知注入（pi 原生机制）
-    const { ensureTemplateAgents } = await import("@pi-triple/shared");
+    const { ensureTemplateAgents } = await import("@away_from/shared");
     const agentsWritten = ensureTemplateAgents(templateDir, id, displayAlias);
     if (agentsWritten) sharedMsg += "\n  ✅ 已写入 AGENTS.md（PTL 认知注入）";
 

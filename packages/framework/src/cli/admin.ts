@@ -7,11 +7,11 @@ import path from "node:path";
 import crypto from "node:crypto";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
-import { compareVersions, PIT_REPO } from "@pi-triple/shared";
+import { compareVersions, PIT_REPO } from "@away_from/shared";
 import {
   loadConfig, resolveDataDir,
   getTemplateAlias, getDefaultTemplateId,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 import { migrate } from "../migrate.js";
 import { resolveRepoRootPackageJson } from "../version.js";
 import { initSharedLayer, linkTemplateToShared, promoteToShared, installBundledExtensions } from "../shared-layer.js";

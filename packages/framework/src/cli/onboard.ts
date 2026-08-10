@@ -9,7 +9,7 @@ import * as readline from "node:readline";
 import {
   loadConfig, saveConfig, resolveDataDir, type PiTripleConfig,
   resolveTemplateId, getTemplateAlias, getDefaultTemplateId, migrateDirectoryNames,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 import { runDoctor } from "../doctor.js";
 import { migrate } from "../migrate.js";
 import { initSharedLayer, linkTemplateToShared, installBundledExtensions } from "../shared-layer.js";

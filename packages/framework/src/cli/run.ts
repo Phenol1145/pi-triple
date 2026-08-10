@@ -12,7 +12,7 @@ import { resolveMode, routeJsonCommand, doPrintCommand } from "./mode.js";
 import { cmdMigrate, handleUpdate, handleInstallRemove, handleShared } from "./admin.js";
 import { cmdTui, cmdHub, getDeprecatedMigration } from "./route.js";
 import { cmdAgentRun, cmdAgentClean } from "./agent.js";
-import { emitJsonError } from "@pi-triple/shared";
+import { emitJsonError } from "@away_from/shared";
 import { dispatchCommand } from "../commands/dispatch.js";
 import { registerPiSessionProvider } from "../session/pi-provider.js";
 

@@ -13,7 +13,7 @@ import {
 } from "../session/session-store.js";
 import { scanSessionFiles, listNodes } from "../session/pi-scan.js";
 import { buildSessionTree } from "../session/pi-tree.js";
-import { loadConfig, getTemplateAlias } from "@pi-triple/shared";
+import { loadConfig, getTemplateAlias } from "@away_from/shared";
 
 /** 解析 args 中的 --flag 与位置参数（--flag value；无值 → "true"） */
 export function parseFlags(args: string[]): { flags: Record<string, string>; rest: string[] } {
@@ -164,9 +164,9 @@ export async function execSessionResume(id: string, args: string[]): Promise<Com
     ...(workspaceCwd ? { workspaceCwd } : {}),
   });
   const name = flags.name || `${getTemplateAlias(rec.templateId, cfg)}-${Date.now().toString(36)}`;
-  const { startPtlSession, getPanePid } = await import("@pi-triple/shared");
-  const { markStarted } = await import("@pi-triple/shared");
-  const { resolveDataDir } = await import("@pi-triple/shared");
+  const { startPtlSession, getPanePid } = await import("@away_from/shared");
+  const { markStarted } = await import("@away_from/shared");
+  const { resolveDataDir } = await import("@away_from/shared");
   const result = startPtlSession(launch, name, true);
   if (result.status === 0) {
     markStarted({

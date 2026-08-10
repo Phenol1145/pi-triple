@@ -1,6 +1,6 @@
 {
-  "name": "@pi-triple/framework",
-  "version": "0.6.0",
+  "name": "@away_from/framework",
+  "version": "0.8.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,8 +11,8 @@
     "dist"
   ],
   "dependencies": {
-    "@pi-triple/shared": "file:../shared",
-    "@pi-triple/infra": "file:../infra",
+    "@away_from/shared": "file:../shared",
+    "@away_from/infra": "file:../infra",
     "zod": "^4.0.0"
   }
 }

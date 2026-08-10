@@ -2,7 +2,7 @@
  * ptl/config-cmd — cmdConfig: get/set/unset/init/show
  */
 
-import { loadConfig, saveConfig, getConfigValue, setConfigValue, unsetConfigValue } from "@pi-triple/shared";
+import { loadConfig, saveConfig, getConfigValue, setConfigValue, unsetConfigValue } from "@away_from/shared";
 import { printBanner } from "./main.js";
 
 export function cmdConfig(subcommand?: string, args: string[] = []): void {

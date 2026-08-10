@@ -1,6 +1,6 @@
 {
-  "name": "@pi-triple/mailbox",
-  "version": "0.6.0",
+  "name": "@away_from/mailbox",
+  "version": "0.8.0",
   "type": "module",
   "description": "Pi-Triple mailbox — cross-session communication for pi (原 pit-communicate，/mail 命令)",
   "main": "./dist/index.js",
@@ -22,6 +22,6 @@
   ],
   "author": "Pi-Triple",
   "dependencies": {
-    "@pi-triple/shared": "file:../shared"
+    "@away_from/shared": "file:../shared"
   }
 }

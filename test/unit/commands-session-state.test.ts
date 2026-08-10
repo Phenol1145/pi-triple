@@ -4,8 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execLs, execStop } from "../../packages/framework/src/commands.js";
-import { markStarted, loadRegistry } from "@pi-triple/shared";
-import { ERR } from "@pi-triple/shared";
+import { markStarted, loadRegistry } from "@away_from/shared";
+import { ERR } from "@away_from/shared";
 
 describe("execLs / execStop 状态增强", () => {
   let root: string;

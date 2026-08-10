@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectPlatform } from "@pi-triple/infra";
+import { detectPlatform } from "@away_from/infra";
 
 describe("PlatformAdapter", () => {
   const adapter = detectPlatform();

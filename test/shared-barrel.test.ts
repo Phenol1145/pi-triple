@@ -8,9 +8,9 @@ import {
   classifySession,
   checkForUpdates,
   renderTemplateAgents,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 
-describe("@pi-triple/shared barrel", () => {
+describe("@away_from/shared barrel", () => {
   it("exposes the migrated leaf modules", () => {
     expect(loadConfig).toBeDefined();
     expect(startPtlSession).toBeDefined();

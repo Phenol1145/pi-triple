@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { scanSessionFiles, parseSessionHeader, toSessionRecords, listNodes, isTapeLive, newestTapeId, pickRestoreTape } from "../../packages/framework/src/session/pi-scan.js";
-import type { PiTripleConfig } from "@pi-triple/shared";
+import type { PiTripleConfig } from "@away_from/shared";
 
 // toSessionRecords 依赖 tmux 运行态：mock tmux 模块（保留 formatAge 真实实现），无真实 tmux 依赖
 const tmuxMocks = vi.hoisted(() => ({

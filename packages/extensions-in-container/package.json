@@ -1,6 +1,6 @@
 {
-  "name": "@pi-triple/extensions-in-container",
-  "version": "0.6.0",
+  "name": "@away_from/extensions-in-container",
+  "version": "0.8.0",
   "type": "module",
   "description": "Pi-Triple dev container — /container 命令族（start/mount/verify/status）封装 dev 容器",
   "main": "./dist/index.js",

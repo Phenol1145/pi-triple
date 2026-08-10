@@ -1,6 +1,6 @@
 {
   "name": "pi-triple",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -31,8 +31,6 @@
     "ptl:dev": "tsx packages/framework/src/pit.ts"
   },
   "dependencies": {
-    "@pi-triple/infra": "file:packages/infra",
-    "@pi-triple/shared": "file:packages/shared",
     "@earendil-works/pi-ai": "^0.82.1",
     "@earendil-works/pi-coding-agent": "^0.82.1",
     "@fastify/websocket": "^11.0.0",
@@ -46,7 +44,9 @@
     "prom-client": "^15.0.0",
     "react": "^18.3.1",
     "string-width": "^7.2.0",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "@away_from/infra": "file:packages/infra",
+    "@away_from/shared": "file:packages/shared"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.1.0",

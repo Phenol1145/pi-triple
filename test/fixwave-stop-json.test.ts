@@ -4,7 +4,7 @@
 // 拦截 → "用法: ptl stop <name> | --all | --stale | --orphans"（--json 模式下也是错）。
 // 修复：`execStop(sub || passthrough[0] || "", flags)`。
 //
-// 用 mock @pi-triple/shared 的 tmux 函数（对齐 test/stop-all.test.ts 做法）——
+// 用 mock @away_from/shared 的 tmux 函数（对齐 test/stop-all.test.ts 做法）——
 // 不走 E2E spawn：真实 tmux 环境下若机器上有 ptl-* 会话会被 stop --all 真杀。
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -18,8 +18,8 @@ const mocks = vi.hoisted(() => ({
   hasTmux: true,
 }));
 
-vi.mock("@pi-triple/shared", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@pi-triple/shared")>();
+vi.mock("@away_from/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@away_from/shared")>();
   return {
     ...mod,
     hasTmux: () => mocks.hasTmux,

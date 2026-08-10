@@ -8,7 +8,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { pitHome } from "@pi-triple/shared";
+import { pitHome } from "@away_from/shared";
 
 /**
  * 打开 SQLite 数据库。先尝试只读模式，失败再 fallback 读写。

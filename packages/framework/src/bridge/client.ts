@@ -4,7 +4,7 @@
  * 与 PTH server 通信：submit / list / get / delete / run（SSE 流）。
  * 错误区分：401 token 无效 / 404 PTH 版本过旧 / 其他网络错误。
  */
-import { loadConfig, getConfigValue } from "@pi-triple/shared";
+import { loadConfig, getConfigValue } from "@away_from/shared";
 import { type ProgramManifest, type ComponentManifest } from "./manifest.js";
 
 /** SSE 事件 */

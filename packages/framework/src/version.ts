@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { readCache, isCacheFresh, isUpdateAvailable } from "@pi-triple/shared";
+import { readCache, isCacheFresh, isUpdateAvailable } from "@away_from/shared";
 
 let cachedVersion: string | null = null;
 

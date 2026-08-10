@@ -1,5 +1,5 @@
 /**
- * Pi-Triple 共享路径解析（@pi-triple/shared — 自 extensions/_shared 迁入，mailbox/pit-control 共用）
+ * Pi-Triple 共享路径解析（@away_from/shared — 自 extensions/_shared 迁入，mailbox/pit-control 共用）
  */
 import os from "node:os";
 import path from "node:path";

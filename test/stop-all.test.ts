@@ -9,7 +9,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// mock @pi-triple/shared 的部分函数（importOriginal 保留真实 loadConfig/resolveDataDir/ERR 等）
+// mock @away_from/shared 的部分函数（importOriginal 保留真实 loadConfig/resolveDataDir/ERR 等）
 const mocks = vi.hoisted(() => ({
   sessions: [] as { name: string }[],
   killed: [] as string[],
@@ -17,8 +17,8 @@ const mocks = vi.hoisted(() => ({
   hasTmux: true,
 }));
 
-vi.mock("@pi-triple/shared", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@pi-triple/shared")>();
+vi.mock("@away_from/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@away_from/shared")>();
   return {
     ...mod,
     hasTmux: () => mocks.hasTmux,

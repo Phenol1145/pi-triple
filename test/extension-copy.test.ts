@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { execExtensionCopy, execSkillCopy } from "../packages/framework/src/extension-copy.js";
-import { loadConfig, saveConfig, resolveDataDir } from "@pi-triple/shared";
+import { loadConfig, saveConfig, resolveDataDir } from "@away_from/shared";
 import { dispatchCommand } from "../packages/framework/src/commands/dispatch.js";
 
 describe("extension/skill copy 双模式", () => {

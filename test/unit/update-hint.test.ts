@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { formatUpdateHint, maybeShowUpdateHint } from "@pi-triple/mailbox";
+import { formatUpdateHint, maybeShowUpdateHint } from "@away_from/mailbox";
 
 describe("formatUpdateHint", () => {
   it("ptl 有更新 → 提示行", () => {

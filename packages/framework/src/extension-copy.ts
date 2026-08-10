@@ -16,7 +16,7 @@ import path from "node:path";
 import {
   loadConfig, resolveTemplateId, resolveDataDir,
   getTemplateAlias, getDefaultTemplateId, ERR,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 import type { CommandResult } from "./commands.js";
 
 export type CopyMode = "reference" | "source";

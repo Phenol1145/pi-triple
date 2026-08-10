@@ -18,7 +18,7 @@ import {
   getTemplateAlias,
   resolveDataDir,
   renameTemplate,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 
 interface TenantsPageProps {
   width: number;

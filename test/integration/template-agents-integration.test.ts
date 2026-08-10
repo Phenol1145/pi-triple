@@ -13,7 +13,7 @@ test("launcher 启动补写 AGENTS.md（幂等）", async () => {
     const tplDir = join(dataDir, "pi-config", templateId);
     mkdirSync(tplDir, { recursive: true });
 
-    const { ensureTemplateAgents } = await import("@pi-triple/shared");
+    const { ensureTemplateAgents } = await import("@away_from/shared");
     const alias = "local";
     ensureTemplateAgents(tplDir, templateId, alias);
     const first = readFileSync(join(tplDir, "AGENTS.md"), "utf-8");

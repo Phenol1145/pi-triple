@@ -15,7 +15,7 @@ import {
   killPtlSession,
   buildTmuxSessionArgs,
   startPtlSession,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 
 describe("tmux module", () => {
   beforeEach(() => {

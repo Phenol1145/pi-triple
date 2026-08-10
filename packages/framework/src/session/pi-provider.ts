@@ -4,7 +4,7 @@ import type { SessionProvider, SessionRecord, ForkOpts, BranchOpts, TransferOpts
 import { scanSessionFiles, toSessionRecords } from "./pi-scan.js";
 import { forkSession, cloneSession, transferSession, forkSessionAtNode } from "./pi-fork.js";
 import { buildSessionTree } from "./pi-tree.js";
-import { loadConfig } from "@pi-triple/shared";
+import { loadConfig } from "@away_from/shared";
 import type { CommandResult } from "../commands.js";
 import { registerSessionProvider } from "./session-store.js";
 

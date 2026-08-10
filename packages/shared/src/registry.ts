@@ -1,5 +1,5 @@
 /**
- * Pi-Triple 共享会话注册表（@pi-triple/shared — 自 extensions/_shared 迁入；
+ * Pi-Triple 共享会话注册表（@away_from/shared — 自 extensions/_shared 迁入；
  * pit-control 仍用 extensions/_shared 副本）
  *
  * 每个租户维护 registry.json，记录活跃会话的基本信息。

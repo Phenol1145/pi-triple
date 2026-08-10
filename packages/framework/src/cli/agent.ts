@@ -6,10 +6,10 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { buildPiLaunch } from "../launcher.js";
-import { startPtlSession } from "@pi-triple/shared";
-import { loadConfig, getTemplateAlias, resolveDataDir } from "@pi-triple/shared";
-import { getSessionBackend, type SessionBackend } from "@pi-triple/shared";
-import { WorkspaceManager, detectPlatform } from "@pi-triple/infra";
+import { startPtlSession } from "@away_from/shared";
+import { loadConfig, getTemplateAlias, resolveDataDir } from "@away_from/shared";
+import { getSessionBackend, type SessionBackend } from "@away_from/shared";
+import { WorkspaceManager, detectPlatform } from "@away_from/infra";
 import fs from "node:fs";
 
 /** ptl agent run <template> <task> [--workspace temp|main] */

@@ -4,8 +4,8 @@ import path from "node:path";
 import os from "node:os";
 import { pathToFileURL } from "node:url";
 import { getPtlVersion, resolveRepoRootPackageJson, maybePrintUpdateHint } from "../../packages/framework/src/version.js";
-import { writeCache } from "@pi-triple/shared";
-import { resolveDataDir } from "@pi-triple/shared";
+import { writeCache } from "@away_from/shared";
+import { resolveDataDir } from "@away_from/shared";
 
 describe("getPtlVersion", () => {
   it("返回 package.json 的 version", () => {
@@ -30,7 +30,7 @@ describe("resolveRepoRootPackageJson", () => {
     // 干扰项：中间层 package.json（非 pi-triple，不应命中）
     fs.writeFileSync(
       path.join(tmpRoot, "packages", "framework", "package.json"),
-      JSON.stringify({ name: "@pi-triple/framework", version: "0.1.0" }),
+      JSON.stringify({ name: "@away_from/framework", version: "0.1.0" }),
     );
     srcUrl = pathToFileURL(path.join(srcLayout, "version.ts")).href;
     distUrl = pathToFileURL(path.join(distLayout, "version.js")).href;

@@ -8,7 +8,7 @@
 import path from "node:path";
 import {
   loadConfig, resolveTemplateId, getTemplateAlias, getDefaultTemplateId, pitHome,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 import { cmdSubmit } from "../bridge/submit.js";
 import { cmdHubConsole } from "../bridge/console.js";
 import { cmdHubLineage } from "../bridge/lineage.js";

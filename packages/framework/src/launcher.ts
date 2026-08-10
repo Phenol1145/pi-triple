@@ -27,9 +27,9 @@ import {
   EnvCredentialProvider,
   ModelRouter,
   WorkspaceManager,
-} from "@pi-triple/infra";
+} from "@away_from/infra";
 import { ensureTemplateLinks } from "./shared-layer.js";
-import { getTemplateAlias, resolveDataDir } from "@pi-triple/shared";
+import { getTemplateAlias, resolveDataDir } from "@away_from/shared";
 
 export interface LaunchOptions {
   /** Tenant ID (from auth token or "local") */
@@ -139,7 +139,7 @@ export async function buildPiLaunch(templateId: string, options: {
 
   // ensure template AGENTS.md (PTL identity injection, idempotent)
   if (fs.existsSync(piConfigDir)) {
-    const { ensureTemplateAgents } = await import("@pi-triple/shared");
+    const { ensureTemplateAgents } = await import("@away_from/shared");
     const alias = getTemplateAlias(templateId);
     ensureTemplateAgents(piConfigDir, templateId, alias);
   }

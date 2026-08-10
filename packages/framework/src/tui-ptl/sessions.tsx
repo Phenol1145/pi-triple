@@ -13,7 +13,7 @@ import {
   loadConfig,
   listTemplates,
   getTemplateAlias,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 import { buildPiLaunch } from "../launcher.js";
 import { listAllSessions } from "../session/session-store.js";
 import type { SessionRecord } from "../session/session-provider.js";
@@ -21,7 +21,7 @@ import { SessionMenuPanel, sessionTmuxName, bareTmuxName } from "./session-menu.
 import {
   killPtlSession,
   buildTmuxSessionArgs,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 
 interface SessionsPageProps {
   width: number;

@@ -9,8 +9,8 @@ import type { PiSessionFile } from "./pi-scan.js";
 import { scanSessionFiles } from "./pi-scan.js";
 import { uuidv7 } from "./uuidv7.js";
 import type { ForkOpts, BranchOpts, TransferOpts } from "./session-provider.js";
-import { resolveTemplateId, loadConfig } from "@pi-triple/shared";
-import { WorkspaceManager, detectPlatform } from "@pi-triple/infra";
+import { resolveTemplateId, loadConfig } from "@away_from/shared";
+import { WorkspaceManager, detectPlatform } from "@away_from/infra";
 
 interface SessionHeader {
   type: string;

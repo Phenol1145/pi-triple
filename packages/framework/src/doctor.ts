@@ -15,7 +15,7 @@ import path from "node:path";
 import net from "node:net";
 import * as readline from "node:readline";
 import { checkTemplateAgentsMd } from "./doctor-agents.js";
-import { loadConfig, resolveDataDir } from "@pi-triple/shared";
+import { loadConfig, resolveDataDir } from "@away_from/shared";
 
 // ─── Types ───────────────────────────────────────────────────
 

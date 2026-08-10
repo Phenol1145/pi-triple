@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import path from "node:path";
-import { loadConfig, resolveDataDir, getTemplateAlias } from "@pi-triple/shared";
+import { loadConfig, resolveDataDir, getTemplateAlias } from "@away_from/shared";
 
 interface ConfigPageProps {
   width: number;

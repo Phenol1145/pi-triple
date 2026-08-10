@@ -1,5 +1,5 @@
 /**
- * Pi-Triple mailbox — @pi-triple/mailbox（原 pit-communicate 扩展，/pit 已改名 /mail）
+ * Pi-Triple mailbox — @away_from/mailbox（原 pit-communicate 扩展，/pit 已改名 /mail）
  *
  * 注册 /mail 命令，提供跨会话通信：
  *   send/ask/share/broadcast  — 发送
@@ -12,8 +12,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Mailbox } from "./mailbox.js";
-import { Presence, Registry, resolveMailboxRoot, resolveTenantId } from "@pi-triple/shared";
-import type { SessionState, MailboxRegistryEntry } from "@pi-triple/shared";
+import { Presence, Registry, resolveMailboxRoot, resolveTenantId } from "@away_from/shared";
+import type { SessionState, MailboxRegistryEntry } from "@away_from/shared";
 import { Delivery } from "./delivery.js";
 import type { IntercomConfig, ReviewMode } from "./delivery.js";
 import { Watcher } from "./watcher.js";
@@ -502,7 +502,7 @@ export default function pitMail(api: any /* ExtensionAPI */) {
   });
 }
 
-// ── Package API（@pi-triple/mailbox 包导出面）──────────────
+// ── Package API（@away_from/mailbox 包导出面）──────────────
 export { Mailbox } from "./mailbox.js";
 export { Delivery } from "./delivery.js";
 export type { IntercomConfig, ReviewMode, DeliveryActions } from "./delivery.js";

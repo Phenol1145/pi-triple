@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { markStarted } from "@pi-triple/shared";
+import { markStarted } from "@away_from/shared";
 import { resolveRestoreTargets } from "../../packages/framework/src/cli/sessions.js";
 
 describe("cmdRestore 目标解析", () => {

@@ -5,7 +5,7 @@
 import { spawnSync } from "node:child_process";
 import {
   loadConfig, getTemplateAlias, listTemplates, resolveDataDir,
-} from "@pi-triple/shared";
+} from "@away_from/shared";
 import { runDoctor } from "../doctor.js";
 import { launchPi, buildPiLaunch } from "../launcher.js";
 import {
@@ -14,8 +14,8 @@ import {
   listPtlPanesDetailed,
   type SessionBackend,
   type PtlPaneInfo,
-} from "@pi-triple/shared";
-import { loadRegistry, markStarted } from "@pi-triple/shared";
+} from "@away_from/shared";
+import { loadRegistry, markStarted } from "@away_from/shared";
 
 /** 会话后端惰性获取（config session.backend——缺省 tmux；命令层零后端方言） */
 let _backend: SessionBackend | null = null;
@@ -293,7 +293,7 @@ export async function cmdDetach(): Promise<void> {
 export function resolveRestoreTargets(
   names: string[],
   dataDir: string,
-): { name: string; entry: import("@pi-triple/shared").RegistryEntry }[] {
+): { name: string; entry: import("@away_from/shared").RegistryEntry }[] {
   const reg = loadRegistry(dataDir);
   if (names.length === 0) {
     return Object.entries(reg.sessions).map(([name, entry]) => ({ name, entry }));

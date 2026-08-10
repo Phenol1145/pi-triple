@@ -30,10 +30,10 @@ import { fileURLToPath } from "node:url";
 import { execEnvCreate, execEnvSet, execEnvFork, execEnvList, execEnvShow } from "../packages/framework/src/env.js";
 import { execExtensionCopy } from "../packages/framework/src/extension-copy.js";
 import { dispatchCommand } from "../packages/framework/src/commands/dispatch.js";
-import pitMail from "@pi-triple/mailbox";
+import pitMail from "@away_from/mailbox";
 
 // ── stop --all mock（唯一 mock 段）：tmux 会话枚举/杀进程/心跳替换，
-//    其余 @pi-triple/shared 函数保留真实实现（importOriginal spread）──
+//    其余 @away_from/shared 函数保留真实实现（importOriginal spread）──
 const mocks = vi.hoisted(() => ({
   sessions: [] as { name: string }[],
   killed: [] as string[],
@@ -41,8 +41,8 @@ const mocks = vi.hoisted(() => ({
   hasTmux: true,
 }));
 
-vi.mock("@pi-triple/shared", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@pi-triple/shared")>();
+vi.mock("@away_from/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@away_from/shared")>();
   return {
     ...mod,
     hasTmux: () => mocks.hasTmux,

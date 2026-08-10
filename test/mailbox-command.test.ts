@@ -1,6 +1,6 @@
 /**
  * /mail 命令注册验证（原 /pit，Task 1 改名）
- * 调用默认导出工厂（@pi-triple/mailbox），验证：
+ * 调用默认导出工厂（@away_from/mailbox），验证：
  *   1. registerCommand 注册的是 "mail"（非 "pit"）
  *   2. help 输出使用 /mail 前缀、无 /pit 残留
  * mailbox root 用 tmpdir 隔离；结束时触发 session_shutdown 清理 watcher（fs.watch）。
@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import pitMail from "@pi-triple/mailbox";
+import pitMail from "@away_from/mailbox";
 
 let root: string;
 const savedAgentDir = process.env.PI_CODING_AGENT_DIR;

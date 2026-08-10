@@ -15,7 +15,7 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "paths": {
-      "@pi-triple/shared": ["./packages/shared/src/index.ts"]
+      "@away_from/shared": ["./packages/shared/src/index.ts"]
     }
   },
   "include": ["src"],

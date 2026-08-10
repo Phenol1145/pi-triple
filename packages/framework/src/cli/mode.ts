@@ -2,7 +2,7 @@
  * ptl/mode — mode resolution + JSON routing + print dispatch
  */
 
-import { emitJson, emitJsonError } from "@pi-triple/shared";
+import { emitJson, emitJsonError } from "@away_from/shared";
 import {
   execTemplateLs, execTemplateNew, execTemplateRm,
   execStatus, execLs, execStop, execSharedStatus,
