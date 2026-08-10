@@ -11,6 +11,7 @@ import {
 } from "@pi-triple/shared";
 import { cmdSubmit } from "../bridge/submit.js";
 import { cmdHubConsole } from "../bridge/console.js";
+import { cmdHubLineage } from "../bridge/lineage.js";
 import { cmdRun } from "../bridge/run.js";
 import { cmdPrograms } from "../bridge/programs.js";
 import { cmdDev } from "../bridge/dev.js";
@@ -38,7 +39,7 @@ export function resolveTuiPanel(subcommand: string | undefined): TuiPanel {
 
 // ─── hub ───────────────────────────────────────────────────
 
-export const HUB_COMMANDS = ["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug", "deploy", "status", "logs", "upgrade", "exec", "bench", "job", "console"] as const;
+export const HUB_COMMANDS = ["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug", "deploy", "status", "logs", "upgrade", "exec", "bench", "job", "console", "lineage"] as const;
 export type HubCommand = (typeof HUB_COMMANDS)[number];
 
 // ─── deprecated（clean break：旧命令仅提示迁移）────────────────
@@ -115,6 +116,7 @@ export async function cmdTui(
 export type HubHandlers = {
   submit: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
   console: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
+  lineage: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
   run: (name: string, args: string[], flags: Record<string, string>) => Promise<void>;
   programs: (flags: Record<string, string>) => Promise<void>;
   dev: (dir: string, passthrough: string[], flags: Record<string, string>) => Promise<void>;
@@ -136,6 +138,7 @@ export type HubHandlers = {
 export const defaultHubHandlers: HubHandlers = {
   submit: cmdSubmit,
   console: cmdHubConsole,
+  lineage: cmdHubLineage,
   run: cmdRun,
   programs: cmdPrograms,
   dev: cmdDev,
@@ -188,6 +191,7 @@ export const defaultHubHandlers: HubHandlers = {
           "  ptl hub kernel status                            运行状态全景",
           "  ptl hub console [--kernel|--sandbox]             活动状态观测台（核心/沙盒）",
           "  ptl hub console --follow                         活动状态流式输出（任务接取/轮次/token）",
+          "  ptl hub lineage <tree|proposals|show|approve|reject>  角色谱系（分化监督层）",
         ].join("\n"));
     }
   },
@@ -251,6 +255,9 @@ export async function cmdHub(
       break;
     case "console":
       await handlers.console(passthrough, flags);
+      break;
+    case "lineage":
+      await handlers.lineage(passthrough, flags);
       break;
     case "job":
       await handlers.job(passthrough, flags);
