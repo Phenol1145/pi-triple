@@ -187,6 +187,7 @@ export const defaultHubHandlers: HubHandlers = {
           "  ptl hub kernel batch remove [n]                  停止 batch",
           "  ptl hub kernel status                            运行状态全景",
           "  ptl hub console [--kernel|--sandbox]             活动状态观测台（核心/沙盒）",
+          "  ptl hub console --follow                         活动状态流式输出（任务接取/轮次/token）",
         ].join("\n"));
     }
   },

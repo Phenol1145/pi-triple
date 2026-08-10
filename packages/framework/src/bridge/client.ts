@@ -123,6 +123,11 @@ export class PthClient {
     return this.token;
   }
 
+  /** 基础 URL（SSE/fetch 直调用——console --follow） */
+  get baseUrl(): string {
+    return this.url;
+  }
+
   /**
    * hub debug WebSocket 地址（F/WP4 Task 22）：http→ws 换算 + /ws/debug 路径。
    * 目标非 sandbox 时带 ?sessionId=（指定调试会话标识）。

@@ -34,12 +34,56 @@ function fmtUptime(ms: number): string {
   return `${Math.floor(s / 3600)}h${Math.floor((s % 3600) / 60)}m`;
 }
 
+/** 流式活动状态（--follow）：消费 SSE /api/v1/kernel/events——逐行格式化实时输出 */
+async function followActivity(client: PthClient): Promise<void> {
+  const token = client.authToken;
+  const base = client.baseUrl.replace(/\/+$/, "");
+  console.log("═══ PTH 活动流（实时——Ctrl+C 停止）═══");
+  const res = await fetch(`${base}/api/v1/kernel/events`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok || !res.body) {
+    console.error(`❌ 活动流连接失败: HTTP ${res.status}`);
+    return;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n\n");
+    buf = lines.pop() ?? "";
+    for (const block of lines) {
+      const dataLine = block.split("\n").find((l) => l.startsWith("data: "));
+      if (!dataLine) continue;
+      const payload = dataLine.slice(6);
+      if (payload === "[DONE]") return;
+      try {
+        const e = JSON.parse(payload) as { kind: string; role?: string; taskId?: string; step?: number; tool?: string; ok?: boolean; usage?: { inputTokens?: number; outputTokens?: number }; detail?: string };
+        const ts = new Date().toLocaleTimeString();
+        const task = e.taskId ? e.taskId.slice(0, 8) : "-";
+        if (e.kind === "task.claim") console.log(`[${ts}] 📥 ${e.role} 接取任务 ${task} — ${e.detail ?? ""}`);
+        else if (e.kind === "agent.step") {
+          const usage = e.usage ? ` tokens=${e.usage.inputTokens ?? 0}→${e.usage.outputTokens ?? 0}` : "";
+          console.log(`[${ts}] 🧠 ${e.role} 任务 ${task} 轮次 ${e.step}${usage} — ${e.detail ?? ""}`);
+        } else if (e.kind === "agent.tool") console.log(`[${ts}] 🔧 ${e.role} 任务 ${task} 轮次 ${e.step} [${e.tool}] ${e.ok ? "✓" : "✗"} ${e.detail ?? ""}`);
+        else if (e.kind === "task.done") console.log(`[${ts}] ✅ ${e.role} 任务 ${task} 完成（${e.step} 轮）— ${e.detail ?? ""}`);
+        else if (e.kind === "task.failed") console.log(`[${ts}] ❌ ${e.role} 任务 ${task} 失败（${e.step} 轮）— ${e.detail ?? ""}`);
+        else console.log(`[${ts}] ${e.kind} ${e.role ?? ""} ${task} ${e.detail ?? ""}`);
+      } catch { /* 非 JSON 行忽略 */ }
+    }
+  }
+}
+
 export async function cmdHubConsole(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const client = PthClient.fromConfig();
   if (!client) {
     console.error("❌ PTH 未配置（pi-triple.json pth.url/pth.token 或 PTH_URL/PTH_TOKEN）");
     return;
   }
+  if ("follow" in flags) return followActivity(client);
   const showKernel = "kernel" in flags || (!("sandbox" in flags));
   const showSandbox = "sandbox" in flags || (!("kernel" in flags));
 
