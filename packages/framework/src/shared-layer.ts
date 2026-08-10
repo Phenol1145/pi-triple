@@ -71,21 +71,6 @@ export function linkTemplateToShared(templateDir: string, sharedDir: string): vo
 }
 
 /** 移除模板的共享层链接（只删 symlink，不删模板自有文件） */
-export function unlinkTemplateFromShared(templateDir: string): void {
-  for (const dir of SHARED_DIRS) {
-    const tenantSubDir = path.join(templateDir, dir);
-    try {
-      for (const entry of fs.readdirSync(tenantSubDir, { withFileTypes: true })) {
-        const fullPath = path.join(tenantSubDir, entry.name);
-        try {
-          if (fs.lstatSync(fullPath).isSymbolicLink()) {
-            fs.unlinkSync(fullPath);
-          }
-        } catch { /* ok */ }
-      }
-    } catch { /* 目录不存在 */ }
-  }
-}
 
 /** 确保模板链接完整（launcher 启动前调用） */
 export function ensureTemplateLinks(templateDir: string, sharedDir: string): void {

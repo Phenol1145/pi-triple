@@ -122,16 +122,3 @@ export async function cmdHubJobFetch(passthrough: string[], flags: Record<string
 }
 
 /** 历史 job 归档列表（性能数据回顾） */
-export async function listJobReports(): Promise<Array<{ jobId: string; fetchedAt: string; avgExecMs: number }>> {
-  try {
-    const files = (await readdir(JOBS_DIR)).filter((f) => f.endsWith(".json"));
-    const out: Array<{ jobId: string; fetchedAt: string; avgExecMs: number }> = [];
-    for (const f of files) {
-      try {
-        const r = JSON.parse(await readFile(join(JOBS_DIR, f), "utf8")) as { jobId: string; fetchedAt: string; execMs: { avg: number } };
-        out.push({ jobId: r.jobId, fetchedAt: r.fetchedAt, avgExecMs: r.execMs.avg });
-      } catch { /* 跳过 */ }
-    }
-    return out.sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
-  } catch { return []; }
-}

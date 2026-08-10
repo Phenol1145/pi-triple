@@ -12,6 +12,7 @@
   ],
   "dependencies": {
     "@pi-triple/shared": "file:../shared",
-    "@pi-triple/infra": "file:../infra"
+    "@pi-triple/infra": "file:../infra",
+    "zod": "^4.0.0"
   }
 }

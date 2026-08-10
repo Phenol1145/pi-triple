@@ -148,15 +148,3 @@ export async function interactiveStart(options: PickerOptions): Promise<{
 }
 
 /** 简单的确认选择器 */
-export async function interactiveSelect(title: string, items: SelectItem[]): Promise<string> {
-  return new Promise((resolve) => {
-    const { unmount } = render(
-      <Select
-        title={title}
-        items={items}
-        onSelect={(v) => { resolve(v); unmount(); }}
-      />,
-      { exitOnCtrlC: false },
-    );
-  });
-}

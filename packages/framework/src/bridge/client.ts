@@ -129,6 +129,32 @@ export class PthClient {
   }
 
   /**
+   * SSE 流消费（统一出口——console --follow 等流式命令复用）：
+   * GET 流式端点 → 逐事件回调（data: 行解析——[DONE] 终止）。
+   */
+  async streamSSE(path: string, onEvent: (e: unknown) => void): Promise<void> {
+    const res = await fetch(`${this.url}${path}`, { headers: { Authorization: `Bearer ${this.token}` } });
+    if (!res.ok || !res.body) throw new Error(`SSE 连接失败: HTTP ${res.status}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const blocks = buf.split("\n\n");
+      buf = blocks.pop() ?? "";
+      for (const block of blocks) {
+        const dataLine = block.split("\n").find((l) => l.startsWith("data: "));
+        if (!dataLine) continue;
+        const payload = dataLine.slice(6);
+        if (payload === "[DONE]") return;
+        try { onEvent(JSON.parse(payload)); } catch { /* 非 JSON 行忽略 */ }
+      }
+    }
+  }
+
+  /**
    * hub debug WebSocket 地址（F/WP4 Task 22）：http→ws 换算 + /ws/debug 路径。
    * 目标非 sandbox 时带 ?sessionId=（指定调试会话标识）。
    */
