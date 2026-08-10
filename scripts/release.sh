@@ -147,10 +147,10 @@ if [ "$DO_DOCKER" = "1" ]; then
     sleep 5
     ST=$(curl -s "http://localhost:3000/api/v1/kernel/tasks/$TID" -H "Authorization: Bearer $TOKEN" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "")
     if [ "$ST" = "completed" ]; then DONE=1; break; fi
-    if [ "$ST" = "rejected" ]; then fail "冒烟任务被拒绝（$TID）"; fi
+    if [ "$ST" = "rejected" ]; then fail "冒烟任务被拒绝（${TID}）"; fi
   done
-  [ "$DONE" = "1" ] || fail "冒烟任务超时未完成（$TID）"
-  ok "冒烟任务 completed（$TID）"
+  [ "$DONE" = "1" ] || fail "冒烟任务超时未完成（${TID}）"
+  ok "冒烟任务 completed（${TID}）"
 fi
 
 # ── 阶段 7：GitHub release（--gh）─────────────────────
@@ -162,7 +162,7 @@ if [ "$DO_GH" = "1" ]; then
   else
     gh release create "v${ROOT_VER}" "$TGZ" --title "Pi-Triple v${ROOT_VER}" --generate-notes || fail "gh release 失败"
   fi
-  ok "GitHub release v${ROOT_VER} 已创建（附件 $TGZ）"
+  ok "GitHub release v${ROOT_VER} 已创建（附件 ${TGZ}）"
 fi
 
 say "发布流程完成"
