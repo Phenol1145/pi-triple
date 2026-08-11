@@ -95,7 +95,7 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
 
   app.post("/kernel/execute", async (req, reply) => {
     if (!enforceAuth(req, reply)) return;
-    const body = (req.body ?? {}) as { kernelId?: string; code?: string; timeoutMs?: number; env?: unknown };
+    const body = (req.body ?? {}) as { kernelId?: string; code?: string; timeoutMs?: number; env?: unknown; exec?: "single" | "program" | "auto" };
     if (!body.kernelId || typeof body.code !== "string") {
       reply.code(400).send({ error: "kernelId and code required" });
       return;
@@ -106,7 +106,7 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
       return;
     }
     try {
-      const result = await pools[poolLang(body.kernelId)].execute(body.kernelId, body.code, body.timeoutMs ? { timeoutMs: body.timeoutMs } : undefined);
+      const result = await pools[poolLang(body.kernelId)].execute(body.kernelId, body.code, { ...(body.timeoutMs ? { timeoutMs: body.timeoutMs } : {}), ...(body.exec ? { exec: body.exec } : {}) });
       return result;
     } catch (err) {
       reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
