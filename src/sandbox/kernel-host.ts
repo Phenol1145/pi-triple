@@ -113,6 +113,30 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
     }
   });
 
+  // ── ASP-5 记忆桥（2026-08-11）：sandbox 内 python 空间访问记忆——转发 PTH 桥端点
+  //  （sandbox 无 PG 凭据/无出网——经 internal 网络回 PTH：pi-platform:3000）
+  const pthBridgeUrl = (process.env.PTH_BRIDGE_URL ?? "http://pi-platform:3000").replace(/\/+$/, "");
+  app.post("/kernel/memory-bridge", async (req, reply) => {
+    if (!enforceAuth(req, reply)) return;
+    const body = (req.body ?? {}) as { op?: string };
+    if (!body.op || !["query", "retrieve", "get"].includes(body.op)) {
+      reply.code(400).send({ error: "op required: query|retrieve|get" });
+      return;
+    }
+    try {
+      const res = await fetch(`${pthBridgeUrl}/api/v1/kernel/memory-bridge`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${getSecret() ?? ""}` },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(35_000),
+      });
+      const text = await res.text();
+      reply.code(res.status).type("application/json").send(text || "{}");
+    } catch (err) {
+      reply.code(502).send({ error: `memory bridge upstream failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  });
+
   app.post("/kernel/reset", async (req, reply) => {
     if (!enforceAuth(req, reply)) return;
     const { kernelId } = (req.body ?? {}) as { kernelId?: string };
