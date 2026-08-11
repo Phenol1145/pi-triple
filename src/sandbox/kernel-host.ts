@@ -202,7 +202,7 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
     compiledInFlight++;
     let workDir = "";
     try {
-      const { code, cc, timeoutMs } = (req.body ?? {}) as { code?: string; cc?: string; timeoutMs?: number };
+      const { code, cc, timeoutMs, buildOnly } = (req.body ?? {}) as { code?: string; cc?: string; timeoutMs?: number; buildOnly?: boolean };
       if (typeof code !== "string" || code.length === 0) {
         reply.code(400).send({ error: "code required" });
         return;
@@ -228,6 +228,11 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
           compiledStats.cacheEntries = m.cacheSize ?? compiledStats.cacheEntries;
         },
       });
+      // 生产核 dev.build（2026-08-11）：buildOnly=true 仅编译（返回 binaryRef/diagnostics），否则两阶段编译+运行
+      if (buildOnly === true) {
+        const b = await kernel.build(code);
+        return { ok: b.ok, value: b.ok ? { binaryRef: b.binaryRef } : null, error: b.ok ? undefined : { message: `编译失败：${(b.diagnostics ?? "").slice(0, 2000)}` }, stdout: "", stderr: b.diagnostics ?? "", durationMs: b.durationMs };
+      }
       const result = await kernel.execute(code);
       return result;
     } catch (e) {
