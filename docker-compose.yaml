@@ -254,7 +254,6 @@ volumes:
   components:
   agent-dir:
   sessions:
-  dev-tools:        # dev 工具容器 /opt/tools（镜像默认 COPY；bind 挂载同路径覆盖——热改）
   jupyter-home:     # jupyter 独立服务 /home/jovyan 持久化
   agent-lab:
   redis-data:
