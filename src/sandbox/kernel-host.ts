@@ -21,8 +21,8 @@
 import Fastify from "fastify";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { KernelPool, type KernelLang } from "./kernel-pool.js";
-import { CCompiledKernel } from "../pth/kernel/interpreter/compiled-kernel.js";
-import { CDebugSession } from "../pth/kernel/interpreter/gdb-mi.js";
+import { CCompiledKernel } from "../pth/impls/kernels/compiled-kernel.js";
+import { CDebugSession } from "../pth/impls/kernels/gdb-mi.js";
 
 /** 编译核统计（/kernel/status 聚合——PTH obs.kernels 可查） */
 export interface CompiledStats {

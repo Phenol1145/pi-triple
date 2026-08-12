@@ -2,7 +2,7 @@ import { describe, it } from "vitest";
 import { createKernelModelRouter } from "../src/pth/kernel/execution/model-router.js";
 import { createLlmFn } from "../src/pth/kernel/interpreter/llm-fn.js";
 import { runAgentTask } from "../src/pth/kernel/execution/agent-loop.js";
-import { createKernelManager, createWorkerKernelWithManager } from "../src/pth/kernel/interpreter/kernel-manager.js";
+import { createKernelManager, createWorkerKernelWithManager } from "../src/pth/impls/kernels/kernel-manager.js";
 
 describe("agent debug full2", () => {
   it("完整 agent 循环（单轮消息模式）", async () => {
