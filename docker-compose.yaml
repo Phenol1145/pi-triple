@@ -34,6 +34,8 @@ services:
       - PTH_SANDBOX_KERNEL_URL=http://sandbox:8080
       # 内存硬限制：node 堆上限（主进程 + batch 子进程继承）——防大 payload OOM 主机
       - NODE_OPTIONS=--max-old-space-size=768
+      # batch 构成参数化（角色:副本数逗号分隔——如 developer:3,analyst:2；未列默认 1；governance 角色显式列出启用）
+      - PTH_WORKER_ROLES=${PTH_WORKER_ROLES:-}
       # batch 轮询 tick 间隔（ms；自驱动后仅空闲退避用）
       - PTH_BATCH_TICK_MS=${PTH_BATCH_TICK_MS:-1000}
       # batch 子进程 PG 连接池上限（7 角色并发 ≤7——8 够；防批量 batch 连接失控）

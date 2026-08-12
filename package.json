@@ -29,7 +29,8 @@
     "lint": "tsc --noEmit && tsc -p packages/shared --noEmit && tsc -p packages/framework --noEmit",
     "monitor": "node tools/docker-monitor/server.js",
     "ptl:dev": "tsx packages/framework/src/pit.ts",
-    "ext:check": "tsx scripts/ext-check.ts"
+    "ext:check": "tsx scripts/ext-check.ts",
+    "pth": "tsx scripts/pth-cli.ts"
   },
   "dependencies": {
     "@away_from/infra": "file:packages/infra",
