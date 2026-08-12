@@ -45,5 +45,11 @@ export function validateMessage(raw: unknown): PitMessage | null {
   if (typeof msg.id !== "string") return null;
   if (!msg.from || !msg.to) return null;
   if (typeof msg.content !== "string") return null;
+  // H2 护栏：注入面来源不可信——补强字段级校验
+  const from = msg.from as Record<string, unknown>;
+  if (typeof from.name !== "string" || from.name.trim() === "") return null;
+  if (msg.priority !== undefined && msg.priority !== "normal" && msg.priority !== "urgent" && msg.priority !== "fyi") return null;
+  if (msg.type !== undefined && msg.type !== "text" && msg.type !== "file" && msg.type !== "ask" && msg.type !== "ask-reply" && msg.type !== "broadcast") return null;
+  if (msg.content.length > 100_000) return null;
   return raw as PitMessage;
 }

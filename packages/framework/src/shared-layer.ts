@@ -227,9 +227,13 @@ export function syncBundledExtensions(sharedDir: string, moduleUrl: string = imp
   }
 
   // 2. 读旧 manifest，剪枝：删除"曾在旧 manifest 但不在新 bundled"的共享层条目
+  //    安全边界（审计 H3）：条目必须是纯 basename——拒绝路径穿越（../、绝对路径、含分隔符）
   const manifestPath = path.join(targetExtDir, ".bundled-manifest");
   const oldManifest = readManifest(manifestPath);
   for (const name of oldManifest) {
+    if (name !== path.basename(name) || name.startsWith(".") || name.includes("/") || name.includes("\\")) {
+      continue; // 非法条目：跳过不删（防越界递归删除）
+    }
     if (!bundledEntries.has(name)) {
       const p = path.join(targetExtDir, name);
       try { fs.rmSync(p, { recursive: true, force: true }); } catch { /* ok */ }

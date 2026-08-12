@@ -136,6 +136,35 @@ describe("installBundledExtensions / syncBundledExtensions — symlink 条目", 
     const manifest = fs.readFileSync(path.join(sharedDir, "extensions", ".bundled-manifest"), "utf8");
     expect(manifest).toContain("link-ext");
   });
+
+  it("syncBundledExtensions：manifest 含路径穿越条目（../ 或绝对路径）→ 拒绝删除共享层外目录", () => {
+    const root = makeTmp();
+    makeBundledRepo(root);
+    const sharedDir = path.join(root, "shared");
+    const extDir = path.join(sharedDir, "extensions");
+    fs.mkdirSync(extDir, { recursive: true });
+
+    // 构造外部受害目录 + 恶意 manifest（含 ../ 穿越与绝对路径条目）
+    // 注意：path.join(extDir, "../victim") 解析为 sharedDir/victim——受害目录必须放这里才测得到
+    const victimDir = path.join(sharedDir, "victim");
+    fs.mkdirSync(victimDir, { recursive: true });
+    fs.writeFileSync(path.join(victimDir, "keep.txt"), "keep");
+    const absVictim = path.join(root, "victim2");
+    fs.mkdirSync(absVictim, { recursive: true });
+    fs.writeFileSync(path.join(absVictim, "keep.txt"), "keep");
+    fs.writeFileSync(
+      path.join(extDir, ".bundled-manifest"),
+      `link-ext\n../victim\n${absVictim}\n`,
+      "utf-8",
+    );
+
+    const synced = syncBundledExtensions(sharedDir, moduleUrlFor(root));
+
+    // 合法条目照常同步；穿越条目不得删掉共享层外的目录
+    expect(synced).toContain("link-ext");
+    expect(fs.existsSync(path.join(victimDir, "keep.txt"))).toBe(true);
+    expect(fs.existsSync(absVictim)).toBe(true);
+  });
 });
 
 describe("仓库 bundled 扩展接线（finding #1）", () => {

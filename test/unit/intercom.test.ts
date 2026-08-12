@@ -189,6 +189,53 @@ describe("Delivery", () => {
     expect(delivery.process(urgentMsg).action).toBe("inject-steer-and-notify");
   });
 
+  it("auto mode: 超长注入内容截断 + 截断标记（H2 护栏）", () => {
+    const delivery = new Delivery({ defaultMode: "auto" });
+    const long = "x".repeat(20000);
+    const msg = createMessage({
+      from: { sessionId: "s1", tenantId: "local", name: "coding" },
+      to: { sessionId: "s2", tenantId: "local" },
+      type: "text", content: long,
+    });
+    const d = delivery.process(msg);
+    expect(d.action).toBe("inject-next-turn");
+    const content = (d as { content: string }).content;
+    expect(content.length).toBeLessThan(20000); // 已截断（原始 20000）
+    expect(content.startsWith("x".repeat(8000))).toBe(true); // 主体 8000
+    expect(content.endsWith("[内容过长已截断]")).toBe(true);
+  });
+
+  it("auto mode: 同 sender 注入速率限制——窗口内第 2 条降级为 notify（H2 护栏）", () => {
+    const delivery = new Delivery({ defaultMode: "auto" });
+    const mk = (content: string) => createMessage({
+      from: { sessionId: "s1", tenantId: "local", name: "coding" },
+      to: { sessionId: "s2", tenantId: "local" },
+      type: "text", content,
+    });
+    expect(delivery.process(mk("first")).action).toBe("inject-next-turn");
+    // 同 sender 同窗口内第二条 → 不得再注入（防会话间 DoS）
+    expect(delivery.process(mk("second")).action).toBe("notify");
+    // 不同 sender 不受限
+    const other = createMessage({
+      from: { sessionId: "s3", tenantId: "local", name: "writer" },
+      to: { sessionId: "s2", tenantId: "local" },
+      type: "text", content: "other",
+    });
+    expect(delivery.process(other).action).toBe("inject-next-turn");
+  });
+
+  it("validateMessage: 缺 from.name / 非法 priority / 超长 content → 拒绝（H2 护栏）", () => {
+    const base = createMessage({
+      from: { sessionId: "s1", tenantId: "local", name: "coding" },
+      to: { sessionId: "s2", tenantId: "local" },
+      type: "text", content: "hi",
+    });
+    expect(validateMessage({ ...base, from: { ...base.from, name: "" } })).toBeNull();
+    expect(validateMessage({ ...base, priority: "critical" })).toBeNull();
+    expect(validateMessage({ ...base, content: "x".repeat(100001) })).toBeNull();
+    expect(validateMessage(base)).not.toBeNull();
+  });
+
   it("gc cleans old", async () => {
     const mb = new Mailbox(root, "local", "s2-gc");
     const msg = createMessage({

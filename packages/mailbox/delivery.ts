@@ -41,6 +41,12 @@ export class Delivery {
   private actions: DeliveryActions | null = null;
   readonly config: IntercomConfig;
 
+  /** H2 护栏：注入内容长度上限（超长截断 + 标记） */
+  private static readonly MAX_INJECT_LENGTH = 8000;
+  /** H2 护栏：per-sender 注入限流——同一发送方窗口内最多 1 条自动注入 */
+  private static readonly INJECT_RATE_WINDOW_MS = 60_000;
+  private lastInjectAt = new Map<string, number>();
+
   /**
    * 构造时传入 mailboxRoot（用于 Delivery 内部的 notify/log，不直接操作 mailbox）
    * 实际的 mailbox.accept/reject 由调用方在 Delivery 决定后执行。
@@ -105,6 +111,20 @@ export class Delivery {
   // ── 内部 ──────────────────────────────────────────────────
 
   private decide(msg: PitMessage, mode: ReviewMode): DeliveryDecision {
+    // H2 护栏：per-sender 注入限流——同 sender 窗口内已注入过 → 降级为 notify（防会话间 DoS/配额耗尽）
+    const key = `${msg.from.tenantId}:${msg.from.name}`;
+    const now = Date.now();
+    const last = this.lastInjectAt.get(key) ?? 0;
+    const rateLimited = now - last < Delivery.INJECT_RATE_WINDOW_MS;
+    if (rateLimited) {
+      return { action: "notify", msgId: msg.id, notifyText: `⏳ 注入限流(60s): ${msg.from.name}: ${msg.content.slice(0, 80)}` };
+    }
+    const markInjected = () => this.lastInjectAt.set(key, now);
+    const clip = (c: string): string => {
+      if (c.length <= Delivery.MAX_INJECT_LENGTH) return c;
+      return c.slice(0, Delivery.MAX_INJECT_LENGTH) + "\n[内容过长已截断]";
+    };
+
     switch (mode) {
       case "manual":
         return { action: "notify", msgId: msg.id, notifyText: this.formatNotify(msg) };
@@ -114,30 +134,33 @@ export class Delivery {
           return { action: "notify", msgId: msg.id, notifyText: this.formatNotify(msg) };
         }
         if (msg.priority === "urgent") {
+          markInjected();
           return {
             action: "inject-steer-and-notify",
             msgId: msg.id,
-            content: msg.content,
+            content: clip(msg.content),
             notifyText: `⚡ 自动接收(urgent): ${msg.from.name}: ${msg.content.slice(0, 80)}`,
           };
         }
         if (msg.priority === "fyi") {
           return { action: "accept", msgId: msg.id, notifyText: this.formatNotify(msg) };
         }
+        markInjected();
         return {
           action: "inject-next-turn",
           msgId: msg.id,
-          content: msg.content,
-          display: `📬 ${msg.from.name}: ${msg.content}`,
+          content: clip(msg.content),
+          display: `📬 ${msg.from.name}: ${msg.content.slice(0, 80)}`,
           notifyText: `🤖 自动接收: ${msg.from.name}: ${msg.content.slice(0, 80)}`,
         };
 
       case "hybrid":
         if (msg.priority === "urgent") {
+          markInjected();
           return {
             action: "inject-steer-and-notify",
             msgId: msg.id,
-            content: msg.content,
+            content: clip(msg.content),
             notifyText: `⚡ 自动接收(urgent): ${msg.from.name}`,
           };
         }

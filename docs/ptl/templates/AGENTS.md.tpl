@@ -14,11 +14,11 @@
 
 - **写扩展/技能 → PTL 共享层（`~/.pi-triple/data/shared/`）或模板本地**，绝不写 `~/.agents/skills/`（那是裸 pi 的体制外目录，不受模板治理）
 - **删模板内共享层 symlink ≠ 卸载**——`ensureTemplateLinks` 每次启动会补链，手动删的会复活；要排除必须把条目移出共享层
-- **不要与 bundled 扩展同名**——`pit update --all` 会覆盖自定义扩展
+- **不要与 bundled 扩展同名**——`ptl update` 会覆盖自定义扩展
 - **非开源/不可信二进制不进 dev 容器**（Mach-O 在 Linux 容器不可执行）
 - **改 dev 容器工具**：先 `docker compose exec dev which <tool>` 确认现状，再按放置决策树选路径
 
 ## 环境信息
 
 - 本模板会话的 workspace 与共享层路径由 PTL 注入，勿假设裸 pi 目录布局
-- 排查自身问题用：`pit doctor`、`pit template ls`、`pit shared status`
+- 排查自身问题用：`ptl doctor`、`ptl template ls`、`ptl shared status`

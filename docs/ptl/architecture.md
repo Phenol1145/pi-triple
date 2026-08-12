@@ -89,7 +89,7 @@ ptl                             → 上手指引
 
 - **模板 = agent 配置蓝图**：`pi-triple.json` 的 `templates` 表——alias/UUID/provider/model/tools 声明
 - **per-template 隔离**：`~/.pi-triple/data/pi-config/<uuid>/` 独立配置目录（extensions/skills/settings/models）——PTL 注入式布局（非裸 pi 目录）
-- **共享层注入**：`data/shared/` 的扩展/skills 逐项 symlink 进模板配置目录——一处更新全局可见（`pit shared status` 检查链接状态）
+- **共享层注入**：`data/shared/` 的扩展/skills 逐项 symlink 进模板配置目录——一处更新全局可见（`ptl shared status` 检查链接状态）
 
 ## 会话与纸带
 
