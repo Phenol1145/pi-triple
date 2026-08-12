@@ -95,7 +95,7 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
 
   app.post("/kernel/execute", async (req, reply) => {
     if (!enforceAuth(req, reply)) return;
-    const body = (req.body ?? {}) as { kernelId?: string; code?: string; timeoutMs?: number; env?: unknown; exec?: "single" | "program" | "auto" };
+    const body = (req.body ?? {}) as { kernelId?: string; code?: string; timeoutMs?: number; env?: unknown; exec?: "single" | "program" | "auto"; space?: string };
     if (!body.kernelId || typeof body.code !== "string") {
       reply.code(400).send({ error: "kernelId and code required" });
       return;
@@ -105,8 +105,13 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
       reply.code(400).send({ error: "env injection rejected" });
       return;
     }
+    if (body.space !== undefined && !/^[a-z0-9-]{1,32}$/.test(body.space)) {
+      // 空间盖章合法性（2026-08-12 批 3）：只允许空间 id 形状——防注入
+      reply.code(400).send({ error: `invalid space: ${body.space}` });
+      return;
+    }
     try {
-      const result = await pools[poolLang(body.kernelId)].execute(body.kernelId, body.code, { ...(body.timeoutMs ? { timeoutMs: body.timeoutMs } : {}), ...(body.exec ? { exec: body.exec } : {}) });
+      const result = await pools[poolLang(body.kernelId)].execute(body.kernelId, body.code, { ...(body.timeoutMs ? { timeoutMs: body.timeoutMs } : {}), ...(body.exec ? { exec: body.exec } : {}), ...(body.space ? { space: body.space } : {}) });
       return result;
     } catch (err) {
       reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
