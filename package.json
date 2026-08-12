@@ -28,7 +28,8 @@
     "test:watch": "vitest",
     "lint": "tsc --noEmit && tsc -p packages/shared --noEmit && tsc -p packages/framework --noEmit",
     "monitor": "node tools/docker-monitor/server.js",
-    "ptl:dev": "tsx packages/framework/src/pit.ts"
+    "ptl:dev": "tsx packages/framework/src/pit.ts",
+    "ext:check": "tsx scripts/ext-check.ts"
   },
   "dependencies": {
     "@away_from/infra": "file:packages/infra",
