@@ -188,24 +188,45 @@ services:
   # 定位：sandbox=运行产物中间态（无网无密钥不可信）；dev=开发/调试/成品保留（可信出网）。
   # 非开源工具（kimiim-cli/obsidian 等 Mach-O）保留本机，不入容器（用户裁决）。
   # 密钥不注入（用户裁决——需时 docker exec -e 临时给）。
+  # ── G 阶段：dev 工具容器（瘦身版 2026-08-12——PTL 外接工具环境）──
+  # 定位：工具执行（agent-reach/yt-dlp/instsci/bf/bfc/chatgpt-share——wrapper exec -T dev <tool>）。
+  # 可信可出网、无密钥注入（用户裁决——需时 docker exec -e 临时给）。
+  # jupyter 已独立为下方 jupyter 服务（官方 minimal-notebook——本容器不再承载）。
+  # 热修改：tools/dev bind 挂载 /opt/tools（改即生效免 rebuild）；agent-reach 配置只读挂 ~/.agents。
   dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    # 修复命名卷属主漂移：卷首次挂载时 .local/.nvm 等可能 root 属主（Docker 卷复制不总保留），
-    # 启动前 chown 归 jovyan（root 只跑 chown，随后降级回 jovyan 启动 jupyter——jupyter 拒绝 root；
-    # su 显式 PATH 避免 sudo secure_path 丢 conda）
-    user: "0:0"
-    entrypoint: [
-      "/bin/bash", "-lc",
-      "mkdir -p /home/jovyan/go && chown -R jovyan:users /home/jovyan/.local /home/jovyan/.nvm /home/jovyan/.cargo /home/jovyan/.rustup /home/jovyan/go /home/jovyan/.config /home/jovyan/.cache /home/jovyan/.jupyter /home/jovyan/.ipython /data/artifacts /data/workspaces && exec su jovyan -s /bin/bash -c 'export PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin:/home/jovyan/.local/bin:/home/jovyan/.nvm/current/bin:/usr/local/go/bin:/home/jovyan/.cargo/bin; python3 -c \"import lifelab\" 2>/dev/null || (echo \"[entrypoint] lifelab 缺失，自动重装…\" && bash /works/labs/lifelab/install.sh); start-notebook.sh'"
-    ]
+    # root 单用户（工具容器无多用户/jupyter 拒绝 root 的问题）
+    entrypoint: ["/bin/bash", "-lc", "exec tail -f /dev/null"]
+    volumes:
+      # 热改源（精确对齐镜像内 COPY 路径——改即生效免 rebuild）
+      - ${HOME}/pi-platform/tools/dev/bfc:/opt/tools/bfc:rw
+      - ${HOME}/pi-platform/tools/dev/agent-reach-chatgpt:/opt/tools/chatgpt-share:rw
+      - ${HOME}/.agents:/root/.agents:ro                 # agent-reach skill/配置（只读——含凭据，用户自行挂载）
+      - ${HOME}/pi-platform:/works/pi-platform:rw
+      - ${HOME}/docs:/works/docs:rw
+      - ${HOME}/Projects:/works/Projects:rw
+      - ${HOME}/go:/works/go:rw
+    networks:
+      - default
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "kill -0 1 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── G 阶段：jupyter 独立服务（官方 minimal-notebook——jupyter 原生生态完整保留）──
+  # 定位：数据科学工作台（jovyan/conda/start-notebook.sh 原生）；与 dev 工具容器解耦。
+  jupyter:
+    image: quay.io/jupyter/minimal-notebook:python-3.13
     ports:
       - "127.0.0.1:8888:8888"        # jupyter（仅本机）——WeKnora searxng 也占 8888，冲突时改 JUPYTER_PORT
     volumes:
-      - dev-home:/home/jovyan          # /home/jovyan 持久化（conda env/jupyter 配置/uv 缓存/nvm）
-      - dev-artifacts:/data/artifacts  # 成品保留区（sandbox 产物成品落此）
-      - workspaces:/data/workspaces    # 与 pth/sandbox 共享（可选——cwd 语义一致）
+      - jupyter-home:/home/jovyan       # /home/jovyan 持久化（conda env/jupyter 配置/uv 缓存/nvm）
+      - dev-artifacts:/data/artifacts   # 成品保留区（sandbox 产物成品落此）
+      - workspaces:/data/workspaces     # 与 pth/sandbox 共享（可选——cwd 语义一致）
       - ${HOME}/ai-teach-jupyter:/works/ai-teach-jupyter:rw
       - ${HOME}/pi-platform:/works/pi-platform:rw
       - ${HOME}/docs:/works/docs:rw
@@ -233,6 +254,8 @@ volumes:
   components:
   agent-dir:
   sessions:
+  dev-tools:        # dev 工具容器 /opt/tools（镜像默认 COPY；bind 挂载同路径覆盖——热改）
+  jupyter-home:     # jupyter 独立服务 /home/jovyan 持久化
   agent-lab:
   redis-data:
   postgres-data:

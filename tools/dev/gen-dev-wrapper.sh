@@ -13,8 +13,9 @@ set -euo pipefail
 
 DEST="${HOME}/.local/bin"
 
-# 默认工具集（与 Dockerfile.dev §7 对应——开源集）；传参时以参数为准
-TOOLS=(${@:-agent-reach yt-dlp instsci chatgpt-share bf bfc})
+# 默认工具集（与 Dockerfile.dev 对应——开源集）；传参时以参数为准
+# instsci 不入列：体积大（254MB）且宿主机已有（~/.local/bin/instsci——用户裁决迁移到本地）
+TOOLS=(${@:-agent-reach yt-dlp chatgpt-share bf bfc})
 
 for tool in "${TOOLS[@]}"; do
   # 目标是符号链接时 cat > 会穿透写坏链接目标（如指向工具源码）——先移除

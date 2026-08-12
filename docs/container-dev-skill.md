@@ -37,64 +37,62 @@
 
 ### 1.1 总览
 
-dev 容器 = **多语言开发工作区**（G 阶段），PTL 外接工具环境 + 开发者工作台共用。入口：
+dev 容器 = **PTL 工具容器**（2026-08-12 瘦身版——G 阶段），承载外接工具（agent-reach/yt-dlp/bfc/chatgpt-share）。
+**jupyter 已独立为 compose `jupyter` 服务**（官方 minimal-notebook——数据科学工作台单独跑）。入口：
 
 ```bash
-docker compose up -d dev      # 启动（首次自动 build）
+docker compose up -d dev      # 启动（首次自动 build——秒级）
 docker compose ps dev         # 状态
-docker compose exec dev bash  # 进入（默认 jovyan 用户）
-docker compose exec -u root dev bash   # 需要 root 时
+docker compose exec dev bash  # 进入（root 单用户——工具容器无多用户）
 ```
 
-Jupyter 界面：`http://127.0.0.1:8888`（仅本机绑定；token 见 compose `JUPYTER_TOKEN`）。端口与 WeKnora searxng 冲突时设 `JUPYTER_PORT=8889`。
+Jupyter（独立服务）：`http://127.0.0.1:8888`（仅本机绑定；token 见 compose `JUPYTER_TOKEN`）。端口与 WeKnora searxng 冲突时设 `JUPYTER_PORT=8889`。
 
 ### 1.2 镜像定义（Dockerfile.dev，已提交版本逐节）
 
-基础：`quay.io/jupyter/minimal-notebook:python-3.13`（Python 3.13 + conda/mamba）。
+基础：`python:3.13-slim`（工具全为 python 生态）。体积 ~559MB（对比 jupyter 基座时代 1.5GB——瘦 63%）。
 
-| 节 | 内容 | 安装用户 |
+| 节 | 内容 | 安装方式 |
 |---|---|---|
-| §1 | 系统工具（apt）：`git-lfs gh jq curl wget tmux vim ripgrep sqlite3 ffmpeg tesseract-ocr z3`，`git lfs install --system` | root |
-| §2 | Node：nvm v0.40.1 + LTS，`NVM_DIR=/home/jovyan/.nvm` | jovyan |
-| §3 | Go：官方 tarball 装 `/usr/local/go`，`ARG GO_VERSION=1.24.2`，`GOPATH=/home/jovyan/go` | root |
-| §4 | Rust：rustup，`~/.cargo/bin` | jovyan |
-| §5 | uv：`~/.local/bin`（多 Python 版本管理） | jovyan |
-| §6 | 数据科学包（conda base）：`pandas numpy matplotlib seaborn scikit-learn scipy`（mamba conda-forge，`mamba clean -ai`） | root |
-| §7 | PTL 外接工具（开源集——**用户裁决：非开源保留本机**）：`yt-dlp`（PyPI→/opt/conda）、`agent-reach`（GitHub Panniantong）、`instsci`（GitHub rimagination，uv tool）、`chatgpt-share`（本地单文件脚本→`/usr/local/bin`） | root + jovyan |
-| §8 | 目录：`/data/artifacts`（成品保留区）、`/works`（工作区），`WORKDIR /works`，`EXPOSE 8888` | root |
+| §1 | 系统工具（apt）：`curl git ca-certificates beef tcc libc6-dev`（beef=Brainfuck 解释器，tcc=bfc 的 C 编译器） | root |
+| §2 | pip 工具：`yt-dlp`（PyPI）、`agent-reach`（GitHub Panniantong） | root |
+| §3 | uv（按需——容器内不预装 instsci：宿主机已有 `~/.local/bin/instsci`，用户裁决迁移本地） | root |
+| §4 | bfc/bf 工具（纯 Python stdlib——`tools/dev/bfc/`）→ `/opt/tools/bfc/` + `/usr/local/bin` symlink | root |
+| §5 | chatgpt-share（`tools/dev/agent-reach-chatgpt/`）→ `/opt/tools/chatgpt-share/` | root |
+| §6 | 目录：`WORKDIR /works`；entrypoint 长驻（`tail -f /dev/null`——wrapper exec 直执行） | root |
 
-**USER 层级规则**（镜像内已按此分层，扩展工具时照抄）：用户级安装（nvm/rustup/uv/`uv tool`）必须 `USER jovyan`——以 root 装会把 `$HOME` 写成 root 属主，卷挂载后 jovyan 无权限写，jupyter 直接启动失败；系统级（apt、`/usr/local`、`pip`→`/opt/conda`）用 root。
+**热修改**（2026-08-12 新增）：compose 将宿主机 `tools/dev/bfc` → `/opt/tools/bfc`、`tools/dev/agent-reach-chatgpt` → `/opt/tools/chatgpt-share` **bind 挂载**——改宿主机源码容器内立即生效，免 rebuild。
 
 ### 1.3 服务编排（docker-compose.yaml `dev` 服务，已提交版本）
 
 | 项 | 值 | 说明 |
 |---|---|---|
-| user | `"0:0"` | entrypoint 以 root 跑 chown，随后 `su jovyan` 降级启动 jupyter（jupyter 拒绝 root） |
-| ports | `127.0.0.1:8888:8888` | 仅本机 |
+| user | 默认（root） | 工具容器单用户——无 jupyter 拒绝 root 问题 |
+| ports | 无 | 工具容器不暴露端口（jupyter 独立服务暴露 8888） |
 | networks | `default` | 可出网 |
-| volumes | 见下表 | 家目录命名卷 + 仓库绑定挂载 + 凭据只读挂载 |
+| volumes | 见下表 | 热改源码 + 工作区 + 凭据只读挂载 |
 
 **卷挂载清单**（真实值）：
 
 ```yaml
-- dev-home:/home/jovyan          # 命名卷：conda env/jupyter 配置/uv 缓存/nvm 持久化
-- dev-artifacts:/data/artifacts  # 成品保留区
-- workspaces:/data/workspaces    # 与 pth/sandbox 共享（cwd 语义一致）
-- ${HOME}/ai-teach-jupyter:/works/ai-teach-jupyter:rw
-- ${HOME}/pi-platform:/works/pi-platform:rw    # ← 主仓库挂载点
+- ${HOME}/pi-platform/tools/dev/bfc:/opt/tools/bfc:rw               # 热改源：bf/bfc（改即生效）
+- ${HOME}/pi-platform/tools/dev/agent-reach-chatgpt:/opt/tools/chatgpt-share:rw  # 热改源：chatgpt-share
+- ${HOME}/.agents:/root/.agents:ro     # agent-reach skill/配置（只读——含凭据）
+- ${HOME}/pi-platform:/works/pi-platform:rw    # 主仓库挂载点
 - ${HOME}/docs:/works/docs:rw
 - ${HOME}/Projects:/works/Projects:rw
 - ${HOME}/go:/works/go:rw
-- ${HOME}/.agents:/home/jovyan/.agents:ro     # agent-reach skill/配置（只读——含凭据）
 ```
 
-**entrypoint**：`chown -R jovyan:users` 已知路径列表（`.local .nvm .cargo .rustup go artifacts workspaces`——新增用户级工具写入新路径时**必须**加进此列表，防命名卷属主漂移）→ `su jovyan` + 显式 PATH（`/opt/conda/bin:/usr/local/bin:/usr/bin:/bin:/home/jovyan/.local/bin:/home/jovyan/.nvm/current/bin:/usr/local/go/bin:/home/jovyan/.cargo/bin`）→ `start-notebook.sh`。
+**entrypoint**：`exec tail -f /dev/null`（长驻——wrapper `exec -T dev <tool>` 直执行工具；不跑 jupyter/不跑服务）。
+
+**jupyter 独立服务**（compose 新增，2026-08-12）：`quay.io/jupyter/minimal-notebook:python-3.13` 官方镜像——jovyan/conda/start-notebook.sh 原生生态完整保留；挂载 `jupyter-home` 卷（/home/jovyan）+ 工作区；healthcheck curl 8888。
 
 ### 1.4 配套工具（tools/dev/）
 
 | 文件 | 作用 |
 |---|---|
-| `tools/dev/gen-dev-wrapper.sh` | 生成宿主机 wrapper：`~/.local/bin/<tool>` → `docker compose -f ~/pi-platform/docker-compose.yaml exec -T dev <tool> "$@"`。默认 TOOLS：`agent-reach yt-dlp instsci chatgpt-share`；可传参只生成指定工具；目标是符号链接时先 rm（防写入穿透）。卸载 = `rm ~/.local/bin/<tool>` |
+| `tools/dev/gen-dev-wrapper.sh` | 生成宿主机 wrapper：`~/.local/bin/<tool>` → `docker compose -f ~/pi-platform/docker-compose.yaml exec -T dev <tool> "$@"`。默认 TOOLS：`agent-reach yt-dlp chatgpt-share bf bfc`（instsci 不入列——宿主机已有 `~/.local/bin/instsci`）；可传参只生成指定工具；目标是符号链接时先 rm（防写入穿透）。卸载 = `rm ~/.local/bin/<tool>` |
 | `tools/dev/agent-reach-chatgpt/` | `chatgpt-share`（单文件纯 stdlib 解码器，镜像 §7 COPY 到 `/usr/local/bin`）、`chatgpt_share.py` + `chatgpt.md`（agent-reach 渠道补丁素材）、`patch-agent-reach.sh`（容器内重装渠道：CLI + channel 插件 + SKILL.md 路由注册，幂等） |
 | `tools/dev/bfc/` | Brainfuck 工具（**工作区 WIP，未提交**，见 §1.5）：`bf`（beef 友好入口 shim：`-p/-c` 直传、文件、stdin 管道）、`bfc`（自写 bf→C 翻译器，纯 Python stdlib，配合 tcc 编译出可执行文件） |
 
@@ -113,41 +111,36 @@ Jupyter 界面：`http://127.0.0.1:8888`（仅本机绑定；token 见 compose `
 
 ## 2. 工具链
 
-**语言运行时**（全部镜像内置，直接可用）：
+**语言运行时**（镜像内置，直接可用）：
 
 | 工具 | 版本/位置 | 验证命令 |
 |---|---|---|
-| Python | 3.13（conda base `/opt/conda`） | `python3 --version` |
-| Node.js | LTS（nvm，`/home/jovyan/.nvm/current`） | `node --version`、`npm --version` |
-| Go | 1.24.2（`/usr/local/go`） | `go version` |
-| Rust | rustup 最新 stable（`~/.cargo/bin`） | `cargo --version` |
-| uv | `~/.local/bin`（可装任意 Python 版本） | `uv --version` |
+| Python | 3.13（`/usr/local`——python:3.13-slim） | `python3 --version` |
+| uv | `/usr/local/bin`（按需装任意 Python 版本） | `uv --version` |
 
-**数据科学**（conda base env）：`pandas numpy matplotlib seaborn scikit-learn scipy`。
+> 2026-08-12 瘦身版：Node/Go/Rust/conda 数据科学栈已移除（dev 回归工具容器本职）。需要完整多语言开发环境 → **jupyter 独立服务**（minimal-notebook：Node/conda 数据科学栈）或宿主机制。
 
-**系统工具**：`git-lfs gh jq curl wget tmux vim ripgrep sqlite3 ffmpeg tesseract-ocr z3`。
+**系统工具**（apt）：`curl git ca-certificates beef tcc libc6-dev`（beef=Brainfuck 解释器；tcc=bfc 的 C 编译器）。
 
 **PTL 外接工具**（开源集——非开源保留宿主机）：
 
 | 工具 | 来源 | 安装层 | 用途 |
 |---|---|---|---|
-| `agent-reach` | GitHub Panniantong（pip git+） | `/opt/conda` | 信息检索/渠道聚合 |
-| `yt-dlp` | PyPI（pip） | `/opt/conda` | 视频/媒体下载 |
-| `instsci` | GitHub rimagination（uv tool） | `~/.local/share/uv` | 学术研究 |
-| `chatgpt-share` | 本地单文件（`tools/dev/agent-reach-chatgpt/`） | `/usr/local/bin` | ChatGPT 分享会话解码（JS 渲染页专用后端） |
+| `agent-reach` | GitHub Panniantong（pip git+） | `/usr/local` | 信息检索/渠道聚合 |
+| `yt-dlp` | PyPI（pip） | `/usr/local` | 视频/媒体下载 |
+| `chatgpt-share` | 本地脚本（`tools/dev/agent-reach-chatgpt/`） | `/opt/tools/chatgpt-share`（热改挂载） | ChatGPT 分享会话解码（JS 渲染页专用后端） |
+| `instsci` | GitHub rimagination（uv tool） | **宿主机** `~/.local/bin/instsci` | 学术研究（2026-08-12 用户裁决迁移本地——254MB 不占镜像） |
 
-**Brainfuck 工具**（工作区 WIP 已装，见 §1.5）：`bf`（beef 解释器入口：`bf -p 'CODE'` / `bf FILE.bf` / `echo 'CODE' | bf`）、`bfc`（编译：`bfc hello.bf -o hello`，自动探测 `tcc → cc → gcc`；`--emit-c` 只输出 C 源码；`-c` 命令行直读）。
+**Brainfuck 工具**（`/opt/tools/bfc/`——热改挂载）：`bf`（beef 解释器入口：`bf -p 'CODE'` / `bf FILE.bf` / `echo 'CODE' | bf`）、`bfc`（编译：`bfc hello.bf -o hello`，自动探测 `tcc → cc → gcc`；`--emit-c` 只输出 C 源码；`-c` 命令行直读）。
 
 **宿主机 wrapper 机制**（工具在容器、命令在宿主机）：`bash tools/dev/gen-dev-wrapper.sh` 生成 `~/.local/bin/<tool>`，此后宿主机（含 PTL）直接敲 `<tool>` 即透传容器内执行，现有调用零改动。wrapper 依赖 dev 容器已启动。
 
-**各语言在容器内新增依赖**（临时，落卷或镜像层）：
+**各工具在容器内新增依赖**（临时，镜像层——重建丢）：
 
 ```bash
-docker compose exec dev pip install <pkg>            # Python → /opt/conda（镜像层，重建丢）
-docker compose exec dev uv tool install <pkg>        # CLI → ~/.local/share/uv（dev-home 卷，保留）
-docker compose exec dev npm i -g <pkg>               # Node 全局（nvm 目录，保留）
-docker compose exec dev mamba install -c conda-forge <pkg>  # 数据科学 → /opt/conda（镜像层）
-docker compose exec -u root dev apt-get install -y <pkg>    # 系统工具（镜像层）
+docker compose exec dev pip install <pkg>            # Python → /usr/local（镜像层，重建丢）
+docker compose exec dev uv tool install <pkg>        # CLI → /root/.local/share/uv（镜像层，重建丢）
+docker compose exec -u root dev apt-get install -y <pkg>    # 系统工具（镜像层，重建丢）
 ```
 
 固化进镜像（长期工具）→ 编辑 `Dockerfile.dev`（注意 §1.2 USER 层级规则）+ 重建 + `gen-dev-wrapper.sh` 生成 wrapper，完整流程见 `docs/superpowers/dev-container-tool-guide.md` §2 路径 B。
@@ -162,7 +155,7 @@ docker compose exec -u root dev apt-get install -y <pkg>    # 系统工具（镜
 
 ```bash
 docker compose up -d dev
-docker compose exec dev bash        # jovyan 用户；root 操作加 -u root
+docker compose exec dev bash        # root 单用户（工具容器）
 ```
 
 ### Step 2｜改代码
@@ -261,10 +254,10 @@ dev 容器（完整工具链 + 出网 + 可信）→ 执行 → 退出码/输出
 | 用途 | 容器路径 | 备注 |
 |---|---|---|
 | 仓库 | `/works/<name>`（`~/pi-platform` → `/works/pi-platform`） | 绑定挂载，rw |
-| 家目录持久层 | `/home/jovyan`（dev-home 命名卷） | conda env/uv 缓存/nvm/配置 |
+| 工具热改源 | `/opt/tools/bfc`、`/opt/tools/chatgpt-share`（`~/pi-platform/tools/dev/*`） | 绑定挂载，rw——改即生效 |
 | 成品 | `/data/artifacts`（dev-artifacts 卷） | 导出目的地 |
 | 与 pth/sandbox 共享 | `/data/workspaces` | cwd 语义一致 |
-| 凭据配置 | `/home/jovyan/.agents` | 只读挂载（`:ro`），不注入密钥 |
+| 凭据配置 | `/root/.agents` | 只读挂载（`:ro`），不注入密钥 |
 
 ### 4.4 扩展开发检查清单
 
@@ -279,10 +272,9 @@ dev 容器（完整工具链 + 出网 + 可信）→ 执行 → 退出码/输出
 
 ### 5.1 卷挂载
 
-- **家目录用命名卷**（`dev-home:/home/jovyan`）：conda env、jupyter 配置、uv 缓存、nvm 重启/重建不丢；
+- **工具热改源用绑定挂载**（`~/pi-platform/tools/dev/*:/opt/tools/*:rw`）：改宿主机源码容器内立即生效，免 rebuild（2026-08-12 瘦身版核心机制）；
 - **仓库用绑定挂载**（`~/xxx:/works/xxx:rw`）：双向同步，宿主编辑容器验证，零拷贝；
 - **含凭据的配置只读挂载**（`:ro`，如 `~/.agents`）：防容器内误写；
-- **新增用户级工具写入新路径** → 把该路径加进 compose entrypoint 的 chown 列表（命名卷首次挂载不保留镜像属主，会 root 属主漂移）；
 - **新增绑定挂载** → 编辑 compose `dev.volumes`（Task 4 提供 `/container mount`）。
 
 ### 5.2 密钥不注入（用户裁决）
@@ -298,32 +290,30 @@ dev 容器（完整工具链 + 出网 + 可信）→ 执行 → 退出码/输出
 - 与 sandbox 共享走 `/data/workspaces`（同卷同路径，无需搬运）；
 - 代码产物（dist 等）直接写仓库挂载目录，宿主机即可见可提交。
 
-### 5.4 USER 层级与属主
+### 5.4 属主与权限
 
-- 用户级安装（nvm/rustup/uv/uv tool）**必须 `USER jovyan`**——root 安装导致家目录 root 属主 → jupyter 启动失败；
-- 系统级（apt、`/usr/local`、pip→`/opt/conda`）用 root；
-- 容器内 root 操作：`docker compose exec -u root dev ...`（jupyter 进程本身拒绝 root，勿用 root 启 notebook）。
+- 工具容器 root 单用户（2026-08-12 瘦身版）——无多用户属主问题；
+- 系统级安装（apt、pip→`/usr/local`）用 root（默认）；
+- 宿主机文件权限决定 bind 挂载后的容器内权限（如 `tools/dev/bfc/bfc` 需 `chmod +x` 才可执行）。
 
 ### 5.5 镜像重建注意事项
 
 | 改动位置 | 重建后 | 恢复方法 |
 |---|---|---|
-| `/opt/conda`、`/usr/local/bin`、apt 包（镜像层） | **丢失** | 重跑对应 `RUN`（固化进 Dockerfile 才持久） |
-| `~/.local/share/uv`、`~/.nvm` 等（dev-home 卷） | 保留 | — |
+| `/usr/local`（pip/uv tool）、apt 包（镜像层） | **丢失** | 重跑对应 `RUN`（固化进 Dockerfile 才持久） |
+| `/opt/tools`（bind 挂载） | **保留**（宿主机源码） | — |
 | agent-reach 的 chatgpt_share 渠道补丁（site-packages） | **丢失**（pip 重装重置） | 重跑 `tools/dev/agent-reach-chatgpt/patch-agent-reach.sh` |
-| lifelab（WIP §7c，源码在挂载） | wheel/包丢失 | `docker compose exec dev bash /works/labs/lifelab/install.sh` |
 
 ### 5.6 坑与教训（实测沉淀）
 
-1. **USER 层级**：用户级工具 root 安装 → 家目录属主错 → jupyter 起不来（§5.4）；
-2. **卷属主漂移**：命名卷首次挂载不保留镜像属主——entrypoint chown 列表要覆盖所有用户级路径；
-3. **tcc 占用 `/usr/bin/cc`**（WIP §7b/§7c）：Rust 链接需要 gcc——项目 `core/.cargo/config.toml` 钉死 `linker=gcc`，勿依赖系统默认 cc；
-4. **jupyter 拒绝 root**：entrypoint chown 后必须 `su jovyan` 降级启动；
-5. **端口冲突**：jupyter 8888 与 WeKnora searxng 撞 → `JUPYTER_PORT=8889`；
-6. **wrapper 符号链接穿透**：`~/.local/bin/<tool>` 若是软链，`cat >` 会写坏链接目标——`gen-dev-wrapper.sh` 已先 rm；手写 wrapper 同样先查 `ls -la`；
-7. **非开源二进制不进容器**：Mach-O（kimiim-cli/obsidian/claude/qodercli）Linux 容器不可执行，保留宿主机；
-8. **容器内 npm 原生模块**：宿主（macOS）装的 node_modules 原生产物在容器（Linux）不可用——容器内重装（§3 Step 3 提示）；
-9. **临时安装 vs 固化**：路径 A（exec 装）方便但镜像层改动重建即丢——长期工具走 Dockerfile.dev（路径 B，见 dev-container-tool-guide §2）。
+1. **基座不匹配**（2026-08-12 病根复盘）：entrypoint 的 chown jovyan/start-notebook.sh 是 jupyter 基座写法——基座换成 node/python 镜像后必崩（`chown: invalid user` 重启循环）。改基座必同步改 entrypoint；
+2. **bash 引号嵌套**：bash 函数内构造 JSON（curl -d）用 python json.dumps 委托（argv 传递）——`"` 与 `'"'"'` 嵌套极易错；
+3. **tcc 占用 `/usr/bin/cc`**：Rust 链接需要 gcc——项目 `core/.cargo/config.toml` 钉死 `linker=gcc`，勿依赖系统默认 cc（2026-08-12 瘦身版已移除 Rust——如复加注意）；
+4. **jupyter 独立服务**：jupyter 8888 与 WeKnora searxng 撞 → `JUPYTER_PORT=8889`；
+5. **wrapper 符号链接穿透**：`~/.local/bin/<tool>` 若是软链，`cat >` 会写坏链接目标——`gen-dev-wrapper.sh` 已先 rm；手写 wrapper 同样先查 `ls -la`；
+6. **非开源二进制不进容器**：Mach-O（kimiim-cli/obsidian/claude/qodercli）Linux 容器不可执行，保留宿主机；
+7. **大工具迁移宿主机**（2026-08-12 用户裁决）：instsci（254MB）等体积大的工具留宿主机 `~/.local/bin`，不入镜像——wrapper 无需生成（宿主机命令直接可用）；
+8. **临时安装 vs 固化**：路径 A（exec 装）方便但镜像层改动重建即丢——长期工具走 Dockerfile.dev（路径 B，见 dev-container-tool-guide §2）。
 
 ---
 
