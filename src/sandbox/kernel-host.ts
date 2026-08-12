@@ -323,6 +323,7 @@ export function registerKernelHost(app: FastifyInstance, opts: KernelHostOptions
     const { direction } = (req.body ?? {}) as { direction?: "into" | "over" | "out" };
     return s.step(direction ?? "into");
   }));
+  app.post("/kernel/debug/snapshot", (req, reply) => withSession(req, reply, (s) => s.snapshot()));
   app.post("/kernel/debug/stack", (req, reply) => withSession(req, reply, (s) => s.stack()));
   app.post("/kernel/debug/variables", (req, reply) => withSession(req, reply, (s) => {
     const { frameId } = (req.body ?? {}) as { frameId?: number };

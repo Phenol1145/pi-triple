@@ -31,6 +31,8 @@
     "ptl:dev": "tsx packages/framework/src/pit.ts"
   },
   "dependencies": {
+    "@away_from/infra": "file:packages/infra",
+    "@away_from/shared": "file:packages/shared",
     "@earendil-works/pi-ai": "^0.82.1",
     "@earendil-works/pi-coding-agent": "^0.82.1",
     "@fastify/websocket": "^11.0.0",
@@ -44,14 +46,13 @@
     "prom-client": "^15.0.0",
     "react": "^18.3.1",
     "string-width": "^7.2.0",
-    "zod": "^4.0.0",
-    "@away_from/infra": "file:packages/infra",
-    "@away_from/shared": "file:packages/shared"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.31",
+    "@vscode/debugprotocol": "^1.68.0",
     "ink-testing-library": "^4.0.0",
     "testcontainers": "^12.1.0",
     "tsx": "^4.0.0",
