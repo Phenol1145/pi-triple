@@ -111,6 +111,14 @@ curl -s -X POST $PTH_API/api/v1/kernel/lineage/approve -H "content-type: applica
      "acceptanceRole": "writer"
   }}'
 
+# ── 派发任务（2026-08-12：推荐 pth CLI——一行派发替代裸 curl）───────────
+npm run pth -- submit "任务描述" --role developer --tags implement
+npm run pth -- submit "任务描述" --role controller:worker-opt --tags controller,optimize
+npm run pth -- wait <taskId>          # 轮询完成 + 自动打印 result
+npm run pth -- roles | tags           # 可派发角色 / 已注册标签
+# 环境变量：PTH_API/PTH_TOKEN/PTH_CREATED_BY
+# （裸 curl 仍可用——见下方旧示例）
+
 # 拒绝：draft → archived
 ptl hub lineage reject <proposalId>
 curl -s -X POST $PTH_API/api/v1/kernel/lineage/reject -H "content-type: application/json" -d '{"proposalId":"diff-xxxx"}'
