@@ -24,6 +24,7 @@
     "build": "tsc -p packages/shared && tsc -p packages/infra && tsc -p packages/framework && tsc -p packages/mailbox && tsc -p packages/extensions-in-container && tsc -p tsconfig.json",
     "pth:dev": "tsx watch src/pth/main.ts",
     "pth:start": "node dist/pth/main.js",
+    "adjudicate": "node --experimental-strip-types scripts/adjudicate-tensions.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit && tsc -p packages/shared --noEmit && tsc -p packages/framework --noEmit",
