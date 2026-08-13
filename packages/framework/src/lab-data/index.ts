@@ -1,8 +1,2 @@
-export { openDb, openReadOnlyOrNull, sharedDbPath, localDbPath } from "./open-db.js";
-export { TABLES, RUN_COLUMNS } from "./schema.js";
-export type { AggregateRow, ComparisonRow, TrendPoint } from "./telemetry.js";
-export { aggregateByRole, listRoles, listModels, modelComparison, dailyTrend } from "./telemetry.js";
-export type { BalanceRow, SettlementRow, FrozenRow } from "./arena.js";
-export { getBalances, getRecentSettlements, getFrozenTasks, getWorkloops, agentKeyFromModel } from "./arena.js";
-export type { EventRow } from "./events.js";
-export { getRecentEvents, getEventsByType, getEventTypes } from "./events.js";
+// 2026-08-13 审计 P1 瘦身：barrel 消费面仅 tui-lab/app.tsx 的 3 个符号（openDb 与 telemetry/arena/events/schema 重导出全部死——knip 实测）
+export { openReadOnlyOrNull, sharedDbPath, localDbPath } from "./open-db.js";
