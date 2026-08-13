@@ -51,10 +51,11 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@away_from/extensions-in-container": "file:packages/extensions-in-container",
+    "@away_from/mailbox": "file:packages/mailbox",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.31",
-    "@vscode/debugprotocol": "^1.68.0",
     "ink-testing-library": "^4.0.0",
     "testcontainers": "^12.1.0",
     "tsx": "^4.0.0",

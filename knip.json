@@ -4,12 +4,10 @@
     "src/pth/main.ts",
     "src/sandbox/main.ts",
     "src/pth/kernel/execution/batch-process.ts",
-    "packages/framework/src/**/*.ts",
     "test/**/*.test.ts",
     "scripts/*.ts"
   ],
-  "project": ["src/**/*.ts", "packages/framework/src/**/*.ts"],
-  "ignore": ["archive/**", "extensions/**", "toolstore/**", "docs/**", "skills-store/**"],
-  "ignoreBinaries": ["pit", "ptl"],
+  "project": ["src/**/*.ts"],
+  "ignoreBinaries": ["ptl"],
   "ignoreExportsUsedInFile": true
 }
