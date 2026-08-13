@@ -33,3 +33,12 @@
 - [ ] 派发 developer：实现（toolstore 扩展 + 最小 PTH 接线）
 - [ ] 派发 tester：多平台验证 + acceptor 验收
 - [ ] 容器工具链安装（binutils/qemu-user 多架构）+ 验证
+
+## 调试用例 worker（2026-08-13 用户提议——自修正闭环的验证环节）
+- 角色：debug-case-writer（parent=tester 分化——测试族内特化）
+- 职责：给定 bug 报告/复现步骤/修复 diff——产出 ① 最小复现用例（触发 bug 的条件序列）
+  ② 回归测试（vitest——防复发）③ 边界用例（相关边界的探索）
+- 在自修正闭环的位置：sensor 检测 → developer 定位/修复 → 【debug-case-writer 生成用例】
+  → 全量验证 → 部署提案
+- 触发：controller 裁决批准修复后；或 developer 修复完成后自动派发
+- 验收：生成的用例能复现修复前 bug（修复前 FAIL）+ 修复后 PASS
