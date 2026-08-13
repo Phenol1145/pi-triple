@@ -48,12 +48,12 @@ COPY --from=builder /app/packages/framework/dist /app/packages/framework/dist
 # ---- F/WP3 Task 14：内嵌 pi + PTL（自修改模式）----
 # pi 可执行 + PTL 稳定 PATH 入口：
 #   /usr/local/bin/pi  →  node_modules/@earendil-works/pi-coding-agent/dist/cli.js
-#   /usr/local/bin/pit →  packages/framework/dist/pit.js（package.json bin 对应；shebang 已由 tsc 保留）
+#   /usr/local/bin/ptl →  packages/framework/dist/pit.js（package.json bin "ptl" 对应；shebang 已由 tsc 保留——2026-08-13 N9：pit 已改名 ptl）
 # 镜像不持 LLM 密钥（用户裁决）：需要自修改会话时按需临时注入 env（见
 # scripts/sandbox-debug-entry.sh 头注释的 docker exec -e 操作流），用完即撤。
 RUN ln -sf /app/node_modules/@earendil-works/pi-coding-agent/dist/cli.js /usr/local/bin/pi && \
-    ln -sf /app/packages/framework/dist/pit.js /usr/local/bin/pit && \
-    chmod +x /usr/local/bin/pi /usr/local/bin/pit
+    ln -sf /app/packages/framework/dist/pit.js /usr/local/bin/ptl && \
+    chmod +x /usr/local/bin/pi /usr/local/bin/ptl
 
 # PTL 扩展：mailbox / pit-control（TS 源——pi loader 原生加载 .ts；依赖 ../_shared）。
 # 拷入 PI_CODING_AGENT_DIR=<agentDir>/extensions/，pi 按 agentDir/extensions 自动发现。

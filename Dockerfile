@@ -44,13 +44,14 @@ COPY --chown=node:node packages/ ./packages/
 COPY --chown=node:node --from=builder /app/dist ./dist
 # 自修改（v1）：容器带源码只读面（worker readSource 读 src/ 修改 PTH 自己——dist 运行 + src 可读）
 COPY --chown=node:node src/ ./src/
-# PTL（packages/framework——仓库拆分后 pit.js 归属 framework 包）
+# PTL（packages/framework——仓库拆分后 ptl bin 归属 framework 包，bin 文件名为 dist/pit.js——2026-08-13 N9）
 COPY --chown=node:node --from=builder /app/packages/framework/dist /app/packages/framework/dist
 
 COPY --chown=node:node config/ ./config/
 # 扩展代码库 + 策略 + 命名编译单元（/data/toolstore——compose 卷持久化；空卷首挂复制镜像内容）
 COPY --chown=node:node toolstore/ /data/toolstore/
 COPY --chown=node:node scripts/drain.sh ./scripts/
+COPY --chown=node:node scripts/seed-wiki.ts ./scripts/
 RUN chmod +x scripts/*.sh
 
 # /data 目录创建即指定属主（GPT 文档 P0-①——install -d -o node——免递归 chown）
