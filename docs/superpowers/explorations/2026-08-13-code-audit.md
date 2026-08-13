@@ -104,3 +104,16 @@ npx ts-prune | grep -v "used in module"
 npx madge --circular --extensions ts src/pth packages/framework/src
 # 环核实：madge 报环后逐边 grep "^import" 区分 import / import type
 ```
+
+## 九、执行记录（2026-08-13 同日三环节全部落地）
+
+| 环节 | 提交 | 内容 | 验证 |
+|------|------|------|------|
+| 1 · P0 依赖卫生 | `bb80456` | devDeps 补 mailbox/extensions-in-container（file: 链接）；删 @vscode/debugprotocol；knip.json 清理（pit 陈旧项等） | knip 未声明依赖/未用 devDep/配置提示全部清零 |
+| 2 · P1 类型归位 + barrel 瘦身 | `6e78ef8` | extensions/types.ts（杀 6 环）；interpreter/types.ts 收 WorkerKernel；components/types.ts（slot-binding/store 断环）；impls/kernels barrel 25 死重导出删除；lab-data barrel 瘦身 + schema.ts 删除 | madge 13→5；ts-prune 60→48 |
+| 3 · P2 分层正位 + 模块拆分 | `00eef9e` | task-store 路由 DIP（存储只存不判）；worker-cluster setDefaultRoles 装配注入（核心不 import 实现层）；batch-process 子进程入口自注入；optimizer-hotspots.ts 拆分（406→245 行）；test/helpers.ts 显式注入装配 | **madge 13→3**；tsc×2 干净；**1560 测试全绿** |
+
+**执行后剩余**（标注保留——非债务）：
+- madge 剩余 3 环：framework containers/commands 2 环（类型级）+ space-registry↔builtin-spaces（姿势正确的装配环——函数式注册 + type-only 反边，测试依赖自动注册，保留）
+- 测试引用类导出保留（仓库惯例）：AGENT_TOOLS_DESCRIPTION/buildKernelHostApp/collectStats/suggest/isResolvable/resetConfig/SandboxDebugSession
+- 大文件拆分剩余：agent-engine 979（已知大工程）、agent-loop 976、agent-tools 773（下轮专项）
