@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Redis } from "ioredis";
 import { RedisSessionStore } from "../../src/pth/kernel/storage/session/redis-session-store.js";
-import { RedisSettingsStore } from "../../src/pth/storage/redis-settings-store.js";
 import type { SessionMeta, SessionEntry, Snapshot } from "../../src/pth/kernel/storage/session/types.js";
 
 const TENANT = "test-storage";
@@ -9,20 +8,16 @@ const PROJECT = "integration";
 
 let redis: Redis;
 let sessionStore: RedisSessionStore;
-let settingsStore: RedisSettingsStore;
 
 beforeAll(async () => {
   redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379");
   sessionStore = new RedisSessionStore(redis);
-  settingsStore = new RedisSettingsStore(redis);
 });
 
 afterAll(async () => {
-  // Flush test keys
+  // Flush test keys（RedisSettingsStore 已删——2026-08-14 A2 Phase 2，设置键清理随删）
   const keys = await redis.keys(`session:${TENANT}:*`);
   if (keys.length > 0) await redis.del(...keys);
-  await redis.del(`settings:${TENANT}`);
-  await redis.del(`settings:${TENANT}:${PROJECT}`);
   await redis.del(`session-index:${TENANT}`);
   await redis.quit();
 });
@@ -210,51 +205,3 @@ describe("RedisSessionStore", () => {
   });
 });
 
-describe("RedisSettingsStore", () => {
-  const SETTINGS_TENANT = "test-settings";
-
-  afterAll(async () => {
-    await redis.del(`settings:${SETTINGS_TENANT}`);
-  });
-
-  it("get returns empty object for unset tenant", async () => {
-    const s = await settingsStore.get(SETTINGS_TENANT);
-    expect(s).toEqual({});
-  });
-
-  it("set + get roundtrip", async () => {
-    await settingsStore.set(SETTINGS_TENANT, { temperature: 0.7, maxTokens: 4096 });
-
-    const s = await settingsStore.get(SETTINGS_TENANT);
-    expect(s.temperature).toBe(0.7);
-    expect(s.maxTokens).toBe(4096);
-  });
-
-  it("updateSettings merges (not replaces)", async () => {
-    // First set initial
-    await settingsStore.set(SETTINGS_TENANT, { a: 1, b: 2 });
-
-    // Then update partial
-    await settingsStore.set(SETTINGS_TENANT, { b: 99, c: 3 });
-
-    const s = await settingsStore.get(SETTINGS_TENANT);
-    expect(s.a).toBe(1);   // preserved
-    expect(s.b).toBe(99);  // updated
-    expect(s.c).toBe(3);   // added
-  });
-
-  it("project-scoped settings are independent", async () => {
-    // Flush to avoid pollution from previous tests sharing SETTINGS_TENANT
-    await redis.del(`settings:${SETTINGS_TENANT}`);
-    await redis.del(`settings:${SETTINGS_TENANT}:proj-a`);
-
-    await settingsStore.set(SETTINGS_TENANT, { global: true }, undefined);
-    await settingsStore.set(SETTINGS_TENANT, { local: true }, "proj-a");
-
-    const global = await settingsStore.get(SETTINGS_TENANT);
-    const local = await settingsStore.get(SETTINGS_TENANT, "proj-a");
-
-    expect(global).toEqual({ global: true });
-    expect(local).toEqual({ local: true });
-  });
-});
