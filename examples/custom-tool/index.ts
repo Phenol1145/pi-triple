@@ -13,20 +13,18 @@
  *   4. Agent 可以调用该工具，ToolPlatform 自动记录审计和指标
  */
 
+// 2026-08-14 A2：引用随当前布局刷新（src/ → src/pth/；会话平面归并进 kernel/storage/session/；
+// 平台件收敛进 @away_from/infra）
 import { Type } from "@sinclair/typebox";
 import { Redis } from "ioredis";
-import { detectPlatform } from "../../src/platform/index.js";
-import { createLogger } from "../../src/observability/logger.js";
-import { createMetrics } from "../../src/observability/metrics.js";
-import { AuditWriter } from "../../src/observability/audit.js";
-import { RedisSessionStore } from "../../src/storage/redis-session-store.js";
-import { EnvCredentialProvider } from "../../src/storage/credential-provider.js";
-import { WorkspaceManager } from "../../src/workspace/manager.js";
-import { ModelRouter } from "../../src/model-router/router.js";
-import { ToolRegistry } from "../../src/tools/registry.js";
-import { ToolPlatform } from "../../src/tools/platform.js";
-import { SessionPool } from "../../src/core/session-pool.js";
-import { AgentEngine } from "../../src/core/agent-engine.js";
+import { detectPlatform, createLogger, EnvCredentialProvider, WorkspaceManager, ModelRouter } from "@away_from/infra";
+import { createMetrics } from "../../src/pth/observability/metrics.js";
+import { AuditWriter } from "../../src/pth/observability/audit.js";
+import { RedisSessionStore } from "../../src/pth/kernel/storage/session/redis-session-store.js";
+import { ToolRegistry } from "../../src/pth/tools/registry.js";
+import { ToolPlatform } from "../../src/pth/tools/platform.js";
+import { SessionPool } from "../../src/pth/core/session-pool.js";
+import { AgentEngine } from "../../src/pth/core/agent-engine.js";
 
 // ============================================================
 // 第一步：创建 SDK ToolDefinition（含 execute()）

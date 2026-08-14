@@ -7,23 +7,24 @@
  * 参考文档：docs/architecture.md #存储模型
  *
  * 流程：
- *   1. 实现 SessionStore + SettingsStore 接口（来自 src/storage/interfaces.ts）
+ *   1. 实现 SessionStore + SettingsStore 接口（来自 src/pth/kernel/storage/session/interfaces.ts）
  *   2. 在 main.ts 中将 RedisSessionStore 替换为自定义实现
  *   3. 其余代码（AgentEngine / Gateway）通过接口消费，无需任何改动
  */
 
+// 2026-08-14 A2：会话平面归并进 kernel/storage/session/（src/pth/storage 已退役）
 import type {
   SessionStore,
   SettingsStore,
   CredentialProvider,
-} from "../../src/storage/interfaces.js";
+} from "../../src/pth/kernel/storage/session/interfaces.js";
 import type {
   SessionMeta,
   SessionEntry,
   Snapshot,
   VersionSnapshotRecord,
   Settings,
-} from "../../src/storage/types.js";
+} from "../../src/pth/kernel/storage/session/types.js";
 
 // ============================================================
 // 第一步：实现 MemorySessionStore
