@@ -1,5 +1,7 @@
 # Prime Agent 调研与 PTH 对照（参考文档）
 
+> **更新（2026-08-14）**：PTH 的 PTC 程序模式已落地——本文「PTC 差距」结论已过时，最新三方对照见 [PTC 模式三方对比：DSH × Prime Agent × PTH](./2026-08-14-ptc-comparison-dsh-prime.md)。
+
 > 日期：2026-08-08 · 类型：exploration（外部参考） · 来源：ChatGPT 分享会话（gpt-5-6-thinking 调研，2026-08-07）
 > 关联：[LLM agent 执行设计](../specs/2026-08-08-pth-llm-agent-execution-design.md)
 
