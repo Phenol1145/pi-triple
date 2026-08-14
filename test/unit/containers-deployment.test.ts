@@ -33,7 +33,8 @@ describe("容器抽象——部署描述 schema", () => {
   });
 
   it("pth.deployment.json 为合法描述（现有拓扑声明化——事实源）", async () => {
-    const dep = await loadDeployment("pth.deployment.json");
+    // 2026-08-14 重组：容器构建归拢 deploy/——部署描述随迁
+    const dep = await loadDeployment("deploy/pth.deployment.json");
     expect(dep.services["pi-platform"]).toBeDefined();
     expect(dep.services.sandbox.internal).toBe(true);
     expect(dep.services["pi-platform"].env?.["DATABASE_URL"]).toContain("postgres");
