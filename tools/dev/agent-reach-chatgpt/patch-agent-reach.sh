@@ -5,7 +5,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-COMPOSE="${AR_COMPOSE:-/Users/anzhize/pi-platform/docker-compose.yaml}"
+COMPOSE="${AR_COMPOSE:-/Users/anzhize/pi-platform/deploy/docker-compose.yaml}"
 CID=$(docker compose -f "$COMPOSE" ps -q dev)
 [ -n "$CID" ] || { echo "dev 容器未运行"; exit 1; }
 

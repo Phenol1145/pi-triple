@@ -75,8 +75,8 @@ pi-platform/
 ├── docs/                          # 文档中心（docs/README.md 索引）
 │   ├── pth/                       #   architecture.md / kernel.md / api.md / deployment.md
 │   └── ptl/                       #   architecture.md / authoring.md
+├── deploy/                        # 容器构建（Dockerfile×3 · docker-compose×2 · pth.deployment.json · docker-monitor）
 ├── ARCHITECTURE.md                # ★ 架构总览（单一真相源）
-├── Dockerfile · docker-compose.yaml
 └── tsconfig.json · vitest.config.ts
 ```
 

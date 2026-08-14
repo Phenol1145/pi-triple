@@ -26,7 +26,7 @@ for tool in "${TOOLS[@]}"; do
   cat > "${DEST}/${tool}" <<EOF
 #!/bin/bash
 # dev 容器工具 wrapper（生成于 $(date +%F)）——实际执行在 dev 容器内
-exec docker compose -f ${HOME}/pi-platform/docker-compose.yaml exec -T dev ${tool} "\$@"
+exec docker compose -f ${HOME}/pi-platform/deploy/docker-compose.yaml exec -T dev ${tool} "\$@"
 EOF
   chmod +x "${DEST}/${tool}"
   echo "✓ ${DEST}/${tool} → dev:${tool}"

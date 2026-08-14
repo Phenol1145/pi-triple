@@ -25,7 +25,7 @@ EXCLUDES=(
   --exclude='.worktrees'
   --exclude='.superpowers'
   --exclude='.DS_Store'
-  --exclude='pth.deploy'
+  --exclude='deploy/generated'
   --exclude='.pi-platform-data'
   --exclude='pi-triple-*'
 )

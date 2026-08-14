@@ -1,6 +1,9 @@
+name: pi-platform   # 项目名显式固定（compose 文件移入 deploy/ 后缺省名会变成 deploy——卷/容器身份必须保持）
 services:
   pi-platform:
-    build: .
+    build:
+      context: ..          # 构建上下文 = 仓库根（compose 的 context 相对本文件所在目录解析）
+      dockerfile: deploy/Dockerfile
     ports:
       - "3000:3000"
     volumes:
@@ -96,8 +99,8 @@ services:
   # /data/workspaces，与 pth 侧 WorkspaceManager basePath（DATA_DIR=/data 时）完全一致。
   sandbox:
     build:
-      context: .
-      dockerfile: Dockerfile.sandbox
+      context: ..
+      dockerfile: deploy/Dockerfile.sandbox
     volumes:
       - workspaces:/data/workspaces
       - compiled-cache:/data/compiled-cache   # 编译核持久缓存（跨调用/跨容器重启）
@@ -197,8 +200,8 @@ services:
   # 热修改：tools/dev bind 挂载 /opt/tools（改即生效免 rebuild）；agent-reach 配置只读挂 ~/.agents。
   dev:
     build:
-      context: .
-      dockerfile: Dockerfile.dev
+      context: ..
+      dockerfile: deploy/Dockerfile.dev
     # root 单用户（工具容器无多用户/jupyter 拒绝 root 的问题）
     entrypoint: ["/bin/bash", "-lc", "exec tail -f /dev/null"]
     volumes:

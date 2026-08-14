@@ -5,8 +5,8 @@
 **状态**：生效（framework 拆分 Plan C Task 3）
 **读者**：开发者（人）+ 未来 AI 主会话（本文档可被整体加载为 skill 指导）
 **相关文件**：
-- 镜像定义：`Dockerfile.dev`（本文 §1.2 基于 **已提交版本** 描述，工作区 WIP 见 §1.5）
-- 服务编排：`docker-compose.yaml`（`dev` 服务，§1.3）
+- 镜像定义：`deploy/Dockerfile.dev`（本文 §1.2 基于 **已提交版本** 描述，工作区 WIP 见 §1.5）
+- 服务编排：`deploy/docker-compose.yaml`（`dev` 服务，§1.3）
 - 配套工具：`tools/dev/`（`gen-dev-wrapper.sh`、`agent-reach-chatgpt/`、`bfc/`，§1.4）
 - 姊妹篇（工具迁移视角）：`docs/superpowers/dev-container-tool-guide.md`
 - 设计 spec：`docs/superpowers/specs/2026-08-05-dev-container-design.md`
@@ -43,12 +43,12 @@ dev 容器 = **PTL 工具容器**（2026-08-12 瘦身版——G 阶段），承�
 ```bash
 docker compose up -d dev      # 启动（首次自动 build——秒级）
 docker compose ps dev         # 状态
-docker compose exec dev bash  # 进入（root 单用户——工具容器无多用户）
+docker compose -f deploy/docker-compose.yaml exec -T dev bash  # 进入（root 单用户——工具容器无多用户）
 ```
 
 Jupyter（独立服务）：`http://127.0.0.1:8888`（仅本机绑定；token 见 compose `JUPYTER_TOKEN`）。端口与 WeKnora searxng 冲突时设 `JUPYTER_PORT=8889`。
 
-### 1.2 镜像定义（Dockerfile.dev，已提交版本逐节）
+### 1.2 镜像定义（deploy/Dockerfile.dev，已提交版本逐节）
 
 基础：`python:3.13-slim`（工具全为 python 生态）。体积 ~559MB（对比 jupyter 基座时代 1.5GB——瘦 63%）。
 
@@ -63,7 +63,7 @@ Jupyter（独立服务）：`http://127.0.0.1:8888`（仅本机绑定；token �
 
 **热修改**（2026-08-12 新增）：compose 将宿主机 `tools/dev/bfc` → `/opt/tools/bfc`、`tools/dev/agent-reach-chatgpt` → `/opt/tools/chatgpt-share` **bind 挂载**——改宿主机源码容器内立即生效，免 rebuild。
 
-### 1.3 服务编排（docker-compose.yaml `dev` 服务，已提交版本）
+### 1.3 服务编排（deploy/docker-compose.yaml `dev` 服务，已提交版本）
 
 | 项 | 值 | 说明 |
 |---|---|---|
@@ -92,7 +92,7 @@ Jupyter（独立服务）：`http://127.0.0.1:8888`（仅本机绑定；token �
 
 | 文件 | 作用 |
 |---|---|
-| `tools/dev/gen-dev-wrapper.sh` | 生成宿主机 wrapper：`~/.local/bin/<tool>` → `docker compose -f ~/pi-platform/docker-compose.yaml exec -T dev <tool> "$@"`。默认 TOOLS：`agent-reach yt-dlp chatgpt-share bf bfc`（instsci 不入列——宿主机已有 `~/.local/bin/instsci`）；可传参只生成指定工具；目标是符号链接时先 rm（防写入穿透）。卸载 = `rm ~/.local/bin/<tool>` |
+| `tools/dev/gen-dev-wrapper.sh` | 生成宿主机 wrapper：`~/.local/bin/<tool>` → `docker compose -f ~/pi-platform/deploy/deploy/docker-compose.yaml exec -T dev <tool> "$@"`。默认 TOOLS：`agent-reach yt-dlp chatgpt-share bf bfc`（instsci 不入列——宿主机已有 `~/.local/bin/instsci`）；可传参只生成指定工具；目标是符号链接时先 rm（防写入穿透）。卸载 = `rm ~/.local/bin/<tool>` |
 | `tools/dev/agent-reach-chatgpt/` | `chatgpt-share`（单文件纯 stdlib 解码器，镜像 §7 COPY 到 `/usr/local/bin`）、`chatgpt_share.py` + `chatgpt.md`（agent-reach 渠道补丁素材）、`patch-agent-reach.sh`（容器内重装渠道：CLI + channel 插件 + SKILL.md 路由注册，幂等） |
 | `tools/dev/bfc/` | Brainfuck 工具（**工作区 WIP，未提交**，见 §1.5）：`bf`（beef 友好入口 shim：`-p/-c` 直传、文件、stdin 管道）、`bfc`（自写 bf→C 翻译器，纯 Python stdlib，配合 tcc 编译出可执行文件） |
 
@@ -102,8 +102,8 @@ Jupyter（独立服务）：`http://127.0.0.1:8888`（仅本机绑定；token �
 
 | 文件 | WIP 改动 |
 |---|---|
-| `Dockerfile.dev` | 新增 §7b：apt 装 `beef`（Brainfuck 解释器）+ `tcc`（Tiny C 编译器）+ `libc6-dev`；COPY `tools/dev/bfc/bf`、`tools/dev/bfc/bfc` → `/usr/local/bin`。新增 §7c：apt 装 `gcc binutils fonts-noto-cjk`（Rust 链接必需——`/usr/bin/cc` 被 tcc 占用，lifelab 的 `core/.cargo/config.toml` 钉死 `linker=gcc`）；`uv tool install maturin`（PyO3 wheel 构建）；pip 装 `ipywidgets`。lifelab 源码在宿主挂载 `/works/labs/lifelab`，镜像重建后需跑 `docker compose exec dev bash /works/labs/lifelab/install.sh` 恢复 |
-| `docker-compose.yaml` | dev 卷新增 `${HOME}/lifelab:/works/labs/lifelab:rw`；entrypoint chown 列表加 `.config .cache .jupyter .ipython` 并在启动前自动检测/重装 lifelab；`JUPYTER_TOKEN` 默认值改 `TokenForJupyter` |
+| `deploy/Dockerfile.dev` | 新增 §7b：apt 装 `beef`（Brainfuck 解释器）+ `tcc`（Tiny C 编译器）+ `libc6-dev`；COPY `tools/dev/bfc/bf`、`tools/dev/bfc/bfc` → `/usr/local/bin`。新增 §7c：apt 装 `gcc binutils fonts-noto-cjk`（Rust 链接必需——`/usr/bin/cc` 被 tcc 占用，lifelab 的 `core/.cargo/config.toml` 钉死 `linker=gcc`）；`uv tool install maturin`（PyO3 wheel 构建）；pip 装 `ipywidgets`。lifelab 源码在宿主挂载 `/works/labs/lifelab`，镜像重建后需跑 `docker compose -f deploy/docker-compose.yaml exec -T dev bash /works/labs/lifelab/install.sh` 恢复 |
+| `deploy/docker-compose.yaml` | dev 卷新增 `${HOME}/lifelab:/works/labs/lifelab:rw`；entrypoint chown 列表加 `.config .cache .jupyter .ipython` 并在启动前自动检测/重装 lifelab；`JUPYTER_TOKEN` 默认值改 `TokenForJupyter` |
 | `tools/dev/gen-dev-wrapper.sh` | 默认 TOOLS 增加 `bf bfc` |
 | `tools/dev/bfc/` | 整体未跟踪（untracked） |
 
@@ -138,12 +138,12 @@ Jupyter（独立服务）：`http://127.0.0.1:8888`（仅本机绑定；token �
 **各工具在容器内新增依赖**（临时，镜像层——重建丢）：
 
 ```bash
-docker compose exec dev pip install <pkg>            # Python → /usr/local（镜像层，重建丢）
-docker compose exec dev uv tool install <pkg>        # CLI → /root/.local/share/uv（镜像层，重建丢）
+docker compose -f deploy/docker-compose.yaml exec -T dev pip install <pkg>            # Python → /usr/local（镜像层，重建丢）
+docker compose -f deploy/docker-compose.yaml exec -T dev uv tool install <pkg>        # CLI → /root/.local/share/uv（镜像层，重建丢）
 docker compose exec -u root dev apt-get install -y <pkg>    # 系统工具（镜像层，重建丢）
 ```
 
-固化进镜像（长期工具）→ 编辑 `Dockerfile.dev`（注意 §1.2 USER 层级规则）+ 重建 + `gen-dev-wrapper.sh` 生成 wrapper，完整流程见 `docs/superpowers/dev-container-tool-guide.md` §2 路径 B。
+固化进镜像（长期工具）→ 编辑 `deploy/Dockerfile.dev`（注意 §1.2 USER 层级规则）+ 重建 + `gen-dev-wrapper.sh` 生成 wrapper，完整流程见 `docs/superpowers/dev-container-tool-guide.md` §2 路径 B。
 
 ---
 
@@ -155,7 +155,7 @@ docker compose exec -u root dev apt-get install -y <pkg>    # 系统工具（镜
 
 ```bash
 docker compose up -d dev
-docker compose exec dev bash        # root 单用户（工具容器）
+docker compose -f deploy/docker-compose.yaml exec -T dev bash        # root 单用户（工具容器）
 ```
 
 ### Step 2｜改代码
@@ -196,8 +196,8 @@ bfc hello.bf -o hello && ./hello
 | 产物类型 | 去处 | 方法 |
 |---|---|---|
 | 代码改动 | 仓库本身 | 绑定挂载双向同步，宿主机直接 `git add/commit`（容器内也可 git，镜像已装） |
-| 成品文件 | `/data/artifacts`（dev-artifacts 卷，持久） | `docker compose exec dev cp result.txt /data/artifacts/` |
-| 取回宿主机 | — | `docker compose exec dev cat /data/artifacts/x` 或 `docker cp pi-platform-dev-1:/data/artifacts/x ./x` |
+| 成品文件 | `/data/artifacts`（dev-artifacts 卷，持久） | `docker compose -f deploy/docker-compose.yaml exec -T dev cp result.txt /data/artifacts/` |
+| 取回宿主机 | — | `docker compose -f deploy/docker-compose.yaml exec -T dev cat /data/artifacts/x` 或 `docker cp pi-platform-dev-1:/data/artifacts/x ./x` |
 | 与 sandbox 共享 | `/data/workspaces`（共享卷） | 双容器同路径直读，无需搬运 |
 
 ### Step 5｜完整示例（走一遍）
@@ -212,7 +212,7 @@ docker compose up -d dev
 docker compose exec -T dev bash -lc 'cd /works/pi-platform && npm run build && npm test'
 
 # 4. 导出：构建产物固化到成品区
-docker compose exec dev bash -lc 'cp -r /works/pi-platform/dist /data/artifacts/foo-dist'
+docker compose -f deploy/docker-compose.yaml exec -T dev bash -lc 'cp -r /works/pi-platform/dist /data/artifacts/foo-dist'
 
 # 5. 宿主机侧：提交代码（改动已在挂载目录）
 cd ~/pi-platform && git add extensions/foo && git commit
@@ -231,7 +231,7 @@ cd ~/pi-platform && git add extensions/foo && git commit
         │  /container <子命令>（Task 4 扩展注册的命令族）
         ▼
 packages/extensions-in-container（宿主机侧薄壳）
-        │  docker compose -f ~/pi-platform/docker-compose.yaml exec -T dev <cmd>
+        │  docker compose -f ~/pi-platform/deploy/deploy/docker-compose.yaml exec -T dev <cmd>
         ▼
 dev 容器（完整工具链 + 出网 + 可信）→ 执行 → 退出码/输出透传回宿主
 ```
@@ -245,7 +245,7 @@ dev 容器（完整工具链 + 出网 + 可信）→ 执行 → 退出码/输出
 | 命令 | 行为 | 底层操作 |
 |---|---|---|
 | `/container start [--name]` | 启动 dev 容器 | `docker compose up -d dev` |
-| `/container mount <dir>` | 挂载仓库目录（写入 compose `dev.volumes`） | 编辑 `docker-compose.yaml` |
+| `/container mount <dir>` | 挂载仓库目录（写入 compose `dev.volumes`） | 编辑 `deploy/docker-compose.yaml` |
 | `/container verify <cmd>` | 容器内运行验证命令 | `docker compose exec -T dev bash -lc <cmd>`，退出码透传 |
 | `/container status` | 容器状态 | `docker compose ps dev`（或 docker-monitor `http://localhost:9090`） |
 
@@ -261,7 +261,7 @@ dev 容器（完整工具链 + 出网 + 可信）→ 执行 → 退出码/输出
 
 ### 4.4 扩展开发检查清单
 
-1. 扩展需要什么工具链？→ 对照 §2；缺失先 `docker compose exec dev <pkgmgr> install`（临时）或固化进 `Dockerfile.dev`；
+1. 扩展需要什么工具链？→ 对照 §2；缺失先 `docker compose -f deploy/docker-compose.yaml exec -T dev <pkgmgr> install`（临时）或固化进 `deploy/Dockerfile.dev`；
 2. 命令薄壳只做参数解析 + `exec` 转发——**逻辑放容器内**；
 3. 验证：`/container verify '<命令>'` 退出码必须能反映成败（`-T` 非 TTY + 透传）；
 4. 导出：成品写 `/data/artifacts`，代码提交走仓库挂载。
@@ -286,7 +286,7 @@ dev 容器（完整工具链 + 出网 + 可信）→ 执行 → 退出码/输出
 ### 5.3 构建产物导出
 
 - 成品统一落 `/data/artifacts`（dev-artifacts 卷，持久保留）；
-- 取回宿主机：`docker compose exec dev cat /data/artifacts/...` 或 `docker cp pi-platform-dev-1:/data/artifacts/x ./x`；
+- 取回宿主机：`docker compose -f deploy/docker-compose.yaml exec -T dev cat /data/artifacts/...` 或 `docker cp pi-platform-dev-1:/data/artifacts/x ./x`；
 - 与 sandbox 共享走 `/data/workspaces`（同卷同路径，无需搬运）；
 - 代码产物（dist 等）直接写仓库挂载目录，宿主机即可见可提交。
 
@@ -313,8 +313,8 @@ dev 容器（完整工具链 + 出网 + 可信）→ 执行 → 退出码/输出
 5. **wrapper 符号链接穿透**：`~/.local/bin/<tool>` 若是软链，`cat >` 会写坏链接目标——`gen-dev-wrapper.sh` 已先 rm；手写 wrapper 同样先查 `ls -la`；
 6. **非开源二进制不进容器**：Mach-O（kimiim-cli/obsidian/claude/qodercli）Linux 容器不可执行，保留宿主机；
 7. **大工具迁移宿主机**（2026-08-12 用户裁决）：instsci（254MB）等体积大的工具留宿主机 `~/.local/bin`，不入镜像——wrapper 无需生成（宿主机命令直接可用）；
-8. **临时安装 vs 固化**：路径 A（exec 装）方便但镜像层改动重建即丢——长期工具走 Dockerfile.dev（路径 B，见 dev-container-tool-guide §2）。
+8. **临时安装 vs 固化**：路径 A（exec 装）方便但镜像层改动重建即丢——长期工具走 deploy/Dockerfile.dev（路径 B，见 dev-container-tool-guide §2）。
 
 ---
 
-*文档维护：Dockerfile.dev / docker-compose.yaml / tools/dev/ 变化时同步更新本文；工作区 WIP（§1.5）提交后移除标注并合并进正文。*
+*文档维护：deploy/Dockerfile.dev / deploy/docker-compose.yaml / tools/dev/ 变化时同步更新本文；工作区 WIP（§1.5）提交后移除标注并合并进正文。*

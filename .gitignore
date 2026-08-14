@@ -13,8 +13,8 @@ pi-triple.json
 .worktrees/
 *.sha256
 
-# 容器抽象生成物（docker 后端渲染——事实源 pth.deployment.json）
-pth.deploy/
+# 容器抽象生成物（docker 后端渲染——事实源 deploy/pth.deployment.json）
+deploy/generated/
 
 # PTH 性能基准归档（循环①——V8 优化数据积累）
 .perf-bench/
