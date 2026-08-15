@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>基于 <a href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent">pi SDK</a> 的多租户 Agent 平台——轻量开发工具链（PTL）+ agent 联邦平台与任务内核（PTH）。</strong>
+  <strong>基于 <a href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent">pi SDK</a> 的两个独立产品——多环境共存平台（PTL）+ 自耦自然语言解释器（PTH）。PTL 可通过 PTH CLI 调用 PTH。</strong>
 </p>
 
 <p align="center">
@@ -32,24 +32,24 @@
 
 ## What is Pi-Triple?
 
-Pi-Triple 是跑在 pi SDK 之上的双产品线平台：**PTL** 面向本地开发/调试（CLI + TUI），**PTH** 面向服务器部署（HTTP API + 任务内核）。
+Pi-Triple 是跑在 pi SDK 之上的两个独立产品：**PTL** 是基于 pi 的多环境共存平台（CLI + TUI + tmux），**PTH** 是自耦自然语言解释器（解释即执行）。二者不存在前后端关系，PTL 可通过 PTH CLI 调用 PTH。
 
 | | PTL（Pi-Triple-Lite） | PTH（Pi-Triple-Heavy） |
 |---|----------------------|------------------------|
-| **定位** | 轻量开发/调试工具链 | agent 联邦平台 + 任务内核 |
-| **入口** | `ptl` CLI | `pth` server（HTTP/SSE/WebSocket） |
+| **定位** | 基于 pi 的多环境共存平台 | 自耦自然语言解释器（解释即执行） |
+| **入口** | `ptl` CLI | `pth` CLI（`pth submit/status/wait`） |
 | **运行时** | pi 进程 × tmux | AgentEngine + Redis + BullMQ + PostgreSQL |
-| **适用** | 本地工作站 · 交互式调试 · 个人/小组 | 服务器部署 · 程序化 API · 集中治理 · 任务流水线 |
+| **适用** | 多 pi 环境并行共存 · 交互式调试 | 自然语言解释执行 · CLI/程序化调用 |
 | **源码** | `packages/framework/` | `src/pth/` |
 | **文档** | [PTL 架构](./docs/ptl/architecture.md) | [PTH 架构](./docs/pth/architecture.md) · [Kernel 体系](./docs/pth/kernel.md) |
 
 ```text
-PTL（本地 CLI/TUI）          PTH（服务器）
+PTL（多环境共存平台）        PTH（自耦自然语言解释器）
 ─────────────────          ──────────────────────────────
-ptl tui/CLI（交互层）  →     Gateway（HTTP/SSE）
-ptl tui dashboard      →     AgentEngine（联邦会话）
-ptl hub submit/run     →     ProgramStore（程序桥）
-                          →     Kernel 任务内核（任务池/REPL/记忆/链）
+ptl tui/CLI            →     pth CLI（submit/status/wait）
+ptl tui dashboard      →     Gateway（HTTP/SSE 兼容通道）
+（旧 ptl hub HTTP 桥兼容）→     AgentEngine
+                          →     Kernel 任务内核（解释即执行的内部机制）
 ```
 
 > 🔧 **SDK 兼容性**：所有 pi SDK 调用通过 `packages/infra/src/sdk-adapter/` 适配层隔离，升级 SDK 只改适配层。当前适配 `@earendil-works/pi-coding-agent@^0.82.1`。
@@ -70,7 +70,7 @@ ptl start            # tmux 会话，立即接入
 ptl tui dashboard    # 系统总控 TUI
 ```
 
-### PTH：任务内核体验（试运行）
+### PTH：自然语言解释器试运行
 
 ```bash
 # 启动（独立 postgres/redis 见 docs/pth/kernel.md）
@@ -228,8 +228,8 @@ bash scripts/check-release-clean.sh  # 发行门禁（发布包零用户痕迹�
 
 ## 已知限制
 
-- **PTL 无 HTTP API**：适合本地工作站交互，不适合程序化/远程访问（→ PTH）
-- **PTH 无 TUI**：适合服务器/API 场景（→ PTL 本地调试 + PTL→PTH 桥）
+- **PTL 无 HTTP API**：面向本地多 pi 环境共存管理；需要程序化调用 PTH 时使用 PTH CLI。
+- **PTH 暂无专属前端**：以 CLI 为规范调用接口（HTTP/SSE 为兼容通道）；专属前端与无容器版本在规划中。
 - **tmux**：Unix-only（Windows 支持规划中）
 - **PTH 进程限制**：BullMQ worker 在主进程（Phase 1 技术债）
 - **mailbox**：单机通信，不支持跨机器

@@ -2,18 +2,18 @@
 
 > 本文档是项目架构的**单一真相源**（single source of truth）。模块细节见 [`docs/ptl/`](./docs/ptl/architecture.md) 与 [`docs/pth/`](./docs/pth/architecture.md)。
 
-Pi-Triple 是基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) 的**多租户 Agent 平台**，采用**单仓双产品**（monorepo, two products）形态：
+Pi-Triple 采用**单仓双产品**（monorepo, two products）形态，包含两个互相独立的产品——**PTL**：基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) 的多环境共存平台；**PTH**：自耦自然语言解释器（解释即执行）。二者不存在前端/后端关系；PTL 可通过 **PTH CLI** 调用 PTH。
 
 | | **PTL**（Pi-Triple-Lite） | **PTH**（Pi-Triple-Heavy） |
 |---|--------------------------|----------------------------|
-| 定位 | 轻量开发/调试工具链 | agent 联邦平台（服务器） |
-| 入口 | `ptl` CLI（`dist/ptl/pit.js`） | `pth` server（`dist/pth/main.js`） |
+| 定位 | 基于 pi 的多环境共存平台 | 自耦自然语言解释器（解释即执行） |
+| 入口 | `ptl` CLI（`dist/ptl/pit.js`） | `pth` CLI / server（`dist/pth/main.js`） |
 | 运行时 | 真实 pi 进程 × tmux | AgentEngine + Redis + BullMQ |
-| 交互 | 本地终端 · TUI · 手动 | HTTP / SSE / WebSocket · 程序化 |
-| 适用 | 个人/小组 · 交互式调试 | 团队/联邦 · 集中治理 · 弹性伸缩 |
+| 交互 | 本地终端 · TUI | CLI · HTTP / SSE / WebSocket（兼容通道） |
+| 适用 | 多 pi 环境并行共存 · 交互式调试 | 自然语言任务解释执行 · 程序化调用 |
 | 源码 | `packages/framework/` | `src/pth/` |
 
-两者共享 `src/shared/`（SDK 适配、模型路由、工作目录、跨 OS 适配、日志），并通过 **PTL→PTH 桥**（`ptl hub submit/run`）打通：PTL 本地开发的 agent 程序可打包提交到 PTH 以联邦模式运行。
+两者共享 `src/shared/`（SDK 适配、模型路由、工作目录、跨 OS 适配、日志）。PTL 通过 **PTH CLI** 调用 PTH（`pth submit/status/wait`）；原 `ptl hub` HTTP 桥保留为兼容通道，不再定义产品关系。
 
 ```
                          ┌─────────────────────────────┐
@@ -24,10 +24,10 @@ Pi-Triple 是基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-co
                 ┌───────────────────────┴───────────────────────┐
                 │                                               │
         ┌───────▼────────┐                              ┌───────▼────────┐
-        │ packages/framework │ ptl hub submit / ptl hub run │     src/pth/     │
-        │  ptl CLI + TUI │ ──────────── 桥 ───────────→ │  Fastify 网关   │
-        │  pi × tmux     │        (bridge/)             │  AgentEngine   │
-        │  交互层定位     │                              │  Redis + BullMQ │
+        │ packages/framework │  pth CLI（submit/status/wait） │     src/pth/     │
+        │  ptl CLI + TUI │ ──────────────────────────→ │  Fastify 网关   │
+        │  pi × tmux     │  （旧 ptl hub HTTP 桥兼容）   │  AgentEngine   │
+        │  多环境共存平台  │                              │  自耦 NL 解释器  │
         └────────────────┘                              └────────────────┘
 ```
 
@@ -38,7 +38,7 @@ Pi-Triple 是基于 [pi SDK](https://www.npmjs.com/package/@earendil-works/pi-co
 ```
 pi-platform/
 ├── src/
-│   ├── pth/                       # Pi-Triple-Heavy（服务器端 + 任务内核）
+│   ├── pth/                       # PTH（自耦自然语言解释器）
 │   │   ├── main.ts                #   服务器入口（kernel 装配 + 路由 + 指标）
 │   │   ├── core/                  #   AgentEngine · SessionPool · AsyncIterableBridge
 │   │   ├── gateway/               #   Fastify 路由（sessions/programs/kernel/self）+ auth + SSE
@@ -93,12 +93,14 @@ PTL **不实现自己的 agent runtime**——它启动真正的 pi 进程，每
 - `ptl start`（默认 tmux 管理）/ `ptl pi`（原生前台逃生舱）
 - 关键模块：`tmux.ts` · `launcher.ts` · `cli/sessions.ts`
 
-### 2. PTL 交互层定位（2026-08-09 收敛）
+### 2. PTL 目标定位（2026-08-15 再界定）
 
-PTL 回归轻量交互层：CLI + 双 TUI（dashboard/lab）+ tmux 会话 + 共享扩展层 + PTL→PTH 桥。
+PTL 是基于 pi 的多环境共存平台：CLI + 双 TUI（dashboard/lab）+ tmux 会话 + 共享扩展层，让多个 pi 环境以模板隔离方式并行共存。PTH 通过 PTH CLI 作为外部能力被调用，二者不构成前后端关系。
 workflow 引擎（ptl-flow）与 agent 经济引擎（agent-lab）已归档至 `archive/`（保留代码不再编译，历史见 git/v0.5.0 release）。
 
-### 3. PTL→PTH 桥（`packages/framework/src/bridge/`）
+### 3. PTL→PTH 调用通道（`packages/framework/src/bridge/`）
+
+规范接口为 PTH CLI（`pth submit/status/wait`）；下列 `ptl hub` HTTP 桥保留为兼容通道。
 
 把 PTL 本地开发的 agent 程序（`agent.json` manifest + skills + systemPrompt）打包提交到 PTH 运行。
 
@@ -129,7 +131,7 @@ Gateway（Fastify + auth + SSE）
 ```
 
 - **AgentEngine**：平台主协调器（session 生命周期 + prompt + abort + 驱逐），持 SessionPool/ModelRouter/WorkspaceManager/SessionStore/ToolPlatform
-- **ProgramStore**（`programs/`）：桥的服务端。`POST /api/v1/programs`（上传）· `GET/DELETE /api/v1/programs/:name` · `POST /api/v1/programs/:name/run`（运行，SSE 直推）
+- **ProgramStore**（`programs/`）：兼容 HTTP 桥的服务端。`POST /api/v1/programs`（上传）· `GET/DELETE /api/v1/programs/:name` · `POST /api/v1/programs/:name/run`（运行，SSE 直推）
 - **WorkflowOrchestrator**（`workflow/`）：服务端 BullMQ 工作流（`agent`/`human-approval` 步骤可用，`parallel`/`condition` 为 stub）。（PTL 侧 flow 引擎已归档——本模块为服务器集中编排）
 - **ToolPlatform**（`tools/`）：pi 内置工具的治理外壳（allowlist + 审计 + 指标），不重写工具
 - **存储**：Redis append-only entry + snapshot 模型；`SessionStore`/`SettingsStore`/`CredentialProvider` 接口可替换后端
@@ -149,7 +151,7 @@ Gateway（Fastify + auth + SSE）
 | ~~workflow~~ | ⚠️ 已归档 `archive/workflow-ext/`（pi 内编排 ptl-flow；`/flow` 命令 + 工具） |
 | ~~agent-lab~~ | ⚠️ 已归档 `archive/agent-lab/`（agent 经济引擎：WorkLoop/arena/调度/优化；代码保留供 0.7/0.8 恢复） |
 | ~~agent-lab-bidder~~ | ⚠️ 已归档 `archive/agent-lab-bidder/`（place_bid 工具；用户保留意向 0.7/0.8 复用） |
-| **pth-tasks** | PTH 任务交互层：会话内 `/pthtask publish|ls|status|batch`（发布/列表/状态/控制 batch）+ 薄 skill（任务描述写法/状态语义/排障） |
+| **pth-tasks** | PTH 任务调用扩展：会话内 `/pthtask publish|ls|status|batch`（发布/列表/状态/控制 batch）+ 薄 skill（任务描述写法/状态语义/排障） |
 | **mailbox** | 跨会话通信（`packages/mailbox` 的分发实现） |
 | **extensions-in-container** | dev 容器内扩展集合 |
 
