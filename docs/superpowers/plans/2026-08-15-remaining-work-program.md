@@ -63,8 +63,8 @@
 - [x] B4 / N2 Phase 4：SKILL.md → skill 条目映射定稿（`parseSkillMarkdown` + 往返测试）
 
 ### P3.2 观测与路径还原（可合批：共用轨迹数据）
-- [ ] D1：护栏进 scorecard 观测
-- [ ] E1：N13 思考路径图重建器
+- [x] D1：护栏进 scorecard 观测（trace 新增 guard 事件；scorecard.guards 聚合 hits/guide/soft/hard）
+- [x] E1：N13 思考路径图重建器（`thinking-path.ts`：发现链/决策链/意图链 + 岔路口/缺口诊断）
 
 ### P3.3 机制链
 - [ ] B3：N4 生态转化 pipeline（记忆侧 skill 条目化）
