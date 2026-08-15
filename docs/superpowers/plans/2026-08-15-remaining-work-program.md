@@ -79,7 +79,7 @@
 - [x] B1：N7 归档定期 trigger 接线（`memory-sweep-trigger.ts`：每天巡检 memory-keeper → memory-admin-proposal；`PTH_MEMORY_SWEEP_SECONDS=0` 禁用）
 
 ### P3.5 LLM→工具调用链审计遗留（根 TODO）
-- [ ] HIGH：ts-interpreter 尾表达式/autoExport 插入 noise-aware（字符串含 `return`/`;` 被切坏）
+- [x] HIGH：ts-interpreter 尾表达式/autoExport 插入 noise-aware（`maskNonCode` 等长掩码——字符串/模板/注释/正则字面量中 `return`/`;` 不再切坏插入点与尾表达式；7 条回归测试）
 - [ ] MEDIUM：非 ASP 模式工具 schema 与执行面同源；ASP 内联工具统一 try/catch 错误回填；surface 解构默认值/模板插值/`as` 断言漏检；ext.syncIndex / manage.scheme.publish 校验
 - [ ] LOW：别名门控提前 · toolsDescription done 去重 · 命名一致性
 

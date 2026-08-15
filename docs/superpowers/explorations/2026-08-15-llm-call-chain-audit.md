@@ -39,6 +39,7 @@
 - ✅ M4 `memory.write` 位置形签名被契约误拒：validate 兼容双签名
 - ✅ M7 runner 二次截断丢 `truncated` 标志
 - ✅ M6 ts-interpreter 把字符串/注释里的 `import/require` 当真实代码拒绝
+- ✅ HIGH ts-interpreter `insertBeforeReturn` / 尾表达式提取在字符串内切分：`maskNonCode` 等长掩码 noise-aware（字符串/模板/注释/正则字面量中 `return`/`;` 不再切坏插入点与尾表达式；行尾注释不再吞闭包尾；7 条回归测试）
 - ✅ 契约失真：`memory.query` / `memory.write` returnType 与注入实现对齐；`state.recall*` 签名改 `anchors: string[]`；`fs.list` 契约改无参；`asAction` 不再生成 `"undefined"`
 
 ## 二、未修（已挂 TODO，按优先级）
@@ -46,7 +47,6 @@
 | 级别 | 问题 | 位置 | 说明 |
 |---|---|---|---|
 | HIGH | Python 记忆桥 `space` 可在程序内伪造 | py-kernel / pth-memory-lib | 软治理已文档化；根治需请求层带外盖章 |
-| HIGH | ts-interpreter `insertBeforeReturn` / 尾表达式提取在字符串内切分 | ts-interpreter.ts | 字符串含 `return`/`;` 的合法程序会被拒；需 noise-aware 尾表达式提取 |
 | HIGH | DNS rebinding SSRF（主机名 → 私网） | web.fetchText | 本机 DNS 沙箱把公网域名解析到保留段，DNS 校验会误杀全部出站；字面量防护已上，出站边界留给网络策略 |
 | MEDIUM | 非 ASP 模式 schema 声明 ASP-only 工具 | agent-tools/agent-loop | schema 面与执行面应同源 |
 | MEDIUM | ASP 内联工具异常未捕获 | agent-loop 571-682 | 打崩任务而非回填错误 |

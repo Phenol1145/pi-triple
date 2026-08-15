@@ -68,7 +68,7 @@
 
 ## LLM→工具调用→执行核 链路筛查遗留（2026-08-15，报告见 docs/superpowers/explorations/2026-08-15-llm-call-chain-audit.md）
 **核心侧（留主 TODO）**：
-- [ ] HIGH：ts-interpreter 尾表达式/autoExport 插入改为 noise-aware（字符串含 return/; 被切坏）
+- [x] HIGH：ts-interpreter 尾表达式/autoExport 插入改为 noise-aware（`maskNonCode` 等长掩码——字符串/模板/注释中 return/; 不再切坏插入点与尾表达式）
 - [ ] MEDIUM：非 ASP 模式工具 schema 与执行面同源（剔除 ASP-only 声明）
 - [ ] MEDIUM：ASP 内联工具（asp_index/memory_index/cache_*）统一进 try/catch 错误回填
 - [ ] MEDIUM：surface 解构默认值/模板插值/as 断言漏检
