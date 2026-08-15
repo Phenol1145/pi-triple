@@ -67,8 +67,8 @@
 - [x] E1：N13 思考路径图重建器（`thinking-path.ts`：发现链/决策链/意图链 + 岔路口/缺口诊断）
 
 ### P3.3 机制链
-- [ ] B3：N4 生态转化 pipeline（记忆侧 skill 条目化）
-- [ ] B5：N1b 百科写入矛盾检测
+- [x] B3：N4 生态转化 pipeline（记忆侧 skill 条目化：`importSkillMarkdown`——解析→规范化→维护面写入；staged 分支落提案）
+- [x] B5：N1b 百科写入矛盾检测（`wiki.ts validateWikiWrite`：id/术语锚点/三要素/重复定义，worker 写 pth-wiki 前强制校验）
 - [ ] D3：T9 PTL 侧交接 flow + 提交指南（PTH CLI 为新规范接口）
 - [ ] D5：失败任务回收机制（软终止/警告闭合任务的转派/归档/重试）
 
