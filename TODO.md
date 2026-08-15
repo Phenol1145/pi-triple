@@ -1,5 +1,7 @@
 # TODO（2026-08-15 对齐真实进度）
 
+> 未执行方案的统一入口与执行顺序见 [剩余工作总控计划](./docs/superpowers/plans/2026-08-15-remaining-work-program.md)。
+
 ## 批 A：差距 7——obs.container（cgroup 容器级观测源）✅
 - [x] obs.ts 加 obs.container（cpu.max/memory.current/pids/usage——容器 cgroup 只读）
 - [x] 测试（白名单模板 + 容错——非容器环境降级）
