@@ -68,4 +68,11 @@ describe("WorkspaceManager 工作区分离（F/WP2 Task 7）", () => {
     expect(() => mgr.getCwd("tenant-a", "../evil")).toThrow();
     expect(() => mgr.getTenantWorkspaceRoot("../evil")).toThrow(/Path traversal/);
   });
+
+  it("P0-3：租户/项目目录权限 0700（不同 UID 不可读）", async () => {
+    const cwd = await mgr.ensureWorkspace("tenant-a", "proj-1");
+    const tenantRoot = mgr.getTenantWorkspaceRoot("tenant-a");
+    expect(fs.statSync(tenantRoot).mode & 0o777).toBe(0o700);
+    expect(fs.statSync(cwd).mode & 0o777).toBe(0o700);
+  });
 });

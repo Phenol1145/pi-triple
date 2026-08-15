@@ -58,7 +58,12 @@ export class WorkspaceManager {
 
   async ensureWorkspace(tenantId: string, project: string): Promise<string> {
     const cwd = this.getCwd(tenantId, project);
-    await fs.mkdir(cwd, { recursive: true });
+    const tenantRoot = this.getTenantWorkspaceRoot(tenantId);
+    // P0-3：租户/项目目录 0700——sandbox workload（不同 UID）不可读其他租户；broker 私有拷贝负责 workload 访问
+    await fs.mkdir(tenantRoot, { recursive: true, mode: 0o700 });
+    await fs.chmod(tenantRoot, 0o700);
+    await fs.mkdir(cwd, { recursive: true, mode: 0o700 });
+    await fs.chmod(cwd, 0o700);
     return cwd;
   }
 
