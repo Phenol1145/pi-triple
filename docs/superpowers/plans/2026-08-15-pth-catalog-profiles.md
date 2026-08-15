@@ -1,6 +1,8 @@
-# PTH Runtime Catalog 与 Product Profiles Implementation Plan
+# PTH Runtime Catalog 与 Product Profiles Implementation Plan（参考计划）
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **计划状态：参考计划（Reference-only）** —— 本文件仅作架构与实施思路参考，当前不作为执行依据；实施前必须重新评审可行性并另建可执行计划。
+>
+> **For agentic workers:** 请勿直接按本计划 checkbox 开工。若后续决定实施，需先转为可执行计划，再使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans。
 
 **Goal:** 用启动期构建的、不可变 `RuntimeCatalog` 取代角色/空间/扩展的模块级全局注册表，并用显式 PTH Host manifests 交付 Control、Standard、Full 三种静态产品 Profile；private deployment 作为策略 overlay，而不是第四套 fork。
 

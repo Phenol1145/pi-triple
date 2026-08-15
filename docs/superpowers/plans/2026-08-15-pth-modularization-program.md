@@ -1,6 +1,8 @@
-# PTH 模块化与产品 Profile 迁移总控 Implementation Plan
+# PTH 模块化与产品 Profile 迁移总控 Implementation Plan（参考计划）
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **计划状态：参考计划（Reference-only）** —— 本文件及其四个子计划仅作架构与实施思路参考，当前不作为执行依据；实施前必须重新评审可行性并另建可执行计划。
+>
+> **For agentic workers:** 请勿直接按本计划及其子计划的 checkbox 开工。若后续决定实施，需先转为可执行计划，再使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans。
 
 **Goal:** 在不维护平行产品分支、不重写公开 HTTP API 或数据库 schema 的前提下，把 PTH 从 `KernelRuntime`/`DataWorldAccess`/全局注册表驱动的系统，迁移为由 PTH Host 组合的模块化单体，并交付 Control、Standard、Full 三个可验证的 Profile。
 

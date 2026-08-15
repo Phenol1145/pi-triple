@@ -1,6 +1,8 @@
-# PTH Contracts 与边界迁移 Implementation Plan
+# PTH Contracts 与边界迁移 Implementation Plan（参考计划）
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **计划状态：参考计划（Reference-only）** —— 本文件仅作架构与实施思路参考，当前不作为执行依据；实施前必须重新评审可行性并另建可执行计划。
+>
+> **For agentic workers:** 请勿直接按本计划 checkbox 开工。若后续决定实施，需先转为可执行计划，再使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans。
 
 **Goal:** 创建纯 TypeScript workspace `@away_from/pth-contracts`，把 PTH 的跨模块协议、执行协议、任务 lease 和事件协议从当前 `@away_from/pth-sandbox`、`DataWorldAccess` 与 `KernelRuntime` 中分离出来，同时以 facade 保持 gateway、batch runner 与现有 package 消费者兼容。
 
