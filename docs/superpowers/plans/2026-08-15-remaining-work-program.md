@@ -45,7 +45,7 @@
 - [x] **P0-2 工作负载凭据暴露**（`a12b4f2` + `7dbcb9e`）：/exec、Python/Bash REPL env 改 allowlist，控制器凭据强制剔除；Dockerfile 新增 workload UID/GID 2001（控制器 root 仅 setuid，/app root 只读）；loopback 记忆桥免密钥且 body.space 被剥除。残留：grant 化单用途 capability 并入 P0-4
 - [x] **P0-3 工作区租户隔离**（`1b5cf72`）：任务工作区改为 `workspaces/<tenant>/tasks/<taskId>` 且 0700；外部发布 tenant 只取 auth token；sandbox `/exec` 容器内启用 `/srv/workload` 私有拷贝执行（进/出回拷）。残留：REPL 尚未绑任务工作区；容器内跨租户负向测试待 clean-build 补跑
 - [x] **P0-4 kernel lease**（`08541dc`）：acquire 返回 UUID lease；所有操作校验 lease id+generation；TTL 过期先销毁移出池、旧租约失效；HTTP 退役 kernelId；SandboxKernel 只持 opaque lease
-- [ ] 干净环境构建 sandbox 镜像（不依赖本地 `dist`），compose 全拓扑启动 + health 通过——Dockerfile 已修（base tsconfig + framework 构建顺序），本机因 registry TLS 超时未验证，待网络可用后重试
+- [x] 干净环境构建 sandbox 镜像（不依赖本地 `dist`），compose 全拓扑启动 + health 通过（`2cd043c`：sandbox/pi-platform 双镜像 no-cache 构建成功；容器 smoke：health 200、workload UID 2001、跨租户读取被拒、私有工作区回拷属主正确；compose 六服务 healthy）
 
 ## P2：拆分收尾
 

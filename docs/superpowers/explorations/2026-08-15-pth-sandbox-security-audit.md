@@ -98,7 +98,7 @@ builder 只复制 `tsconfig.json`，但 pth-memory 和 pth-sandbox 的 tsconfig 
 
 **处置**：复制根 base tsconfig；明确 workspace 构建顺序或使用 root build；在 CI 中执行无缓存 Docker build，禁止依赖开发机残留 `dist`。
 
-**状态（2026-08-15）**：Dockerfile 已修（builder 复制 `tsconfig.base.json`，构建顺序 pth-memory → pth-sandbox → shared → infra → framework）；workload 用户与私有工作区根已加入。**未验证**：本机无缓存 `docker build` 因 registry TLS 超时（node:22-slim 拉取失败）未能跑通——需网络可用后重试，不可视为已闭合。
+**状态（2026-08-15）**：已处置并验证。`docker build --no-cache` 成功（builder 补齐 `tsconfig.base.json` 与 shared→infra→framework 构建顺序；`useradd` 先建 group；pi-platform runtime 的 package.json 以 node 属主拷入，修复 `ERR_MODULE_NOT_FOUND`）。容器 smoke：health 200、`/exec` 以 UID 2001 运行、跨租户目录读被拒、私有工作区回拷属主为 node 1000。`docker compose` 全拓扑（含 dev/jupyter）六服务 healthy。
 
 ## P1：修复 P0 后仍须解决的高风险问题
 
@@ -122,7 +122,7 @@ builder 只复制 `tsconfig.json`，但 pth-memory 和 pth-sandbox 的 tsconfig 
 ## 已有防护与其边界
 
 - sandbox 没有宿主机端口映射，只加入 `sandbox-internal` 网络；
-- 容器以非 root 用户运行，并设置 1 CPU、1 GiB、256 PID 限额；
+- 工作负载以非 root `workload`（UID/GID 2001）运行，并设置 1 CPU、1 GiB、256 PID 限额；控制器容器内 root 仅用于 setuid；
 - `/exec` 的正常 timeout 路径使用 detached 进程组并 `kill(-pid)`；
 - cwd 校验能阻止启动路径的 `..` 与 symlink 逃逸。
 
