@@ -27,6 +27,7 @@
 | 主题 | 文档 | 设计状态 | 当前实施状态 | 主要关系 |
 |---|---|---|---|---|
 | 总体架构 | [Kernel 架构总纲](./2026-08-07-pth-kernel-architecture.md) | 已裁决 | 核心骨架已落地 | 其他 Kernel SPEC 的基础 |
+| 模块化产品形态 | [PTH 模块化 Profiles](./2026-08-15-pth-modular-profiles-design.md) | 已获方向批准 | 未开始 | 将当前目录迁移为可组合模块与产品形态 |
 | 解释器持久化 | [Refine / 持久化](./2026-08-08-pth-interpreter-persistence-design.md) | 已裁决 | 部分落地 | 被 REPL、Environment 设计复用 |
 | 多语言执行 | [多语言持久 REPL](./2026-08-08-pth-multilang-repl-design.md) | 已裁决 | 本地 per-worker 形态已落地 | 池化归属被 sandbox SPEC 更新 |
 | 任务流程 | [TaskResolver](./2026-08-08-pth-task-resolver-design.md) | 已裁决 | 核心骨架已落地 | 与 agent loop、Environment 路由相邻 |
