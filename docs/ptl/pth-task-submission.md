@@ -167,7 +167,28 @@ ptl hub kernel batch remove 1     # 缩容
 | 任务 rejected | 描述不清/验收不可达 | `GET /tasks/:id` 看 payload 原因，修正重发 |
 | `PTH_TOKEN 未配置`（会话内） | 会话 env 缺 token | 配置后重开会话 |
 
-## 10. 相关
+## 10. 概念设计交接（T9 / D3）
+
+> 渐进降输入已废止（T9）：任务文本不得只写核心意图。PTL 侧先理解用户全部需求/想法，
+> 产出**概念设计**，PTH 据其生成实施方案。
+
+**模板**：`npm run pth -- handoff`
+
+**提交**：`npm run pth -- submit --concept --file concept.md`（缺省路由 planner、自动加 `concept-design` 标签）
+
+概念设计必须包含五个段落，缺一拒绝提交：
+
+| 段落 | 回答的问题 |
+|---|---|
+| 【目标】 | 用户最终要什么（可验收结果） |
+| 【背景与约束】 | 为什么做 / 不可违反的约束 |
+| 【现状】 | 已知信息（实现/记忆/已尝试路径） |
+| 【概念方案】 | 核心思路与关键取舍 |
+| 【验收标准】 | 怎么证明完成 |
+
+【边界 / 非目标】与【风险与未决】建议补全，实施防扩界。
+
+## 11. 相关
 
 - Skill：`pth-tasks`（pi 会话内 `/pthtask` 全套 + 任务描述写法）
 - PTH 侧：`docs/pth/kernel.md`（任务池/REPL/记忆闭环）· `docs/superpowers/specs/2026-08-08-pth-task-resolver-design.md`（任务链 payload.flow）

@@ -69,8 +69,8 @@
 ### P3.3 机制链
 - [x] B3：N4 生态转化 pipeline（记忆侧 skill 条目化：`importSkillMarkdown`——解析→规范化→维护面写入；staged 分支落提案）
 - [x] B5：N1b 百科写入矛盾检测（`wiki.ts validateWikiWrite`：id/术语锚点/三要素/重复定义，worker 写 pth-wiki 前强制校验）
-- [ ] D3：T9 PTL 侧交接 flow + 提交指南（PTH CLI 为新规范接口）
-- [ ] D5：失败任务回收机制（软终止/警告闭合任务的转派/归档/重试）
+- [x] D3：T9 PTL 侧交接 flow + 提交指南（`concept-design.ts` 五段校验 + `pth handoff`/`pth submit --concept` + 指南 §10）
+- [x] D5：失败任务回收机制（软终止/警告闭合 → 非终态 requeue 回池；claims_count 兜底）
 
 ### P3.4 并行/顺手批次
 - [ ] B7：N5 资源环采集
