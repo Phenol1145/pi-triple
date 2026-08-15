@@ -1,5 +1,5 @@
 /**
- * /container 命令注册与行为验证（@away_from/extensions-in-container）
+ * /container 命令注册与行为验证（@away_from/dev-container）
  * 参考 test/mailbox-command.test.ts 模式：mock api 验证 registerCommand；
  * docker 调用注入 fake runner（不依赖真实 docker/容器）：
  *   1. 工厂注册 container 命令（默认导出存在）
@@ -10,7 +10,7 @@ import { describe, it, expect, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import containerExt from "@away_from/extensions-in-container";
+import containerExt from "@away_from/dev-container";
 
 const COMPOSE = "/tmp/container-ext/compose.yaml";
 

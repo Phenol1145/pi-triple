@@ -1,5 +1,5 @@
 /**
- * Pi-Triple extensions-in-container — @away_from/extensions-in-container
+ * Pi-Triple dev-container — @away_from/dev-container
  *
  * /container 命令族（skill 文档 §4.2 接口约定）：
  *   /container start [--name]    启动 dev 容器（docker compose up -d dev）

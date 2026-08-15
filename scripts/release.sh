@@ -9,11 +9,11 @@
 #
 # 阶段（0-4 安全默认；5-7 需显式 flag 开启）：
 #   0 环境检查：工作区干净 / main 分支 / 与 origin 同步
-#   1 版本一致性：根 == 5 子包；git tag v<ver> 未占用
+#   1 版本一致性：根 == 7 子包；git tag v<ver> 未占用
 #   2 残留检查：@pi-triple 旧 scope 零残留 + check-release-clean.sh（npm pack + tar 噪音双门禁）
 #   3 测试：vitest 全量（--skip-tests 跳过）
 #   4 打包：release-pack.sh + tgz 内容断言（name/version 与根一致）
-#   5 npm：--npm 开启。topo 序发布 5 子包 + 根包（file: → ^ver 临替 → 还原 → dist-tags 验证）
+#   5 npm：--npm 开启。topo 序发布 7 子包 + 根包（file: → ^ver 临替 → 还原 → dist-tags 验证）
 #   6 docker 回归：--docker 开启。build + force-recreate + health + kernel/status + 冒烟任务
 #   7 GitHub：--gh 开启。gh release create + tgz 附件（--notes <file> 自定义发布笔记）
 #
@@ -44,7 +44,7 @@ json_get() { python3 -c "import json,sys; print(json.load(open(sys.argv[1]))[sys
 
 ROOT_NAME=$(json_get package.json name)
 ROOT_VER=$(json_get package.json version)
-SUBPACKAGES=(shared infra mailbox framework extensions-in-container)
+SUBPACKAGES=(shared infra pth-memory pth-sandbox mailbox framework dev-container)
 TGZ="pi-triple-v${ROOT_VER}.tgz"
 
 # ── 阶段 0：环境检查 ──────────────────────────────────
@@ -67,7 +67,7 @@ done
 if git tag -l "v${ROOT_VER}" | grep -q .; then
   echo "⚠️  tag v${ROOT_VER} 已存在（--gh 阶段将失败——增量发布请先 bump version）"
 fi
-ok "5 子包 name/version 与根一致"
+ok "${#SUBPACKAGES[@]} 子包 name/version 与根一致"
 
 # ── 阶段 2：残留检查 ──────────────────────────────────
 say "阶段 2：残留检查"

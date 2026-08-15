@@ -168,15 +168,15 @@ describe("installBundledExtensions / syncBundledExtensions — symlink 条目", 
 });
 
 describe("仓库 bundled 扩展接线（finding #1）", () => {
-  it("extensions/mailbox 与 extensions/extensions-in-container 被 installBundledExtensions 同步", () => {
+  it("extensions/mailbox 与 extensions/dev-container 被 installBundledExtensions 同步", () => {
     const sharedDir = path.join(makeTmp(), "shared");
     const installed = installBundledExtensions(sharedDir);
 
-    for (const name of ["mailbox", "extensions-in-container"]) {
+    for (const name of ["mailbox", "dev-container"]) {
       const dst = path.join(sharedDir, "extensions", name);
       expect(fs.existsSync(dst), `${name} 未被同步为 bundled 扩展`).toBe(true);
       expect(fs.statSync(dst).isDirectory()).toBe(true);
     }
-    expect(installed).toEqual(expect.arrayContaining(["mailbox", "extensions-in-container"]));
+    expect(installed).toEqual(expect.arrayContaining(["mailbox", "dev-container"]));
   });
 });

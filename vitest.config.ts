@@ -9,6 +9,8 @@ export default defineConfig({
       "@away_from/infra": fileURLToPath(new URL("./packages/infra/src/index.ts", import.meta.url)),
       "@away_from/pth-memory": fileURLToPath(new URL("./packages/pth-memory/src/index.ts", import.meta.url)),
       "@away_from/pth-sandbox": fileURLToPath(new URL("./packages/pth-sandbox/src/index.ts", import.meta.url)),
+      "@away_from/mailbox": fileURLToPath(new URL("./packages/mailbox/src/index.ts", import.meta.url)),
+      "@away_from/dev-container": fileURLToPath(new URL("./packages/dev-container/src/index.ts", import.meta.url)),
     },
   },
   test: {
