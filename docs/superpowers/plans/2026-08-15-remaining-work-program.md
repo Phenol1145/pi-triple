@@ -88,9 +88,9 @@
 
 ## P4：架构级裁决（每个方案产出一个 ADR）
 
-- [ ] **模块化迁移计划重评审**：以 PTH = 自耦 NL 解释器 / PTL = 多环境平台的新范围为输入，逐模块核验 Reference-only 五计划中 tasking/runner/execution/catalog/session/knowledge 的边界是否仍然成立；输出：转可执行新计划 / 修订 / 退役
-- [ ] **PTL/PTH 分仓裁决**：按新范围重新评估 `2026-08-08-repo-split-design.md`（5 新仓目标）——执行、修订为包级拆分，或明确维持单仓；涉及发布脚本与 Docker 构建链
-- [ ] **PTH 专属前端与无容器版本**：承接 ADR-0001 的后续方向，产出范围草案（前端形态、无容器运行时边界、与 PTH CLI 的关系）
+- [x] **模块化迁移计划重评审**：旧五计划退役为历史参考；新执行入口 `2026-08-15-pth-modularization-v2.md`（P0–P3 / 27 子项）——见 ADR `0002-pth-modularization-re-review.md`
+- [x] **PTL/PTH 分仓裁决**：维持 pi-platform 单仓（包级边界 + 目录门禁；旧拆仓 spec 标记历史参考）——见 ADR `0003-repo-split-monorepo-decision.md`
+- [x] **PTH 专属前端与无容器版本**：范围草案 ADR（CLI 增强为基线；无容器仅单租户可信负载；密钥按形态互斥）——见 ADR `0004-pth-frontend-and-nocontainer-scope.md`
 
 ## 完成标准
 
