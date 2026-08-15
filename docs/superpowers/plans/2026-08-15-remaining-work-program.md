@@ -84,7 +84,7 @@
 - [x] LOW：别名归一提前到门控前 · toolsDescription done 去重 · 描述名/工具名下划线一致
 
 ### P3.6 调试闭环
-- [ ] debug-case-writer 角色（parent=tester）：最小复现 + 回归测试 + 边界用例；接 controller 批准/developer 修复后派发
+- [x] debug-case-writer 角色（parent=tester）：最小复现 + 回归测试 + 边界用例；controller 批准（`manage.fix.approve`）/ developer 修复完成后自动派发（task-loop）
 
 ## P4：架构级裁决（每个方案产出一个 ADR）
 

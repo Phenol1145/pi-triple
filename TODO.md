@@ -57,14 +57,15 @@
 - [x] 沙箱侧账本（B7/N5 资源环等）→ **归位 packages/pth-sandbox/TODO.md**
 - [x] 逐包评估（D 方案，8/15）：E2/N11 保留为**设计储备不排期**；B7/N5 → sandbox TODO；B3/B5/N1b/N7 + B4 Phase 2–4 → memory TODO；主 TODO 不再承载
 
-## 调试用例 worker（2026-08-13 用户提议——自修正闭环的验证环节）未启动
-- 角色：debug-case-writer（parent=tester 分化——测试族内特化）
+## 调试用例 worker（2026-08-13 用户提议——自修正闭环的验证环节）✅（2026-08-15 P3.6 落）
+- 角色：debug-case-writer（parent=tester 分化——测试族内特化；tags debug-case/regression-case/boundary-case）
 - 职责：给定 bug 报告/复现步骤/修复 diff——产出 ① 最小复现用例（触发 bug 的条件序列）
   ② 回归测试（vitest——防复发）③ 边界用例（相关边界的探索）
 - 在自修正闭环的位置：sensor 检测 → developer 定位/修复 → 【debug-case-writer 生成用例】
   → 全量验证 → 部署提案
-- 触发：controller 裁决批准修复后；或 developer 修复完成后自动派发
-- 验收：生成的用例能复现修复前 bug（修复前 FAIL）+ 修复后 PASS
+- 触发：controller 裁决批准修复后（`manage.fix.approve` 治理面通道）；developer 修复完成自动派发
+  （task-loop 完成点——`payload.debugCases="off"` 可关）
+- 验收：生成的用例能复现修复前 bug（修复前 FAIL）+ 修复后 PASS（done.result 契约 repro/regression/boundary/verification）
 
 ## LLM→工具调用→执行核 链路筛查遗留（2026-08-15，报告见 docs/superpowers/explorations/2026-08-15-llm-call-chain-audit.md）
 **核心侧（留主 TODO）**：
