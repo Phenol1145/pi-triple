@@ -76,7 +76,7 @@
 - [ ] B7：N5 资源环采集
 - [ ] C1：N10 剩余 21 子任务持续派发
 - [ ] D4：role-doc 文案三要素对齐
-- [ ] B1：N7 归档定期 trigger 接线
+- [x] B1：N7 归档定期 trigger 接线（`memory-sweep-trigger.ts`：每天巡检 memory-keeper → memory-admin-proposal；`PTH_MEMORY_SWEEP_SECONDS=0` 禁用）
 
 ### P3.5 LLM→工具调用链审计遗留（根 TODO）
 - [ ] HIGH：ts-interpreter 尾表达式/autoExport 插入 noise-aware（字符串含 `return`/`;` 被切坏）
