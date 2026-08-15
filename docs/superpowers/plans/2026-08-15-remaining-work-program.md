@@ -58,7 +58,7 @@
 ## P3：核心账本（顺序 = `docs/pth/backlog-priority.md` 推荐序列）
 
 ### P3.1 知识层根基
-- [ ] B4 / N2 Phase 2：skills.get 真实接线 + Level 0 清单 / Level 1 全文两级检索
+- [x] B4 / N2 Phase 2：skills.get 真实接线 + Level 0 清单 / Level 1 全文两级检索（`packages/pth-memory/src/skills.ts` + capability 注入 `skills.list/get`）
 - [ ] B4 / N2 Phase 3：memory-keeper 专项维护面 + 不可变语义 + controller:adversarial 审核
 - [ ] B4 / N2 Phase 4：SKILL.md → skill 条目映射定稿
 
