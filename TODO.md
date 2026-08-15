@@ -61,3 +61,14 @@
   → 全量验证 → 部署提案
 - 触发：controller 裁决批准修复后；或 developer 修复完成后自动派发
 - 验收：生成的用例能复现修复前 bug（修复前 FAIL）+ 修复后 PASS
+
+## LLM→工具调用→执行核 链路筛查遗留（2026-08-15，报告见 docs/superpowers/explorations/2026-08-15-llm-call-chain-audit.md）
+- [ ] HIGH：Python 记忆桥 space 盖章改为请求层带外注入（程序不可伪造）
+- [ ] HIGH：ts-interpreter 尾表达式/autoExport 插入改为 noise-aware（字符串含 return/; 被切坏）
+- [ ] HIGH（部分）：web.fetchText DNS rebinding 防护——与出站网络策略协同（字面量防护已上）
+- [ ] MEDIUM：非 ASP 模式工具 schema 与执行面同源（剔除 ASP-only 声明）
+- [ ] MEDIUM：ASP 内联工具（asp_index/memory_index/cache_*）统一进 try/catch 错误回填
+- [ ] MEDIUM：surface 解构默认值/模板插值/as 断言漏检
+- [ ] MEDIUM：ext.syncIndex 失效 · memoryScope own 读侧过滤 · manage.scheme.publish id 校验
+- [ ] MEDIUM：web.fetchText 改流式限量（下载完再判超限 → 流式封顶）
+- [ ] LOW：别名门控提前 · toolsDescription done 去重 · readSource/toolstore symlink 防线 · 命名一致性

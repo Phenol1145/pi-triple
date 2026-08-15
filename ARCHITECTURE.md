@@ -71,7 +71,7 @@ pi-platform/
 ├── archive/                       # 已归档（保留代码不再编译）：framework-flow（workflow 引擎）· agent-lab(+bidder) · workflow-ext
 │
 ├── examples/                      # 示例（echo-agent / pr-review / arena-review / custom-*）
-├── test/                          # 1635 个测试（vitest，195 文件）
+├── test/                          # 1645 个测试（vitest，195 文件）
 ├── docs/                          # 文档中心（docs/README.md 索引）
 │   ├── pth/                       #   architecture.md / kernel.md / api.md / deployment.md
 │   └── ptl/                       #   architecture.md / authoring.md
