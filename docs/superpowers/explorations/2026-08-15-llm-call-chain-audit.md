@@ -12,6 +12,7 @@
 - ✅ 除法链 `a / b / c`：正则字面量启发式按「前邻上下文」区分除号与正则（此前整段被剥成 `/x/` 吞掉后续代码）
 - ✅ `if/while (foo())` 的 foo 漏检：扫描改用负向后行断言，不再消费前导字符
 - ✅ 控制流头部成员访问漏检（`if (foo.bar)`）、TS 非空断言漏检（`foo!.bar` / `foo!()`）
+- ✅ M 系列：模板串 `${}` 插值表达式纳入越界扫描（模板文本掩码、插值保留）；解构默认值 RHS（`{ a = foo.bar }`）不再误收为安全名；`as` 断言根参与判定
 - 已知边界文档化：模板串 `${}` 插值、`if (x) /re/` 语句位正则、含空白正则字面量
 
 ### 只读 SQL 执行器（storage/index.ts）
@@ -31,6 +32,9 @@
 - ✅ MEDIUM-2 unknown-tool / empty-done / empty-reply 护栏从不重置：在非命中路径显式 reset
 - ✅ MEDIUM-4 provider `arguments: null` 打崩任务：llm-fn 对象化 + executeStep 入口防御
 - ✅ LOW-4 缺 `tool_calls[].function` 的畸形响应不再二次解引用
+- ✅ MEDIUM 非 ASP 模式 schema/prompt 剔除 ASP-only（`toolsToSchema/toolsDescription {asp:false}`——schema 面与 AGENT_TOOLS 执行面同源）
+- ✅ MEDIUM ASP 内联工具（asp_index/memory_index/cache_*）统一 try/catch 错误回填（异常不终止任务）
+- ✅ LOW 别名归一提前到门控/护栏之前（`cd`/`space_index` 等别名不再绕过 ASP 空间门控）；toolsDescription done 去重 + 下划线命名与 tool_calls 声明一致
 
 ### 文件与网络
 - ✅ H4 `fs.task` 路径穿越：`resolve + relative` 词法包含校验（`sub/../../etc/passwd` 拒绝）
@@ -38,6 +42,8 @@
 - ✅ M3 `ext.db.query` 签名错配：改接 `queryTemplate` 双参通道
 - ✅ M4 `memory.write` 位置形签名被契约误拒：validate 兼容双签名
 - ✅ M7 runner 二次截断丢 `truncated` 标志
+- ✅ MEDIUM `ext.syncIndex` 永远失败：改走系统写通道（PgMemoryStore force 固定 id——worker 面 prompt 层只读不再拦截；内容仅来自 toolstore 扫描）
+- ✅ MEDIUM `manage.resource.scheme.publish` / `perf.publish` id 防穿越（id 进入文件名前白名单校验）
 - ✅ M6 ts-interpreter 把字符串/注释里的 `import/require` 当真实代码拒绝
 - ✅ HIGH ts-interpreter `insertBeforeReturn` / 尾表达式提取在字符串内切分：`maskNonCode` 等长掩码 noise-aware（字符串/模板/注释/正则字面量中 `return`/`;` 不再切坏插入点与尾表达式；行尾注释不再吞闭包尾；7 条回归测试）
 - ✅ 契约失真：`memory.query` / `memory.write` returnType 与注入实现对齐；`state.recall*` 签名改 `anchors: string[]`；`fs.list` 契约改无参；`asAction` 不再生成 `"undefined"`
@@ -48,15 +54,11 @@
 |---|---|---|---|
 | HIGH | Python 记忆桥 `space` 可在程序内伪造 | py-kernel / pth-memory-lib | 软治理已文档化；根治需请求层带外盖章 |
 | HIGH | DNS rebinding SSRF（主机名 → 私网） | web.fetchText | 本机 DNS 沙箱把公网域名解析到保留段，DNS 校验会误杀全部出站；字面量防护已上，出站边界留给网络策略 |
-| MEDIUM | 非 ASP 模式 schema 声明 ASP-only 工具 | agent-tools/agent-loop | schema 面与执行面应同源 |
-| MEDIUM | ASP 内联工具异常未捕获 | agent-loop 571-682 | 打崩任务而非回填错误 |
-| MEDIUM | 解构默认值 / 模板插值 / `as` 断言漏检 | ptc/surface | 守卫漏报（M2/M3/M5） |
-| MEDIUM | `ext.syncIndex` 永远失败；`memoryScope:own` 读侧未过滤；`manage.scheme.publish` id 未校验 | ext-capability / kernel-manager / manage | 一致性 + 纵深 |
-| MEDIUM | web.fetchText 超限检查在完整下载后 | capability.ts | 改流式限量 |
-| LOW | 别名门控 / 工具描述重复 / symlink 逃逸 / 命名不一致 | agent-loop / read-source / toolstore | 收尾批 |
+| MEDIUM | web.fetchText 超限检查在完整下载后 | capability.ts | 改流式限量（已挂 sandbox TODO） |
+| LOW | readSource / toolstore symlink 逃逸 | read-source / toolstore | 收尾批（已挂 sandbox TODO） |
 
 ## 三、结论
 
 - 触发误判（逗号声明/短变量名）已根修，并有回归测试钉死。
-- 三路筛查共确认 9 个 HIGH、约 15 个 MEDIUM、若干 LOW；本轮修复 9 个 HIGH 中的 7 个（剩余 2 个为架构级：Python 桥盖章、DNS rebinding）及多数可低成本修复的 MEDIUM。
+- 三路筛查共确认 9 个 HIGH、约 15 个 MEDIUM、若干 LOW；本轮修复 9 个 HIGH 中的 7 个（剩余 2 个为架构级：Python 桥盖章、DNS rebinding），MEDIUM 全部落地（剩余 web.fetchText 流式限量与 LOW symlink 逃逸挂 sandbox TODO）。
 - 剩余项已进入 TODO 待办，建议下一批按表内顺序处理。

@@ -80,8 +80,8 @@
 
 ### P3.5 LLM→工具调用链审计遗留（根 TODO）
 - [x] HIGH：ts-interpreter 尾表达式/autoExport 插入 noise-aware（`maskNonCode` 等长掩码——字符串/模板/注释/正则字面量中 `return`/`;` 不再切坏插入点与尾表达式；7 条回归测试）
-- [ ] MEDIUM：非 ASP 模式工具 schema 与执行面同源；ASP 内联工具统一 try/catch 错误回填；surface 解构默认值/模板插值/`as` 断言漏检；ext.syncIndex / manage.scheme.publish 校验
-- [ ] LOW：别名门控提前 · toolsDescription done 去重 · 命名一致性
+- [x] MEDIUM：非 ASP 模式工具 schema 与执行面同源（剔除 ASP-only）；ASP 内联工具统一 try/catch 错误回填；surface 解构默认值/模板插值/`as` 断言漏检；ext.syncIndex 系统通道 + manage/perf scheme.publish id 防穿越
+- [x] LOW：别名归一提前到门控前 · toolsDescription done 去重 · 描述名/工具名下划线一致
 
 ### P3.6 调试闭环
 - [ ] debug-case-writer 角色（parent=tester）：最小复现 + 回归测试 + 边界用例；接 controller 批准/developer 修复后派发
