@@ -51,10 +51,10 @@
 - [x] D2 已裁并落地（8/15 custom）：不豁免治理族——negative-loop 阈值 5→15（`PTH_GUARD_NEGATIVE_LIMIT`）
 - [x] B4 / N2 Phase 1（8/15）：四段式 skill 格式（`skill-format.ts`）+ 3 条角色 SOP 种子注入（developer/scout/memory-keeper）
 - [x] 模块拆分（8/15）：`packages/pth-memory`（记忆域）· `packages/pth-sandbox`（沙箱域含内核契约/运行时）——见 docs/pth/split-design.md
-- [ ] B4 / N2 Phase 2–4 → **归位 packages/pth-memory/TODO.md**
+- [x] B4 / N2 Phase 2–4 → **归位 packages/pth-memory/TODO.md**
 - [ ] 核心剩余账本：D1（护栏进 scorecard）· D3（T9 PTL 交接 flow）· D5（失败任务回收）· E1（N13 路径重建）· C1（21 子任务）· D4 · N10（7/28）· N12 二期
-- [ ] 记忆侧账本（B3/B5/N1b/N7）→ **归位 packages/pth-memory/TODO.md**
-- [ ] 沙箱侧账本（B7/N5 资源环等）→ **归位 packages/pth-sandbox/TODO.md**
+- [x] 记忆侧账本（B3/B5/N1b/N7）→ **归位 packages/pth-memory/TODO.md**
+- [x] 沙箱侧账本（B7/N5 资源环等）→ **归位 packages/pth-sandbox/TODO.md**
 - [x] 逐包评估（D 方案，8/15）：E2/N11 保留为**设计储备不排期**；B7/N5 → sandbox TODO；B3/B5/N1b/N7 + B4 Phase 2–4 → memory TODO；主 TODO 不再承载
 
 ## 调试用例 worker（2026-08-13 用户提议——自修正闭环的验证环节）未启动

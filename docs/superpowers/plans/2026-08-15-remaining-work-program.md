@@ -49,11 +49,11 @@
 
 ## P2：拆分收尾
 
-- [ ] 迁移 `test/pth-kernel-execution/memory-policy.test.ts` → `packages/pth-memory/test/`
-- [ ] 迁移 `test/pth-kernel-storage/memory-store-pg.test.ts` → `packages/pth-memory/test/`
-- [ ] 勾平 `packages/pth-memory/TODO.md` 与 `packages/pth-sandbox/TODO.md` 的"拆分后立即要做"（sandbox 侧实际已完成，补勾即可）
-- [ ] 用 madge（或等价扫描）验证：`pth-memory`、`pth-sandbox` 零 `src/pth` 反向依赖
-- [ ] 全量测试 + lint + build 绿线复核
+- [x] 迁移 `test/pth-kernel-execution/memory-policy.test.ts` → `packages/pth-memory/test/`（包级 policy 用例迁入；core 扩展适配用例留在 `test/pth-kernel-execution/memory-extension-policy.test.ts`）
+- [x] 迁移 `test/pth-kernel-storage/memory-store-pg.test.ts` → `packages/pth-memory/test/`（改用包内 `MEMORY_SCHEMA_SQL`，不再 import core）
+- [x] 勾平 `packages/pth-memory/TODO.md` 与 `packages/pth-sandbox/TODO.md` 的"拆分后立即要做"（sandbox 侧实际已完成，补勾即可）
+- [x] 用 madge（或等价扫描）验证：`pth-memory`、`pth-sandbox` 零 `src/pth` 反向依赖（唯一残留为注释；sandbox 包内一个测试原 import core，已迁回 core）
+- [x] 全量测试 + lint + build 绿线复核（199 文件 / 1662 测试通过）
 
 ## P3：核心账本（顺序 = `docs/pth/backlog-priority.md` 推荐序列）
 
