@@ -34,6 +34,8 @@
 
 **处置**：移除默认密钥、立即轮换既有密钥；不要把桥接端点放在公开 listener 上；由服务端从不可伪造的身份派生 scope，缺少 scope 一律拒绝。
 
+**状态（2026-08-15）**：已处置。compose/描述符改为 `${SANDBOX_SHARED_SECRET:?}`（无默认值，缺省拒绝启动）；`memory-bridge` 取消 auth 豁免，tenant/space 只能来自 Redis token 声明；body 自报 space 返回 400；sandbox 上游改用 `PTH_MEMORY_BRIDGE_TOKEN`，缺失 fail-closed 503。新增测试：`test/pth-gateway/auth.test.ts`、`test/pth-gateway/kernel-routes.test.ts`、`packages/pth-sandbox/test/kernel-host-bridge.test.ts`。
+
 ### P0-2：不可信代码持有 sandbox 控制面凭据
 
 `/exec`、Python REPL 和 Bash REPL 都将完整 `process.env` 传给工作负载。Compose 注入的 `SANDBOX_SHARED_SECRET` 因而可由不可信代码读取。该密钥可调用全部 `/kernel/*` 和 memory bridge 控制面，而不是仅授权当前任务。
