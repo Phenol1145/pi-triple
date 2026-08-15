@@ -67,6 +67,8 @@ PTH 和 sandbox 同时以同一用户挂载全局 `workspaces` 卷。`validateCw
 
 **处置**：每任务/租户使用独立容器或只挂载该任务的工作区子目录；以 UID/ACL 或挂载命名空间强制约束，而非把初始 cwd 当作授权边界。
 
+**状态（2026-08-15）**：已处置核心项。PTH 侧租户/项目/任务目录 0700（workload UID 无法读其他租户）；外部任务发布的 tenant 只能来自 auth token（body 覆盖无效，`routes-kernel`/`routes-jobs` 透传）；sandbox `/exec` 在容器内启用私有工作区（`PTH_EXEC_PRIVATE_ROOT=/srv/workload`）：执行前拷贝任务 cwd、chown workload、执行后回拷，workload 不直接接触共享卷。残留：Python/Bash REPL 尚未绑定任务工作区 broker（依赖 0700 权限拒绝读共享卷）；容器内跨租户负向测试待 clean-build 环境补跑。
+
 ### P0-4：kernel 没有安全租约，TTL 还会重分配活跃 REPL
 
 kernel ID 是递增、可预测的 `py-N` / `sh-N`；`execute/reset/snapshot/release` 只按 ID 操作，既不验证 owner，也不检查当前租约。Compose 默认开启 30 分钟 entry TTL；sweep 会 dispose 一个仍被持有的 entry 并直接标记为空闲，旧客户端持有的 ID 不会失效，新客户端可获得同一个 ID。
@@ -82,6 +84,8 @@ kernel ID 是递增、可预测的 `py-N` / `sh-N`；`execute/reset/snapshot/rel
 
 **处置**：`acquire` 返回高熵、一次性的 lease capability；所有操作校验 lease、tenant、generation 与 in-flight 状态。TTL 到期时原子失效旧租约、终止并回收 entry，绝不能仅置为 idle。
 
+**状态（2026-08-15）**：已处置。新增 `kernel-lease.ts`：acquire 返回 UUID lease；execute/reset/snapshot/release 全部校验 lease id+generation；release 同 lease 幂等、旧 lease 拒绝；TTL 到期 `active → cancelling → disposed` 并移出池，绝不复用旧租约；HTTP 协议退役 `kernelId`（旧字段 400）；SandboxKernel 客户端只持有 opaque lease。测试：`sandbox-kernel-host.test.ts`（lease 协议、TTL 竞态、stale lease）、`sandbox-kernel.test.ts`、`sandbox-kernel-abort.test.ts`。
+
 ### P0-5：当前 sandbox 镜像不能从干净源码可靠构建
 
 builder 只复制 `tsconfig.json`，但 pth-memory 和 pth-sandbox 的 tsconfig 都继承根 `tsconfig.base.json`。构建阶段会因缺失该文件而报 TypeScript `TS5083`。此外 runtime 复制 framework `dist`，但 builder 没有构建 framework；它还复制了已迁移、当前不存在的 `extensions/mailbox` 目录。
@@ -93,6 +97,8 @@ builder 只复制 `tsconfig.json`，但 pth-memory 和 pth-sandbox 的 tsconfig 
 - `packages/pth-sandbox/tsconfig.json:2`
 
 **处置**：复制根 base tsconfig；明确 workspace 构建顺序或使用 root build；在 CI 中执行无缓存 Docker build，禁止依赖开发机残留 `dist`。
+
+**状态（2026-08-15）**：Dockerfile 已修（builder 复制 `tsconfig.base.json`，构建顺序 pth-memory → pth-sandbox → shared → infra → framework）；workload 用户与私有工作区根已加入。**未验证**：本机无缓存 `docker build` 因 registry TLS 超时（node:22-slim 拉取失败）未能跑通——需网络可用后重试，不可视为已闭合。
 
 ## P1：修复 P0 后仍须解决的高风险问题
 
