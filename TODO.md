@@ -53,7 +53,7 @@
 - [ ] 核心剩余账本：D1（护栏进 scorecard）· D3（T9 PTL 交接 flow）· D5（失败任务回收）· E1（N13 路径重建）· C1（21 子任务）· D4 · N10（7/28）· N12 二期
 - [ ] 记忆侧账本（B3/B5/N1b/N7）→ **归位 packages/pth-memory/TODO.md**
 - [ ] 沙箱侧账本（B7/N5 资源环等）→ **归位 packages/pth-sandbox/TODO.md**
-- [ ] E2/N11 设计储备：拆分完成后在主 TODO 单独评估保留/砍掉
+- [x] 逐包评估（D 方案，8/15）：E2/N11 保留为**设计储备不排期**；B7/N5 → sandbox TODO；B3/B5/N1b/N7 + B4 Phase 2–4 → memory TODO；主 TODO 不再承载
 
 ## 调试用例 worker（2026-08-13 用户提议——自修正闭环的验证环节）未启动
 - 角色：debug-case-writer（parent=tester 分化——测试族内特化）

@@ -14,7 +14,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
+    setupFiles: ["./test/setup.ts"],
+    include: ["test/**/*.test.ts", "test/**/*.test.tsx", "packages/*/test/**/*.test.ts"],
     testTimeout: 90_000,
     // testcontainers 并发资源竞争（Docker Desktop 多 postgres 并发启动超时）——
     // 实测 maxWorkers=4 稳定全绿（1390 tests）；并发过高时 testcontainers 偶发启动失败
