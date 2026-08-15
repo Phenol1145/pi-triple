@@ -28,11 +28,13 @@
 
 ## P0：在途改动收口
 
-- [ ] 裁决并提交（或明确还原）`deploy/Dockerfile.dev` 的 root 运行说明注释
-- [ ] 裁决并提交（或明确还原）`deploy/docker-compose.yaml` 的 `dev-home` 卷清理
-- [ ] 裁决 `deploy/pth.deployment.json` 的 postgres/redis 调优、env 补全、dev/jupyter 服务——与 compose 逐项核对后单独提交
-- [ ] 纳管 `docs/superpowers/explorations/2026-08-15-pth-sandbox-security-audit.md`（当前未跟踪）——它是 P1 的输入，须先入库
-- [ ] `git status` 只剩 P1+ 明确允许的改动
+> P0 裁决（2026-08-15）：`pth.deployment.json` 维持"四服务生产拓扑的事实源"（dev/jupyter 留在 compose）；postgres 内存限额 512M→4G，修复 `shared_buffers=2GB` 起不来的矛盾。
+
+- [x] 裁决并提交（或明确还原）`deploy/Dockerfile.dev` 的 root 运行说明注释 → `17a98a5`
+- [x] 裁决并提交（或明确还原）`deploy/docker-compose.yaml` 的 `dev-home` 卷清理 → `6dbea6c`（同提交修正 postgres 限额）
+- [x] 裁决 `deploy/pth.deployment.json` 的 postgres/redis 调优、env 补全、dev/jupyter 服务——与 compose 逐项核对后单独提交 → `2f97600`
+- [x] 纳管 `docs/superpowers/explorations/2026-08-15-pth-sandbox-security-audit.md`（当前未跟踪）——它是 P1 的输入，须先入库 → `4b86787`
+- [x] `git status` 只剩 P1+ 明确允许的改动
 
 ## P1：Sandbox P0 安全整改
 
