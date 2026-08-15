@@ -59,8 +59,8 @@
 
 ### P3.1 知识层根基
 - [x] B4 / N2 Phase 2：skills.get 真实接线 + Level 0 清单 / Level 1 全文两级检索（`packages/pth-memory/src/skills.ts` + capability 注入 `skills.list/get`）
-- [ ] B4 / N2 Phase 3：memory-keeper 专项维护面 + 不可变语义 + controller:adversarial 审核
-- [ ] B4 / N2 Phase 4：SKILL.md → skill 条目映射定稿
+- [ ] B4 / N2 Phase 3：memory-keeper 专项维护面 + 不可变语义 + controller:adversarial 审核（已落地核心：`skills.maintain` 按角色注入、skill 写后冻结；待建：staged 审核流/审核角色/PTC entries）
+- [x] B4 / N2 Phase 4：SKILL.md → skill 条目映射定稿（`parseSkillMarkdown` + 往返测试）
 
 ### P3.2 观测与路径还原（可合批：共用轨迹数据）
 - [ ] D1：护栏进 scorecard 观测
