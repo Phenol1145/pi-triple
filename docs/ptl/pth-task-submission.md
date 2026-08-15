@@ -19,7 +19,7 @@ curl GET /tasks/:id               ←──  任务详情（含 outputRef 结果
 
 | 通道 | 提交物 | 执行方式 | 结果 |
 |------|--------|----------|------|
-| **任务池**（`hub kernel tasks`） | 任务描述（文本/代码/模板参数） | batch 池化 worker（7 角色）认领执行，无人值守 | tasks 表持久（completed/rejected） |
+| **任务池**（`hub kernel tasks`） | 任务描述（文本/代码/模板参数） | batch 池化 worker（origin + 13 内置叶子角色）认领执行，无人值守 | tasks 表持久（completed/rejected） |
 | **程序桥**（`hub submit`） | agent 程序目录（manifest + skills + systemPrompt） | AgentEngine 一次性 session（流式） | SSE 流直推，session 即销毁 |
 
 ## 2. 前置配置
