@@ -75,7 +75,7 @@
 ### P3.4 并行/顺手批次
 - [x] B7：N5 资源环采集（`obs.resource()` 聚合 container+PG activity/database/slow+storage+batches；`pgStat` 新增 slow 视图）
 - [ ] C1：N10 剩余 21 子任务持续派发
-- [ ] D4：role-doc 文案三要素对齐
+- [x] D4：role-doc 文案三要素对齐（`buildRoleDoc` 生成 T8 场景锚点三要素段——重启注入全量 role-doc；覆盖测试）
 - [x] B1：N7 归档定期 trigger 接线（`memory-sweep-trigger.ts`：每天巡检 memory-keeper → memory-admin-proposal；`PTH_MEMORY_SWEEP_SECONDS=0` 禁用）
 
 ### P3.5 LLM→工具调用链审计遗留（根 TODO）

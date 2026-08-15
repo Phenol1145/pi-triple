@@ -25,6 +25,7 @@
 - ✅ H5 `state.recall*` 绕过可见性：召回面接入会话空间过滤
 - ✅ H6 `memory.update` 字段白名单（拒绝 meta 提权）；governance 层 official 条目内容冻结
 - ✅ H7 伪造系统恢复源：`worker-role` / `space-reg` / `worker-index` 归入 prompt 层（worker 拒写）
+- ✅ 实机补漏（C1 v3 planner 崩溃）：agent-loop 全部 prompt SQL 指引与 eager 查询补 `meta` 列（H3 fail-closed 下缺 meta 必拒）；环境预置聚合改 JS 侧统计
 
 ### 工具执行面
 - ✅ HIGH-1 bash 失败回填 `error: unknown`：stderr/error 真实写回 tool 消息
