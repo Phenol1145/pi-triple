@@ -1,6 +1,6 @@
 # PTH 使用说明（PTL 侧用户手册）
 
-> 适用对象：PTL（Pi-Triple 运维框架）侧用户——通过 `ptl hub` 与 REST API 使用 PTH 任务池。
+> 适用对象：PTL 平台用户——通过 **PTH CLI**（`pth submit/status/wait`）调用 PTH；`ptl hub` 与 REST API 为兼容通道。
 > 相关文档：`docs/pth/orchestration.md`（编排分工）、`docs/pth/agent-construction.md`（构建体系）。
 > 文中 `$PTH_API` 为 PTH 网关地址占位符（示例用 `http://localhost:8787`——请替换为你的网关地址；`ptl hub` 命令自动使用已配置的网关）。
 
@@ -8,9 +8,10 @@
 
 ## 0. 一分钟认识 PTH
 
-PTH（Pi-Triple-Heavy）= **服务器端任务内核**：任务池 → 角色路由 → worker 执行 → 产物提交 → 应用。
+PTH（Pi-Triple-Heavy）= **自耦自然语言解释器**：输入自然语言意图，直接产出执行结果（解释即执行）。
+任务池 → 角色路由 → worker 执行 → 产物提交 → 应用，是它解释执行的内部机制。
 
-对 PTL 侧用户，PTH 是一台**异步任务机器**：你提交任务（指定角色或标签）→ PTH 自动路由到合适角色、
+从调用方视角，PTH 像一个**异步解释执行器**：你提交自然语言任务（可指定角色或标签）→ PTH 自动路由到合适角色、
 分配 worker 执行 → 你查询状态 / 收取产物。角色可以**分化生长**（树状谱系），事件可以**链式触发**下游任务。
 
 核心概念：
@@ -255,7 +256,7 @@ task.failed  任务失败（ok=false，detail=错误摘要）
 ### 2.5 与 flow 的分工（编排分工）
 
 - **trigger**：**系统级**链式编排——依据运行时事件（task.done 等）自动发下游任务，在任务池内部闭环
-- **flow**：**用户级**工作流编排——交互层（PTL）声明 stages，发布时 `payload.flow` 显式指定角色路由
+- **flow**：**用户级**工作流编排——PTL 侧声明 stages，发布时 `payload.flow` 显式指定角色路由
 - 二者互补：flow 定"这次任务怎么走"，trigger 定"系统事件发生后自动做什么"
 - 详见 `docs/pth/orchestration.md`（编排分工）与 `docs/pth/agent-construction.md`（构建体系）
 

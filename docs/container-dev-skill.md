@@ -37,7 +37,7 @@
 
 ### 1.1 总览
 
-dev 容器 = **PTL 工具容器**（2026-08-12 瘦身版——G 阶段），承载外接工具（agent-reach/yt-dlp/bfc/chatgpt-share）。
+dev 容器 = **PTL 的外接工具容器**（2026-08-12 瘦身版——G 阶段；不属于 PTL 平台内的 pi 环境），承载外接工具（agent-reach/yt-dlp/bfc/chatgpt-share）。
 **jupyter 已独立为 compose `jupyter` 服务**（官方 minimal-notebook——数据科学工作台单独跑）。入口：
 
 ```bash

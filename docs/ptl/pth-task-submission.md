@@ -1,11 +1,11 @@
 # PTL→PTH 任务提交指南
 
-> 交互层（PTL 会话）如何把任务交给 PTH 任务内核执行——四种提交形态、生命周期、结果取回。
+> 从 PTL（基于 pi 的多环境共存平台）如何把任务交给 PTH（自耦自然语言解释器）执行——四种提交形态、生命周期、结果取回。规范接口为 PTH CLI；下文 `ptl hub`/REST 为兼容通道。
 
 ## 1. 总览
 
 ```
-PTL 会话（本地）                      PTH（远端服务器）
+PTL（多环境共存平台）              PTH（自耦自然语言解释器）
 ──────────────────                   ──────────────────────────────
 ptl hub kernel tasks add "描述"  ──→  tasks 表（pg）→ batch worker claim 执行
 ptl hub kernel tasks add --template ─→  模板展开（templates 库）→ 同上

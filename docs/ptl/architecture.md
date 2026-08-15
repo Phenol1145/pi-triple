@@ -1,18 +1,18 @@
 # PTL（Pi-Triple-Lite）架构
 
-> PTL（Pi-Triple-Lite）文档 — 轻量开发/调试工具链（v0.6+ 形态）
+> PTL（Pi-Triple-Lite）文档 — 基于 pi 的多环境共存平台（v0.6+ 形态）
 > 双产品全景见顶层 [`ARCHITECTURE.md`](../../ARCHITECTURE.md)。
 
 ## 定位
 
-PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己的 agent runtime，不跑服务进程——只做一件事：**让多个 pi 进程以模板隔离的方式，在 tmux 里高效并行**，并作为 **PTH（服务器端任务内核）的运维/交互前端**。
+PTL 是**基于 pi 的多环境共存平台**。不维护自己的 agent runtime——让多个 pi 进程以模板隔离的方式在 tmux 里高效并行、共存与切换。PTH 不是 PTL 的后端，而是可通过 **PTH CLI** 调用的独立产品（自耦自然语言解释器）。
 
 **核心原则**：
 - **pi 是引擎，PTL 是壳**：启动真正的 pi 进程（原生 TUI），不多包一层 API 把 pi 变成 SDK
 - **模板 = agent 配置蓝图**：每个模板独立配置目录（extensions/skills/settings/models）、session 目录、workspace
 - **tmux 是运行时载体**：多会话复用同一终端，后台保活，`switch-client` 瞬移切换
 - **共享层 = 不复制代码**：共享扩展/技能/skill 逐项 symlink 注入模板目录，一处更新全局可见
-- **PTH 双桥 = 交互层延伸**：PTL 会话即交互层——任务发布/容器运维不离开 CLI
+- **PTH CLI = 外部能力调用**：需要解释执行自然语言任务时通过 PTH CLI 调用 PTH，不把 PTH 当作 PTL 的交互层延伸
 
 ## 架构总览
 
@@ -42,9 +42,9 @@ PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己
 │  ├── data/shared/             共享层（skills/扩展——symlink 源）   │
 │  └── data/mailbox/<uuid>/     邮箱（agent 间通信）                │
 └──────────────────────────────────────────────────────────────────┘
-          ↓ PTH 双桥（HTTP :3000）
+          ↓ PTH CLI（当前实现经 HTTP 兼容通道）
 ┌──────────────────────────────────────────────────────────────────┐
-│  PTH（Pi-Triple-Heavy）服务器端任务内核                           │
+│  PTH（Pi-Triple-Heavy）——自耦自然语言解释器                       │
 │  Fastify 网关 + kernel 任务池（13 内置角色·四族正交路由）+ sandbox 隔离执行 │
 │  容器化：pth.deployment.json 声明式部署（v0.7）                   │
 └──────────────────────────────────────────────────────────────────┘
@@ -68,8 +68,8 @@ PTL 是**以 pi 原生 TUI 为核心的本地开发工作台**。不维护自己
 | **agent** | `ptl agent run/clean` | 一次性 agent 实例 |
 | **运维** | `ptl onboard/doctor/status/install/remove` | 导引/诊断/扩展 |
 | | `ptl shared status/init` | 共享层操作 |
-| **PTH 桥** | `ptl hub submit/run/dev/programs` | agent 程序提交/远端运行 |
-| | `ptl hub kernel tasks/batch/status` | PTH 任务发布/batch 控制 |
+| **PTH 调用（兼容通道）** | `ptl hub submit/run/dev/programs` | agent 程序提交/远端运行（HTTP 桥兼容） |
+| | `ptl hub kernel tasks/batch/status` | PTH 任务发布/batch 控制（HTTP 桥兼容） |
 | | `ptl hub observe/debug/request/respond` | 观测/调试/回退 |
 | | `ptl hub deploy/status/logs/upgrade/exec` | 容器运维（v0.7 新增） |
 
@@ -98,9 +98,9 @@ ptl                             → 上手指引
 - **registry**：`data/pi-config/*/registry.json` 登记会话（templateId/model/状态机 ●运行/○空壳/×孤儿）
 - **纸带（session 族）**：pi 会话记录（tapes）——fork/clone/transfer/branch/tree/resume 操作——`session/pi-scan.ts` 扫描恢复
 
-## PTL→PTH 双桥
+## 调用 PTH 的通道
 
-PTL 作为交互层，经 HTTP 访问 PTH gateway（`/api/v1/*`——Bearer 认证）：
+规范接口是 **PTH CLI**（`pth submit/status/wait`）。当前 `ptl hub` 族仍经 HTTP 访问 PTH gateway（`/api/v1/*`——Bearer 认证），作为兼容通道保留：
 
 | 通道 | 命令 | 形态 |
 |------|------|------|
@@ -115,6 +115,8 @@ PTL 作为交互层，经 HTTP 访问 PTH gateway（`/api/v1/*`——Bearer 认�
 
 ## 容器抽象（v0.7）
 
+> 对 PTH 部署的外部运维能力（兼容通道）——不属于 PTL 平台内的 pi 环境。
+
 ```
 pth.deployment.json（声明式部署描述——事实源）
   ├─ 四服务拓扑（pi-platform/sandbox/postgres/redis）
@@ -124,7 +126,7 @@ pth.deployment.json（声明式部署描述——事实源）
 docker compose 渲染（已实现） | podman/k8s（扩展点）
 ```
 
-代码：`packages/framework/src/containers/`（PTL 侧运维库——不依赖 PTH 服务器端代码）。渲染产物 `pth.deploy/`（gitignore）。
+代码：`packages/framework/src/containers/`（PTL 侧运维库——不依赖 PTH 内部实现）。渲染产物 `pth.deploy/`（gitignore）。
 
 ## 归档物（archive/）
 
@@ -153,8 +155,8 @@ PTL 瘦身（2026-08-09）归档的四目录——保留代码不编译，恢复
 
 ## 与 PTH 的关系（双产品）
 
-- **PTL（Lite）= 交互层**：多 pi 并行工作台 + PTH 运维前端——本仓库 `packages/framework` + `packages/shared`
-- **PTH（Heavy）= 执行层**：服务器端任务内核——`src/pth/`（网关/kernel/sandbox）+ `src/sandbox/`
-- 边界：PTL 不跑服务进程；PTH 不占本地终端——HTTP/SSE/WebSocket 契约衔接
+- **PTL = 基于 pi 的多环境共存平台**：多 pi 环境并行共存、模板隔离管理——本仓库 `packages/framework` + `packages/shared`
+- **PTH = 自耦自然语言解释器**：自然语言意图 → 执行结果（解释即执行）——`src/pth/`（网关/kernel/sandbox）+ `src/sandbox/`
+- 二者没有前后端关系：PTL 通过 **PTH CLI** 调用 PTH；HTTP/SSE/WebSocket 仅为兼容通道
 
 相关：`docs/ptl/authoring.md`（模板编写）· `docs/ptl/pth-task-submission.md`（任务提交）· `docs/pth/deployment.md`（容器部署）。

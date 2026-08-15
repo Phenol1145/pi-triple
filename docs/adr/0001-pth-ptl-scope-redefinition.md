@@ -16,4 +16,4 @@
 - `CONTEXT.md` 与总览文档（`ARCHITECTURE.md`、`README.md`、`docs/README.md`）的定位表述以本决定为准。
 - `docs/superpowers/plans/` 下的模块化迁移计划保持参考计划状态；任何实施前须按新范围重新评估。
 - 代码现状仍以 HTTP 桥与 `pth` server 为主，PTH CLI 目前是 HTTP 网关的封装；CLI 作为规范接口、无容器版本与 PTH 专属前端均为待落地方向。
-- `docs/ptl/`、`docs/pth/` 子文档中的旧"交互层/执行层"表述留待各自文档的后续修订，不以本决定为一次全部重写。
+- `docs/ptl/`、`docs/pth/` 子文档已同步新定位（2026-08-15 同日修订）；`docs/superpowers/` 下的历史 plans/specs/explorations 保留原表述，作为历史记录。
