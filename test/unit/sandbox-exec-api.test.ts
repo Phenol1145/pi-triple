@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildExecApp } from "../../src/sandbox/exec-api.js";
+import { buildExecApp } from "@away_from/pth-sandbox";
 import type { FastifyInstance } from "fastify";
 
 /**

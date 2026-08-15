@@ -4,9 +4,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
-      // 测试始终跑源码（无需先 build）：@away_from/shared 的 exports.default 指向 dist
+      // 测试始终跑源码（无需先 build）：包 exports.default 指向 dist
       "@away_from/shared": fileURLToPath(new URL("./packages/shared/src/index.ts", import.meta.url)),
       "@away_from/infra": fileURLToPath(new URL("./packages/infra/src/index.ts", import.meta.url)),
+      "@away_from/pth-memory": fileURLToPath(new URL("./packages/pth-memory/src/index.ts", import.meta.url)),
+      "@away_from/pth-sandbox": fileURLToPath(new URL("./packages/pth-sandbox/src/index.ts", import.meta.url)),
     },
   },
   test: {

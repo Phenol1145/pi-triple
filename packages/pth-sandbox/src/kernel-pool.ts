@@ -10,9 +10,9 @@
  * 安全边界：本池不注入任何业务密钥（协议层无 env 字段——敏感信息约束 §4.5）。
  */
 
-import { PyKernel } from "../pth/impls/kernels/py-kernel.js";
-import { BashKernel } from "../pth/impls/kernels/bash-kernel.js";
-import type { ExecuteOptions, Interpreter, InterpreterResult, InterpreterSnapshot } from "../pth/kernel/interpreter/types.js";
+import { PyKernel } from "./py-kernel.js";
+import { BashKernel } from "./bash-kernel.js";
+import type { ExecuteOptions, Interpreter, InterpreterResult, InterpreterSnapshot } from "./kernel/interpreter/types.js";
 
 export type KernelLang = "python" | "bash";
 

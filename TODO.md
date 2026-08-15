@@ -48,10 +48,12 @@
 - [x] B4-2 已裁 A（8/15）：首批 3 条 seed（developer/scout/memory-keeper）；B4-3 已裁 C（两级检索）
 - [x] D2 已裁并落地（8/15 custom）：不豁免治理族——negative-loop 阈值 5→15（`PTH_GUARD_NEGATIVE_LIMIT`）
 - [x] B4 / N2 Phase 1（8/15）：四段式 skill 格式（`skill-format.ts`）+ 3 条角色 SOP 种子注入（developer/scout/memory-keeper）
-- [ ] B4 / N2 Phase 2–4：skills.get 真实接线 + 两级检索；memory-keeper 专项维护面 + 不可变语义 + 对抗性审核；0.13 转化落点
-- [ ] 剩余账本：D1（护栏进 scorecard）· B3（N4 生态转化）· B5（N1b 百科矛盾检测）· D3（T9 PTL 交接 flow）· D5（失败任务回收机制）· E1（N13 路径重建）· B7（N5 资源环）· C1（21 子任务）· D4 · B1 · E2
-- [ ] N10 agentic 测试集：7/28，21 子任务待派发
-- [ ] N12 二期：护栏命中/误杀进 scorecard · JIT 调护栏参数
+- [x] 模块拆分（8/15）：`packages/pth-memory`（记忆域）· `packages/pth-sandbox`（沙箱域含内核契约/运行时）——见 docs/pth/split-design.md
+- [ ] B4 / N2 Phase 2–4 → **归位 packages/pth-memory/TODO.md**
+- [ ] 核心剩余账本：D1（护栏进 scorecard）· D3（T9 PTL 交接 flow）· D5（失败任务回收）· E1（N13 路径重建）· C1（21 子任务）· D4 · N10（7/28）· N12 二期
+- [ ] 记忆侧账本（B3/B5/N1b/N7）→ **归位 packages/pth-memory/TODO.md**
+- [ ] 沙箱侧账本（B7/N5 资源环等）→ **归位 packages/pth-sandbox/TODO.md**
+- [ ] E2/N11 设计储备：拆分完成后在主 TODO 单独评估保留/砍掉
 
 ## 调试用例 worker（2026-08-13 用户提议——自修正闭环的验证环节）未启动
 - 角色：debug-case-writer（parent=tester 分化——测试族内特化）
@@ -63,12 +65,14 @@
 - 验收：生成的用例能复现修复前 bug（修复前 FAIL）+ 修复后 PASS
 
 ## LLM→工具调用→执行核 链路筛查遗留（2026-08-15，报告见 docs/superpowers/explorations/2026-08-15-llm-call-chain-audit.md）
-- [ ] HIGH：Python 记忆桥 space 盖章改为请求层带外注入（程序不可伪造）
+**核心侧（留主 TODO）**：
 - [ ] HIGH：ts-interpreter 尾表达式/autoExport 插入改为 noise-aware（字符串含 return/; 被切坏）
-- [ ] HIGH（部分）：web.fetchText DNS rebinding 防护——与出站网络策略协同（字面量防护已上）
 - [ ] MEDIUM：非 ASP 模式工具 schema 与执行面同源（剔除 ASP-only 声明）
 - [ ] MEDIUM：ASP 内联工具（asp_index/memory_index/cache_*）统一进 try/catch 错误回填
 - [ ] MEDIUM：surface 解构默认值/模板插值/as 断言漏检
-- [ ] MEDIUM：ext.syncIndex 失效 · memoryScope own 读侧过滤 · manage.scheme.publish id 校验
-- [ ] MEDIUM：web.fetchText 改流式限量（下载完再判超限 → 流式封顶）
-- [ ] LOW：别名门控提前 · toolsDescription done 去重 · readSource/toolstore symlink 防线 · 命名一致性
+- [ ] MEDIUM：ext.syncIndex 失效 · manage.scheme.publish id 校验
+- [ ] LOW：别名门控提前 · toolsDescription done 去重 · 命名一致性
+
+**记忆侧**（→ packages/pth-memory/TODO.md）：H3 谓词下推 · H5 统一入口 · H6 store 纵深 · H7 来源校验 · memoryScope own 读侧 · readSource/toolstore symlink（与沙箱协同）
+
+**沙箱侧**（→ packages/pth-sandbox/TODO.md）：web.fetchText DNS rebinding/流式限量 · N5 资源环 L3 · 编译核/gdb 容量复核 · sandbox exec-api 健康观测

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { KernelPool } from "../../src/sandbox/kernel-pool.js";
-import { buildKernelHostApp } from "../../src/sandbox/kernel-host.js";
+import { KernelPool } from "@away_from/pth-sandbox";
+import { buildKernelHostApp } from "@away_from/pth-sandbox";
 import type { FastifyInstance } from "fastify";
 
 /**
@@ -162,8 +162,8 @@ describe("kernel host 协议（buildKernelHostApp）", () => {
 describe("sandbox main 组合形态（exec + kernel 同端口共存）", () => {
   it("同一 app 挂 /exec 与 /kernel/* 路由", async () => {
     process.env.SANDBOX_SHARED_SECRET = SECRET;
-    const { buildExecApp } = await import("../../src/sandbox/exec-api.js");
-    const { registerKernelHost } = await import("../../src/sandbox/kernel-host.js");
+    const { buildExecApp } = await import("@away_from/pth-sandbox");
+    const { registerKernelHost } = await import("@away_from/pth-sandbox");
     const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-combo-"));
     const app = buildExecApp({ workspacesRoot: wsRoot });
     registerKernelHost(app, {});
@@ -185,14 +185,14 @@ describe("sandbox main 组合形态（exec + kernel 同端口共存）", () => {
 
 describe("kernel-pool 兜底（acquire 排队超时 + 条目 TTL 回收）", () => {
   it("池满 acquire 排队 → 超时拒绝（不无限卡）", async () => {
-    const { KernelPool } = await import("../../src/sandbox/kernel-pool.js");
+    const { KernelPool } = await import("@away_from/pth-sandbox");
     const pool = new KernelPool({ lang: "python", max: 1, acquireTimeoutMs: 100, entryTtlMsMs: 0 } as never);
     await pool.acquire();  // 占满
     await expect(pool.acquire()).rejects.toThrow(/pool exhausted/);
   });
 
   it("release 唤醒排队者（清 timer）", async () => {
-    const { KernelPool } = await import("../../src/sandbox/kernel-pool.js");
+    const { KernelPool } = await import("@away_from/pth-sandbox");
     const pool = new KernelPool({ lang: "python", max: 1, acquireTimeoutMs: 5000, entryTtlMsMs: 0 } as never);
     const id1 = await pool.acquire();
     const p2 = pool.acquire();
@@ -201,7 +201,7 @@ describe("kernel-pool 兜底（acquire 排队超时 + 条目 TTL 回收）", () 
   });
 
   it("条目 TTL：inUse 超时强制回收（崩溃泄漏兜底）", async () => {
-    const { KernelPool } = await import("../../src/sandbox/kernel-pool.js");
+    const { KernelPool } = await import("@away_from/pth-sandbox");
     const pool = new KernelPool({ lang: "python", max: 2, acquireTimeoutMs: 5000, entryTtlMsMs: 100 } as never);
     await pool.acquire();  // entry1 inUse
     // 等待 TTL 扫描（sweep 间隔 = min(ttl, 60s) = 100ms）

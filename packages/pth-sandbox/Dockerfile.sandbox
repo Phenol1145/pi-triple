@@ -9,7 +9,8 @@ COPY packages/ ./packages/
 RUN npm ci
 
 COPY src/ ./src/
-RUN npx tsc
+# 2026-08-15 拆分：沙箱运行时 = pth-memory + pth-sandbox 两包（内核契约/宿主在沙箱包内）
+RUN npx tsc -p packages/pth-memory && npx tsc -p packages/pth-sandbox
 
 # ---- Runtime stage ----
 # sandbox：隔离命令执行容器。安全边界：
@@ -41,7 +42,8 @@ COPY packages/ ./packages/
 # 无需额外 npm i。
 RUN npm ci --omit=dev
 
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/packages/pth-memory/dist /app/packages/pth-memory/dist
+COPY --from=builder /app/packages/pth-sandbox/dist /app/packages/pth-sandbox/dist
 # PTL（packages/framework——仓库拆分后 pit.js 归属 framework 包）
 COPY --from=builder /app/packages/framework/dist /app/packages/framework/dist
 
@@ -80,4 +82,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD curl -f http://localhost:8080/health || exit 1
 
-CMD ["node", "dist/sandbox/main.js"]
+CMD ["node", "packages/pth-sandbox/dist/main.js"]
