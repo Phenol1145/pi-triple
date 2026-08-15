@@ -74,7 +74,7 @@
 
 ### P3.4 并行/顺手批次
 - [x] B7：N5 资源环采集（`obs.resource()` 聚合 container+PG activity/database/slow+storage+batches；`pgStat` 新增 slow 视图）
-- [ ] C1：N10 剩余 21 子任务持续派发
+- [x] C1：N10 agentic 测试集完成——sensor:worker-opt 轨迹分析 → v3 重规划（现行 22 角色×28 子任务，`agentic-test-suite-v3.md`）→ 试点 5 条 → 余 20 条全派发，28/28 完成（T22/T24 经 D5 回池重试后完成）
 - [x] D4：role-doc 文案三要素对齐（`buildRoleDoc` 生成 T8 场景锚点三要素段——重启注入全量 role-doc；覆盖测试）
 - [x] B1：N7 归档定期 trigger 接线（`memory-sweep-trigger.ts`：每天巡检 memory-keeper → memory-admin-proposal；`PTH_MEMORY_SWEEP_SECONDS=0` 禁用）
 
