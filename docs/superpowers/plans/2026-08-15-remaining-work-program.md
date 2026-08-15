@@ -42,7 +42,7 @@
 > 设计参考：`docs/superpowers/plans/2026-08-15-pth-execution-isolation.md`（Reference-only——先按 PTH 新范围评审其任务切片，再转为可执行任务，不得原样照搬）。
 
 - [x] **P0-1 默认密钥与公开入口**（`e0df40d` + `e89ae44`）：移除 `sandbox-dev-secret` 默认值（compose `:?` 强校验）；`/api/v1/kernel/memory-bridge` 取消 auth 豁免，tenant/space 只能来自 Redis token 声明，body 自报 space 一律 400；sandbox 上游改用独立 `PTH_MEMORY_BRIDGE_TOKEN`，缺失 fail-closed 503
-- [ ] **P0-2 工作负载凭据暴露**：`/exec`、Python/Bash REPL 不传完整 `process.env`，改为严格 allowlist；短期、单用途、绑定任务/租户的 capability；工作负载与 API 不同 UID，应用根只读
+- [x] **P0-2 工作负载凭据暴露**（`a12b4f2` + `7dbcb9e`）：/exec、Python/Bash REPL env 改 allowlist，控制器凭据强制剔除；Dockerfile 新增 workload UID/GID 2001（控制器 root 仅 setuid，/app root 只读）；loopback 记忆桥免密钥且 body.space 被剥除。残留：grant 化单用途 capability 并入 P0-4
 - [ ] **P0-3 工作区租户隔离**：每任务/租户只挂载对应工作区子树（独立容器或命名挂载），`validateCwd` 不作为授权边界；补充跨租户读写负向测试
 - [ ] **P0-4 kernel lease**：`acquire` 返回高熵一次性 lease（校验 lease/tenant/generation/in-flight）；TTL 到期原子失效并回收，禁止仅置 idle；补可预测 ID 重放/过期/并发执行负向测试
 - [ ] 干净环境构建 sandbox 镜像（不依赖本地 `dist`），compose 全拓扑启动 + health 通过

@@ -51,6 +51,8 @@
 
 **处置**：工作负载使用严格环境白名单；不向其暴露服务身份凭据；改为短期、单用途、绑定任务和租户的 capability。服务 API 与工作负载应使用不同 UID 或不同容器，并将应用根文件系统设为只读（必要写入使用专用挂载）。
 
+**状态（2026-08-15）**：已处置核心项。新增 `workload/environment.ts`：/exec、PyKernel、BashKernel 一律 allowlist 构造 env，`SANDBOX_SHARED_SECRET`/`PTH_MEMORY_BRIDGE_TOKEN`/数据库/LLM key 强制剔除；Dockerfile 创建 workload UID/GID 2001，控制器 root 仅用于 setuid，/app 归 root 只读，工作区暂 0777（P0-3 收窄）。sandbox 内 loopback 记忆桥免共享密钥且 body.space 被剥除，上游由 controller 持有的 bridge token 鉴权。残留：grant 化的单用途 capability 属 P0-4 lease 一并落地；sandbox 镜像干净构建因 registry TLS 超时未能在本机验证（改动已过 `docker compose config` 与全量测试）。
+
 ### P0-3：共享工作区不是租户隔离
 
 PTH 和 sandbox 同时以同一用户挂载全局 `workspaces` 卷。`validateCwd()` 仅确保启动目录位于该卷下，不能限制 `bash -lc` 在运行后访问绝对路径、切换目录或读取其他租户子树。
