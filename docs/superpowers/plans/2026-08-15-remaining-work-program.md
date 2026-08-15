@@ -73,7 +73,7 @@
 - [x] D5：失败任务回收机制（软终止/警告闭合 → 非终态 requeue 回池；claims_count 兜底）
 
 ### P3.4 并行/顺手批次
-- [ ] B7：N5 资源环采集
+- [x] B7：N5 资源环采集（`obs.resource()` 聚合 container+PG activity/database/slow+storage+batches；`pgStat` 新增 slow 视图）
 - [ ] C1：N10 剩余 21 子任务持续派发
 - [ ] D4：role-doc 文案三要素对齐
 - [x] B1：N7 归档定期 trigger 接线（`memory-sweep-trigger.ts`：每天巡检 memory-keeper → memory-admin-proposal；`PTH_MEMORY_SWEEP_SECONDS=0` 禁用）
