@@ -45,10 +45,12 @@
 - [x] N12 护栏统一抽象一期（五计数器 → guardrails 注册表 + `PTH_GUARD_*`）
 - [x] 概念设计裁决收口：T1–T10（8/14）· W1–W7（8/15）全部裁决
 - [x] 角色谱系定型（8/15）：origin + 13 叶子四族（executor/explorer/governor/researcher）；sensor/controller 升为真实类型
-- [ ] B4 / N2 skill 记忆类型——附录 E 四阶段方案已定；待裁决 B4-2（首批种子 SOP）后按 Phase 实装
-- [ ] 剩余账本：D1（护栏进 scorecard）· B3（N4 生态转化）· B5（N1b 百科矛盾检测）· D3（T9 PTL 交接 flow）· E1（N13 路径重建）· B7（N5 资源环）· C1（21 子任务）· D4 · B1 · D2 · E2
+- [x] B4-2 已裁 A（8/15）：首批 3 条 seed（developer/scout/memory-keeper）；B4-3 已裁 C（两级检索）
+- [x] D2 已裁并落地（8/15 custom）：不豁免治理族——negative-loop 阈值 5→15（`PTH_GUARD_NEGATIVE_LIMIT`）
+- [ ] B4 / N2 skill 记忆类型——四阶段方案与裁决齐备，**Phase 1（skill 格式 + 3 条种子 SOP）待开工**
+- [ ] 剩余账本：D1（护栏进 scorecard）· B3（N4 生态转化）· B5（N1b 百科矛盾检测）· D3（T9 PTL 交接 flow）· D5（失败任务回收机制）· E1（N13 路径重建）· B7（N5 资源环）· C1（21 子任务）· D4 · B1 · E2
 - [ ] N10 agentic 测试集：7/28，21 子任务待派发
-- [ ] N12 二期：护栏命中/误杀进 scorecard · JIT 调护栏参数 · 治理族豁免裁决
+- [ ] N12 二期：护栏命中/误杀进 scorecard · JIT 调护栏参数
 
 ## 调试用例 worker（2026-08-13 用户提议——自修正闭环的验证环节）未启动
 - 角色：debug-case-writer（parent=tester 分化——测试族内特化）
