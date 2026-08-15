@@ -47,7 +47,8 @@
 - [x] 角色谱系定型（8/15）：origin + 13 叶子四族（executor/explorer/governor/researcher）；sensor/controller 升为真实类型
 - [x] B4-2 已裁 A（8/15）：首批 3 条 seed（developer/scout/memory-keeper）；B4-3 已裁 C（两级检索）
 - [x] D2 已裁并落地（8/15 custom）：不豁免治理族——negative-loop 阈值 5→15（`PTH_GUARD_NEGATIVE_LIMIT`）
-- [ ] B4 / N2 skill 记忆类型——四阶段方案与裁决齐备，**Phase 1（skill 格式 + 3 条种子 SOP）待开工**
+- [x] B4 / N2 Phase 1（8/15）：四段式 skill 格式（`skill-format.ts`）+ 3 条角色 SOP 种子注入（developer/scout/memory-keeper）
+- [ ] B4 / N2 Phase 2–4：skills.get 真实接线 + 两级检索；memory-keeper 专项维护面 + 不可变语义 + 对抗性审核；0.13 转化落点
 - [ ] 剩余账本：D1（护栏进 scorecard）· B3（N4 生态转化）· B5（N1b 百科矛盾检测）· D3（T9 PTL 交接 flow）· D5（失败任务回收机制）· E1（N13 路径重建）· B7（N5 资源环）· C1（21 子任务）· D4 · B1 · E2
 - [ ] N10 agentic 测试集：7/28，21 子任务待派发
 - [ ] N12 二期：护栏命中/误杀进 scorecard · JIT 调护栏参数
