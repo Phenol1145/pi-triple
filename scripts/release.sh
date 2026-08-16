@@ -109,7 +109,7 @@ NOTES_FOR_GH="$NOTES_FILE"
 if [ -n "$NOTES_FILE" ]; then
   [ -f "$NOTES_FILE" ] || fail "--notes 文件不存在: $NOTES_FILE"
   if grep -q '__TGZ_SHA256__' "$NOTES_FILE"; then
-    TMP_NOTES=$(mktemp /tmp/release-notes-XXXX.md)
+    TMP_NOTES=$(mktemp /tmp/release-notes.XXXXXX)
     sed "s/__TGZ_SHA256__/${TGZ_SHA}/g" "$NOTES_FILE" > "$TMP_NOTES"
     NOTES_FOR_GH="$TMP_NOTES"
     echo "  notes 含 __TGZ_SHA256__ 占位符——GH 正文临时替换为本包 sha256（仓库文件未改）"
