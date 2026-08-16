@@ -194,3 +194,4 @@ echo "  包:   $TGZ$([ -f "$TGZ" ] && echo "（$(du -h "$TGZ" | cut -f1)）")"
 [ "$DO_NPM" = "1" ] && echo "  npm:  6 包已发布"
 [ "$DO_DOCKER" = "1" ] && echo "  docker: 回归通过"
 [ "$DO_GH" = "1" ] && echo "  github: v${ROOT_VER} 已发布"
+exit 0
