@@ -11,8 +11,9 @@
 >   输出上限与进程组收割（P2-4）、KnowledgeBroker（P2-5）、liveness/readiness 拆分与
 >   `check-sandbox-env.sh` 路径修正（P2-6）。
 > - **本计划** 拥有 v2 P2 之外的全部沙箱安全/观测/可交付性长尾。
-> - 重叠点只在两个：S0-1（H8）与 v2 P2-5 同源、S1-5（degraded 观测）与 v2 P2-6 相邻；
+> - 语义重叠点只有两个：S0-1（H8）与 v2 P2-5 同源、S1-5（degraded 观测）与 v2 P2-6 相邻；
 >   先落的一侧为准，后落的一侧只做适配，不重复实现。
+>   此外 v2 P2-3/P2-4/P2-6 与本计划 S1-1/S1-4/S1-5 共享沙箱热点文件——归属见文末「并行执行约定」。
 
 ## 输入与基线（2026-08-16 实测）
 
@@ -270,10 +271,34 @@
 
 ---
 
-## 执行顺序建议
+## 并行执行约定（2026-08-16 用户裁决：fork 两侧并行）
 
-1. **S0**（安全纵深）→ 2. **S1**（观测与容量）→ 3. **S2**（可交付性与证据）。
-2. 与 v2 的并行关系：v2 P2 可独立开工；若 v2 P2-5 先落，S0-1 改为只做 kernel-mode 适配与
-   回归保护；若 S1-5 先落，v2 P2-6 的 readiness 直接消费 degraded 状态。
-3. 全部子项完成前，本文件是 sandbox 长尾的唯一执行入口；新增沙箱范围变更先更新本文件
-   或另立新计划。
+> 本计划与 `2026-08-15-pth-modularization-v2.md` 由 fork 出的两侧并行推进；
+> 形态 = **双翼交错、热点串行**。v2 侧持有热点文件期间，本计划 S1 系列一律等待。
+
+### 热点文件归属（串行区）
+
+| 文件 | 持有侧 | 本计划等待点 |
+|---|---|---|
+| `packages/pth-sandbox/src/kernel-host.ts`、`exec-api.ts`、`bash-kernel.ts`、`py-kernel.ts`、`compiled-kernel.ts`、`gdb-mi.ts`、`kernel-pool.ts` | v2 P2（P2-2~P2-6）完成前 | S1-1~S1-5 不得开工 |
+| `packages/pth-sandbox/test/sandbox-kernel-host.test.ts` 及上述包运行期测试 | 同上 | 同上 |
+| `package.json` | 轮流 | 只新增独立 script 键 `verify:sandbox-build`，与 v2 的 `check:pth-boundaries` 先后提交 |
+| memory-bridge 协议 | 本计划 S0-1 先行 | v2 P2-5 在其后只做 grant 适配 |
+
+### Wave 调度
+
+1. **Wave 1（并行翼）**：本计划 S0-2/S0-3/S0-4/S2-1/S2-2 ‖ v2 P0。
+2. **Wave 2（并行翼）**：本计划 S0-1 ‖ v2 P1。
+3. **Wave 3（热点串行）**：v2 P2-1~P2-7 独占沙箱热点文件并消费 S0-1；
+   P2-6 合并本计划 S1-5 的 degraded 状态输入；P2 完成后释放 →
+   本计划按 S1-1 → S1-2 → S1-3 → S1-4 顺序补齐。
+4. **Wave 4（收尾并行翼）**：本计划 S2-3/S2-4 ‖ v2 P3。
+5. **Wave 5**：本计划 S2-5 收账；两侧合入主线后跑联合全量门禁。
+
+### Fork 工程约束
+
+- 两侧使用独立 git worktree/branch；子项独立提交；Wave 结束合入共同主线再跑该 Wave 联合门禁。
+- 下一 Wave 开工前必须在主线确认对侧完成；热点文件未释放不得越界。
+- 生产/实机部署与 `docker compose` 冒烟只在合入主线后的 Wave 门禁执行，fork 分支上只跑
+  单测/全量 vitest/lint/build。
+- 全部子项完成前，本文件是 sandbox 长尾的唯一执行入口；新增沙箱范围变更先更新本文件或另立新计划。

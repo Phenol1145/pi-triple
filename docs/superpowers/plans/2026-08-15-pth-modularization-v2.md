@@ -43,6 +43,34 @@
 | `2026-08-15-pth-execution-isolation.md` | `ExecutionPort` + 签名 `ExecutionGrant`（grant 化执行认证）；cancel-ack-release 竞态闭环；stdout/stderr 输出上限与 truncation marker；进程组统一收割；liveness/readiness 拆分；部署渲染/clean build 校验；hostile integration matrix | P0-1 记忆桥 token 化 + auth 豁免取消；P0-2 workload allowlist env + UID/GID 2001；P0-3 私有工作区拷贝 + 租户目录 0700；P0-4 opaque `SandboxLease` + `kernelId` 退役；P0-5 clean build 验证；P1-6 声明式部署网络修复（`2f97600`） | 「移除旧 bridge 而非包装」与当前「token 化 bridge 作为兼容通道」的现状不一致（是否彻底移除改由后续 ADR 决定）；默认 `SANDBOX_SHARED_SECRET` 已由 compose `${VAR:?}` 强制，但 kernel host 仍以共享密钥认证——这属有效未做（grant 化），不是过时 | 未完成的 P1-1~P1-6 与 grant 化转入 v2 P2；已落地的 P0 项只做回归保护，不重复实现 |
 | `2026-08-15-pth-catalog-profiles.md` | 不可变 `RuntimeCatalogSnapshot`；注入式 `RoleRoutingPolicy`/`SpaceLookup`；扩展贡献显式化（只支持有真实宿主路径的贡献）；bootstrap 统一装配（API Host / runner Host 同源 catalog） | 无：无 `src/pth/catalog`/`bootstrap`/`profiles`；`ExtRegistry` 仍扫描 + eval + `loadAll`；`worker-cluster`/`space-registry` 全局注册仍由 `assembly.ts` 与 `batch-process.ts` 各自重复执行。部分：装配层已注入角色/空间注册（`setDefaultRoles`/`registerBuiltinSpaces`/`setSpaceLookup`） | Control/Standard/Full 三产品 Profile 是否仍为 PTH 目标需按 ADR 0001 重估（PTH 独立产品化、无容器版本由其他 ADR 管）；PTL bridge/client 处理 capability-disabled 的步骤过时 | catalog 注入与扩展收敛转入 v2 P3；三 Profile 发布级步骤退役，另行 ADR |
 
+## 并行执行约定（2026-08-16，与沙箱加固计划）
+
+> 用户裁决：本计划与 `2026-08-16-pth-sandbox-hardening.md` 由 fork 出的两侧并行推进。
+> 并行形态 = **双翼交错、热点串行**；热点文件任何时刻只允许一侧持有，不得两侧同时改。
+
+### 热点文件归属（串行区，两侧共同遵守）
+
+| 文件 | 持有侧 | 对侧等待点 |
+|---|---|---|
+| `packages/pth-sandbox/src/kernel-host.ts`、`exec-api.ts`、`bash-kernel.ts`、`py-kernel.ts`、`compiled-kernel.ts`、`gdb-mi.ts`、`kernel-pool.ts` | 本计划 P2（P2-2~P2-6）完成前 | 沙箱侧 S1-1~S1-5 必须等释放 |
+| `packages/pth-sandbox/test/sandbox-kernel-host.test.ts` 及上述包的运行期测试 | 同上 | 同上 |
+| `package.json` | 轮流 | 两侧只允许新增独立 script 键（`check:pth-boundaries` / `verify:sandbox-build`），先后提交 |
+| memory-bridge 协议（`pth-memory-lib.ts` + py/bash kernel + gateway 桥路由） | 沙箱侧 S0-1 先行 | 本计划 P2-5 在其后只做 grant 适配，不重做盖章 |
+
+### Wave 调度（两侧 fork 后的推进节奏）
+
+1. **Wave 1**：本计划 P0-1~P0-6 ‖ 沙箱 S0-2/S0-3/S0-4/S2-1/S2-2。
+2. **Wave 2**：本计划 P1-1~P1-8 ‖ 沙箱 S0-1。
+3. **Wave 3**：本计划 P2-1~P2-7 独占热点文件（其中 P2-5 消费 S0-1；P2-6 合并沙箱 S1-5 的 degraded 状态输入）；完成后释放 → 沙箱 S1-1~S1-4。
+4. **Wave 4**：本计划 P3-1~P3-6 ‖ 沙箱 S2-3/S2-4。
+5. **Wave 5**：沙箱 S2-5 收账（双方阶段门禁在各自侧通过后，合入主线跑一次联合全量门禁）。
+
+### Fork 工程约束
+
+- 两侧分别使用独立 git worktree/branch；每侧子项独立提交，Wave 结束先合入共同主线再跑该 Wave 的联合门禁。
+- 进入下一 Wave 前两侧必须在主线上确认对侧完成；热点文件未释放不得越界。
+- 生产/实机部署与 `docker compose` 冒烟只在合入主线的 Wave 门禁执行，不在 fork 分支上各自部署。
+
 ## 执行阶段
 
 > 每个子项 = 一个独立提交；子项内先写失败测试再实现（TDD）。
