@@ -194,4 +194,8 @@ echo "  包:   $TGZ$([ -f "$TGZ" ] && echo "（$(du -h "$TGZ" | cut -f1)）")"
 [ "$DO_NPM" = "1" ] && echo "  npm:  6 包已发布"
 [ "$DO_DOCKER" = "1" ] && echo "  docker: 回归通过"
 [ "$DO_GH" = "1" ] && echo "  github: v${ROOT_VER} 已发布"
+if [ -n "$TMP_NOTES" ]; then
+  echo "  notes 回填（GH 正文已替换为实际 sha256；仓库文件仍为占位符）:"
+  echo "    sed -i '' 's/__TGZ_SHA256__/${TGZ_SHA}/g' \"$NOTES_FILE\" && git add \"$NOTES_FILE\" && git commit -m \"docs(release): v${ROOT_VER} 回填 tgz sha256\" && git push"
+fi
 exit 0
