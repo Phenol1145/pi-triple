@@ -111,20 +111,20 @@ builder 只复制 `tsconfig.json`，但 pth-memory 和 pth-sandbox 的 tsconfig 
 | P1-5 | `/health` 无条件返回 200，即使共享密钥缺失、所有执行端点均为 503，Compose 会错误放行依赖。 | `exec-api.ts:253-271`; `docker-compose.yaml:72-77, 123-127` | 拆分 liveness 与 readiness；readiness 检查密钥、内核池和必要目录。 |
 | P1-6 | `ptl hub deploy` 的声明式描述文件路径与 schema/渲染器脱节；即使读取成功也会丢失 PTH 的双网络，使它无法访问 sandbox。 | `packages/framework/src/bridge/containers.ts:20`; `packages/framework/src/containers/deployment.ts:16`; `packages/framework/src/containers/docker-backend.ts:62` | 修正 descriptor 定位、schema 与 renderer；添加实际渲染后的连通性测试。在完成前以手写 Compose 为唯一部署路径。 |
 
-> **处置去向（2026-08-16 补账，执行入口 `docs/superpowers/plans/2026-08-16-pth-sandbox-hardening.md`）**：
-> P1-1 → v2 `pth-modularization-v2.md` P2-3（cancel-ack-release）；P1-2 → v2 P1-4（runner 侧 await reset）；
-> P1-3/P1-4 → v2 P2-4（输出上限 + 进程组收割）；P1-5 → v2 P2-6（liveness/readiness + check-sandbox-env.sh 路径）；
-> P1-6 → 已落地（`2f97600`）。下方 P2 五条：Bash 标记竞态/StreamJob/shutdown → 加固计划 S1-4；
-> gdb 上限+idle 已部分落地、ID 竞态与 pending 关联 → S1-3；编译 cache key 缺 compiler 身份 → S1-2；
-> `check-sandbox-env.sh` 路径 → v2 P2-6。
+> **处置去向（2026-08-16 补账 → 2026-08-16 S2-5 全部落）**：
+> P1-1 → v2 P2-3 ✅（cancel-ack-release）；P1-2 → v2 P1-4 ✅（runner await reset）；
+> P1-3/P1-4 → v2 P2-4 ✅（输出上限 + 进程组收割）；P1-5 → v2 P2-6 ✅（liveness/readiness +
+> check-sandbox-env.sh 路径）；P1-6 → ✅ `2f97600`。下方 P2 五条全部关闭：
+> Bash 标记/StreamJob/shutdown → S1-4 ✅ `0355931`；gdb ID/pending → S1-3 ✅
+> `eb926c6`/`7de4ec4`；编译 cache key → S1-2 ✅ `9230788`；check-sandbox-env.sh → v2 P2-6 ✅。
 
-## P2：应纳入后续加固
+## P2：应纳入后续加固（全部已落——保留原文为历史记录）
 
-- Bash 使用固定完成标记，用户输出和 stdout/stderr 跨流时序可导致响应提前结束或错配：`packages/pth-sandbox/src/bash-kernel.ts:246-286`。
-- debug session 上限与 ID 生成存在并发竞态；GDB MI pending 请求没有可靠关联：`kernel-host.ts:280-291`、`gdb-mi.ts:217, 289, 323`。
-- 编译缓存 key 未包含 compiler identity，gcc/clang/tcc 可能命中同一产物：`compiled-kernel.ts:60, 154`。
-- `StreamJob` 只有一个 `onDone`，多 SSE 订阅可使较早连接无法结束；host shutdown 未完整 dispose pools/debug 会话：`exec-api.ts:69, 352`、`kernel-host.ts:267`。
-- `scripts/check-sandbox-env.sh` 仍扫描仓库根的 `Dockerfile.sandbox`，真实文件已迁入 `packages/pth-sandbox/`；缺文件错误被吞掉，脚本可给出“镜像无凭据”的假阳性：`scripts/check-sandbox-env.sh:10-18`。
+- ✅ Bash 完成标记竞态（S1-4）：一次性随机标记，只认当前 pending——`bash-kernel.ts`。
+- ✅ debug session ID/pending（S1-3）：UUID id + MI token 化派发 + attach 失败/detach 清理 `.debug/<id>`。
+- ✅ 编译缓存 key 含 compiler 身份（S1-2）：`sha256(cc + source)`。
+- ✅ `StreamJob` 多订阅 + shutdown dispose（S1-4）：`doneCallbacks` 集合 + `KernelHostHandle.dispose` + app onClose。
+- ✅ `check-sandbox-env.sh` 路径修正（v2 P2-6）。
 
 ## 已有防护与其边界
 

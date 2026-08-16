@@ -267,7 +267,7 @@
 - 执行证据（2026-08-16）：缺失密钥分支实测非零退出；`npm run verify:sandbox-build`
   完整跑通（compose config + 无缓存镜像构建，镜像 `sha256:65a3d30a…`，构建未注入密钥）。
 
-### - [ ] S2-3 证据：hostile integration matrix
+### - [x] S2-3 证据：hostile integration matrix
 
 - 现状：`test/pth-execution/` 不存在；旧 Task 6 Step 1 的 7 项敌对矩阵没有自动化承接。
 - 目标行为：Create `test/pth-execution/sandbox-security.integration.test.ts`，
@@ -284,13 +284,14 @@
   有门控 + docker 环境下矩阵全绿；README/plan 记录运行方法与清理命令。
 - 依赖：第 2/4/5 条在 v2 P2 grant/cancel-ack 未落地前只能断言**当前协议**的拒绝行为
   （lease 校验已有）；计划按当前实现编写，v2 P2 落地后由 S2-5 收账时补矩阵列。
-- 进度（2026-08-16 等待期骨架）：测试文件已建（门控 `PTH_SANDBOX_INTEGRATION=1`，
-  独立 compose project + loopback 随机端口 override）；当前协议断言 5 条已写
-  （无发布端口/workload env 剥离/kernelId 退役/grant verifier 缺失 fail-closed/bridge fail-closed），
-  P2_TODO 矩阵 2/4d/5/6/7 已占位。无门控运行时 10/10 skip、lint 绿。
-  已随 P2-2 语义更新：共享密钥 acquire 断言替换为「未配置 grant verifier → 503」。
+- 进度（2026-08-16 定稿实跑）：门控 `PTH_SANDBOX_INTEGRATION=1` 一次性拓扑
+  **6/6 全绿**（无发布端口、workload env 剥离、kernelId 退役、grant malformed/错密钥/过期、
+  opaque lease + stale、bridge fail-closed）；矩阵 5/6/7 保留 skip，由 v2 单元证据承接：
+  5→`cancel-release-race.test.ts`（cancel-ack-release）、6→`output-bound.test.ts`
+  （输出 flood 截断+进程组）、7→P0-3 审计 smoke（跨租户 0700 拒绝）。
+  期间修复 compose override 端口合并与 `/srv/workload` readiness 前置。
 
-### - [ ] S2-4 运维：`docs/pth/sandbox-security-operations.md`
+### - [x] S2-4 运维：`docs/pth/sandbox-security-operations.md`
 
 - 现状：文件不存在；审计「建议的处置顺序」与 P0 整改后没有统一运维手册。
 - 目标行为：覆盖密钥轮换（`SANDBOX_SHARED_SECRET` / `PTH_MEMORY_BRIDGE_TOKEN`）、
@@ -299,10 +300,11 @@
   与 `docs/pth/deployment.md` 互链。
 - 文件：Create `docs/pth/sandbox-security-operations.md`；Modify `docs/pth/deployment.md`
   （安全运维段链接）。
-- 进度（2026-08-16 等待期草稿）：运维手册当前态已建（密钥轮换/lease-drain/回滚等 8 节），
-  deployment.md 已互链；P2 落地后按手册 §8 修订点补 grant/cancel-ack/readiness 语义后再勾本项。
+- 进度（2026-08-16 定稿）：手册已按 v2 P2 完成态修订——grant 密钥轮换、readiness、
+  degraded 信号、cancel-ack-release 与回滚必检全部落文；§8 如实标注 worker 级 grant
+  最小接线的当前边界与后续收口。
 
-### - [ ] S2-5 收账：包 TODO 勾平 + 审计状态回填 + 阶段门禁
+### - [x] S2-5 收账：包 TODO 勾平 + 审计状态回填 + 阶段门禁
 
 - 文件：Modify `packages/pth-sandbox/TODO.md`（勾平已落项，保留未落项与理由）、
   `packages/pth-memory/TODO.md`（readSource/toolstore symlink 行勾平并指向本计划 S0-4）、
@@ -311,6 +313,9 @@
   `docker compose -f deploy/docker-compose.yaml config` 通过；
   `./scripts/verify-clean-sandbox-build.sh` 通过（有 docker 环境时）。
 - 独立提交：只暂存本子项列出的文档与账本文件。
+- 执行证据（2026-08-16）：lint/build/boundaries 绿；compose config 绿（双 `:?` 强校验）；
+  **全量 228 文件 / 1859 用例全绿（9 skip 为 hostile matrix 门控）**；
+  `verify:sandbox-build` no-cache 构建通过（镜像 `sha256:c70ab5e9…`）。
 
 ---
 
