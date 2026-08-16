@@ -288,6 +288,24 @@
 
 ---
 
+## 附录：S1 实施锚点（2026-08-16 等待 v2 P2 期间预研，开工时以当时的 main 为准复核）
+
+- **S1-1（N5 L3）**：`KernelPool` 增计数器字段（acquire 成功 / 池满排队拒绝 / TTL dispose /
+  lease 拒绝 / release 幂等），在 `tryAcquireNow`/`acquire` 超时分支/`disposeEntry`/`execute` 校验
+  拒绝路径/`release` 幂等分支各 +1；`status()` 附 `metrics` 对象。
+  `registerKernelHost` 的 `/kernel/status` 把两池 `status()` 的 metrics 合并进返回；
+  `obs.ts` 的 `obs.resource()` 复用 `obs.kernels()` 的受信 fetch（失败降级 `{error}`）。
+- **S1-2**：`compiled-kernel.ts` `const hash = sha256(source)` → `sha256(`${this.cc}\n${source}`)`
+  （hash 目录名长度变化无兼容问题——扫描以 `name.length >= 8` 为准；旧条目由磁盘上限自然淘汰）。
+- **S1-3**：`gdb-mi.ts` 构造器 `this.id = c-debug-${Date.now().toString(36)}` → `c-debug-${randomUUID()}`；
+  kernel-host attach 入 Map 前唯一性检查；`pending` 数组 → 带 token 的请求队列（或固化单飞约束 + 重入拒绝）。
+- **S1-4**：`bash-kernel.ts` `run()` 生成 `__BASH_DONE_<nonce>_$?__` 并只匹配当前 nonce；
+  `exec-api.ts` `StreamJob.onDone` 单槽 → `Set<() => void>`；`registerKernelHost` 返回/暴露
+  `dispose()`（dispose 两池 entries + detach 全部 debug 会话 + 清 stream jobs）。
+- **S1-5**：新增 `packages/pth-sandbox/src/health-state.ts`：跟踪
+  共享密钥缺失 / bridge token 缺失 / 池满拒绝 / 编译并发满拒绝 → `degraded + reasons[]`；
+  `/kernel/status` 暴露；日志只记状态跃迁。/health 语义改动留给 v2 P2-6。
+
 ## 并行执行约定（2026-08-16 用户裁决：fork 两侧并行）
 
 > 本计划与 `2026-08-15-pth-modularization-v2.md` 由 fork 出的两侧并行推进；
