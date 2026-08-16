@@ -134,6 +134,9 @@
   259 用例绿，hostile matrix 骨架 9/9 skip（门控未开）。
 - 同步 v2 P1 收账 + P2-1 后全量（`193b55d` 态）：218 文件 / 1810 用例（1 skipped）中
   1800 通过；唯一失败为 batch fork 集成用例 2.5s 时序 flake，单跑 3/3 全绿。
+- 同步 v2 P2-1/P2-2 后回归（`cf902eb`）：lint/build 绿；本计划相关 31 文件 / 274 用例中
+  263 通过、9 skip；2 个失败在 `kernel-manager-sandbox.test.ts`——Side A 的 grant 化后
+  该测试文件尚未随 P2-2 更新（构造 SandboxKernel 未传 grant），非本计划代码，待 v2 P2 收账修复。
 
 ---
 
