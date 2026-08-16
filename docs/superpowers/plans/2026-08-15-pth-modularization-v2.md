@@ -19,7 +19,7 @@
 - **拆分裁决（`docs/pth/split-design.md`，2026-08-15）**：单仓 workspace 包形态；
   `packages/pth-memory`（记忆域）与 `packages/pth-sandbox`（沙箱域）已拆为独立包；
   **内核契约包含在沙箱包内**——不新建独立的 `@away_from/pth-contracts` workspace 包。
-- **当前基线（2026-08-15）**：全量测试 204 文件 / 1716 用例绿；`npm run lint`、`npm run build` 干净；
+- **当前基线（2026-08-16 P0 收账）**：全量测试 209 文件 / 1742 用例绿；`npm run lint`、`npm run build` 干净；
   Node 22 + TS 5.7 + Vitest + Fastify + PostgreSQL + Redis + Docker Compose。
 - **已完成且不重复的业务功能**：P3.5 LLM 调用链审计收口、P3.6 debug-case-dispatch 调试闭环、
   concept-design 概念设计交接、`src/pth/kernel/ptc/contract.ts`（PTC 契约注册表）、
@@ -82,36 +82,36 @@
 
 ### P0：契约与边界（gateway facade + 内部契约 + import 边界检查）
 
-- [ ] **P0-1 建立内部契约层 `src/pth/contracts/`（纯类型 + 校验，不新建 workspace 包）**
+- [x] **P0-1 建立内部契约层 `src/pth/contracts/`（纯类型 + 校验，不新建 workspace 包）**——`7e93d12`
   - 文件：Create `src/pth/contracts/identity.ts`（`TenantScope`、`WorkspaceRef`）、
     `src/pth/contracts/tasking.ts`（`TaskLease`、`TaskOutcome`、`TaskWorkItem`、`TaskRepository`、`TaskReadModel`、`TaskRunner` ports）、
     `src/pth/contracts/execution.ts`（`ExecutionRequest`、`ExecutionGrant`、`ExecutionResult`、`ExecutionPort`）、
     `src/pth/contracts/index.ts`；Create `test/pth-contracts/contracts.test.ts`。
   - 验收：`npx vitest run test/pth-contracts` 绿；`grep` 证明 contracts 目录不 import `fastify`/`pg`/`redis`/`@away_from/pth-sandbox` 运行时；
     内核 interpreter 契约仍从 `@away_from/pth-sandbox` 导出（遵守拆分裁决）。
-- [ ] **P0-2 引入 import 边界检查 `npm run check:pth-boundaries`**
+- [x] **P0-2 引入 import 边界检查 `npm run check:pth-boundaries`**——`4ee1b12`（基线 42 条待修）
   - 文件：Create `scripts/check-pth-boundaries.ts`、Create `test/pth-architecture/phase-boundaries.test.ts`、Modify `package.json`。
   - 规则：`src/pth/gateway/**` 不 import `KernelRuntime`/`DataWorldAccess`，不访问 `kernel.pool`/`kernel.dataWorld`；
     `tasking`/`runner`/`execution`/`catalog` 模块之间只 import 公共 API，不 import 他方 storage adapter；
     domain 模块不 import `@away_from/pth-sandbox` 运行时 adapter（`impls/kernels/**`、`bootstrap/**`、`main.ts` 除外）。
   - 验收：`npm run check:pth-boundaries` 可运行并输出违规清单；当前违规被测试显式记录为「待修」，后续阶段逐项清零。
-- [ ] **P0-3 建立 `PthGatewayFacade` 并迁移 gateway 路由数据访问**
+- [x] **P0-3 建立 `PthGatewayFacade` 并迁移 gateway 路由数据访问**——`78272b2`（gateway 组违规清零）
   - 文件：Create `src/pth/application/gateway/pth-gateway-facade.ts`、Create `test/pth-application/pth-gateway-facade.test.ts`；
     Modify `src/pth/gateway/routes-kernel.ts`、`routes-jobs.ts`、`routes-lineage.ts`、`routes-trigger.ts`、
     `src/pth/gateway/server.ts`、`src/pth/kernel/assembly.ts`、`src/pth/main.ts`。
   - 验收：`test/pth-gateway/*` 路由测试绿；facade 暴露 route 形状方法（`publishTask`/`listTasks`/`getTask`/`spawnBatch` 等），
     不含 `pool`/`dataWorld`/`batchManager` 字段；`check:pth-boundaries` 中 gateway 组违规为 0。
-- [ ] **P0-4 将 `DataWorldAccess` 收缩为 assembly-only legacy**
+- [x] **P0-4 将 `DataWorldAccess` 收缩为 assembly-only legacy**——`4148774`
   - 文件：Modify `src/pth/kernel/storage/index.ts`（标记 deprecated + 文档说明）、`src/pth/kernel/assembly.ts`、
     `src/pth/kernel/execution/batch-process.ts`；Create `test/pth-architecture/dataworld-boundary.test.ts`。
   - 验收：`createDataWorld()` 保留给 bootstrap/assembly 兼容；gateway/新模块构造器只接收窄 ports；
     测试证明 gateway 不 import `DataWorldAccess`。
-- [ ] **P0-5 补内核契约归属回归（守护拆分裁决）**
+- [x] **P0-5 补内核契约归属回归（守护拆分裁决）**——`59af8a6`（违规清零）
   - 文件：Create `packages/pth-sandbox/test/interpreter-contract-export.test.ts`；Modify `src/pth/kernel/ptc/runner.ts`
     （如需要，把类型 import 集中到 `src/pth/impls/kernels/` 的 re-export 点）。
   - 验收：测试证明 `Interpreter`/`InterpreterResult`/`WorkerKernel` 契约仍由 `@away_from/pth-sandbox` 稳定导出；
     PTH 业务代码不因契约归属变更而散落 import。
-- [ ] **P0-6 阶段验收：全量绿线 + 独立提交**
+- [x] **P0-6 阶段验收：全量绿线 + 独立提交**——209 文件 / 1742 测试 + lint/build/check:pth-boundaries 绿（2026-08-16）
   - 运行 `npx vitest run`、`npm run lint`、`npm run build` 全绿；`npm run check:pth-boundaries` 记录基线违规清单。
   - 独立提交：只暂存本阶段列出的文件，`git diff --cached --check` 通过后提交。
 
@@ -249,7 +249,7 @@
 
 ## 每阶段验收统一要求（不通过不得进入下一阶段）
 
-- [ ] 全量 `npx vitest run` 绿（基线 1716 用例；新增/迁移测试计入后不得有回退）。
+- [ ] 全量 `npx vitest run` 绿（P0 后基线 1742 用例；新增/迁移测试计入后不得有回退）。
 - [ ] `npm run lint` 绿。
 - [ ] `npm run build` 绿。
 - [ ] 独立提交：只暂存该阶段明确列出的文件；`git diff --cached --check` 通过；提交信息按阶段命名
