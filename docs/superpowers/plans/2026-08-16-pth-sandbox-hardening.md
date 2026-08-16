@@ -173,7 +173,7 @@
   现有持久缓存恢复/磁盘上限/并发测试保持绿。
 - 执行证据（2026-08-16 `9230788`）：lint + boundaries 绿；compiled-kernel 12 用例全绿。
 
-### - [ ] S1-3 MEDIUM：gdb 会话 ID 竞态与 GDB MI pending 关联复核
+### - [x] S1-3 MEDIUM：gdb 会话 ID 竞态与 GDB MI pending 关联复核
 
 - 现状：会话上限（`PTH_DEBUG_SESSIONS`）与 30min idle 回收已落；
   `CDebugSession.id = c-debug-${Date.now().toString(36)}`（`gdb-mi.ts:220`）并发可撞；
@@ -187,6 +187,8 @@
   Modify `packages/pth-sandbox/test/gdb-mi.test.ts`、`sandbox-debug-session.test.ts`。
 - 验收：并发 attach 无 id 碰撞；乱序/重入响应不被错派；回收后目录清理；
   现有 debug 全链路测试绿。
+- 执行证据（2026-08-16 `eb926c6`/`7de4ec4`）：lint + boundaries 绿；
+  gdb/debug/kernel-host 46 用例全绿（含 token 解析、UUID id、单飞重入拒绝、detach 清理）。
 
 ### - [ ] S1-4 MEDIUM：Bash 完成标记跨流竞态 + StreamJob 多订阅 + shutdown dispose
 
