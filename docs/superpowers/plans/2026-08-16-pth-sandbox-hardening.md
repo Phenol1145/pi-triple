@@ -142,7 +142,7 @@
 
 ## S1：观测与容量缺口（N5 L3 + 残余竞态）
 
-### - [ ] S1-1 MEDIUM：kernel 池容量/回收/TTL 观测接入 N5 资源环（L3）
+### - [x] S1-1 MEDIUM：kernel 池容量/回收/TTL 观测接入 N5 资源环（L3）
 
 - 现状：`/kernel/status` 与 `obs.kernels()` 已存在；`obs.resource()` 聚合里没有 kernels。
 - 目标行为：
@@ -157,8 +157,10 @@
   Create `test/pth-kernel-extensions/obs-resource.test.ts`。
 - 验收：status 含计数且池满/TTL dispose 后数值正确；`obs.resource()` 在 sandbox URL
   可达时含 `kernels`，不可达时降级为 error 字段且其余数据源照常。
+- 执行证据（2026-08-16 `3c8a6f4`）：lint + `check:pth-boundaries` 绿；新增 6 用例全绿；
+  sandbox 包 + extensions 回归 21 文件 / 178 用例全绿。
 
-### - [ ] S1-2 MEDIUM：编译核 cache key 纳入 compiler 身份
+### - [x] S1-2 MEDIUM：编译核 cache key 纳入 compiler 身份
 
 - 现状：`hash = sha256(source)`（`compiled-kernel.ts:154`），gcc/clang/tcc 同源码会撞同一产物；
   磁盘/并发上限已实现，不在本项重做。
@@ -169,8 +171,9 @@
   Modify `packages/pth-sandbox/test/compiled-kernel.test.ts`。
 - 验收：测试证明同源码不同 cc 各自 build、各自 cache-hit；
   现有持久缓存恢复/磁盘上限/并发测试保持绿。
+- 执行证据（2026-08-16 `9230788`）：lint + boundaries 绿；compiled-kernel 12 用例全绿。
 
-### - [ ] S1-3 MEDIUM：gdb 会话 ID 竞态与 GDB MI pending 关联复核
+### - [x] S1-3 MEDIUM：gdb 会话 ID 竞态与 GDB MI pending 关联复核
 
 - 现状：会话上限（`PTH_DEBUG_SESSIONS`）与 30min idle 回收已落；
   `CDebugSession.id = c-debug-${Date.now().toString(36)}`（`gdb-mi.ts:220`）并发可撞；
@@ -184,8 +187,10 @@
   Modify `packages/pth-sandbox/test/gdb-mi.test.ts`、`sandbox-debug-session.test.ts`。
 - 验收：并发 attach 无 id 碰撞；乱序/重入响应不被错派；回收后目录清理；
   现有 debug 全链路测试绿。
+- 执行证据（2026-08-16 `eb926c6`/`7de4ec4`）：lint + boundaries 绿；
+  gdb/debug/kernel-host 46 用例全绿（含 token 解析、UUID id、单飞重入拒绝、detach 清理）。
 
-### - [ ] S1-4 MEDIUM：Bash 完成标记跨流竞态 + StreamJob 多订阅 + shutdown dispose
+### - [x] S1-4 MEDIUM：Bash 完成标记跨流竞态 + StreamJob 多订阅 + shutdown dispose
 
 - 现状：Bash 固定标记 `__BASH_DONE_$?__`（`bash-kernel.ts:224-285`），用户输出可伪造标记；
   `StreamJob.onDone` 单槽（`exec-api.ts:73`）多 SSE 订阅会漏通知；
@@ -202,8 +207,10 @@
 - 验收：
   - 程序自己 echo 固定旧标记不会提前结束；
   - 双订阅同时收到完成事件；dispose 后无残留子进程/定时器（测试断言 pool/debug/jobs 为空）。
+- 执行证据（2026-08-16 `0355931`）：lint + boundaries 绿；bash/exec-api/kernel-host 45 用例全绿
+  （含伪造旧标记、真实双 SSE 订阅、handle.dispose 幂等）。
 
-### - [ ] S1-5 MEDIUM：sandbox 侧 degraded 观测（与 v2 P2-6 readiness 互补）
+### - [x] S1-5 MEDIUM：sandbox 侧 degraded 观测（与 v2 P2-6 readiness 互补）
 
 - 现状：PTH 侧 degraded 监控已落（`sandbox-bash.ts:91` + `routes-self.ts`）；
   sandbox 自身 `/health` 无条件 200、`/kernel/status` 无 degraded 维度。
@@ -217,11 +224,15 @@
   Modify `packages/pth-sandbox/test/sandbox-kernel-host.test.ts`。
 - 验收：缺密钥/缺 token/池满场景 status.degraded=true 且 reasons 准确；
   恢复后转 false；与 v2 P2-6 落地后的 readiness 接线留 TODO 注释。
+- 执行证据（2026-08-16 `004e9cc`）：lint + boundaries 绿；kernel-host/readiness 28 用例全绿
+  （缺密钥、缺 token、池满、编译并发四条件各自断言 + 恢复清除）。
 
-### - [ ] S1-6 阶段门禁
+### - [x] S1-6 阶段门禁
 
 - 全量 `npx vitest run`、`npm run lint`、`npm run build` 绿。
 - 独立提交：只暂存 S1 列出的文件，`git diff --cached --check` 通过。
+- 执行证据（2026-08-16）：lint/build/boundaries 绿；全量 **228 文件 / 1859 用例全绿**
+  （hostile matrix 10/10 skip 门控未开——一次通过，无 flake）。
 
 ---
 
@@ -275,8 +286,9 @@
   （lease 校验已有）；计划按当前实现编写，v2 P2 落地后由 S2-5 收账时补矩阵列。
 - 进度（2026-08-16 等待期骨架）：测试文件已建（门控 `PTH_SANDBOX_INTEGRATION=1`，
   独立 compose project + loopback 随机端口 override）；当前协议断言 5 条已写
-  （无发布端口/workload env 剥离/kernelId 退役/opaque lease+bridge fail-closed），
-  P2_TODO 矩阵 2/5/6/7 已占位。无门控运行时 9/9 skip、lint 绿。
+  （无发布端口/workload env 剥离/kernelId 退役/grant verifier 缺失 fail-closed/bridge fail-closed），
+  P2_TODO 矩阵 2/4d/5/6/7 已占位。无门控运行时 10/10 skip、lint 绿。
+  已随 P2-2 语义更新：共享密钥 acquire 断言替换为「未配置 grant verifier → 503」。
 
 ### - [ ] S2-4 运维：`docs/pth/sandbox-security-operations.md`
 
