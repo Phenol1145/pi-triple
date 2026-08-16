@@ -120,6 +120,9 @@
 - 联合门禁（合入 v2 P0 后，`98b24e8`）：lint/build 绿；210 文件 / 1759 用例中 1758 通过；
   1 个 timing 敏感的 batch fork 集成用例与 1 个 testcontainers `afterAll` 超时为环境性 flake，
   `batch-manager-fork.integration.test.ts`、`pg.test.ts`、`transcript-audit.test.ts` 单跑全绿。
+- 同步 v2 P1-1/P1-2 后回归（`ef422a7`）：lint/build 绿；211 文件 / 1769 用例中 1768 通过；
+  唯一失败为 v2 侧 mid-P1 的 `phase-boundaries.test.ts`（`pg-task-repository.ts` 新违规未入 baseline，
+  属 v2 P1 未完成态，非本计划代码）。
 
 ---
 
