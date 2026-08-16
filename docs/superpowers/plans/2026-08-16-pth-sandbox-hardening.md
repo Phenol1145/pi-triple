@@ -117,6 +117,9 @@
 - 执行证据（2026-08-16）：lint/build 绿；全量 1733/1733 用例通过；
   两次全量运行各有 1–2 个 testcontainers 用例 `afterAll` 容器停止超时（环境性），
   `transcript-audit.test.ts` 与 `pg.test.ts` 单跑全绿。
+- 联合门禁（合入 v2 P0 后，`98b24e8`）：lint/build 绿；210 文件 / 1759 用例中 1758 通过；
+  1 个 timing 敏感的 batch fork 集成用例与 1 个 testcontainers `afterAll` 超时为环境性 flake，
+  `batch-manager-fork.integration.test.ts`、`pg.test.ts`、`transcript-audit.test.ts` 单跑全绿。
 
 ---
 
