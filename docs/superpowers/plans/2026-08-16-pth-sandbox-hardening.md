@@ -190,7 +190,7 @@
 - 执行证据（2026-08-16 `eb926c6`/`7de4ec4`）：lint + boundaries 绿；
   gdb/debug/kernel-host 46 用例全绿（含 token 解析、UUID id、单飞重入拒绝、detach 清理）。
 
-### - [ ] S1-4 MEDIUM：Bash 完成标记跨流竞态 + StreamJob 多订阅 + shutdown dispose
+### - [x] S1-4 MEDIUM：Bash 完成标记跨流竞态 + StreamJob 多订阅 + shutdown dispose
 
 - 现状：Bash 固定标记 `__BASH_DONE_$?__`（`bash-kernel.ts:224-285`），用户输出可伪造标记；
   `StreamJob.onDone` 单槽（`exec-api.ts:73`）多 SSE 订阅会漏通知；
@@ -207,6 +207,8 @@
 - 验收：
   - 程序自己 echo 固定旧标记不会提前结束；
   - 双订阅同时收到完成事件；dispose 后无残留子进程/定时器（测试断言 pool/debug/jobs 为空）。
+- 执行证据（2026-08-16 `0355931`）：lint + boundaries 绿；bash/exec-api/kernel-host 45 用例全绿
+  （含伪造旧标记、真实双 SSE 订阅、handle.dispose 幂等）。
 
 ### - [ ] S1-5 MEDIUM：sandbox 侧 degraded 观测（与 v2 P2-6 readiness 互补）
 
