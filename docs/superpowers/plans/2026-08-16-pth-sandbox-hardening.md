@@ -227,10 +227,12 @@
 - 执行证据（2026-08-16 `004e9cc`）：lint + boundaries 绿；kernel-host/readiness 28 用例全绿
   （缺密钥、缺 token、池满、编译并发四条件各自断言 + 恢复清除）。
 
-### - [ ] S1-6 阶段门禁
+### - [x] S1-6 阶段门禁
 
 - 全量 `npx vitest run`、`npm run lint`、`npm run build` 绿。
 - 独立提交：只暂存 S1 列出的文件，`git diff --cached --check` 通过。
+- 执行证据（2026-08-16）：lint/build/boundaries 绿；全量 **228 文件 / 1859 用例全绿**
+  （hostile matrix 10/10 skip 门控未开——一次通过，无 flake）。
 
 ---
 
