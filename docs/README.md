@@ -26,6 +26,7 @@
 | [PTH 框架契约](./pth/framework-contracts.md) | 模块边界 · 公共端口 · 依赖矩阵 · 生命周期不变量 · 边界检查规则 |
 | [PTH 配置](./pth/configuration.md) | 107 键 typed schema · ConfigCenter · secrets 文件 · `pth config` 命令 |
 | [PTH Trigger 运行时](./pth/trigger-runtime.md) | workflow/loop 扁平化为 trigger 调度指令 · 系统 trigger 目录 · 事件词汇 |
+| [v1.1.1 发布说明](./releases/v1.1.1.md) | 2026-08-17 补丁 · 三条安装路径修复（F1–F17）· 门禁证据 |
 | [v1.1.0 发布说明](./releases/v1.1.0.md) | 2026-08-16 发布 · 门禁证据 · 运维变更 |
 | [PTH Kernel 体系](./pth/kernel.md) | ★ 任务池 · 多语言 REPL · 记忆闭环 · 监控日志 |
 | [PTH API 参考](./pth/api.md) | HTTP/SSE/WebSocket 端点 |

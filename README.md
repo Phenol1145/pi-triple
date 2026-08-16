@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://img.shields.io/badge/version-1.1.0-blue"><img alt="version" src="https://img.shields.io/badge/version-1.1.0-blue?style=flat-square" /></a>
+  <a href="https://img.shields.io/badge/version-1.1.1-blue"><img alt="version" src="https://img.shields.io/badge/version-1.1.1-blue?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/tests-1897%20passed-green"><img alt="tests" src="https://img.shields.io/badge/tests-1897%20passed-green?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/node-%3E%3D22-green"><img alt="node" src="https://img.shields.io/badge/node-%3E%3D22-green?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/typescript-5.7-blue"><img alt="ts" src="https://img.shields.io/badge/typescript-5.7-blue?style=flat-square" /></a>
