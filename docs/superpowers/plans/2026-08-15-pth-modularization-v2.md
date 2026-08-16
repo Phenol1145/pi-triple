@@ -119,31 +119,31 @@
 
 ### P1：Task Control 与 Runner 分离（lease/CAS + dispatcher + observers）
 
-- [ ] **P1-1 幂等 schema 迁移：tasks 表新增真实 lease 列**
+- [x] **P1-1 幂等 schema 迁移：tasks 表新增真实 lease 列**——`e790fef`
   - 文件：Modify `src/pth/kernel/storage/schema.ts`、`src/pth/kernel/storage/task-store-pg.ts`；
     Modify `test/pth-kernel-storage/schema.test.ts`、`test/pth-kernel-storage/task-store-pg.test.ts`。
   - SQL：`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS lease_id UUID;`、
     `lease_generation BIGINT NOT NULL DEFAULT 0`、`lease_expires_at TIMESTAMPTZ`；
     索引 `idx_tasks_active_lease (tenant_id, lease_id, lease_generation) WHERE status='claimed'`。
   - 验收：旧数据（无 lease 列值）迁移后仍可读写；`claimed_by`/`claims_count` 保留为诊断字段。
-- [ ] **P1-2 新建 `src/pth/tasking/adapters/pg-task-repository.ts`（原子 claim + CAS outcome）**
+- [x] **P1-2 新建 `src/pth/tasking/adapters/pg-task-repository.ts`（原子 claim + CAS outcome）**——`e0aaee5`
   - 文件：Create `src/pth/tasking/adapters/pg-task-repository.ts`、Create `test/pth-tasking/pg-task-repository.test.ts`；
     Modify `packages/pth-contracts`（如 P0 未建则 Modify `src/pth/contracts/tasking.ts`）。
   - 验收：并发 claim 只发一个 lease；stale lease/重复 outcome/跨租户读均不生效；
     `recoverExpired` 只清过期 claimed 行且 generation 单调；测试需真实 PostgreSQL fixture。
-- [ ] **P1-3 新建 `TaskControlService` / `TaskQueries` / `TaskWorkItemReader`，scope 从 auth 派生**
+- [x] **P1-3 新建 `TaskControlService` / `TaskQueries` / `TaskWorkItemReader`，scope 从 auth 派生**——`1de1e83`
   - 文件：Create `src/pth/tasking/task-control-service.ts`、`task-queries.ts`、`task-work-item-reader.ts`、
     Create `test/pth-tasking/task-control-service.test.ts`；Modify `src/pth/gateway/auth.ts`、
     `src/pth/application/gateway/pth-gateway-facade.ts`、`src/pth/gateway/routes-kernel.ts`、`routes-jobs.ts`。
   - 验收：`createdBy` 使用服务器端 `scope.principalId`，body 字段不可覆盖；跨租户 `get`/`list` 返回 404/空；
     路由 JSON 形状不变；现有 `test/pth-gateway/kernel-routes.test.ts`、`jobs-routes.test.ts` 绿。
-- [ ] **P1-4 新建 `src/pth/runner/`（`AgentTaskRunner` + `TaskWorkspace` + `RunnerConfig`）**
+- [x] **P1-4 新建 `src/pth/runner/`（`AgentTaskRunner` + `TaskWorkspace` + `RunnerConfig`）**——`0df57ab`
   - 文件：Create `src/pth/runner/agent-task-runner.ts`、`task-workspace.ts`、`runner-config.ts`、
     Create `test/pth-runner/agent-task-runner.test.ts`；Modify `src/pth/kernel/execution/agent-loop.ts`
     （必要时抽取纯执行函数）、`src/pth/kernel/execution/workspace.ts`。
   - 验收：runner 只接收 `{ lease, work }`，返回 `TaskOutcome`，不调用 repository/audit/transcript/notify；
     测试证明 `await kernel.reset()` 完成后才执行；agent 失败/PTC 失败/取消信号产生正确 outcome。
-- [ ] **P1-5 新建 `TaskDispatcher` + `TaskOutcomeCommitter`，固定 claim→load→run→commit 序列**
+- [x] **P1-5 新建 `TaskDispatcher` + `TaskOutcomeCommitter`，固定 claim→load→run→commit 序列**——`1e1d857`
   - 文件：Create `src/pth/tasking/task-dispatcher.ts`、`task-outcome-committer.ts`、
     Create `test/pth-tasking/task-dispatcher.test.ts`。
   - 验收：claim 空则不执行；`commit` 返回 `{ committed:false }` 时 runner 结果不触发任何 observer；
