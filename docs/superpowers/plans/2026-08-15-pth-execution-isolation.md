@@ -1,3 +1,6 @@
+> **Retirement notice（2026-08-16）**：本计划已由 `2026-08-15-pth-modularization-v2.md` 取代，
+> 仅保留为历史参考，不再作为执行依据。
+
 # PTH Execution 与 Sandbox 隔离整改 Implementation Plan（参考计划）
 
 > **计划状态：参考计划（Reference-only）** —— 本文件仅作架构与实施思路参考，当前不作为执行依据；实施前必须重新评审可行性并另建可执行计划。

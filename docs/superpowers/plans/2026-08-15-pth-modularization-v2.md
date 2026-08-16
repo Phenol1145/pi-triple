@@ -225,23 +225,23 @@
   - 验收：`RoleRoutingPolicy`/`SpaceLookup` 读取注入的 snapshot；`assembly.ts` 与 `batch-process.ts`
     由同一 manifest 构建出等价 catalog（测试断言角色/空间/扩展键一致）；
     旧全局 getter 仅作 deprecated 兼容出口，新生产代码零调用。
-- [ ] **P3-3 扩展贡献显式化：`ExtRegistry` 只支持有真实宿主路径的贡献**
+- [x] **P3-3 扩展贡献显式化：`ExtRegistry` 只支持有真实宿主路径的贡献**——`892a286`
   - 文件：Create `src/pth/catalog/extensions/contribution-schema.ts`、`extension-loader.ts`、`extension-context.ts`、`extension-policy.ts`；
     Modify `src/pth/kernel/extensions/ext-registry.ts`、`src/pth/kernel/interpreter/ext-capability.ts`、
     `scripts/ext-check.ts`；Modify `test/pth-kernel-execution/ext-registry.test.ts` 等既有扩展测试。
   - 验收：仅 roles/spaces/observers/capabilityPolicies 等有宿主实现的贡献可进 catalog；
     不支持的 `tools`/`events`/`kernels`/`debugAdapters`/`onStartup` 声明被拒绝并给出诊断；
     `ext-check.ts` 区分 PTH 插件 / 外来工具目录 / 坏插件，坏插件失败、外来目录不报错。
-- [ ] **P3-4 新建 `src/pth/bootstrap/`：统一装配入口（单 Host + module manifest，不发布三产品 Profile）**
+- [x] **P3-4 新建 `src/pth/bootstrap/`：统一装配入口（单 Host + module manifest，不发布三产品 Profile）**——`130f429`
   - 文件：Create `src/pth/bootstrap/pth-host.ts`、`module-manifest.ts`、`bootstrap-config.ts`；
     Modify `src/pth/kernel/assembly.ts`、`src/pth/main.ts`、`src/pth/kernel/execution/batch-process.ts`。
   - 验收：main 与 batch-process 共用同一 manifest/catalog 构建路径；缺依赖、未知 module、非法 policy 在监听端口前 fail closed；
     `createKernelRuntime()` 作为 deprecated 兼容入口保留；**不引入** `PTH_PROFILE=control|standard|full` 产品选择。
-- [ ] **P3-5 边界检查覆盖新模块目录并纳入 CI 语义**
+- [x] **P3-5 边界检查覆盖新模块目录并纳入 CI 语义**——`f43adad`
   - 文件：Modify `scripts/check-pth-boundaries.ts`、`package.json`；Create `test/pth-architecture/final-boundaries.test.ts`。
   - 验收：`npm run check:pth-boundaries` 对 `contracts/tasking/runner/execution/catalog/bootstrap/gateway` 全量执行，
     违规为 0；测试证明 bootstrap 可组装 adapters，业务模块不可 import 他方 storage adapter。
-- [ ] **P3-6 阶段验收：全量绿线 + 独立提交 + 旧计划 Retirement notice**
+- [x] **P3-6 阶段验收：全量绿线 + 独立提交 + 旧计划 Retirement notice**——227 文件 / 1842 测试 + lint/build/boundary 绿（2026-08-16）
   - 运行 `npx vitest run`、`npm run lint`、`npm run build`、`npm run check:pth-boundaries` 全绿。
   - 独立提交：只暂存本阶段列出的文件与旧计划 Retirement notice 标注，`git diff --cached --check` 通过后提交。
 
@@ -249,7 +249,7 @@
 
 ## 每阶段验收统一要求（不通过不得进入下一阶段）
 
-- [ ] 全量 `npx vitest run` 绿（P1 后基线 1787 用例；新增/迁移测试计入后不得有回退）。
+- [ ] 全量 `npx vitest run` 绿（P3 后基线 1842 用例；新增/迁移测试计入后不得有回退）。
 - [ ] `npm run lint` 绿。
 - [ ] `npm run build` 绿。
 - [ ] 独立提交：只暂存该阶段明确列出的文件；`git diff --cached --check` 通过；提交信息按阶段命名
@@ -274,8 +274,8 @@
 
 ## 计划完成后：旧五份计划处理
 
-- [ ] 在五份旧计划文件顶部统一添加 Retirement notice（不删除正文）：
+- [x] 在五份旧计划文件顶部统一添加 Retirement notice（不删除正文）：
   > **Retirement notice（2026-08-15）**：本计划已由 `2026-08-15-pth-modularization-v2.md` 取代，
   > 仅保留为历史参考，不再作为执行依据。
-- [ ] 五份文件保留在 `docs/superpowers/plans/` 下，git 历史完整保留。
-- [ ] 本 v2 计划成为唯一执行入口；后续如需新增模块化工作，先更新本文件或另立新计划。
+- [x] 五份文件保留在 `docs/superpowers/plans/` 下，git 历史完整保留。
+- [x] 本 v2 计划成为唯一执行入口；后续如需新增模块化工作，先更新本文件或另立新计划。
