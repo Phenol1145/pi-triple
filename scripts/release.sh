@@ -25,6 +25,7 @@ cd "$(dirname "$0")/.."
 
 # ── 参数 ─────────────────────────────────────────────
 DO_NPM=0; DO_DOCKER=0; DO_GH=0; SKIP_TESTS=0; NOTES_FILE=""
+NOTES_FOR_GH=""; TMP_NOTES=""
 for arg in "$@"; do
   case "$arg" in
     --npm) DO_NPM=1 ;;
@@ -100,6 +101,25 @@ rm -rf "$TMPD"
 [ "$PKG_VER" = "$ROOT_VER" ] || fail "tgz 内 version=$PKG_VER ≠ 工作区 $ROOT_VER"
 ok "$TGZ 内容断言通过（name/version 一致）"
 
+# ── 阶段 4b：notes sha256 校验/占位符替换（--notes）─────────
+# release-pack 已确定性打包——notes 中的 hash 必须与刚打包产物一致，否则在创建 Release 前失败。
+# 支持 __TGZ_SHA256__ 占位符：临时替换用于 GH 正文；仓库 notes 文件不修改（发布后手动回填）。
+TGZ_SHA=$(shasum -a 256 "$TGZ" | awk '{print $1}')
+NOTES_FOR_GH="$NOTES_FILE"
+if [ -n "$NOTES_FILE" ]; then
+  [ -f "$NOTES_FILE" ] || fail "--notes 文件不存在: $NOTES_FILE"
+  if grep -q '__TGZ_SHA256__' "$NOTES_FILE"; then
+    TMP_NOTES=$(mktemp /tmp/release-notes-XXXX.md)
+    sed "s/__TGZ_SHA256__/${TGZ_SHA}/g" "$NOTES_FILE" > "$TMP_NOTES"
+    NOTES_FOR_GH="$TMP_NOTES"
+    echo "  notes 含 __TGZ_SHA256__ 占位符——GH 正文临时替换为本包 sha256（仓库文件未改）"
+  elif grep -q "$TGZ_SHA" "$NOTES_FILE"; then
+    echo "  notes sha256 与打包产物一致（${TGZ_SHA}）"
+  else
+    fail "notes 中未找到本包 sha256 ${TGZ_SHA}——先回填，或使用 __TGZ_SHA256__ 占位符"
+  fi
+fi
+
 # ── 阶段 5：npm 发布（--npm）─────────────────────────
 if [ "$DO_NPM" = "1" ]; then
   say "阶段 5：npm 发布（topo 序：${SUBPACKAGES[*]} + 根包）"
@@ -159,8 +179,9 @@ fi
 if [ "$DO_GH" = "1" ]; then
   say "阶段 7：GitHub release v${ROOT_VER}"
   git tag -l "v${ROOT_VER}" | grep -q . && fail "tag v${ROOT_VER} 已存在"
-  if [ -n "$NOTES_FILE" ]; then
-    gh release create "v${ROOT_VER}" "$TGZ" --title "Pi-Triple v${ROOT_VER}" --notes-file "$NOTES_FILE" || fail "gh release 失败"
+  if [ -n "$NOTES_FOR_GH" ]; then
+    gh release create "v${ROOT_VER}" "$TGZ" --title "Pi-Triple v${ROOT_VER}" --notes-file "$NOTES_FOR_GH" || fail "gh release 失败"
+    [ -n "$TMP_NOTES" ] && rm -f "$TMP_NOTES"
   else
     gh release create "v${ROOT_VER}" "$TGZ" --title "Pi-Triple v${ROOT_VER}" --generate-notes || fail "gh release 失败"
   fi
