@@ -4,6 +4,9 @@ data
 tmp
 docs
 test
+# 构建产物绝不进上下文：镜像内由 builder 阶段按拓扑序构建（避免本机 dist 掩盖 Dockerfile 构建错误）
+dist
+**/dist
 extensions/*/node_modules
 .pi-subagents
 .superpowers
