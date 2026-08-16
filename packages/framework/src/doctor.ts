@@ -24,6 +24,8 @@ export interface DoctorCheck {
   ok: boolean;
   message: string;
   fixable: boolean;
+  /** 非交互环境可执行的修复指引（如 brew install git / export API key） */
+  fix?: string;
 }
 
 export interface DoctorReport {
@@ -350,6 +352,7 @@ export async function runDoctorStructured(mode: "full" | "quick" = "full"): Prom
       ok: result.status === "ok" || result.status === "warn",
       message: result.message,
       fixable: result.status === "fail",
+      ...(result.status === "fail" && result.fixDescription ? { fix: result.fixDescription } : {}),
     });
   }
 
@@ -380,6 +383,7 @@ function renderDoctorPrint(report: DoctorReport): void {
     const icon = c.ok ? icons.ok : icons.fail;
     const color = c.ok ? "\x1b[32m" : "\x1b[31m";
     console.log(`  ${icon} ${color}${c.name}\x1b[0m — ${c.message}`);
+    if (!c.ok && c.fix) console.log(`    \x1b[2m→ ${c.fix}\x1b[0m`);
   }
 }
 

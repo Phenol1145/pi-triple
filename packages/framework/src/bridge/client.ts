@@ -48,26 +48,41 @@ export class PthClient {
   /**
    * SSE 流消费（统一出口——console --follow 等流式命令复用）：
    * GET 流式端点 → 逐事件回调（data: 行解析——[DONE] 终止）。
+   * opts.signal 可中止连接；HTTP 错误经 throwError 统一翻译（401/404 可操作提示）。
    */
-  async streamSSE(path: string, onEvent: (e: unknown) => void): Promise<void> {
-    const res = await fetch(`${this.url}${path}`, { headers: { Authorization: `Bearer ${this.token}` } });
-    if (!res.ok || !res.body) throw new Error(`SSE 连接失败: HTTP ${res.status}`);
+  async streamSSE(path: string, onEvent: (e: unknown) => void, opts: { signal?: AbortSignal } = {}): Promise<void> {
+    const res = await this.request(path, {
+      headers: { Authorization: `Bearer ${this.token}` },
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    });
+    if (!res.ok) await this.throwError(res, "SSE 连接失败");
+    if (!res.body) throw new Error(`SSE 连接失败: 响应无 body（${this.url}${path}）`);
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const blocks = buf.split("\n\n");
-      buf = blocks.pop() ?? "";
-      for (const block of blocks) {
-        const dataLine = block.split("\n").find((l) => l.startsWith("data: "));
-        if (!dataLine) continue;
-        const payload = dataLine.slice(6);
-        if (payload === "[DONE]") return;
-        try { onEvent(JSON.parse(payload)); } catch { /* 非 JSON 行忽略 */ }
+    const flushBlock = (block: string): boolean => {
+      const dataLine = block.split("\n").find((l) => l.startsWith("data: "));
+      if (!dataLine) return false;
+      const payload = dataLine.slice(6);
+      if (payload === "[DONE]") return true;
+      try { onEvent(JSON.parse(payload)); } catch { /* 非 JSON 行忽略 */ }
+      return false;
+    };
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const blocks = buf.split("\n\n");
+        buf = blocks.pop() ?? "";
+        for (const block of blocks) {
+          if (flushBlock(block)) return;
+        }
       }
+      // 收尾：无空行结尾的最后一个事件（网络截断容错）
+      if (buf.trim() && flushBlock(buf)) return;
+    } finally {
+      reader.releaseLock();
     }
   }
 

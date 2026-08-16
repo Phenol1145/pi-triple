@@ -180,7 +180,7 @@ export function createTemplate(alias: string, templateConfig?: Partial<TemplateC
   // 强制唯一
   for (const [id, tpl] of Object.entries(cfg.templates)) {
     if (tpl.alias === sanitized) {
-      throw new Error(`别名 "${sanitized}" 已被模板 ${id.slice(0, 8)}… 使用`);
+      throw new Error(`别名 "${sanitized}" 已被模板 ${id.slice(0, 8)}… 使用——请换一个别名（ptl template ls 查看已占用别名）`);
     }
   }
 

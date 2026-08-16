@@ -15,6 +15,7 @@ import { execSessionLs } from "../commands/session.js";
 import { execTraceLs } from "../commands/trace.js";
 import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, execEnvFork, parseEnvPatch } from "../env.js";
 import { execExtensionCopy, execSkillCopy } from "../extension-copy.js";
+import { runDoctorStructured } from "../doctor.js";
 
 type PtlMode = "print" | "json";
 
@@ -46,7 +47,12 @@ const JSON_ROUTERS: Record<string, JsonRouter> = {
     return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "env 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
   },
   status: async () => await execStatus(),
-  doctor: async () => await execStatus(),
+  doctor: async () => {
+    const report = await runDoctorStructured("full");
+    return report.allOk
+      ? { ok: true, data: report }
+      : { ok: false, data: report, error: { code: "DOCTOR_CHECKS_FAILED", message: "部分检查未通过（data.checks 含 fix 指引）" } };
+  },
   ls: async () => await execLs(),
   stop: async (sub, passthrough, flags) => await execStop(sub || passthrough[0] || "", flags),
   shared: async (sub) => {
