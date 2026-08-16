@@ -217,7 +217,7 @@
   - 验收：snapshot 冻结后不可变（roles/spaces/extension allowlist/capability policy）；
     builder 在 `build()` 后拒绝修改；重复 ID/非法 capability/非法 policy fail closed；
     排序确定，同 manifest 构建结果一致。
-- [ ] **P3-2 角色/空间全局注册改为 catalog 注入**
+- [x] **P3-2 角色/空间全局注册改为 catalog 注入**——`cfb2b7f`
   - 文件：Create `src/pth/catalog/adapters/builtin-catalog-contributions.ts`、`role-routing-policy.ts`、`space-lookup.ts`；
     Modify `src/pth/kernel/execution/worker-cluster.ts`、`space-registry.ts`、`tag-registry.ts`、`role-router.ts`、
     `src/pth/impls/roles/default-roles.ts`、`src/pth/impls/spaces/builtin-spaces.ts`、
