@@ -211,7 +211,7 @@
 
 ### P3：Catalog 注入与扩展收敛（模块边界整理，不发布三产品 Profile）
 
-- [ ] **P3-1 新建 `src/pth/catalog/`：不可变 `RuntimeCatalogSnapshot` + builder**
+- [x] **P3-1 新建 `src/pth/catalog/`：不可变 `RuntimeCatalogSnapshot` + builder**——`9bec619`
   - 文件：Create `src/pth/catalog/runtime-catalog.ts`、`catalog-builder.ts`、`capability-policy.ts`、
     Create `test/pth-catalog/runtime-catalog.test.ts`。
   - 验收：snapshot 冻结后不可变（roles/spaces/extension allowlist/capability policy）；
