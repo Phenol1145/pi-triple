@@ -70,20 +70,22 @@ export interface SessionBackend {
   formatAge(ms: number): string;
 }
 
+/** 后端注册表：实现模块（tmux-backend）import 时注册——断 session-backend↔tmux-backend 文件级环 */
+const registry = new Map<SessionBackendKind, () => Promise<SessionBackend>>();
+
+export function registerSessionBackend(kind: SessionBackendKind, factory: () => Promise<SessionBackend>): void {
+  registry.set(kind, factory);
+}
+
 /** 后端选择：kind → 实现（tmux 已实现；zellij/screen 扩展点） */
 export async function getSessionBackend(kind?: SessionBackendKind): Promise<SessionBackend> {
   const resolved = kind ?? readBackendConfig();
-  switch (resolved) {
-    case "tmux": {
-      const { createTmuxBackend } = await import("./tmux-backend.js");
-      return createTmuxBackend();
-    }
-    case "zellij":
-    case "screen":
-      throw new Error(`会话后端 "${resolved}" 尚未实现（v1 仅 tmux——zellij/screen 为扩展点）`);
-    default:
-      throw new Error(`unknown session backend kind: ${resolved as string}`);
+  const factory = registry.get(resolved);
+  if (!factory) {
+    const hint = resolved === "tmux" ? "（tmux 实现未注册——请 import @away_from/shared 全 barrel）" : "";
+    throw new Error(`会话后端 "${resolved}" 尚未实现（v1 仅 tmux；zellij/screen 为扩展点）${hint}`);
   }
+  return factory();
 }
 
 /** 配置读取：config `session.backend`（缺省 tmux）——惰性 import 防循环 */

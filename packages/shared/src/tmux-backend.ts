@@ -7,6 +7,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { registerSessionBackend } from "./session-backend.js";
 import type { SessionBackend, SessionBackendKind, SessionCreateResult, SessionLaunch } from "./session-backend.js";
 import {
   buildTmuxSessionArgs,
@@ -81,3 +82,6 @@ export class TmuxBackend implements SessionBackend {
 export function createTmuxBackend(): TmuxBackend {
   return new TmuxBackend();
 }
+
+// 模块优化 P0：实现模块自注册（方向 tmux-backend → session-backend；session-backend 不再反向 dynamic import）
+registerSessionBackend("tmux", async () => createTmuxBackend());
