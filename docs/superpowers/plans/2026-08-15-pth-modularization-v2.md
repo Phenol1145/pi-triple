@@ -148,19 +148,19 @@
     Create `test/pth-tasking/task-dispatcher.test.ts`。
   - 验收：claim 空则不执行；`commit` 返回 `{ committed:false }` 时 runner 结果不触发任何 observer；
     runner 抛错生成 terminal outcome 且不二次执行；行为测试覆盖 pause/stop/stale work item。
-- [ ] **P1-6 将 `TaskLoop` 改为薄兼容 wrapper，保持现有 fork 拓扑**
+- [x] **P1-6 将 `TaskLoop` 改为薄兼容 wrapper，保持现有 fork 拓扑**——`5ea2b0e`（legacy 兼容 + BatchTaskLoop 组合）
   - 文件：Modify `src/pth/kernel/execution/task-loop.ts`、`batch-process.ts`、`batch-manager.ts`；
     Modify `test/pth-kernel-execution/task-loop.test.ts`、`test/pth-kernel-execution/batch-process.integration.test.ts`。
   - 验收：`BatchTaskLoop extends TaskLoop` 改为组合 dispatcher；现有 IPC 消息名与 `runOnce()` 布尔语义不变；
     batch fork 集成测试绿。
-- [ ] **P1-7 新建 `src/pth/runner/observers/`，observer 只在 committed 后 fan-out**
+- [x] **P1-7 新建 `src/pth/runner/observers/`，observer 只在 committed 后 fan-out**——`0922174`（7 observers + 有界队列 + tenantId）
   - 文件：Create `src/pth/runner/observers/audit-observer.ts`、`transcript-observer.ts`、`activity-observer.ts`、
     `metrics-observer.ts`、`notifier-observer.ts`、`refine-observer.ts`、`optimizer-observer.ts`、
     Create `src/pth/tasking/task-outcome-observers.ts`、Create `test/pth-tasking/task-outcome-observers.test.ts`；
     Modify `src/pth/kernel/execution/event-bus.ts`、`activity-hub.ts`、`src/pth/kernel/storage/audit-store.ts`、`transcript-store.ts`。
   - 验收：`committed:false` 不触发任何 observer；单个 observer 失败不影响其他 observer 与已持久化 outcome；
     audit/transcript 写入带 `tenantId`；慢 refine/optimizer 用有界后台队列，不阻塞下一轮 claim。
-- [ ] **P1-8 阶段验收：全量绿线 + 独立提交**
+- [x] **P1-8 阶段验收：全量绿线 + 独立提交**——215 文件 / 1787 测试 + lint/build/check:pth-boundaries 绿（2026-08-16）
   - 运行 `npx vitest run`、`npm run check:pth-boundaries`（tasking/runner 组违规为 0）、`npm run lint`、`npm run build` 全绿。
   - 独立提交：只暂存本阶段列出的文件，`git diff --cached --check` 通过后提交。
 
@@ -249,7 +249,7 @@
 
 ## 每阶段验收统一要求（不通过不得进入下一阶段）
 
-- [ ] 全量 `npx vitest run` 绿（P0 后基线 1742 用例；新增/迁移测试计入后不得有回退）。
+- [ ] 全量 `npx vitest run` 绿（P1 后基线 1787 用例；新增/迁移测试计入后不得有回退）。
 - [ ] `npm run lint` 绿。
 - [ ] `npm run build` 绿。
 - [ ] 独立提交：只暂存该阶段明确列出的文件；`git diff --cached --check` 通过；提交信息按阶段命名
