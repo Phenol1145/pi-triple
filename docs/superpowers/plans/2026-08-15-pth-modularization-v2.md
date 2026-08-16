@@ -181,28 +181,28 @@
     `packages/pth-sandbox/src/sandbox-kernel.ts`、`packages/pth-sandbox/test/sandbox-kernel-host.test.ts`。
   - 验收：`/kernel/acquire` 接受 grant 并返回 opaque `SandboxLease`；`SANDBOX_SHARED_SECRET` 不再作为 kernel 执行认证
     （仅可保留为 controller 内部服务间认证）；malformed/expired/wrong-key/wrong-tenant grant 一律拒绝。
-- [ ] **P2-3 取消/释放竞态闭环：cancel → ack → release**
+- [x] **P2-3 取消/释放竞态闭环：cancel → ack → release**——`083ec6e`
   - 文件：Modify `packages/pth-sandbox/src/kernel-host.ts`、`kernel-pool.ts`、`sandbox-kernel.ts`、`exec-api.ts`；
     Create `packages/pth-sandbox/test/cancel-release-race.test.ts`。
   - 验收：client abort 后必须等 controller 确认执行停止才 release；ack 不可达时 entry 进入 cancelling/disposed，
     绝不乐观回 idle；transport deadline = min(grant deadline, 请求 timeout) + 清理余量，不再用历史固定 10 秒。
-- [ ] **P2-4 stdout/stderr 输出上限 + 统一进程组收割**
+- [x] **P2-4 stdout/stderr 输出上限 + 统一进程组收割**——`a135d5b`
   - 文件：Modify `packages/pth-sandbox/src/exec-api.ts`、`py-kernel.ts`、`bash-kernel.ts`、`compiled-kernel.ts`、`gdb-mi.ts`；
     Create `packages/pth-sandbox/test/output-bound.test.ts`（或并入 `cancel-release-race.test.ts`）。
   - 验收：输出按字节上限截断并返回 contracts `truncated` 标记；超限即杀进程组；
     Python/Bash/C/gdb 的 timeout/abort 均 kill + wait + reap 整棵进程树，无残留后代。
-- [ ] **P2-5 记忆桥收敛为 grant-bound `KnowledgeBroker`（保留 token 化 HTTP 桥为兼容通道）**
+- [x] **P2-5 记忆桥收敛为 grant-bound `KnowledgeBroker`（保留 token 化 HTTP 桥为兼容通道）**——`a2c95f0`
   - 文件：Create `src/pth/execution/knowledge-broker.ts`、`adapters/pth-knowledge-broker.ts`、
     Create `test/pth-execution/knowledge-broker.test.ts`；Modify `src/pth/gateway/routes-kernel.ts`、
     `packages/pth-sandbox/src/kernel-host.ts`（memory-bridge 转发路径）。
   - 验收：执行期知识访问必须带 grant 且具备 `memory.read` capability；body 自报 `space` 不可授权；
     未授权访问返回 403/空；现有 token 化 bridge 测试继续绿（兼容通道）。
-- [ ] **P2-6 liveness/readiness 拆分 + `scripts/check-sandbox-env.sh` 路径修正**
+- [x] **P2-6 liveness/readiness 拆分 + `scripts/check-sandbox-env.sh` 路径修正**——`c65c459`
   - 文件：Modify `packages/pth-sandbox/src/exec-api.ts`、`kernel-host.ts`、`deploy/docker-compose.yaml`；
     Modify `scripts/check-sandbox-env.sh`（扫描 `packages/pth-sandbox/Dockerfile.sandbox`，缺文件必须失败）。
   - 验收：`/health` 只做 liveness；新增 readiness 检查共享密钥/内核池/必要目录；
     compose healthcheck 指向正确端点；`check-sandbox-env.sh` 在目标 Dockerfile 缺失时非零退出。
-- [ ] **P2-7 阶段验收：全量绿线 + 独立提交**
+- [x] **P2-7 阶段验收：全量绿线 + 独立提交**——222 文件 / 1822 测试 + lint/build/boundary/compose + sandbox clean build（2026-08-16）
   - 运行 `npx vitest run`、`npm run lint`、`npm run build` 全绿；
     `docker compose -f deploy/docker-compose.yaml config` 通过；sandbox clean build 冒烟通过。
   - 独立提交：只暂存本阶段列出的文件，`git diff --cached --check` 通过后提交。
@@ -211,13 +211,13 @@
 
 ### P3：Catalog 注入与扩展收敛（模块边界整理，不发布三产品 Profile）
 
-- [ ] **P3-1 新建 `src/pth/catalog/`：不可变 `RuntimeCatalogSnapshot` + builder**
+- [x] **P3-1 新建 `src/pth/catalog/`：不可变 `RuntimeCatalogSnapshot` + builder**——`9bec619`
   - 文件：Create `src/pth/catalog/runtime-catalog.ts`、`catalog-builder.ts`、`capability-policy.ts`、
     Create `test/pth-catalog/runtime-catalog.test.ts`。
   - 验收：snapshot 冻结后不可变（roles/spaces/extension allowlist/capability policy）；
     builder 在 `build()` 后拒绝修改；重复 ID/非法 capability/非法 policy fail closed；
     排序确定，同 manifest 构建结果一致。
-- [ ] **P3-2 角色/空间全局注册改为 catalog 注入**
+- [x] **P3-2 角色/空间全局注册改为 catalog 注入**——`cfb2b7f`
   - 文件：Create `src/pth/catalog/adapters/builtin-catalog-contributions.ts`、`role-routing-policy.ts`、`space-lookup.ts`；
     Modify `src/pth/kernel/execution/worker-cluster.ts`、`space-registry.ts`、`tag-registry.ts`、`role-router.ts`、
     `src/pth/impls/roles/default-roles.ts`、`src/pth/impls/spaces/builtin-spaces.ts`、
@@ -225,23 +225,23 @@
   - 验收：`RoleRoutingPolicy`/`SpaceLookup` 读取注入的 snapshot；`assembly.ts` 与 `batch-process.ts`
     由同一 manifest 构建出等价 catalog（测试断言角色/空间/扩展键一致）；
     旧全局 getter 仅作 deprecated 兼容出口，新生产代码零调用。
-- [ ] **P3-3 扩展贡献显式化：`ExtRegistry` 只支持有真实宿主路径的贡献**
+- [x] **P3-3 扩展贡献显式化：`ExtRegistry` 只支持有真实宿主路径的贡献**——`892a286`
   - 文件：Create `src/pth/catalog/extensions/contribution-schema.ts`、`extension-loader.ts`、`extension-context.ts`、`extension-policy.ts`；
     Modify `src/pth/kernel/extensions/ext-registry.ts`、`src/pth/kernel/interpreter/ext-capability.ts`、
     `scripts/ext-check.ts`；Modify `test/pth-kernel-execution/ext-registry.test.ts` 等既有扩展测试。
   - 验收：仅 roles/spaces/observers/capabilityPolicies 等有宿主实现的贡献可进 catalog；
     不支持的 `tools`/`events`/`kernels`/`debugAdapters`/`onStartup` 声明被拒绝并给出诊断；
     `ext-check.ts` 区分 PTH 插件 / 外来工具目录 / 坏插件，坏插件失败、外来目录不报错。
-- [ ] **P3-4 新建 `src/pth/bootstrap/`：统一装配入口（单 Host + module manifest，不发布三产品 Profile）**
+- [x] **P3-4 新建 `src/pth/bootstrap/`：统一装配入口（单 Host + module manifest，不发布三产品 Profile）**——`130f429`
   - 文件：Create `src/pth/bootstrap/pth-host.ts`、`module-manifest.ts`、`bootstrap-config.ts`；
     Modify `src/pth/kernel/assembly.ts`、`src/pth/main.ts`、`src/pth/kernel/execution/batch-process.ts`。
   - 验收：main 与 batch-process 共用同一 manifest/catalog 构建路径；缺依赖、未知 module、非法 policy 在监听端口前 fail closed；
     `createKernelRuntime()` 作为 deprecated 兼容入口保留；**不引入** `PTH_PROFILE=control|standard|full` 产品选择。
-- [ ] **P3-5 边界检查覆盖新模块目录并纳入 CI 语义**
+- [x] **P3-5 边界检查覆盖新模块目录并纳入 CI 语义**——`f43adad`
   - 文件：Modify `scripts/check-pth-boundaries.ts`、`package.json`；Create `test/pth-architecture/final-boundaries.test.ts`。
   - 验收：`npm run check:pth-boundaries` 对 `contracts/tasking/runner/execution/catalog/bootstrap/gateway` 全量执行，
     违规为 0；测试证明 bootstrap 可组装 adapters，业务模块不可 import 他方 storage adapter。
-- [ ] **P3-6 阶段验收：全量绿线 + 独立提交 + 旧计划 Retirement notice**
+- [x] **P3-6 阶段验收：全量绿线 + 独立提交 + 旧计划 Retirement notice**——227 文件 / 1842 测试 + lint/build/boundary 绿（2026-08-16）
   - 运行 `npx vitest run`、`npm run lint`、`npm run build`、`npm run check:pth-boundaries` 全绿。
   - 独立提交：只暂存本阶段列出的文件与旧计划 Retirement notice 标注，`git diff --cached --check` 通过后提交。
 
@@ -249,10 +249,10 @@
 
 ## 每阶段验收统一要求（不通过不得进入下一阶段）
 
-- [ ] 全量 `npx vitest run` 绿（P1 后基线 1787 用例；新增/迁移测试计入后不得有回退）。
-- [ ] `npm run lint` 绿。
-- [ ] `npm run build` 绿。
-- [ ] 独立提交：只暂存该阶段明确列出的文件；`git diff --cached --check` 通过；提交信息按阶段命名
+- [x] 全量 `npx vitest run` 绿（P3 后基线 1842 用例；新增/迁移测试计入后不得有回退）。
+- [x] `npm run lint` 绿。
+- [x] `npm run build` 绿。
+- [x] 独立提交：只暂存该阶段明确列出的文件；`git diff --cached --check` 通过；提交信息按阶段命名
   （例如 `refactor(pth): P0 contracts and gateway facade`）。
 
 ## 不在本计划内（由其他 ADR / 计划管理）
@@ -274,8 +274,8 @@
 
 ## 计划完成后：旧五份计划处理
 
-- [ ] 在五份旧计划文件顶部统一添加 Retirement notice（不删除正文）：
+- [x] 在五份旧计划文件顶部统一添加 Retirement notice（不删除正文）：
   > **Retirement notice（2026-08-15）**：本计划已由 `2026-08-15-pth-modularization-v2.md` 取代，
   > 仅保留为历史参考，不再作为执行依据。
-- [ ] 五份文件保留在 `docs/superpowers/plans/` 下，git 历史完整保留。
-- [ ] 本 v2 计划成为唯一执行入口；后续如需新增模块化工作，先更新本文件或另立新计划。
+- [x] 五份文件保留在 `docs/superpowers/plans/` 下，git 历史完整保留。
+- [x] 本 v2 计划成为唯一执行入口；后续如需新增模块化工作，先更新本文件或另立新计划。
