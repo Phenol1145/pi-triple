@@ -9,6 +9,7 @@ dist/
 *.tgz
 *.zip
 pi-triple.json
+.env.pth.secrets
 .DS_Store
 .worktrees/
 *.sha256
