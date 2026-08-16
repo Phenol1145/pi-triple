@@ -276,6 +276,8 @@
   与 `docs/pth/deployment.md` 互链。
 - 文件：Create `docs/pth/sandbox-security-operations.md`；Modify `docs/pth/deployment.md`
   （安全运维段链接）。
+- 进度（2026-08-16 等待期草稿）：运维手册当前态已建（密钥轮换/lease-drain/回滚等 8 节），
+  deployment.md 已互链；P2 落地后按手册 §8 修订点补 grant/cancel-ack/readiness 语义后再勾本项。
 
 ### - [ ] S2-5 收账：包 TODO 勾平 + 审计状态回填 + 阶段门禁
 
