@@ -31,6 +31,7 @@
     "monitor": "node tools/docker-monitor/server.js",
     "ptl:dev": "tsx packages/framework/src/pit.ts",
     "ext:check": "tsx scripts/ext-check.ts",
+    "check:pth-boundaries": "tsx scripts/check-pth-boundaries.ts",
     "pth": "tsx scripts/pth-cli.ts"
   },
   "dependencies": {
