@@ -168,14 +168,14 @@
 
 ### P2：Execution 隔离收口（grant 化 + 取消/释放竞态 + 输出与进程边界）
 
-- [ ] **P2-1 新建 `src/pth/execution/`，实现 `ExecutionPort` + 签名 `ExecutionGrantService`**
+- [x] **P2-1 新建 `src/pth/execution/`，实现 `ExecutionPort` + 签名 `ExecutionGrantService`**——`eeb97c5`
   - 文件：Create `src/pth/execution/execution-service.ts`、`authorization/execution-grant-service.ts`、
     `authorization/grant-key-provider.ts`、`adapters/sandbox-execution-adapter.ts`、`index.ts`、
     Create `test/pth-execution/execution-grant-service.test.ts`、`sandbox-execution-adapter.test.ts`；
     Modify `src/pth/contracts/execution.ts`（若 P0 已建）。
   - 验收：grant 绑定 lease/scope/workspace/language/capability/generation/deadline，可验证过期、重放、generation 不匹配；
     签名密钥由 bootstrap 注入，无默认 `sandbox-dev-secret`。
-- [ ] **P2-2 sandbox `acquire` 改为 grant 校验，退役执行认证共享密钥**
+- [x] **P2-2 sandbox `acquire` 改为 grant 校验，退役执行认证共享密钥**——`6602816`
   - 文件：Create `packages/pth-sandbox/src/authorization/grant-verifier.ts`、
     Create `packages/pth-sandbox/test/grant-verifier.test.ts`；Modify `packages/pth-sandbox/src/kernel-host.ts`、
     `packages/pth-sandbox/src/sandbox-kernel.ts`、`packages/pth-sandbox/test/sandbox-kernel-host.test.ts`。
