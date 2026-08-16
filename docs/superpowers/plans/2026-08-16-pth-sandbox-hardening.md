@@ -123,6 +123,7 @@
 - 同步 v2 P1-1/P1-2 后回归（`ef422a7`）：lint/build 绿；211 文件 / 1769 用例中 1768 通过；
   唯一失败为 v2 侧 mid-P1 的 `phase-boundaries.test.ts`（`pg-task-repository.ts` 新违规未入 baseline，
   属 v2 P1 未完成态，非本计划代码）。
+- 同步 v2 P1-3/P1-4 后回归（`72c0ec6`）：lint/build 绿；本计划相关 28 文件 / 245 用例全绿。
 
 ---
 
