@@ -239,6 +239,8 @@
   （新增 `verify:sandbox-build` 脚本，不改动现有脚本语义）。
 - 验收：Dockerfile 路径缺失时脚本失败；正常 clean build 退出 0；
   `docker compose config` 在未提供 `SANDBOX_SHARED_SECRET` 时失败（`:?` 生效）。
+- 执行证据（2026-08-16）：缺失密钥分支实测非零退出；`npm run verify:sandbox-build`
+  完整跑通（compose config + 无缓存镜像构建，镜像 `sha256:65a3d30a…`，构建未注入密钥）。
 
 ### - [ ] S2-3 证据：hostile integration matrix
 
