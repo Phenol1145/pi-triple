@@ -275,8 +275,9 @@
   （lease 校验已有）；计划按当前实现编写，v2 P2 落地后由 S2-5 收账时补矩阵列。
 - 进度（2026-08-16 等待期骨架）：测试文件已建（门控 `PTH_SANDBOX_INTEGRATION=1`，
   独立 compose project + loopback 随机端口 override）；当前协议断言 5 条已写
-  （无发布端口/workload env 剥离/kernelId 退役/opaque lease+bridge fail-closed），
-  P2_TODO 矩阵 2/5/6/7 已占位。无门控运行时 9/9 skip、lint 绿。
+  （无发布端口/workload env 剥离/kernelId 退役/grant verifier 缺失 fail-closed/bridge fail-closed），
+  P2_TODO 矩阵 2/4d/5/6/7 已占位。无门控运行时 10/10 skip、lint 绿。
+  已随 P2-2 语义更新：共享密钥 acquire 断言替换为「未配置 grant verifier → 503」。
 
 ### - [ ] S2-4 运维：`docs/pth/sandbox-security-operations.md`
 
