@@ -266,6 +266,10 @@
   有门控 + docker 环境下矩阵全绿；README/plan 记录运行方法与清理命令。
 - 依赖：第 2/4/5 条在 v2 P2 grant/cancel-ack 未落地前只能断言**当前协议**的拒绝行为
   （lease 校验已有）；计划按当前实现编写，v2 P2 落地后由 S2-5 收账时补矩阵列。
+- 进度（2026-08-16 等待期骨架）：测试文件已建（门控 `PTH_SANDBOX_INTEGRATION=1`，
+  独立 compose project + loopback 随机端口 override）；当前协议断言 5 条已写
+  （无发布端口/workload env 剥离/kernelId 退役/opaque lease+bridge fail-closed），
+  P2_TODO 矩阵 2/5/6/7 已占位。无门控运行时 9/9 skip、lint 绿。
 
 ### - [ ] S2-4 运维：`docs/pth/sandbox-security-operations.md`
 
