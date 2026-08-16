@@ -142,7 +142,7 @@
 
 ## S1：观测与容量缺口（N5 L3 + 残余竞态）
 
-### - [ ] S1-1 MEDIUM：kernel 池容量/回收/TTL 观测接入 N5 资源环（L3）
+### - [x] S1-1 MEDIUM：kernel 池容量/回收/TTL 观测接入 N5 资源环（L3）
 
 - 现状：`/kernel/status` 与 `obs.kernels()` 已存在；`obs.resource()` 聚合里没有 kernels。
 - 目标行为：
@@ -157,6 +157,8 @@
   Create `test/pth-kernel-extensions/obs-resource.test.ts`。
 - 验收：status 含计数且池满/TTL dispose 后数值正确；`obs.resource()` 在 sandbox URL
   可达时含 `kernels`，不可达时降级为 error 字段且其余数据源照常。
+- 执行证据（2026-08-16 `3c8a6f4`）：lint + `check:pth-boundaries` 绿；新增 6 用例全绿；
+  sandbox 包 + extensions 回归 21 文件 / 178 用例全绿。
 
 ### - [ ] S1-2 MEDIUM：编译核 cache key 纳入 compiler 身份
 
