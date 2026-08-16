@@ -181,7 +181,7 @@
     `packages/pth-sandbox/src/sandbox-kernel.ts`、`packages/pth-sandbox/test/sandbox-kernel-host.test.ts`。
   - 验收：`/kernel/acquire` 接受 grant 并返回 opaque `SandboxLease`；`SANDBOX_SHARED_SECRET` 不再作为 kernel 执行认证
     （仅可保留为 controller 内部服务间认证）；malformed/expired/wrong-key/wrong-tenant grant 一律拒绝。
-- [ ] **P2-3 取消/释放竞态闭环：cancel → ack → release**
+- [x] **P2-3 取消/释放竞态闭环：cancel → ack → release**——`083ec6e`
   - 文件：Modify `packages/pth-sandbox/src/kernel-host.ts`、`kernel-pool.ts`、`sandbox-kernel.ts`、`exec-api.ts`；
     Create `packages/pth-sandbox/test/cancel-release-race.test.ts`。
   - 验收：client abort 后必须等 controller 确认执行停止才 release；ack 不可达时 entry 进入 cancelling/disposed，
