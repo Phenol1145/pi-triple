@@ -117,6 +117,26 @@
 - 执行证据（2026-08-16）：lint/build 绿；全量 1733/1733 用例通过；
   两次全量运行各有 1–2 个 testcontainers 用例 `afterAll` 容器停止超时（环境性），
   `transcript-audit.test.ts` 与 `pg.test.ts` 单跑全绿。
+- 联合门禁（合入 v2 P0 后，`98b24e8`）：lint/build 绿；210 文件 / 1759 用例中 1758 通过；
+  1 个 timing 敏感的 batch fork 集成用例与 1 个 testcontainers `afterAll` 超时为环境性 flake，
+  `batch-manager-fork.integration.test.ts`、`pg.test.ts`、`transcript-audit.test.ts` 单跑全绿。
+- 同步 v2 P1-1/P1-2 后回归（`ef422a7`）：lint/build 绿；211 文件 / 1769 用例中 1768 通过；
+  唯一失败为 v2 侧 mid-P1 的 `phase-boundaries.test.ts`（`pg-task-repository.ts` 新违规未入 baseline，
+  属 v2 P1 未完成态，非本计划代码）。
+- 同步 v2 P1-3/P1-4 后回归（`72c0ec6`）：lint/build 绿；本计划相关 28 文件 / 245 用例全绿。
+- 同步 v2 P1-5 后回归（`29bf6d0`）：lint/build 绿；`check:pth-boundaries` 当前违规 0 条；
+  本计划相关 28 文件 / 245 用例全绿。
+- 同步 v2 P1-5 后全量回归（`41dfabd`）：**214 文件 / 1782 用例全绿**（一次通过，无 flake）。
+- 同步 v2 P1-6 后回归（`d0f0025`）：lint/build 绿；本计划相关 28 文件 / 249 用例全绿
+  （含 S0 验收补强的 IPv6 与同名 shell 函数用例）。
+- S0 验收补强后全量回归（`3bfea7b` 态）：**214 文件 / 1786 用例全绿**（一次通过）。
+- 同步 v2 P1 收账 + P2-1 后回归（`2e34990`）：lint/build 绿；本计划相关 30 文件 /
+  259 用例绿，hostile matrix 骨架 9/9 skip（门控未开）。
+- 同步 v2 P1 收账 + P2-1 后全量（`193b55d` 态）：218 文件 / 1810 用例（1 skipped）中
+  1800 通过；唯一失败为 batch fork 集成用例 2.5s 时序 flake，单跑 3/3 全绿。
+- 同步 v2 P2-1/P2-2 后回归（`cf902eb`）：lint/build 绿；本计划相关 31 文件 / 274 用例中
+  263 通过、9 skip；2 个失败在 `kernel-manager-sandbox.test.ts`——Side A 的 grant 化后
+  该测试文件尚未随 P2-2 更新（构造 SandboxKernel 未传 grant），非本计划代码，待 v2 P2 收账修复。
 
 ---
 
@@ -233,6 +253,8 @@
   （新增 `verify:sandbox-build` 脚本，不改动现有脚本语义）。
 - 验收：Dockerfile 路径缺失时脚本失败；正常 clean build 退出 0；
   `docker compose config` 在未提供 `SANDBOX_SHARED_SECRET` 时失败（`:?` 生效）。
+- 执行证据（2026-08-16）：缺失密钥分支实测非零退出；`npm run verify:sandbox-build`
+  完整跑通（compose config + 无缓存镜像构建，镜像 `sha256:65a3d30a…`，构建未注入密钥）。
 
 ### - [ ] S2-3 证据：hostile integration matrix
 
@@ -251,6 +273,10 @@
   有门控 + docker 环境下矩阵全绿；README/plan 记录运行方法与清理命令。
 - 依赖：第 2/4/5 条在 v2 P2 grant/cancel-ack 未落地前只能断言**当前协议**的拒绝行为
   （lease 校验已有）；计划按当前实现编写，v2 P2 落地后由 S2-5 收账时补矩阵列。
+- 进度（2026-08-16 等待期骨架）：测试文件已建（门控 `PTH_SANDBOX_INTEGRATION=1`，
+  独立 compose project + loopback 随机端口 override）；当前协议断言 5 条已写
+  （无发布端口/workload env 剥离/kernelId 退役/opaque lease+bridge fail-closed），
+  P2_TODO 矩阵 2/5/6/7 已占位。无门控运行时 9/9 skip、lint 绿。
 
 ### - [ ] S2-4 运维：`docs/pth/sandbox-security-operations.md`
 
@@ -261,6 +287,8 @@
   与 `docs/pth/deployment.md` 互链。
 - 文件：Create `docs/pth/sandbox-security-operations.md`；Modify `docs/pth/deployment.md`
   （安全运维段链接）。
+- 进度（2026-08-16 等待期草稿）：运维手册当前态已建（密钥轮换/lease-drain/回滚等 8 节），
+  deployment.md 已互链；P2 落地后按手册 §8 修订点补 grant/cancel-ack/readiness 语义后再勾本项。
 
 ### - [ ] S2-5 收账：包 TODO 勾平 + 审计状态回填 + 阶段门禁
 
@@ -273,6 +301,24 @@
 - 独立提交：只暂存本子项列出的文档与账本文件。
 
 ---
+
+## 附录：S1 实施锚点（2026-08-16 等待 v2 P2 期间预研，开工时以当时的 main 为准复核）
+
+- **S1-1（N5 L3）**：`KernelPool` 增计数器字段（acquire 成功 / 池满排队拒绝 / TTL dispose /
+  lease 拒绝 / release 幂等），在 `tryAcquireNow`/`acquire` 超时分支/`disposeEntry`/`execute` 校验
+  拒绝路径/`release` 幂等分支各 +1；`status()` 附 `metrics` 对象。
+  `registerKernelHost` 的 `/kernel/status` 把两池 `status()` 的 metrics 合并进返回；
+  `obs.ts` 的 `obs.resource()` 复用 `obs.kernels()` 的受信 fetch（失败降级 `{error}`）。
+- **S1-2**：`compiled-kernel.ts` `const hash = sha256(source)` → `sha256(`${this.cc}\n${source}`)`
+  （hash 目录名长度变化无兼容问题——扫描以 `name.length >= 8` 为准；旧条目由磁盘上限自然淘汰）。
+- **S1-3**：`gdb-mi.ts` 构造器 `this.id = c-debug-${Date.now().toString(36)}` → `c-debug-${randomUUID()}`；
+  kernel-host attach 入 Map 前唯一性检查；`pending` 数组 → 带 token 的请求队列（或固化单飞约束 + 重入拒绝）。
+- **S1-4**：`bash-kernel.ts` `run()` 生成 `__BASH_DONE_<nonce>_$?__` 并只匹配当前 nonce；
+  `exec-api.ts` `StreamJob.onDone` 单槽 → `Set<() => void>`；`registerKernelHost` 返回/暴露
+  `dispose()`（dispose 两池 entries + detach 全部 debug 会话 + 清 stream jobs）。
+- **S1-5**：新增 `packages/pth-sandbox/src/health-state.ts`：跟踪
+  共享密钥缺失 / bridge token 缺失 / 池满拒绝 / 编译并发满拒绝 → `degraded + reasons[]`；
+  `/kernel/status` 暴露；日志只记状态跃迁。/health 语义改动留给 v2 P2-6。
 
 ## 并行执行约定（2026-08-16 用户裁决：fork 两侧并行）
 
