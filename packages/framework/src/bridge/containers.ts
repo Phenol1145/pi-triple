@@ -16,6 +16,7 @@
 import { resolve } from "node:path";
 import { loadDeployment } from "../containers/deployment.js";
 import { getBackend, type BackendKind } from "../containers/backend.js";
+import "../containers/docker-backend.js"; // 模块专项 ④：注册 docker 容器后端实现
 
 const DEPLOYMENT_FILE = "pth.deployment.json";
 

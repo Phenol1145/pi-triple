@@ -4,6 +4,10 @@
  * ptl.ts print/json 模式和 TUI 命令栏都调用这些函数。
  * 每个函数返回 CommandResult，由调用方决定渲染方式。
  */
+import type { CommandResult } from "./commands-types.js";
+export type { CommandResult } from "./commands-types.js";
+
+
 
 import fs from "node:fs";
 import path from "node:path";
@@ -35,13 +39,6 @@ import { WorkspaceManager, detectPlatform } from "@away_from/infra";
 
 // ─── Types ───────────────────────────────────────────────────
 
-export interface CommandResult {
-  ok: boolean;
-  message: string;
-  data?: any;
-  error?: { code: string; message: string; candidates?: string[] };
-  handoff?: { cmd: string; args: string[] };
-}
 
 // ─── Commands ────────────────────────────────────────────────
 

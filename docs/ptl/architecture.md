@@ -127,6 +127,9 @@ docker compose 渲染（已实现） | podman/k8s（扩展点）
 ```
 
 代码：`packages/framework/src/containers/`（PTL 侧运维库——不依赖 PTH 内部实现）。渲染产物 `pth.deploy/`（gitignore）。
+实现注册方向（模块专项 ④）：`backend.ts` 只定义接口与注册表，`docker-backend.ts` 经
+`registerContainerBackend("docker", …)` 自注册；CLI 共享的 `CommandResult` 类型在
+`commands-types.ts`（session 层不反向 import commands.ts）。
 
 ## 归档物（archive/）
 

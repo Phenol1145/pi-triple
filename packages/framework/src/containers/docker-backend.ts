@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Deployment } from "./deployment.js";
+import { registerContainerBackend } from "./backend.js";
 import type { ContainerBackend, BackendStatus, ServiceStatus } from "./backend.js";
 
 export const COMPOSE_GEN_DIR = "pth.deploy";
@@ -214,3 +215,6 @@ function mapHealth(h: string): ServiceStatus["health"] | undefined {
   if (h === "unhealthy") return "unhealthy";
   return "starting";
 }
+
+// 模块专项 ④：实现模块自注册（方向 docker-backend → backend；backend 不再反向 dynamic import）
+registerContainerBackend("docker", async () => new DockerBackend());

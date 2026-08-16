@@ -1,4 +1,4 @@
-import type { CommandResult } from "../commands.js";
+import type { CommandResult } from "../commands-types.js";
 
 export interface SessionRecord {
   id: string;

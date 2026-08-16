@@ -35,17 +35,18 @@ export interface ContainerBackend {
   available(): Promise<boolean>;
 }
 
-/** 后端选择：kind → 实现（docker 已实现；podman/k8s 占位——扩展点） */
+/** 后端注册表：实现模块 import 时自注册（模块专项 ④ 断 backend↔docker-backend 文件环） */
+const registry = new Map<BackendKind, () => Promise<ContainerBackend>>();
+
+export function registerContainerBackend(kind: BackendKind, factory: () => Promise<ContainerBackend>): void {
+  registry.set(kind, factory);
+}
+
+/** 后端选择：kind → 实现（docker-backend 自注册；podman/k8s 占位——扩展点） */
 export async function getBackend(kind: BackendKind): Promise<ContainerBackend> {
-  switch (kind) {
-    case "docker": {
-      const { DockerBackend } = await import("./docker-backend.js");
-      return new DockerBackend();
-    }
-    case "podman":
-    case "k8s":
-      throw new Error(`容器后端 "${kind}" 尚未实现（v0.7 仅 docker——podman/k8s 为扩展点）`);
-    default:
-      throw new Error(`unknown backend kind: ${kind as string}`);
+  const factory = registry.get(kind);
+  if (!factory) {
+    throw new Error(`容器后端 "${kind}" 尚未实现（v0.7 仅 docker——podman/k8s 为扩展点）`);
   }
+  return factory();
 }
