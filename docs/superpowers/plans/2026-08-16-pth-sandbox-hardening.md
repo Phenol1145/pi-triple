@@ -210,7 +210,7 @@
 - 执行证据（2026-08-16 `0355931`）：lint + boundaries 绿；bash/exec-api/kernel-host 45 用例全绿
   （含伪造旧标记、真实双 SSE 订阅、handle.dispose 幂等）。
 
-### - [ ] S1-5 MEDIUM：sandbox 侧 degraded 观测（与 v2 P2-6 readiness 互补）
+### - [x] S1-5 MEDIUM：sandbox 侧 degraded 观测（与 v2 P2-6 readiness 互补）
 
 - 现状：PTH 侧 degraded 监控已落（`sandbox-bash.ts:91` + `routes-self.ts`）；
   sandbox 自身 `/health` 无条件 200、`/kernel/status` 无 degraded 维度。
@@ -224,6 +224,8 @@
   Modify `packages/pth-sandbox/test/sandbox-kernel-host.test.ts`。
 - 验收：缺密钥/缺 token/池满场景 status.degraded=true 且 reasons 准确；
   恢复后转 false；与 v2 P2-6 落地后的 readiness 接线留 TODO 注释。
+- 执行证据（2026-08-16 `004e9cc`）：lint + boundaries 绿；kernel-host/readiness 28 用例全绿
+  （缺密钥、缺 token、池满、编译并发四条件各自断言 + 恢复清除）。
 
 ### - [ ] S1-6 阶段门禁
 
