@@ -191,18 +191,18 @@
     Create `packages/pth-sandbox/test/output-bound.test.ts`（或并入 `cancel-release-race.test.ts`）。
   - 验收：输出按字节上限截断并返回 contracts `truncated` 标记；超限即杀进程组；
     Python/Bash/C/gdb 的 timeout/abort 均 kill + wait + reap 整棵进程树，无残留后代。
-- [ ] **P2-5 记忆桥收敛为 grant-bound `KnowledgeBroker`（保留 token 化 HTTP 桥为兼容通道）**
+- [x] **P2-5 记忆桥收敛为 grant-bound `KnowledgeBroker`（保留 token 化 HTTP 桥为兼容通道）**——`a2c95f0`
   - 文件：Create `src/pth/execution/knowledge-broker.ts`、`adapters/pth-knowledge-broker.ts`、
     Create `test/pth-execution/knowledge-broker.test.ts`；Modify `src/pth/gateway/routes-kernel.ts`、
     `packages/pth-sandbox/src/kernel-host.ts`（memory-bridge 转发路径）。
   - 验收：执行期知识访问必须带 grant 且具备 `memory.read` capability；body 自报 `space` 不可授权；
     未授权访问返回 403/空；现有 token 化 bridge 测试继续绿（兼容通道）。
-- [ ] **P2-6 liveness/readiness 拆分 + `scripts/check-sandbox-env.sh` 路径修正**
+- [x] **P2-6 liveness/readiness 拆分 + `scripts/check-sandbox-env.sh` 路径修正**——`c65c459`
   - 文件：Modify `packages/pth-sandbox/src/exec-api.ts`、`kernel-host.ts`、`deploy/docker-compose.yaml`；
     Modify `scripts/check-sandbox-env.sh`（扫描 `packages/pth-sandbox/Dockerfile.sandbox`，缺文件必须失败）。
   - 验收：`/health` 只做 liveness；新增 readiness 检查共享密钥/内核池/必要目录；
     compose healthcheck 指向正确端点；`check-sandbox-env.sh` 在目标 Dockerfile 缺失时非零退出。
-- [ ] **P2-7 阶段验收：全量绿线 + 独立提交**
+- [x] **P2-7 阶段验收：全量绿线 + 独立提交**——222 文件 / 1822 测试 + lint/build/boundary/compose + sandbox clean build（2026-08-16）
   - 运行 `npx vitest run`、`npm run lint`、`npm run build` 全绿；
     `docker compose -f deploy/docker-compose.yaml config` 通过；sandbox clean build 冒烟通过。
   - 独立提交：只暂存本阶段列出的文件，`git diff --cached --check` 通过后提交。
