@@ -79,3 +79,4 @@
 **记忆侧**（→ packages/pth-memory/TODO.md）：H3 谓词下推 · H5 统一入口 · H6 store 纵深 · H7 来源校验 · memoryScope own 读侧 · readSource/toolstore symlink（与沙箱协同）
 
 **沙箱侧**（→ packages/pth-sandbox/TODO.md）：web.fetchText DNS rebinding/流式限量 · N5 资源环 L3 · 编译核/gdb 容量复核 · sandbox exec-api 健康观测
+  → 执行入口（2026-08-16）：`docs/superpowers/plans/2026-08-16-pth-sandbox-hardening.md`（S0–S2）

@@ -111,6 +111,13 @@ builder 只复制 `tsconfig.json`，但 pth-memory 和 pth-sandbox 的 tsconfig 
 | P1-5 | `/health` 无条件返回 200，即使共享密钥缺失、所有执行端点均为 503，Compose 会错误放行依赖。 | `exec-api.ts:253-271`; `docker-compose.yaml:72-77, 123-127` | 拆分 liveness 与 readiness；readiness 检查密钥、内核池和必要目录。 |
 | P1-6 | `ptl hub deploy` 的声明式描述文件路径与 schema/渲染器脱节；即使读取成功也会丢失 PTH 的双网络，使它无法访问 sandbox。 | `packages/framework/src/bridge/containers.ts:20`; `packages/framework/src/containers/deployment.ts:16`; `packages/framework/src/containers/docker-backend.ts:62` | 修正 descriptor 定位、schema 与 renderer；添加实际渲染后的连通性测试。在完成前以手写 Compose 为唯一部署路径。 |
 
+> **处置去向（2026-08-16 补账，执行入口 `docs/superpowers/plans/2026-08-16-pth-sandbox-hardening.md`）**：
+> P1-1 → v2 `pth-modularization-v2.md` P2-3（cancel-ack-release）；P1-2 → v2 P1-4（runner 侧 await reset）；
+> P1-3/P1-4 → v2 P2-4（输出上限 + 进程组收割）；P1-5 → v2 P2-6（liveness/readiness + check-sandbox-env.sh 路径）；
+> P1-6 → 已落地（`2f97600`）。下方 P2 五条：Bash 标记竞态/StreamJob/shutdown → 加固计划 S1-4；
+> gdb 上限+idle 已部分落地、ID 竞态与 pending 关联 → S1-3；编译 cache key 缺 compiler 身份 → S1-2；
+> `check-sandbox-env.sh` 路径 → v2 P2-6。
+
 ## P2：应纳入后续加固
 
 - Bash 使用固定完成标记，用户输出和 stdout/stderr 跨流时序可导致响应提前结束或错配：`packages/pth-sandbox/src/bash-kernel.ts:246-286`。

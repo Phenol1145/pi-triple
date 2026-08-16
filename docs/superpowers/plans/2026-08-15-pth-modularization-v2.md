@@ -240,6 +240,9 @@
   ——本计划不重做、不扩围，只在这些文件跨越模块边界时做 import/装配调整。
 - **数据库 schema 大改**：除 P1-1 幂等 lease 列外，不做表结构重设计。
 - **Docker/mailbox/dev-container 包内业务整理**：各包按包内 TODO 独立推进。
+- **pth-sandbox 包长尾与旧 Task 5/6 孤儿交付物**（H8/H9、fetchText 流式、symlink 防线、
+  N5 资源环 L3、编译核/gdb 残余、sandbox 侧 degraded、hostile matrix、ops doc、clean-build 脚本）：
+  由 `2026-08-16-pth-sandbox-hardening.md` 承接；与本计划 P2 的分工边界以该计划为准。
 
 ## 计划完成后：旧五份计划处理
 
