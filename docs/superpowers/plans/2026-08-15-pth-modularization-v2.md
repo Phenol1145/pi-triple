@@ -186,7 +186,7 @@
     Create `packages/pth-sandbox/test/cancel-release-race.test.ts`。
   - 验收：client abort 后必须等 controller 确认执行停止才 release；ack 不可达时 entry 进入 cancelling/disposed，
     绝不乐观回 idle；transport deadline = min(grant deadline, 请求 timeout) + 清理余量，不再用历史固定 10 秒。
-- [ ] **P2-4 stdout/stderr 输出上限 + 统一进程组收割**
+- [x] **P2-4 stdout/stderr 输出上限 + 统一进程组收割**——`a135d5b`
   - 文件：Modify `packages/pth-sandbox/src/exec-api.ts`、`py-kernel.ts`、`bash-kernel.ts`、`compiled-kernel.ts`、`gdb-mi.ts`；
     Create `packages/pth-sandbox/test/output-bound.test.ts`（或并入 `cancel-release-race.test.ts`）。
   - 验收：输出按字节上限截断并返回 contracts `truncated` 标记；超限即杀进程组；
