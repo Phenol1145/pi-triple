@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createToolstore } from "../src/pth/kernel/interpreter/toolstore.js";
 import { ExtRegistry, buildStdExtChannels, type ExtContext } from "../src/pth/kernel/extensions/ext-registry.js";
+import { classifyExtensionDir } from "../src/pth/catalog/extensions/extension-policy.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TOOLSTORE = path.join(ROOT, "toolstore");
@@ -27,6 +28,27 @@ async function main(): Promise<number> {
   for (const id of targets) {
     const dir = path.join(TOOLSTORE, "extensions", id);
     const pluginJson = path.join(dir, "plugin.json");
+    // P3-3：目录分类——无 plugin.json 的外来工具目录不报错；坏插件失败并给诊断
+    const hasPluginJson = await import("node:fs/promises").then(({ access }) => access(pluginJson).then(() => true).catch(() => false));
+    let manifest: { contracts?: unknown } | undefined;
+    let manifestError: string | undefined;
+    if (hasPluginJson) {
+      try {
+        manifest = JSON.parse(await ts.readText(`extensions/${id}/plugin.json`)) as { contracts?: unknown };
+      } catch (e) {
+        manifestError = (e as Error).message;
+      }
+    }
+    const classification = classifyExtensionDir({ hasPluginJson, manifest, manifestError });
+    if (classification.class === "external-dir") {
+      console.log(`── ${id}：外来工具目录（无 plugin.json）——跳过（不报错）`);
+      continue;
+    }
+    if (classification.class === "bad-plugin") {
+      console.error(`── ${id}：坏插件（${classification.diagnostics.join("；")}）`);
+      failures++;
+      continue;
+    }
     // 入口探测：index.js 优先（checkJs + JSDoc 类型友好）——index.ts 向后兼容
     let indexFile = path.join(dir, "index.js");
     try {
