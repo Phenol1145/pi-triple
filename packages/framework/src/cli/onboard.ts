@@ -83,7 +83,7 @@ function defaultDeps(): OnboardDeps {
       const templateDir = path.join(dataDir, "pi-config", templateId);
       const alias = getTemplateAlias(templateId, config);
       const exists = fs.existsSync(templateDir) && fs.existsSync(path.join(templateDir, "settings.json"));
-      if (!exists) await migrate({ templateId });
+      if (!exists) await migrate({ templateId, quietIfNoSource: true });
       return { created: !exists, alias };
     },
     initShared: (sharedDir) => {

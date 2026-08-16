@@ -5,8 +5,8 @@
  * 后续启动：快速检查（跳过已通过项）
  *
  * 用法：
- *   npm run doctor          # 独立运行完整检查
- *   npm run tui             # 启动前自动快速检查
+ *   ptl doctor              # 独立运行完整检查
+ *   ptl tui dashboard       # 启动前自动快速检查
  */
 
 import { execSync, spawnSync } from "node:child_process";
@@ -453,7 +453,7 @@ export async function runDoctor(mode: "full" | "quick" = "full"): Promise<boolea
     console.log("  \x1b[32m✅ 所有检查通过，Pi-Triple 准备就绪！\x1b[0m");
   } else {
     console.log("  \x1b[33m⚠️  部分检查未通过，某些功能可能不可用。\x1b[0m");
-    console.log("  \x1b[2m运行 npm run doctor 重新检查\x1b[0m");
+    console.log("  \x1b[2m运行 ptl doctor 重新检查\x1b[0m");
   }
   console.log("");
 

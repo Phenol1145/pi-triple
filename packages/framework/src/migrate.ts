@@ -2,10 +2,10 @@
  * Pi-Triple Migrate — 将现有 pi 配置/扩展/技能迁移到 Pi-Triple
  *
  * 用法：
- *   npm run migrate                  # 迁移到默认模板 "local"
- *   npm run migrate -- --tenant dev  # 迁移到指定模板
- *   npm run migrate -- --source /custom/pi/agent  # 自定义源目录
- *   npm run migrate -- --dry-run     # 只预览，不复制
+ *   ptl migrate                  # 迁移到默认模板 "local"
+ *   ptl migrate -- --tenant dev  # 迁移到指定模板
+ *   ptl migrate -- --source /custom/pi/agent  # 自定义源目录
+ *   ptl migrate -- --dry-run     # 只预览，不复制
  */
 
 import fs from "node:fs";
@@ -15,6 +15,8 @@ interface MigrateOptions {
   source: string;
   target: string;
   dryRun: boolean;
+  /** 程序化自动迁移（onboard/template new/env derive）在无源目录时静默返回，不打印红色错误 */
+  quietIfNoSource?: boolean;
 }
 
 interface MigrateReport {
@@ -117,24 +119,26 @@ export async function migrate(options: Partial<MigrateOptions> & { templateId?: 
 
   const report: MigrateReport = { copied: [], skipped: [], errors: [] };
 
-  console.log("");
-  console.log("\x1b[36m╔══════════════════════════════════════╗\x1b[0m");
-  console.log("\x1b[36m║\x1b[0m   \x1b[1mPi-Triple Migrate\x1b[0m                \x1b[36m║\x1b[0m");
-  console.log("\x1b[36m║\x1b[0m   扩展 & 配置迁移                  \x1b[36m║\x1b[0m");
-  console.log("\x1b[36m╚══════════════════════════════════════╝\x1b[0m");
-  console.log("");
-  console.log(`  源:   ${source}`);
-  console.log(`  目标: ${target}`);
-  console.log(`  模板: ${templateId}`);
-  if (dryRun) console.log("  \x1b[33m模式: 预览 (dry-run)\x1b[0m");
-  console.log("");
-
-  // 检查源目录
+  // 检查源目录（程序化自动迁移在首次安装无 ~/.pi/agent 时静默跳过）
   if (!fs.existsSync(source)) {
-    console.log(`  \x1b[31m❌ 源目录不存在: ${source}\x1b[0m`);
     report.errors.push(`源目录不存在: ${source}`);
+    if (options.quietIfNoSource) return report;
+    console.log("");
+    console.log("\x1b[36m╔══════════════════════════════════════╗\x1b[0m");
+    console.log("\x1b[36m║\x1b[0m   \x1b[1mPi-Triple Migrate\x1b[0m                \x1b[36m║\x1b[0m");
+    console.log("\x1b[36m║\x1b[0m   扩展 & 配置迁移                  \x1b[36m║\x1b[0m");
+    console.log("\x1b[36m╚══════════════════════════════════════╝\x1b[0m");
+    console.log("");
+    console.log(`  源:   ${source}`);
+    console.log(`  目标: ${target}`);
+    console.log(`  模板: ${templateId}`);
+    if (dryRun) console.log("  \x1b[33m模式: 预览 (dry-run)\x1b[0m");
+    console.log("");
+    console.log(`  \x1b[31m❌ 源目录不存在: ${source}\x1b[0m`);
     return report;
   }
+
+  console.log("");
 
   // 迁移目录
   for (const dir of DIRS_TO_MIGRATE) {
@@ -205,7 +209,7 @@ export async function migrate(options: Partial<MigrateOptions> & { templateId?: 
 
   console.log("");
   if (!dryRun) {
-    console.log(`  \x1b[32m迁移完成！\x1b[0m 运行 npm run tui 验证。`);
+    console.log(`  \x1b[32m迁移完成！\x1b[0m 运行 ptl tui dashboard 验证。`);
   } else {
     console.log(`  预览完成。去掉 --dry-run 执行实际迁移。`);
   }

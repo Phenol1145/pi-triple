@@ -61,11 +61,12 @@ ptl tui dashboard      →     Gateway（HTTP/SSE 兼容通道）
 ### PTL：30 秒上手
 
 ```bash
-git clone <repo> && cd pi-platform
-npm install && npm link
+# 前置：Node >= 22，至少配置一个 LLM API key（ptl onboard 会检查）
+git clone https://github.com/Phenol1145/pi-triple.git && cd pi-triple
+npm install && npm run build && npm link   # ★ 必须先 build：ptl bin 跑 packages/framework/dist/
 
-ptl onboard          # 环境导引（检查 + 安装 provider + 迁移扩展）
-ptl template new local
+ptl onboard          # 环境导引（检查 + 初始化配置/模板/共享扩展）
+ptl template new dev # 新建一个工作模板（默认模板别名 local 已存在）
 ptl start            # tmux 会话，立即接入
 ptl tui dashboard    # 系统总控 TUI
 ```
@@ -73,17 +74,18 @@ ptl tui dashboard    # 系统总控 TUI
 ### PTH：自然语言解释器试运行
 
 ```bash
-# 启动（独立 postgres/redis 见 docs/pth/kernel.md）
+# 先构建 dist（见上方 Quick Start 或 Development 节），再启动
+# 独立 postgres/redis 见 docs/pth/deployment.md
 DATABASE_URL=... REDIS_URL=... PORT=33100 node dist/pth/main.js
 
 # 发布任务 + 启动 worker
-curl -X POST localhost:33100/api/v1/kernel/tasks \
+curl -X POST http://localhost:33100/api/v1/kernel/tasks \
   -d '{"title":"demo","text":"return {sum:[1,2,3].reduce((a,b)=>a+b)}","createdBy":"demo","tags":["demo"]}' \
   -H "Authorization: Bearer <token>"
 ptl hub kernel batch add 2     # 启动 2 个 worker
 
 # 可观测
-curl localhost:33100/metrics   # Prometheus 四层指标
+curl http://localhost:33100/metrics   # Prometheus 四层指标
 ```
 
 ---
@@ -166,9 +168,9 @@ packages/infra/                        storage（PostgreSQL：tasks/memory/trans
 ## 🛠️ Development
 
 ```bash
-npx tsc --noEmit         # 类型检查（不产出 dist）
-npx vitest run           # 1645 tests（直跑 TS，195 文件）
-npm run build && npm link # ★ ptl/pth bin 跑 dist/，端到端验证前必须 build
+npm run build && npm link # ★ 先 build：ptl/pth bin 跑 dist/，端到端验证前必须 build
+npx vitest run           # 1897 tests（232 文件，9 hostile skip）
+npm run lint             # 类型检查 + 模块边界 + pth-config 门禁
 bash scripts/check-release-clean.sh  # 发行门禁（发布包零用户痕迹）
 ```
 

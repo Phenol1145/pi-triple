@@ -210,11 +210,11 @@ async function materializeEnv(alias: string, recipe: Record<string, unknown>): P
     const agentsWritten = ensureTemplateAgents(templateDir, id, displayAlias);
     if (agentsWritten) sharedMsg += "\n  ✅ 已写入 AGENTS.md（PTL 认知注入）";
 
-    // Auto-migrate if pi config exists
+    // Auto-migrate if pi config exists（首次安装无 ~/.pi/agent 时静默跳过）
     let migrated = false;
     if (!fs.existsSync(path.join(templateDir, "settings.json"))) {
       const { migrate } = await import("./migrate.js");
-      await migrate({ templateId: id });
+      await migrate({ templateId: id, quietIfNoSource: true });
       migrated = true;
     }
 

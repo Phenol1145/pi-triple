@@ -121,6 +121,7 @@ export function loadConfig(): PiTripleConfig {
 
 export function saveConfig(config: PiTripleConfig): void {
   const p = configPath();
+  fs.mkdirSync(path.dirname(p), { recursive: true }); // 首次运行 ~/.pi-triple 可能不存在（ptl onboard Step 2）
   const tmp = p + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
   fs.renameSync(tmp, p);
