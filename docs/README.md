@@ -24,6 +24,7 @@
 |------|------|
 | [PTH 架构](./pth/architecture.md) | 分层总览 · 框架/实现分离 · 替换与扩展点 |
 | [PTH 框架契约](./pth/framework-contracts.md) | 模块边界 · 公共端口 · 依赖矩阵 · 生命周期不变量 · 边界检查规则 |
+| [PTH Trigger 运行时](./pth/trigger-runtime.md) | workflow/loop 扁平化为 trigger 调度指令 · 系统 trigger 目录 · 事件词汇 |
 | [PTH Kernel 体系](./pth/kernel.md) | ★ 任务池 · 多语言 REPL · 记忆闭环 · 监控日志 |
 | [PTH API 参考](./pth/api.md) | HTTP/SSE/WebSocket 端点 |
 | [PTH 部署指南](./pth/deployment.md) | 本地 + Docker 部署 |

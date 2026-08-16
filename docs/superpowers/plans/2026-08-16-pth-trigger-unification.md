@@ -125,8 +125,15 @@ interface TriggerDef {
 ### T6：文档 + 全量门禁
 - [x] T6-1 新建 `docs/pth/trigger-runtime.md`：trigger 运行时总览（action 目录、事件词汇、观察/CRUD 面）
 - [x] T6-2 `docs/README.md` 增加 trigger-runtime 行
-- [ ] T6-3 全量 `npm test` + `npm run lint` + `npm run build` + `check:pth-boundaries` 全绿
-- [ ] T6-4 收账：勾平本计划 checkbox，独立提交
+- [x] T6-3 全量 `npm test` + `npm run lint` + `npm run build` + `check:pth-boundaries` 全绿
+- [x] T6-4 收账：勾平本计划 checkbox，独立提交
+
+## 收账证据（2026-08-16）
+
+- 全量 vitest：**230 文件通过 / 1876 用例绿 / 9 hostile integration skip**（231 文件）；
+- `npm run lint`（含 `check:pth-boundaries`）：**0 违规**；
+- `npm run build`：干净；
+- 提交：`2fabcbe`（T1）、`09eda35`（T2/T3）、`308be44`（T4/T5）、文档收账提交。
 
 ## 退出门禁
 
