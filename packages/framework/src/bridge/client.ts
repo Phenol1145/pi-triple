@@ -399,6 +399,25 @@ export class PthClient {
     return (await res.json()) as Array<Record<string, unknown>>;
   }
 
+  /** 任务详情（W8 P2：wait/cancel 复用） */
+  async getTask(id: string): Promise<Record<string, unknown> | null> {
+    const res = await this.request(`/api/v1/kernel/tasks/${encodeURIComponent(id)}`, { method: "GET", headers: this.headers() });
+    if (res.status === 404) return null;
+    if (!res.ok) await this.throwError(res, "任务详情失败");
+    return (await res.json()) as Record<string, unknown>;
+  }
+
+  /** 取消任务（recursive=true 沿 delivery.parent 链传播到未终态子任务——W8 P2） */
+  async cancelTask(id: string, opts: { recursive?: boolean } = {}): Promise<{ cancelled: number; taskIds: string[] }> {
+    const res = await this.request(`/api/v1/kernel/tasks/${encodeURIComponent(id)}/cancel`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(opts),
+    });
+    if (!res.ok) await this.throwError(res, "取消任务失败");
+    return (await res.json()) as { cancelled: number; taskIds: string[] };
+  }
+
   /** worker 级控制（pause/resume/remove/add） */
   async workerControl(batchId: string, action: string, role: string, copies?: number): Promise<Record<string, unknown>> {
     const res = await this.request(`/api/v1/kernel/batch/${encodeURIComponent(batchId)}/workers`, {

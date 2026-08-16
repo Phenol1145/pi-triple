@@ -23,7 +23,7 @@ import { cmdHubDebug } from "../bridge/debug.js";
 import { cmdHubDeploy, cmdHubStatus, cmdHubLogs, cmdHubUpgrade, cmdHubExec } from "../bridge/containers.js";
 import { cmdHubBench } from "../bridge/bench.js";
 import { cmdHubJobSubmit, cmdHubJobStatus, cmdHubJobFetch } from "../bridge/jobs.js";
-import { cmdKernelStatus, cmdKernelTasksAdd, cmdKernelTasksLs, cmdKernelBatchAdd, cmdKernelBatchRemove, cmdKernelBatchWorker, cmdKernelTemplatesLs } from "../bridge/kernel.js";
+import { cmdKernelStatus, cmdKernelTasksAdd, cmdKernelTasksLs, cmdKernelTasksCancel, cmdKernelWait, cmdKernelBatchAdd, cmdKernelBatchRemove, cmdKernelBatchWorker, cmdKernelTemplatesLs } from "../bridge/kernel.js";
 import { printNamespaceHelp } from "./main.js";
 
 // ─── TUI ───────────────────────────────────────────────────
@@ -169,8 +169,11 @@ export const defaultHubHandlers: HubHandlers = {
       case "tasks":
         if (rest[0] === "add") return cmdKernelTasksAdd(rest.slice(1), flags);
         if (rest[0] === "ls") return cmdKernelTasksLs(flags);
-        console.log("  用法: ptl hub kernel tasks add \"<描述>\" [--tags a,b] | ls [--limit n]");
+        if (rest[0] === "cancel") return cmdKernelTasksCancel(rest.slice(1), flags);
+        console.log("  用法: ptl hub kernel tasks add \"<描述>\" [--tags a,b] | ls [--limit n] | cancel <id> [--recursive]");
         return;
+      case "wait":
+        return cmdKernelWait(rest, flags);
       case "templates":
         if (rest[0] === "ls" || rest.length === 0) return cmdKernelTemplatesLs(rest, flags);
         console.log("  用法: ptl hub kernel templates ls");
@@ -189,6 +192,8 @@ export const defaultHubHandlers: HubHandlers = {
           "  ptl hub kernel tasks add --template <id> --key v… 模板发布",
           "  ptl hub kernel templates ls                       模板列表",
           "  ptl hub kernel tasks ls [--limit n]              任务列表",
+          "  ptl hub kernel wait <taskId> [--follow]          等待任务终态（--follow 实时打印 path/childResult）",
+          "  ptl hub kernel tasks cancel <id> [--recursive]   取消任务（沿派发树传播）",
           "  ptl hub kernel batch add [n]                     启动 batch",
           "  ptl hub kernel batch remove [n]                  停止 batch",
           "  ptl hub kernel status                            运行状态全景",
