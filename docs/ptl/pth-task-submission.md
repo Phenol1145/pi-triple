@@ -80,6 +80,15 @@ ptl hub kernel tasks add --template recon-doc \
 
 模板参数经 `--key value` 传入（`--template/--tags/--limit/--dry-run` 为保留 flag）。
 
+PTH CLI（`scripts/pth-cli.ts`）走同一模板发布通道（任务模板统一收口 A+）：
+
+```bash
+npm run pth -- submit --template recon-doc --param url=https://example.com --param entryId=x --tags research
+```
+
+模板库 = `src/pth/kernel/templates.ts` 的 `TASK_TEMPLATES`（`recon-doc`/`memory-maintain`/`dev-task`/`dev-task-ts`；
+系统内部模板如 `memory-sweep` 为 `hidden`，不出现在 `GET /api/v1/kernel/templates` 列表）。
+
 ### 3.4 会话内命令（等价）
 
 pi 会话里用扩展命令（推荐 agent 使用）：
