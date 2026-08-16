@@ -160,7 +160,7 @@
 - 执行证据（2026-08-16 `3c8a6f4`）：lint + `check:pth-boundaries` 绿；新增 6 用例全绿；
   sandbox 包 + extensions 回归 21 文件 / 178 用例全绿。
 
-### - [ ] S1-2 MEDIUM：编译核 cache key 纳入 compiler 身份
+### - [x] S1-2 MEDIUM：编译核 cache key 纳入 compiler 身份
 
 - 现状：`hash = sha256(source)`（`compiled-kernel.ts:154`），gcc/clang/tcc 同源码会撞同一产物；
   磁盘/并发上限已实现，不在本项重做。
@@ -171,6 +171,7 @@
   Modify `packages/pth-sandbox/test/compiled-kernel.test.ts`。
 - 验收：测试证明同源码不同 cc 各自 build、各自 cache-hit；
   现有持久缓存恢复/磁盘上限/并发测试保持绿。
+- 执行证据（2026-08-16 `9230788`）：lint + boundaries 绿；compiled-kernel 12 用例全绿。
 
 ### - [ ] S1-3 MEDIUM：gdb 会话 ID 竞态与 GDB MI pending 关联复核
 
