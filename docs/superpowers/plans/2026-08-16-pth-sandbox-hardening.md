@@ -304,7 +304,7 @@
   degraded 信号、cancel-ack-release 与回滚必检全部落文；§8 如实标注 worker 级 grant
   最小接线的当前边界与后续收口。
 
-### - [ ] S2-5 收账：包 TODO 勾平 + 审计状态回填 + 阶段门禁
+### - [x] S2-5 收账：包 TODO 勾平 + 审计状态回填 + 阶段门禁
 
 - 文件：Modify `packages/pth-sandbox/TODO.md`（勾平已落项，保留未落项与理由）、
   `packages/pth-memory/TODO.md`（readSource/toolstore symlink 行勾平并指向本计划 S0-4）、
@@ -313,6 +313,9 @@
   `docker compose -f deploy/docker-compose.yaml config` 通过；
   `./scripts/verify-clean-sandbox-build.sh` 通过（有 docker 环境时）。
 - 独立提交：只暂存本子项列出的文档与账本文件。
+- 执行证据（2026-08-16）：lint/build/boundaries 绿；compose config 绿（双 `:?` 强校验）；
+  **全量 228 文件 / 1859 用例全绿（9 skip 为 hostile matrix 门控）**；
+  `verify:sandbox-build` no-cache 构建通过（镜像 `sha256:c70ab5e9…`）。
 
 ---
 
