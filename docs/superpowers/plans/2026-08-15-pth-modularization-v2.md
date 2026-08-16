@@ -249,10 +249,10 @@
 
 ## 每阶段验收统一要求（不通过不得进入下一阶段）
 
-- [ ] 全量 `npx vitest run` 绿（P3 后基线 1842 用例；新增/迁移测试计入后不得有回退）。
-- [ ] `npm run lint` 绿。
-- [ ] `npm run build` 绿。
-- [ ] 独立提交：只暂存该阶段明确列出的文件；`git diff --cached --check` 通过；提交信息按阶段命名
+- [x] 全量 `npx vitest run` 绿（P3 后基线 1842 用例；新增/迁移测试计入后不得有回退）。
+- [x] `npm run lint` 绿。
+- [x] `npm run build` 绿。
+- [x] 独立提交：只暂存该阶段明确列出的文件；`git diff --cached --check` 通过；提交信息按阶段命名
   （例如 `refactor(pth): P0 contracts and gateway facade`）。
 
 ## 不在本计划内（由其他 ADR / 计划管理）
