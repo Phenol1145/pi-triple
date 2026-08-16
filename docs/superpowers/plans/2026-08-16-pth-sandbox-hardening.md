@@ -39,7 +39,7 @@
 
 ## S0：安全纵深闭合（H8/H9 + 流式限量 + symlink 防线）
 
-### - [ ] S0-1 HIGH：Python/Bash 记忆桥 space 盖章改为请求层带外（程序不可伪造）
+### - [x] S0-1 HIGH：Python/Bash 记忆桥 space 盖章改为请求层带外（程序不可伪造）
 
 - 现状：`pth-memory-lib.ts` 从 `_NAMESPACE._PTH_SPACE` 读 space 并塞进 body；PyKernel 把
   `_PTH_SPACE` 写进 exec globals（`py-kernel.ts:84-87`）；BashKernel 前置
@@ -65,7 +65,7 @@
   - 直连 PTH 桥与 sandbox 转发两条路径的 memory 三操作均不再因 body.space 产生 400；
   - `memory.query` 仍受 PTH 侧 op 白名单 + `meta` 可见性过滤。
 
-### - [ ] S0-2 HIGH：web.fetchText DNS rebinding 防护
+### - [x] S0-2 HIGH：web.fetchText DNS rebinding 防护
 
 - 现状：只做 URL hostname 字面量检查（`capability.ts:208-218`）；fetch 用全局 DNS，
   `public.example → 169.254.x.x` 的 rebinding 未挡。
@@ -80,7 +80,7 @@
   - 302 跳转到私网地址被拒；
   - 现有字面量防护与正常公网 fetch 测试保持绿。
 
-### - [ ] S0-3 MEDIUM：web.fetchText 改流式限量
+### - [x] S0-3 MEDIUM：web.fetchText 改流式限量
 
 - 现状：`res.arrayBuffer()` 先全量下载、后判 `> maxBytes`（`capability.ts:232-234`）。
 - 目标行为：用 `res.body` 流式累加，达到 `maxBytes` 立即 abort 并抛错；
@@ -93,7 +93,7 @@
   - 新增测试：mock 流服务在收到 abort/连接关闭后才继续发送（证明未全量下载）；
   - 新增测试：中文等多字节内容跨 chunk 解码正确。
 
-### - [ ] S0-4 LOW：readSource / toolstore symlink 防线
+### - [x] S0-4 LOW：readSource / toolstore symlink 防线
 
 - 现状：`read-source.ts` 只做 `normalize` 词法越界；`toolstore.ts` 只做 `path.resolve` 前缀判断；
   均无 `lstat/realpath`，symlink 文件或 symlink 目录组件可逃出白名单根。
@@ -110,10 +110,13 @@
   - 根内正常文件/目录读取行为不变；
   - 既有越界/类型校验测试保持绿。
 
-### - [ ] S0-5 阶段门禁
+### - [x] S0-5 阶段门禁
 
 - 全量 `npx vitest run`、`npm run lint`、`npm run build` 绿。
 - 独立提交：只暂存 S0 列出的文件，`git diff --cached --check` 通过。
+- 执行证据（2026-08-16）：lint/build 绿；全量 1733/1733 用例通过；
+  两次全量运行各有 1–2 个 testcontainers 用例 `afterAll` 容器停止超时（环境性），
+  `transcript-audit.test.ts` 与 `pg.test.ts` 单跑全绿。
 
 ---
 
@@ -204,7 +207,7 @@
 
 ## S2：可交付性与证据（旧 Task 5/6 孤儿项 + 命名收口）
 
-### - [ ] S2-1 LOW：sandbox-bash / kernel-host 协议文档与命名一致性
+### - [x] S2-1 LOW：sandbox-bash / kernel-host 协议文档与命名一致性
 
 - 现状：`sandbox-bash.ts`（无状态 `/exec` 客户端）与 `BashKernel`（持久 REPL kernel）两套命名
   并存；`concepts.md:377,388,744` 对后端实体的描述已过时（声称 kernel-host 同时处理 python/ts/bash）；
@@ -218,7 +221,7 @@
 - 验收：文档中每个 sandbox 端点都有唯一名称与归属模块；grep 确认
   `kernel-host 同时处理 python/ts/bash` 类过时表述清零；无代码行为变化。
 
-### - [ ] S2-2 可交付性：`scripts/verify-clean-sandbox-build.sh`
+### - [x] S2-2 可交付性：`scripts/verify-clean-sandbox-build.sh`
 
 - 现状：脚本不存在；`check-sandbox-env.sh` 仍扫根目录旧路径（该修复归 v2 P2-6，本项不抢）。
 - 目标行为：脚本从干净源码执行
