@@ -142,5 +142,8 @@
 - [x] **K2 Phase 2 双轴任务契约 + Discipline Resolver**（`853b426`）：`TaskWorkItem.domains/domainBinding` +
   `createDisciplineResolver`（显式 id fail-closed / 别名扫描 v1-explicit-alias）+
   发布路径盖章 + claim 映射 + gateway 顶层 `domains` 参数
-- 全量：**K0 后 258/2122；K1a 后 259/2131；K1b 后 260/2156；K2 后 262/2175**（文件/用例）均绿 + lint 绿
-- 下一批：K3 KnowledgeContext → K4 晋升闭环 → K5 双域试点
+- [x] **K3 Phase 3 KnowledgeContext + broker search/get**（`4ee2b40`）：
+  `KnowledgeContextProvider`（有界/指纹可复现/relevance 排序 + runner 注入正文与 capability）+
+  broker search（tenant 来自 grant/official/queryText 过滤/limit）+ get 非 official 404
+- 全量：**K0 后 258/2122；K1a 后 259/2131；K1b 后 260/2156；K2 后 262/2175；K3 后 263/2189**（文件/用例）均绿 + lint 绿
+- 下一批：K4 晋升闭环 → K5 双域试点
