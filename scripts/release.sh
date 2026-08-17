@@ -147,8 +147,9 @@ fi
 # ── 阶段 6：docker 回归（--docker）────────────────────
 if [ "$DO_DOCKER" = "1" ]; then
   say "阶段 6：docker 回归（build + 健康 + 冒烟）"
-  # 2026-08-18 修复：compose 已归拢 deploy/（442961a）——显式 -f 指定（根目录无 compose 文件）
-  COMPOSE="docker compose -f deploy/docker-compose.yaml"
+  # 2026-08-18 修复：compose 已归拢 deploy/（442961a）——显式 -f 指定（根目录无 compose 文件）；
+  # secrets 统一走 deploy/.env.pth.secrets（:? fail-closed——缺文件/缺键 compose 拒绝启动）
+  COMPOSE="docker compose --env-file deploy/.env.pth.secrets -f deploy/docker-compose.yaml"
   $COMPOSE build pi-platform || fail "镜像构建失败"
   $COMPOSE up -d --force-recreate pi-platform || fail "容器重建失败"
   # 健康等待（最长 90s）
