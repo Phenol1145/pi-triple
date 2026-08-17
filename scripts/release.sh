@@ -150,7 +150,9 @@ if [ "$DO_DOCKER" = "1" ]; then
   # 2026-08-18 修复：compose 已归拢 deploy/（442961a）——显式 -f 指定（根目录无 compose 文件）；
   # secrets 统一走 deploy/.env.pth.secrets（:? fail-closed——缺文件/缺键 compose 拒绝启动）
   COMPOSE="docker compose --env-file deploy/.env.pth.secrets -f deploy/docker-compose.yaml"
-  $COMPOSE build pi-platform || fail "镜像构建失败"
+  # 2026-08-18 修复：sandbox 同版本发布（pth-sandbox 在包内）——只 build pi-platform 会用
+  # 陈旧 sandbox 镜像（旧 exec-api 无 /ready → 健康检查 404 卡死）
+  $COMPOSE build pi-platform sandbox || fail "镜像构建失败"
   $COMPOSE up -d --force-recreate pi-platform || fail "容器重建失败"
   # 健康等待（最长 90s）
   HEALTHY=0
