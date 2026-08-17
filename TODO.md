@@ -2,6 +2,19 @@
 
 > 未执行方案的统一入口与执行顺序见 [剩余工作总控计划](./docs/superpowers/plans/2026-08-15-remaining-work-program.md)。
 
+## N14 实施批次（2026-08-18 开工——设计 docs/pth/n14-sensor-controller-four-dims.md §6）
+- [x] **P0 契约**：tool-reg 条目格式 + `__tool_spec__` 校验（`packages/pth-memory/src/tool-reg.ts`）
+  + memory-policy PROMPT_KINDS 增补 tool-reg（prompt 层只读防伪造注册）
+  + 存量登记器（`src/pth/tasking/tool-reg-builtin.ts`——33 件 builtin 条目生成 + 双写对账
+  + `scripts/seed-tool-reg.ts` 幂等 seed/--check）+ 对账钉测试 20 例
+  （数量订正：PTC_TOOL_DEFS 实为 33 条=AGENT_TOOLS 27 键含 done + ASP-only 6；设计文档 35 为 B6 退役前旧数）
+- [ ] **P1 观测**：sensor 三新点位（sensor:tool-face / sensor:tool-single / sensor:rule——builtin-roles + prompt）
+  + guardrails 计数进 scorecard（N12 二期观测面随同落）
+- [ ] **P2 通道执行缝**：注册表驱动动态工具面（快照版本化 + 预算守卫 24 件/角色）+ program 执行器（ts 核）
+  + agent 态接穿透 runChild + `PTH_TOOL_WRITE_POLICY` 配置
+- [ ] **P3 调节与 SOP**：controller 三新点位（tool-face/tool-single/rule）+ manage.tool.* 调节面
+  + 四条 SOP 固化（skill:opt-tool-face/tool-single/memory/rule）+ 晋升管线首跑（1-2 个真实 tool-function 晋升）
+
 ## 批 A：差距 7——obs.container（cgroup 容器级观测源）✅
 - [x] obs.ts 加 obs.container（cpu.max/memory.current/pids/usage——容器 cgroup 只读）
 - [x] 测试（白名单模板 + 容错——非容器环境降级）
