@@ -149,5 +149,9 @@
   fail-closed：draft + provenance + domain/adversarial 双 pass + 无 reject + 生产/审核分离）+
   `knowledge-promotion.ts`（verdict/promote/reject）+ capability 注入（adversarial review /
   memory-keeper promote）+ gateway verify/promote 路由
-- 全量：**K0 后 258/2122；K1a 后 259/2131；K1b 后 260/2156；K2 后 262/2175；K3 后 263/2189；K4 后 264/2215**（文件/用例）均绿 + lint 绿
-- 下一批：K5 双域试点
+- [x] **K5 Phase 5 双域真实任务试点**（报告 `docs/pth/k5-pilot-report.md`）：重建镜像 +
+  真实 deepseek 任务（programming-languages / materials-science 各 1 条 completed）→
+  resolver 盖章 domains/domainBinding → refiner scoped draft → HTTP 双 verdict + promote →
+  revision 历史验证；期间修复 K1b status/meta-only 不记历史（`a70ebfe`）
+- 全量：**K0 后 258/2122；K1a 后 259/2131；K1b 后 260/2156；K2 后 262/2175；K3 后 263/2189；K4 后 264/2215；K1b 修复后 264/2216**（文件/用例）均绿 + lint 绿
+- v1.2 K0–K5 全部完成；后续按报告 §4：source registry + 30 题冻结评测 → 再按证据扩展
