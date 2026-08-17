@@ -139,5 +139,8 @@
   `knowledge-provenance.ts`（official domain-fact/domain-method 六字段强制 + 内容哈希校验）+
   `memory_revisions` append-only 历史（write 事务化、revisionHistory/restoreRevision）+
   refiner 只写 scoped draft（tenantId + spaceScope private + provenance；缺 scope fail-closed）
-- 全量：**K0 后 258 文件/2122 用例绿；K1a 后 259 文件/2131 用例绿；K1b 后 260 文件/2156 用例绿** + lint 绿
-- 下一批：K2 目录双轴路由 → K3 KnowledgeContext → K4 晋升闭环 → K5 双域试点
+- [x] **K2 Phase 2 双轴任务契约 + Discipline Resolver**（`853b426`）：`TaskWorkItem.domains/domainBinding` +
+  `createDisciplineResolver`（显式 id fail-closed / 别名扫描 v1-explicit-alias）+
+  发布路径盖章 + claim 映射 + gateway 顶层 `domains` 参数
+- 全量：**K0 后 258/2122；K1a 后 259/2131；K1b 后 260/2156；K2 后 262/2175**（文件/用例）均绿 + lint 绿
+- 下一批：K3 KnowledgeContext → K4 晋升闭环 → K5 双域试点
