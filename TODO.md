@@ -145,5 +145,9 @@
 - [x] **K3 Phase 3 KnowledgeContext + broker search/get**（`4ee2b40`）：
   `KnowledgeContextProvider`（有界/指纹可复现/relevance 排序 + runner 注入正文与 capability）+
   broker search（tenant 来自 grant/official/queryText 过滤/limit）+ get 非 official 404
-- 全量：**K0 后 258/2122；K1a 后 259/2131；K1b 后 260/2156；K2 后 262/2175；K3 后 263/2189**（文件/用例）均绿 + lint 绿
-- 下一批：K4 晋升闭环 → K5 双域试点
+- [x] **K4 Phase 4 候选验证与晋升闭环**（`5fe95b1`）：`knowledge-verdicts.ts`（canPromote
+  fail-closed：draft + provenance + domain/adversarial 双 pass + 无 reject + 生产/审核分离）+
+  `knowledge-promotion.ts`（verdict/promote/reject）+ capability 注入（adversarial review /
+  memory-keeper promote）+ gateway verify/promote 路由
+- 全量：**K0 后 258/2122；K1a 后 259/2131；K1b 后 260/2156；K2 后 262/2175；K3 后 263/2189；K4 后 264/2215**（文件/用例）均绿 + lint 绿
+- 下一批：K5 双域试点
