@@ -11,10 +11,16 @@
 - [x] **P1 观测**：sensor 三新点位（sensor:tool-face / sensor:tool-single / sensor:rule——builtin-roles + prompt）
   + guardrails 计数进 scorecard（N12 二期观测面随同落）
   （已落 `d230f96`：GOVERNANCE_ROLES +3；obs.guards——scorecard.guards 出 obs，按护栏分账 + killRatio + byRole）
-- [ ] **P2 通道执行缝**：注册表驱动动态工具面（快照版本化 + 预算守卫 24 件/角色）+ program 执行器（ts 核）
+- [x] **P2 通道执行缝**：注册表驱动动态工具面（快照版本化 + 预算守卫 24 件/角色）+ program 执行器（ts 核）
   + agent 态接穿透 runChild + `PTH_TOOL_WRITE_POLICY` 配置
-- [ ] **P3 调节与 SOP**：controller 三新点位（tool-face/tool-single/rule）+ manage.tool.* 调节面
-  + 四条 SOP 固化（skill:opt-tool-face/tool-single/memory/rule）+ 晋升管线首跑（1-2 个真实 tool-function 晋升）
+  （已落 `008f85c`：`kernel/execution/tool-registry.ts` 快照/可见性/预算守卫 + agent-loop 三态分发
+  + PTH_TOOL_FACE_BUDGET；P2 自决：注册面 ASP 空间无关 / 预算只裁注册面 / program 继承 worker caps）
+- [x] **P3 调节与 SOP**：controller 三新点位（tool-face/tool-single/rule）+ manage.tool.* 调节面
+  + 四条 SOP 固化（skill:opt-tool-face/tool-single/memory/rule）+ 晋升管线首跑（2 个真实 tool-function 晋升验证）
+  （2026-08-18 收尾批：GOVERNANCE_ROLES 13→16；manage.tool.list/register/revise（预算守卫 + PTH_TOOL_WRITE_POLICY 双策略）
+  + tool-proposal 治理流（propose → adversarial review → 监督批准 → 注册）+ tool-proposal-review trigger 事件驱动派发
+  + SEED_OPT_SOPS ×4 注入 + gateway approve 同流 + 首跑脚本 `scripts/n14-p3-tool-promotion.ts`
+  ——真实晋升 `fn-wx7wk7→tool:toolfn_anchor_stats`、`fn-v2u2if→tool:toolfn_anchors_of`，ts 核执行 + 快照可见验证通过）
 
 ## 批 A：差距 7——obs.container（cgroup 容器级观测源）✅
 - [x] obs.ts 加 obs.container（cpu.max/memory.current/pids/usage——容器 cgroup 只读）
