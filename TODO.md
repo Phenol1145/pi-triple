@@ -158,4 +158,4 @@
   离线与 live（真实 PG 落库 36 条）指标：**domainRecallAt3=1.0 / knowledgeRecallAt5=1.0 /
   evidenceCoverage=1.0**（阈值 0.9/0.9/0.95）
 - 全量：**K0 后 258/2122；K1a 后 259/2131；K1b 后 260/2156；K2 后 262/2175；K3 后 263/2189；K4 后 264/2215；K1b 修复后 264/2216；K5-eval 后 266/2225**（文件/用例）均绿 + lint 绿
-- v1.2：Gate A 修复中——F1 `c717677` ✅ / F2 `d6f6487` ✅ / F3-F5 进行中（见 `n24-v12-acceptance-fix-plan.md`）
+- v1.2：Gate A 修复中——F1 ✅ / F2 ✅ / F3 ✅（`8d79538`）/ F4-F5 进行中（见 `n24-v12-acceptance-fix-plan.md`）
