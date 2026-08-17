@@ -8,8 +8,9 @@
   + 存量登记器（`src/pth/tasking/tool-reg-builtin.ts`——33 件 builtin 条目生成 + 双写对账
   + `scripts/seed-tool-reg.ts` 幂等 seed/--check）+ 对账钉测试 20 例
   （数量订正：PTC_TOOL_DEFS 实为 33 条=AGENT_TOOLS 27 键含 done + ASP-only 6；设计文档 35 为 B6 退役前旧数）
-- [ ] **P1 观测**：sensor 三新点位（sensor:tool-face / sensor:tool-single / sensor:rule——builtin-roles + prompt）
+- [x] **P1 观测**：sensor 三新点位（sensor:tool-face / sensor:tool-single / sensor:rule——builtin-roles + prompt）
   + guardrails 计数进 scorecard（N12 二期观测面随同落）
+  （已落 `d230f96`：GOVERNANCE_ROLES +3；obs.guards——scorecard.guards 出 obs，按护栏分账 + killRatio + byRole）
 - [ ] **P2 通道执行缝**：注册表驱动动态工具面（快照版本化 + 预算守卫 24 件/角色）+ program 执行器（ts 核）
   + agent 态接穿透 runChild + `PTH_TOOL_WRITE_POLICY` 配置
 - [ ] **P3 调节与 SOP**：controller 三新点位（tool-face/tool-single/rule）+ manage.tool.* 调节面
