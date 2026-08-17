@@ -135,5 +135,9 @@
 - [x] **K1a Phase 1a 知识正确性收口**（`f4c760d`）：PgMemoryStore 全方法 tenant 隔离
   （缺省 default、update fail-closed）；KnowledgeBroker retrieve 固定 official +
   tenant 取自 grant、get 命中接 consumption 计数；skills.list 排除 draft/archived
-- 全量：**K0 后 258 文件/2122 用例绿；K1a 后 259 文件/2131 用例绿** + lint 绿
-- 下一批：K1b provenance/revision/refiner draft → K2 目录双轴路由 → K3 KnowledgeContext → K4 晋升闭环 → K5 双域试点
+- [x] **K1b Phase 1b provenance + revision + refiner draft**（`aa2762e`）：
+  `knowledge-provenance.ts`（official domain-fact/domain-method 六字段强制 + 内容哈希校验）+
+  `memory_revisions` append-only 历史（write 事务化、revisionHistory/restoreRevision）+
+  refiner 只写 scoped draft（tenantId + spaceScope private + provenance；缺 scope fail-closed）
+- 全量：**K0 后 258 文件/2122 用例绿；K1a 后 259 文件/2131 用例绿；K1b 后 260 文件/2156 用例绿** + lint 绿
+- 下一批：K2 目录双轴路由 → K3 KnowledgeContext → K4 晋升闭环 → K5 双域试点
