@@ -36,6 +36,14 @@ for dir in "${targets[@]}"; do
   fi
 done
 
+# node_modules 软链陷阱（L2 实战教训——2026-08-18）：.gitignore 的 "node_modules/" 带尾斜杠
+# 只匹配目录，不匹配同名软链 → 软链会被 git add -A 收进提交。主 gitdir info/exclude
+# 加无斜杠 "node_modules"（本地排除，不进仓库——对所有 worktree 生效）。
+if ! grep -qx "node_modules" .git/info/exclude 2>/dev/null; then
+  echo "node_modules" >> .git/info/exclude
+  echo "✅ .git/info/exclude 已加 node_modules（防软链误提交）"
+fi
+
 cat <<'EOF'
 
 完成。快速起步（各 worktree 内软链依赖，避免重复 npm install）：
