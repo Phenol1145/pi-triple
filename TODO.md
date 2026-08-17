@@ -121,3 +121,19 @@
   `scripts/import-mcp-bundle.ts`；复用 `tool-proposal-review` 自动对抗审核
 - N4 生态转化 pipeline 两分支全部闭环（skill ✅ + MCP ✅）
 - 全量：**257 文件 / 2103 用例绿** + lint（tsc/boundaries/config 117 键）绿
+
+## v1.2 路线切换 + N18 K0/K1a（Phase 0/1a）✅（2026-08-18 审稿后落）
+> 审稿裁决：原 N16 V1–V5 静态物化 188 角色**冻结**；采纳「角色 × 学科域组合」。
+> 文档：`n16-v1.2-role-expansion-review.md`（P0×5/P1×5/P2×3 实证）+
+> `n16-v1.2-role-domain-composition-design.md`（Phase 0–6）。实施契约 `docs/pth/n18-v12-phase0-1a-design.md`。
+- [x] **裁决入账**（`c126630`）：concepts 0.18 改为组合设计、词表四术语替换、N16 账本行改写、
+  parallel-lanes v1.2 改为 K0–K5 车道
+- [x] **K0 Phase 0 设计纠偏**（`f8afa78`）：`contracts/domains.ts` + `DisciplineCatalog`
+  （DAG 无环/多父/缺父 fail-closed/稳定指纹）+ 生成器 `scripts/build-discipline-catalog.ts`
+  ——manifest 复算钉死 **category=5 / discipline=32 / sub-discipline=147 / total=184**
+  （手写 149/112 总数废止）
+- [x] **K1a Phase 1a 知识正确性收口**（`f4c760d`）：PgMemoryStore 全方法 tenant 隔离
+  （缺省 default、update fail-closed）；KnowledgeBroker retrieve 固定 official +
+  tenant 取自 grant、get 命中接 consumption 计数；skills.list 排除 draft/archived
+- 全量：**K0 后 258 文件/2122 用例绿；K1a 后 259 文件/2131 用例绿** + lint 绿
+- 下一批：K1b provenance/revision/refiner draft → K2 目录双轴路由 → K3 KnowledgeContext → K4 晋升闭环 → K5 双域试点
