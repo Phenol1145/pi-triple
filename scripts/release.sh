@@ -147,8 +147,10 @@ fi
 # ── 阶段 6：docker 回归（--docker）────────────────────
 if [ "$DO_DOCKER" = "1" ]; then
   say "阶段 6：docker 回归（build + 健康 + 冒烟）"
-  docker compose build pi-platform || fail "镜像构建失败"
-  docker compose up -d --force-recreate pi-platform || fail "容器重建失败"
+  # 2026-08-18 修复：compose 已归拢 deploy/（442961a）——显式 -f 指定（根目录无 compose 文件）
+  COMPOSE="docker compose -f deploy/docker-compose.yaml"
+  $COMPOSE build pi-platform || fail "镜像构建失败"
+  $COMPOSE up -d --force-recreate pi-platform || fail "容器重建失败"
   # 健康等待（最长 90s）
   HEALTHY=0
   for i in $(seq 1 18); do
