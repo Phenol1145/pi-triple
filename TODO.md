@@ -111,3 +111,13 @@
 - [x] **A4 护栏 JIT**（`0feeaff`）：guard-kill-spike 热点（软处置/负结果族白名单）→
   `guard-config` 审批热调 → 复测窗口 → 劣化 deopt 回滚；hard 契约护栏只人工调
 - 全量：**256 文件 / 2082 用例绿** + lint（tsc/boundaries/config 117 键）绿
+
+## N17 车道批（A5 + D1——生态转化两条腿）✅（2026-08-18 双 lane 并行落）
+> 设计契约 `docs/pth/n17-lane-a5-d1-design.md`；合并顺序 A5 → D1，每步全量验证。
+- [x] **A5 叶子角色 SOP 种子×8**（`b09ed8f`）：writer/coder/debug-case-writer/acceptor/planner/
+  spider/solver/predictor 四段式 SOP（`SEED_LEAF_SOPS`）注入 prompt-docs——当前 actuator 叶子全种子化
+- [x] **D1 MCP 拆解**（`3628d71`）：`mcp-tool-bundle-v1` → `mcp-decompose.ts`（parse/spec/importMcpTools）
+  → tool-proposal draft 批量落库（永不直写 official）+ `manage.tool.importMcp` +
+  `scripts/import-mcp-bundle.ts`；复用 `tool-proposal-review` 自动对抗审核
+- N4 生态转化 pipeline 两分支全部闭环（skill ✅ + MCP ✅）
+- 全量：**257 文件 / 2103 用例绿** + lint（tsc/boundaries/config 117 键）绿
