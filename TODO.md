@@ -100,3 +100,14 @@
 
 **沙箱侧**（→ packages/pth-sandbox/TODO.md）：web.fetchText DNS rebinding/流式限量 · N5 资源环 L3 · 编译核/gdb 容量复核 · sandbox exec-api 健康观测
   → 执行入口（2026-08-16）：`docs/superpowers/plans/2026-08-16-pth-sandbox-hardening.md`（S0–S2）
+
+## N15 车道批（B1/B2/A4——穿透经济化 + 护栏 JIT）✅（2026-08-18 三 lane 并行落）
+> 设计契约 `docs/pth/n15-lane-b1-b2-a4-design.md`；合并顺序 B2 → B1 → A4，每步全量验证。
+- [x] **B2 穿透执行预算经济化**（`4c166e5`+`cfe8632`）：单次 `PTH_PENETRATION_MAX_STEPS` +
+  父任务累计 `PTH_PENETRATION_TASK_BUDGET_STEPS` 双预算线（耗尽报错父回退 delegate）；
+  每次调用结算 `penetration-edge` 边级计量聚合（B1 数据地基）
+- [x] **B1 穿透自动发现**（`d5a3019`）：`penetration-edge` 达标 → `penetration-proposal`（draft）
+  → 监督批准 → `skill:penetrate:<child>` official 注册；`penetration-discovery` schedule trigger 巡检
+- [x] **A4 护栏 JIT**（`0feeaff`）：guard-kill-spike 热点（软处置/负结果族白名单）→
+  `guard-config` 审批热调 → 复测窗口 → 劣化 deopt 回滚；hard 契约护栏只人工调
+- 全量：**256 文件 / 2082 用例绿** + lint（tsc/boundaries/config 117 键）绿
