@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,
+    "paths": {
+      "@away_from/infra": ["./packages/infra/src/index.ts"],
+      "@away_from/shared": ["./packages/shared/src/index.ts"],
+      "@away_from/pth-memory": ["./packages/pth-memory/src/index.ts"],
+      "@away_from/pth-sandbox": ["./packages/pth-sandbox/src/index.ts"]
+    }
+  },
+  "files": [
+    "scripts/n28-feasibility-fixture.ts",
+    "scripts/n28-feasibility-harness.ts",
+    "scripts/eval-n28-feasibility.ts",
+    "scripts/accept-n28-feasibility.ts",
+    "test/pth-runner/cognitive-responsibility.vertical.test.ts",
+    "test/pth-runner/n28-feasibility-evaluator.test.ts",
+    "test/pth-runner/n28-feasibility-acceptance.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
