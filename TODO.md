@@ -158,7 +158,13 @@
   离线与 live（真实 PG 落库 36 条）指标：**domainRecallAt3=1.0 / knowledgeRecallAt5=1.0 /
   evidenceCoverage=1.0**（阈值 0.9/0.9/0.95）
 - 全量：**K0 后 258/2122；K1a 后 259/2131；K1b 后 260/2156；K2 后 262/2175；K3 后 263/2189；K4 后 264/2215；K1b 修复后 264/2216；K5-eval 后 266/2225**（文件/用例）均绿 + lint 绿
-- v1.2：F1–F5 contracted fixes 已全部合并；**原 Gate A/B/C 组合验收仍未关闭**——复验发现
-  revision/version `23505`、raw-query 数据面租户隔离、stale verdict、真实 transactional outbox、
-  多进程 claim 与生产评测覆盖仍阻塞（见 `docs/pth/v1.2-acceptance-fix-revalidation.md`）。本轮新鲜
-  工程基线：267 files passed / 1 skipped，2278 tests passed / 9 skipped；lint、K5 offline/live 84/84。
+- [x] **R1–R6 复验修复轮全部 done（2026-08-18 wave-1..4）**：R1 revision/promotion 统一物化判据
+  + 单事务 CAS（`38128a1`+`1604d8d`）；R2 raw query 受限 AST 数据面 tenant/status/space（`076a627`+`e423a54`）；
+  R4 同事务 outbox + 原子 claim（`c5db1a3`）；R3 持久 VerificationPlan + verdict 绑定 + 授权（`ececb2a`+`c660c36`）；
+  R5 生产端口评测 + EvidenceRef 全链（`e8abe1a`）；R6 组合验收（`lane/r6-composition-acceptance`）
+  ——`test/pth-composition/r6-acceptance.test.ts` 真实 PG 8/8 + 七类故障注入负向全过
+- [x] **Gate A/B/C 改回 accepted**：最终复验报告 `docs/pth/v1.2-acceptance-fix-revalidation-final.md`
+  结论 **ACCEPTED**（P0-1..P0-5、P1-1..P1-5 全 PASS）
+- 本轮新鲜工程基线：**270 files passed / 1 skipped；2300 tests passed / 9 skipped；observer failed 0**；
+  lint（tsc/boundaries 0/config 0）绿；K5 offline/live 138 题 24/24 覆盖 + mutation 1.0；
+  R6 组合套件真实 PostgreSQL testcontainers 8/8。
