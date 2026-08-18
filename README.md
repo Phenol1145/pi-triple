@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://img.shields.io/badge/version-1.1.3-blue"><img alt="version" src="https://img.shields.io/badge/version-1.1.3-blue?style=flat-square" /></a>
-  <a href="https://img.shields.io/badge/tests-1988%20passed-green"><img alt="tests" src="https://img.shields.io/badge/tests-1988%20passed-green?style=flat-square" /></a>
+  <a href="https://img.shields.io/badge/tests-2300%20passed-green"><img alt="tests" src="https://img.shields.io/badge/tests-2300%20passed-green?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/node-%3E%3D22-green"><img alt="node" src="https://img.shields.io/badge/node-%3E%3D22-green?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/typescript-5.7-blue"><img alt="ts" src="https://img.shields.io/badge/typescript-5.7-blue?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/license-MIT-green"><img alt="license" src="https://img.shields.io/badge/license-MIT-green?style=flat-square" /></a>
@@ -169,7 +169,7 @@ packages/infra/                        storage（PostgreSQL：tasks/memory/trans
 
 ```bash
 npm run build && npm link # ★ 先 build：ptl/pth bin 跑 dist/，端到端验证前必须 build
-npx vitest run           # 1897 tests（232 文件，9 hostile skip）
+npx vitest run           # 2300 tests（270 文件，9 skip）
 npm run lint             # 类型检查 + 模块边界 + pth-config 门禁
 bash scripts/check-release-clean.sh  # 发行门禁（发布包零用户痕迹）
 ```
