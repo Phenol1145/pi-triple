@@ -28,7 +28,8 @@
 | [自主知识摄入设计](./pth/n26-autonomous-knowledge-intake-design.md) | 人类唯一信任源 · 自动发现/抓取/抽取/核验/晋升/重爬 · 十域生产验收 |
 | [Role/Memory/Worker 可行性设计](./pth/n28-role-memory-orchestration-design.md) | Role Lineage · WorkerReplica · 重叠记忆责任区 · 分层检索 · 统一认知预算 |
 | [Role/Memory/Worker 实施计划](./pth/n28-role-memory-orchestration-implementation-plan.md) | N27 含 R6 的最终报告校正后执行 · 七个可审查任务 · 12 条 gold query · 1,000 组预算探针 · GO/NO-GO 判定 |
-| [Role/Memory/Worker 可行性报告](./pth/n28-feasibility-report.md) | **GO** · 修复轮后权威版 · H1–H6 全 PASS · 四门禁全绿 |
+| [Role/Memory/Worker 可行性报告](./pth/n28-feasibility-report.md) | **GO** · 第二轮复核修复后权威版 · `7e76180` · H1–H6 全 PASS · 四门禁全绿 · 合同 v1.1 人工批准 |
+| [Role/Memory/Worker 权威验收 envelope](./pth/n28-feasibility-envelope.json) | 完整门禁证据（evaluator byte-identical GO · focused/typecheck/full/lint）· 绑定 `7e76180` |
 | [Role/Memory/Worker 可行性验收复核](./pth/n28-feasibility-acceptance-review.md) | 历史复核 **NOT ACCEPTED / NO-GO**（修复前）· 预算绕过与生产接线阻断 · 修复顺序与重新验收条件 |
 | [Role/Memory/Worker 再验收反馈](./pth/n28-feasibility-reacceptance-feedback.md) | 当前自动门禁 GO；独立复核 **NOT ACCEPTED / NO-GO** · Worker/Directory 身份错配 · 重复 ID 预算绕过 · evaluator 假绿 |
 | [Human Interaction 边界 ADR](./adr/0005-pth-human-interaction-boundary.md) | PTH 拥有协议和状态 · human-interface 非 batch worker · PTL/UI 为 adapter |
