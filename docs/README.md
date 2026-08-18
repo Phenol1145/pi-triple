@@ -26,6 +26,8 @@
 | [PTH 框架契约](./pth/framework-contracts.md) | 模块边界 · 公共端口 · 依赖矩阵 · 生命周期不变量 · 边界检查规则 |
 | [Human Interaction 协议](./pth/n25-human-interaction-protocol-design.md) | 意图多轴模型 · TaskDraft · 可调审核 · 人类等待/恢复 · 输出表达 · adapter 边界 |
 | [自主知识摄入设计](./pth/n26-autonomous-knowledge-intake-design.md) | 人类唯一信任源 · 自动发现/抓取/抽取/核验/晋升/重爬 · 十域生产验收 |
+| [Role/Memory/Worker 可行性设计](./pth/n28-role-memory-orchestration-design.md) | Role Lineage · WorkerReplica · 重叠记忆责任区 · 分层检索 · 统一认知预算 |
+| [Role/Memory/Worker 实施计划](./pth/n28-role-memory-orchestration-implementation-plan.md) | N27 含 R6 的最终报告校正后执行 · 七个可审查任务 · 12 条 gold query · 1,000 组预算探针 · GO/NO-GO 判定 |
 | [Human Interaction 边界 ADR](./adr/0005-pth-human-interaction-boundary.md) | PTH 拥有协议和状态 · human-interface 非 batch worker · PTL/UI 为 adapter |
 | [v1.2 F1–F5 复验报告](./pth/v1.2-acceptance-fix-revalidation.md) | F1–F5 contracted fixes 已合并；原 Gate A/B/C 仍未关闭 |
 | [PTH 配置](./pth/configuration.md) | 107 键 typed schema · ConfigCenter · secrets 文件 · `pth config` 命令 |
