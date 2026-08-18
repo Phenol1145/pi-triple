@@ -29,6 +29,7 @@
 | [Role/Memory/Worker 可行性设计](./pth/n28-role-memory-orchestration-design.md) | Role Lineage · WorkerReplica · 重叠记忆责任区 · 分层检索 · 统一认知预算 |
 | [Role/Memory/Worker 实施计划](./pth/n28-role-memory-orchestration-implementation-plan.md) | N27 含 R6 的最终报告校正后执行 · 七个可审查任务 · 12 条 gold query · 1,000 组预算探针 · GO/NO-GO 判定 |
 | [Role/Memory/Worker 可行性报告](./pth/n28-feasibility-report.md) | **NO-GO** · T1–T6 合并 · H2/H3/H5 PASS · H1/H4/H6 探针分母未满 · 四门禁全绿 |
+| [Role/Memory/Worker 可行性验收复核](./pth/n28-feasibility-acceptance-review.md) | **NOT ACCEPTED / NO-GO** · 预算绕过与生产接线阻断 · H1–H6 独立对账 · 修复顺序与重新验收条件 |
 | [Human Interaction 边界 ADR](./adr/0005-pth-human-interaction-boundary.md) | PTH 拥有协议和状态 · human-interface 非 batch worker · PTL/UI 为 adapter |
 | [v1.2 F1–F5 复验报告](./pth/v1.2-acceptance-fix-revalidation.md) | F1–F5 contracted fixes 已合并；原 Gate A/B/C 仍未关闭 |
 | [PTH 配置](./pth/configuration.md) | 107 键 typed schema · ConfigCenter · secrets 文件 · `pth config` 命令 |
