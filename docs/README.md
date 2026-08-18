@@ -24,6 +24,10 @@
 |------|------|
 | [PTH 架构](./pth/architecture.md) | 分层总览 · 框架/实现分离 · 替换与扩展点 |
 | [PTH 框架契约](./pth/framework-contracts.md) | 模块边界 · 公共端口 · 依赖矩阵 · 生命周期不变量 · 边界检查规则 |
+| [Human Interaction 协议](./pth/n25-human-interaction-protocol-design.md) | 意图多轴模型 · TaskDraft · 可调审核 · 人类等待/恢复 · 输出表达 · adapter 边界 |
+| [自主知识摄入设计](./pth/n26-autonomous-knowledge-intake-design.md) | 人类唯一信任源 · 自动发现/抓取/抽取/核验/晋升/重爬 · 十域生产验收 |
+| [Human Interaction 边界 ADR](./adr/0005-pth-human-interaction-boundary.md) | PTH 拥有协议和状态 · human-interface 非 batch worker · PTL/UI 为 adapter |
+| [v1.2 F1–F5 复验报告](./pth/v1.2-acceptance-fix-revalidation.md) | F1–F5 contracted fixes 已合并；原 Gate A/B/C 仍未关闭 |
 | [PTH 配置](./pth/configuration.md) | 107 键 typed schema · ConfigCenter · secrets 文件 · `pth config` 命令 |
 | [PTH Trigger 运行时](./pth/trigger-runtime.md) | workflow/loop 扁平化为 trigger 调度指令 · 系统 trigger 目录 · 事件词汇 |
 | [W8 任务派发设计](./pth/w8-task-dispatch-design.md) | PTL 入口路由 · delegate/await · 事件驱动回流 · 组织权 |
