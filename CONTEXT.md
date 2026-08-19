@@ -186,6 +186,14 @@ _Avoid_: Data world、shared store
 PTH Knowledge 内将人类获准来源自动转化为不可变来源修订与可核验知识候选的领域能力。
 _Avoid_: 顶层 Intake Module、crawler、抓取工具、直接官方晋升
 
+**Source Ingestion Loop（单源摄入内环）**:
+针对一个已由人类 Trust Policy 授权的 Source Subscription，持续完成获取、修订、抽取、核验、晋升、重爬与陈旧传播的闭环。
+_Avoid_: 来源发现、扩大信任范围、一次性抓取任务
+
+**Source Expansion Loop（信源扩展外环）**:
+根据覆盖缺口与内环反馈推荐新的 Source Candidate，并等待人类 Trust Policy 授权后再建立 Subscription 的闭环。
+_Avoid_: 自动授信、直接抓取候选正文、单源重爬
+
 **Trust Policy（信任策略）**:
 由人类签发、绑定租户/空间并版本化的来源准入规则，是 PTH 授予来源范围、许可与抓取预算信任的唯一事实源。
 _Avoid_: LLM 推荐、搜索排名、worker 自报权威、逐条事实真值
