@@ -31,7 +31,7 @@
 | [最小可信摄入内环 envelope](./pth/n29-minimal-intake-acceptance.json) | 唯一权威 envelope（focused 355 零 skip/build/lint/三 typecheck/full 2609 全绿 · G9-c 真实公网 canary satisfied）· 绑定 `d36891f` |
 | [最小可信摄入内环再次验收反馈](./pth/n29-minimal-intake-reacceptance-feedback.md) | 当前 HEAD 独立复核 **NOT ACCEPTED / NO-GO** · 跨租户 outbox · stage CAS / Trust Policy / admission / official 旁路 · 修复顺序与复验条件 |
 | [统一运行观测台设计](./pth/n30-runtime-observatory-design.md) | C 方案 · Job/Task/Intake 甘特图 · CPU/RSS/Heap/Network 同轴折线 · Freshness Contract · O0–O5 分层交付 |
-| [统一 Workflow DAG 薄腰设计](./pth/n31-unified-workflow-dag-design.md) | 原生执行器保持分立 · Task/Intake/Optimizer 统一只读 DAG · 版本化跨轮反馈 · Task Flow 最小动态编译 |
+| [统一 Workflow DAG 薄腰设计](./pth/n31-unified-workflow-dag-design.md) | **2.0 目标架构** · 1.x 只做真实设施验证 · 构造约束锁定不可变/可变边界 · 原生执行器保持分立 |
 | [Role/Memory/Worker 可行性设计](./pth/n28-role-memory-orchestration-design.md) | Role Lineage · WorkerReplica · 重叠记忆责任区 · 分层检索 · 统一认知预算 |
 | [Role/Memory/Worker 实施计划](./pth/n28-role-memory-orchestration-implementation-plan.md) | N27 含 R6 的最终报告校正后执行 · 七个可审查任务 · 12 条 gold query · 1,000 组预算探针 · GO/NO-GO 判定 |
 | [Role/Memory/Worker 可行性报告](./pth/n28-feasibility-report.md) | **GO** · 第二轮复核修复后权威版 · `7e76180` · H1–H6 全 PASS · 四门禁全绿 · 合同 v1.1 人工批准 |

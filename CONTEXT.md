@@ -106,6 +106,10 @@ _Avoid_: Workflow Run、Trigger、全局执行引擎
 一次编译产生的不可变工作拓扑版本；同一循环的不同轮次可以引用不同修订。
 _Avoid_: 可原地修改的 Flow、数据库 row version、运行状态
 
+**Workflow Construction Envelope（工作流构造约束）**:
+构造期锁定工作流不可变部分并声明可变范围的版本化约束；运行反馈只能在该范围内选择拓扑。
+_Avoid_: Workflow Revision、运行期配置、LLM 自报边界
+
 **Workflow Run（工作流运行）**:
 某个 Workflow Revision 的一次有限执行，其内部依赖关系必须无环。
 _Avoid_: Interaction Session、Intake Run 的同义词、无限循环
