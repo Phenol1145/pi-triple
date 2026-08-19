@@ -194,3 +194,15 @@ describe("cmdHub", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("operator 命令边界（ptl operator 是 top-level，不属于 hub/tui/deprecated）", () => {
+  it("operator 不是 deprecated 命令，也不属于 TUI 面板", () => {
+    expect(getDeprecatedMigration("operator")).toBeNull();
+    expect(TUI_PANELS).not.toContain("operator");
+  });
+
+  it("HUB_COMMANDS 保留 hub console（PTH bridge 活动观测台），operator 不进入 hub 子命令", () => {
+    expect(HUB_COMMANDS).toContain("console");
+    expect(HUB_COMMANDS).not.toContain("operator");
+  });
+});

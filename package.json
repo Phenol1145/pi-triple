@@ -21,7 +21,7 @@
   "scripts": {
     "prepublishOnly": "npm run build",
     "clean": "rm -rf dist packages/shared/dist packages/infra/dist packages/framework/dist packages/mailbox/dist packages/dev-container/dist packages/pth-memory/dist packages/pth-sandbox/dist",
-    "build": "tsc -p packages/shared && tsc -p packages/infra && tsc -p packages/pth-memory && tsc -p packages/pth-sandbox && tsc -p packages/framework && tsc -p packages/mailbox && tsc -p packages/dev-container && tsc -p tsconfig.json",
+    "build": "tsc -p packages/shared && tsc -p packages/infra && tsc -p packages/pth-memory && tsc -p packages/pth-sandbox && tsc -p packages/framework && node scripts/copy-framework-web-assets.mjs && tsc -p packages/mailbox && tsc -p packages/dev-container && tsc -p tsconfig.json",
     "pth:dev": "tsx watch src/pth/main.ts",
     "pth:start": "node dist/pth/main.js",
     "adjudicate": "node --experimental-strip-types scripts/adjudicate-tensions.ts",

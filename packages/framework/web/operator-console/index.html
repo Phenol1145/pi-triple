@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PTL Operator Console</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">PTL Operator Console</span>
+    <span id="session-state" class="session-state">未连接</span>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar" aria-label="Operator Console 页面">
+      <button class="nav-item" type="button" data-page="overview">Overview</button>
+      <button class="nav-item" type="button" data-page="work">Work</button>
+      <button class="nav-item" type="button" data-page="debug">Debug</button>
+      <button class="nav-item" type="button" data-page="memory">Memory</button>
+      <button class="nav-item" type="button" data-page="config">Config</button>
+    </nav>
+
+    <main class="content">
+      <section class="page" id="page-overview" data-page-root="overview">
+        <h1>Overview</h1>
+        <p class="placeholder">Overview 页面将在后续任务实现。</p>
+      </section>
+      <section class="page" id="page-work" data-page-root="work" hidden>
+        <h1>Work</h1>
+        <p class="placeholder">Work 页面将在后续任务实现。</p>
+      </section>
+      <section class="page" id="page-debug" data-page-root="debug" hidden>
+        <h1>Debug</h1>
+        <p class="placeholder">Debug 页面将在后续任务实现。</p>
+      </section>
+      <section class="page" id="page-memory" data-page-root="memory" hidden>
+        <h1>Memory</h1>
+        <p class="placeholder">Memory 页面将在后续任务实现。</p>
+      </section>
+      <section class="page" id="page-config" data-page-root="config" hidden>
+        <h1>Config</h1>
+        <p class="placeholder">Config 页面将在后续任务实现。</p>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

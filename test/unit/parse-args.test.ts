@@ -93,3 +93,24 @@ describe("parseArgs config 子命令", () => {
     expect(r.passthrough).toEqual(["redis"]);
   });
 });
+
+describe("parseArgs operator 命令", () => {
+  it("ptl operator → command=operator，无子命令", () => {
+    const r = parseArgs(["operator"]);
+    expect(r.command).toBe("operator");
+    expect(r.subcommand).toBe("");
+    expect(r.passthrough).toEqual([]);
+  });
+
+  it("ptl operator --port 8787 --host 127.0.0.1 --no-open → valued flags 与 boolean flag 正确解析", () => {
+    const r = parseArgs(["operator", "--port", "8787", "--host", "127.0.0.1", "--no-open"]);
+    expect(r.command).toBe("operator");
+    expect(r.flags.port).toBe("8787");
+    expect(r.flags.host).toBe("127.0.0.1");
+    expect(r.flags["no-open"]).toBe("true");
+  });
+
+  it("ptl operator --port（缺值）→ 报错", () => {
+    expect(() => parseArgs(["operator", "--port"])).toThrow(/--port/);
+  });
+});
