@@ -27,8 +27,8 @@
 | [Human Interaction 协议](./pth/n25-human-interaction-protocol-design.md) | 意图多轴模型 · TaskDraft · 可调审核 · 人类等待/恢复 · 输出表达 · adapter 边界 |
 | [自主知识摄入设计](./pth/n26-autonomous-knowledge-intake-design.md) | 人类唯一信任源 · 自动发现/抓取/抽取/核验/晋升/重爬 · 十域生产验收 |
 | [最小可信知识摄入内环反馈与实施计划](./pth/n29-minimal-knowledge-intake-loop-feedback-plan.md) | 双环复验 NO-GO · 本轮单信源 M0 · Task/outbox 前置修复 · 初次摄入/不变重爬/变化重爬验收 |
-| [最小可信摄入内环验收报告](./pth/n29-minimal-intake-report.md) | 再复核修复后权威版 **EVALUATION-INCOMPLETE（全部门禁绿 + G9-c canary satisfied；仅 G8-b/G10 partial 余项）** · `d36891f` · P0-1~P0-9/P1-1~P1-3 全修 · 29 sentinel exact 覆盖 |
-| [最小可信摄入内环 envelope](./pth/n29-minimal-intake-acceptance.json) | 唯一权威 envelope（focused 355 零 skip/build/lint/三 typecheck/full 2609 全绿 · G9-c 真实公网 canary satisfied）· 绑定 `d36891f` |
+| [最小可信摄入内环验收报告](./pth/n29-minimal-intake-report.md) | 最终权威版 **MIN_INNER_LOOP_GO** · `c6d0156` · P0-1~P0-9/P1-1~P1-3 全修 · 31 sentinel exact 覆盖 · G8-b 三阶段 SIGKILL + G10 五项 sabotage 全 satisfied |
+| [最小可信摄入内环 envelope](./pth/n29-minimal-intake-acceptance.json) | 唯一权威 envelope **MIN_INNER_LOOP_GO**（focused 361 零 skip/build/lint/三 typecheck/full 2615+9 冻结 skip 全绿 · 六项 realism gates 全 satisfied）· 绑定 `c6d0156` |
 | [最小可信摄入内环再次验收反馈](./pth/n29-minimal-intake-reacceptance-feedback.md) | 当前 HEAD 独立复核 **NOT ACCEPTED / NO-GO** · 跨租户 outbox · stage CAS / Trust Policy / admission / official 旁路 · 修复顺序与复验条件 |
 | [统一运行观测台设计](./pth/n30-runtime-observatory-design.md) | C 方案 · Job/Task/Intake 甘特图 · CPU/RSS/Heap/Network 同轴折线 · Freshness Contract · O0–O5 分层交付 |
 | [统一 Workflow DAG 薄腰设计](./pth/n31-unified-workflow-dag-design.md) | **2.0 目标架构** · 1.x 只做真实设施验证 · 构造约束锁定不可变/可变边界 · 原生执行器保持分立 |
