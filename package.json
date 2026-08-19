@@ -29,7 +29,7 @@
     "test:watch": "vitest",
     "verify:sandbox-build": "bash scripts/verify-clean-sandbox-build.sh",
     "lint": "tsc -p packages/shared && tsc -p packages/infra && tsc -p packages/pth-memory && tsc -p packages/pth-sandbox && tsc --noEmit && tsc -p packages/shared --noEmit && tsc -p packages/framework --noEmit && npm run check:pth-boundaries && npm run check:pth-config",
-    "monitor": "node tools/docker-monitor/server.js",
+    "monitor": "node deploy/docker-monitor/server.js",
     "ptl:dev": "tsx packages/framework/src/pit.ts",
     "ext:check": "tsx scripts/ext-check.ts",
     "check:pth-boundaries": "tsx scripts/check-pth-boundaries.ts",
