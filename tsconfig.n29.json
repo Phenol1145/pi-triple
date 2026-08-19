@@ -18,6 +18,7 @@
     "scripts/eval-n29-minimal-intake.ts",
     "scripts/pth-intake-subscribe.ts",
     "src/pth/contracts/knowledge-intake.ts",
+    "src/pth/contracts/knowledge-intake-attestation.ts",
     "src/pth/execution/knowledge-intake/index.ts",
     "src/pth/execution/knowledge-intake/trust-policy.ts",
     "src/pth/execution/knowledge-intake/fetch-broker.ts",
