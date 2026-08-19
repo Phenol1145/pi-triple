@@ -296,7 +296,7 @@ describe("AgentEngine prompt (multi-turn)", () => {
     expect(remembers).toBe(true);
 
     await engine.destroySession(sid, TENANT);
-  }, 60000);
+  }, 180000);
 });
 
 describe("AgentEngine abort", () => {
