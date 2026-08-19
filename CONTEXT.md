@@ -98,6 +98,30 @@ _Avoid_: Responsibility Capacity、吞吐配额、Worker 数量、模型上下�
 
 ## 任务执行
 
+**Workflow Definition（工作流定义）**:
+一类有限工作图的版本化模板与约束，供一次或多次运行编译为不可变拓扑。
+_Avoid_: Workflow Run、Trigger、全局执行引擎
+
+**Workflow Revision（工作流修订）**:
+一次编译产生的不可变工作拓扑版本；同一循环的不同轮次可以引用不同修订。
+_Avoid_: 可原地修改的 Flow、数据库 row version、运行状态
+
+**Workflow Run（工作流运行）**:
+某个 Workflow Revision 的一次有限执行，其内部依赖关系必须无环。
+_Avoid_: Interaction Session、Intake Run 的同义词、无限循环
+
+**Loop Epoch（循环轮次）**:
+反馈循环中的一轮 Workflow Run；后续轮次由前一轮反馈触发，但不构成当前运行图的回边。
+_Avoid_: retry attempt、Flow stage loop、时间窗口
+
+**Workflow Projection（工作流投影）**:
+从 Task、Intake、Optimizer 等权威事实构造的统一只读工作图，不拥有或反向修改原生状态。
+_Avoid_: 第二事实源、通用 repository、前端拼图
+
+**Workflow Compiler（工作流编译器）**:
+依据反馈、目录、预算与策略生成下一轮 Workflow Revision 的确定性边界。
+_Avoid_: LLM 自由编排器、Task Runner、Workflow 状态所有者
+
 **Task Control（任务控制）**:
 接受、路由、租借、取消并记录任务的权威方；拥有任务状态迁移。
 _Avoid_: Kernel、worker pool
