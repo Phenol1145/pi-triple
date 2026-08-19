@@ -39,6 +39,8 @@
     "test/pth-knowledge-intake/g10-sabotage-sensitivity.test.ts",
     "test/pth-knowledge-intake/g8-dual-process.test.ts",
     "test/pth-knowledge-intake/g8-dual-process-child.ts",
+    "test/pth-knowledge-intake/g8-stage-sigkill.test.ts",
+    "test/pth-knowledge-intake/g8-stage-sigkill-child.ts",
     "test/pth-knowledge-intake/minimal-loop-tls.integration.test.ts",
     "test/pth-kernel-assembly/intake-mode-gates.test.ts",
     "test/pth-kernel-interpreter/web-transport-ip.test.ts",
