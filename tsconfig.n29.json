@@ -1,0 +1,40 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,
+    "paths": {
+      "@away_from/shared": ["./packages/shared/src/index.ts"],
+      "@away_from/infra": ["./packages/infra/src/index.ts"],
+      "@away_from/pth-memory": ["./packages/pth-memory/src/index.ts"],
+      "@away_from/pth-sandbox": ["./packages/pth-sandbox/src/index.ts"],
+      "@away_from/mailbox": ["./packages/mailbox/src/index.ts"],
+      "@away_from/dev-container": ["./packages/dev-container/src/index.ts"]
+    }
+  },
+  "files": [
+    "scripts/accept-n29-minimal-intake.ts",
+    "scripts/eval-n29-minimal-intake.ts",
+    "scripts/pth-intake-subscribe.ts",
+    "src/pth/contracts/knowledge-intake.ts",
+    "src/pth/execution/knowledge-intake/index.ts",
+    "src/pth/execution/knowledge-intake/trust-policy.ts",
+    "src/pth/execution/knowledge-intake/fetch-broker.ts",
+    "src/pth/execution/knowledge-intake/admission.ts",
+    "src/pth/execution/knowledge-intake/knowledge-ingestor.ts",
+    "src/pth/execution/knowledge-intake/service.ts",
+    "src/pth/execution/knowledge-intake/due-scanner.ts",
+    "src/pth/kernel/storage/knowledge-intake-pg.ts",
+    "src/pth/runner/intake-processors.ts",
+    "src/pth/bootstrap/batch-process.ts",
+    "test/pth-knowledge-intake/trust-policy.test.ts",
+    "test/pth-knowledge-intake/knowledge-intake-pg.test.ts",
+    "test/pth-knowledge-intake/fetch-broker.test.ts",
+    "test/pth-knowledge-intake/knowledge-ingestor.test.ts",
+    "test/pth-knowledge-intake/minimal-loop.integration.test.ts",
+    "test/pth-runner/intake-processors.test.ts",
+    "test/pth-runner/n29-minimal-intake-acceptance.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
