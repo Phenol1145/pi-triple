@@ -31,6 +31,9 @@
 | [最小可信摄入内环 envelope](./pth/n29-minimal-intake-acceptance.json) | 唯一权威 envelope **MIN_INNER_LOOP_GO**（focused 361 零 skip/build/lint/三 typecheck/full 2615+9 冻结 skip 全绿 · 六项 realism gates 全 satisfied）· 绑定 `c6d0156` |
 | [最小可信摄入内环再次验收反馈](./pth/n29-minimal-intake-reacceptance-feedback.md) | 当前 HEAD 独立复核 **NOT ACCEPTED / NO-GO** · 跨租户 outbox · stage CAS / Trust Policy / admission / official 旁路 · 修复顺序与复验条件 |
 | [统一运行观测台设计](./pth/n30-runtime-observatory-design.md) | C 方案 · Job/Task/Intake 甘特图 · CPU/RSS/Heap/Network 同轴折线 · Freshness Contract · O0–O5 分层交付 |
+| [v1.3 专业计算角色与可执行教程设计](./pth/n32-v13-professional-computing-design.md) | intake/optimize/run · Assembly / Computational Chemistry / Lean 4 / Wolfram · technical-educator · 五类共享记忆 · Jupyter · N30 联动 |
+| [v1.3 专业计算实施计划](./superpowers/plans/2026-08-19-v13-professional-computing.md) | Index Memory → 统一专业适配器 → 四类真实垂直切片 → Notebook → 权威验收 |
+| [N30 运行观测台实施计划](./superpowers/plans/2026-08-19-n30-runtime-observatory.md) | O0–O4 · 只读时间线 · 有界采样 · SSE reconcile · 甘特/折线联动 |
 | [统一 Workflow DAG 薄腰设计](./pth/n31-unified-workflow-dag-design.md) | **2.0 目标架构** · 1.x 只做真实设施验证 · 构造约束锁定不可变/可变边界 · 原生执行器保持分立 |
 | [Role/Memory/Worker 可行性设计](./pth/n28-role-memory-orchestration-design.md) | Role Lineage · WorkerReplica · 重叠记忆责任区 · 分层检索 · 统一认知预算 |
 | [Role/Memory/Worker 实施计划](./pth/n28-role-memory-orchestration-implementation-plan.md) | N27 含 R6 的最终报告校正后执行 · 七个可审查任务 · 12 条 gold query · 1,000 组预算探针 · GO/NO-GO 判定 |
@@ -43,6 +46,7 @@
 | [PTH 配置](./pth/configuration.md) | 107 键 typed schema · ConfigCenter · secrets 文件 · `pth config` 命令 |
 | [PTH Trigger 运行时](./pth/trigger-runtime.md) | workflow/loop 扁平化为 trigger 调度指令 · 系统 trigger 目录 · 事件词汇 |
 | [W8 任务派发设计](./pth/w8-task-dispatch-design.md) | PTL 入口路由 · delegate/await · 事件驱动回流 · 组织权 |
+| [v1.2.0 发布说明](./releases/v1.2.0.md) | 2026-08-19 · **N29 最小可信知识摄入内环 MIN_INNER_LOOP_GO** + N28 二轮复核 GO · 2624 用例 |
 | [v1.1.3 发布说明](./releases/v1.1.3.md) | 2026-08-18 · W8 任务派发 + 0.16 穿透/收口 + staged 审核流 + batch 健康面 · 1988 用例 |
 | [v1.1.2 发布说明](./releases/v1.1.2.md) | 2026-08-17 · 全模块结构专项收账 · 1903 用例 · 门禁证据 |
 | [v1.1.1 发布说明](./releases/v1.1.1.md) | 2026-08-17 补丁 · 三条安装路径修复（F1–F17）· 门禁证据 |
