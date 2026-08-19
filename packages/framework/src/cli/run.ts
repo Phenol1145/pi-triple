@@ -12,9 +12,10 @@ import { resolveMode, routeJsonCommand, doPrintCommand } from "./mode.js";
 import { cmdMigrate, handleUpdate, handleInstallRemove, handleShared } from "./admin.js";
 import { cmdTui, cmdHub, getDeprecatedMigration } from "./route.js";
 import { cmdAgentRun, cmdAgentClean } from "./agent.js";
-import { emitJsonError } from "@away_from/shared";
+import { emitJsonError, getConfigValue } from "@away_from/shared";
 import { dispatchCommand } from "../commands/dispatch.js";
 import { registerPiSessionProvider } from "../session/pi-provider.js";
+import { startOperatorConsole } from "../operator-console/launch.js";
 
 // Re-export for test compatibility
 export { parseArgs };
@@ -218,6 +219,35 @@ export async function main() {
       else if (subcommand === "clean") cmdAgentClean(flags, passthrough);
       else { console.log("  用法: ptl agent run|clean ..."); console.log("  ptl agent run <template> <task> [--workspace temp|main]"); console.log("  ptl agent clean <agentId>"); }
       break;
+    case "operator": {
+      const host = flags.host ?? "127.0.0.1";
+      if (host !== "127.0.0.1") {
+        console.log(`  \x1b[31m❌ operator 仅支持监听 127.0.0.1（收到: ${host}）\x1b[0m`);
+        process.exit(1);
+      }
+      let port: number | undefined;
+      if (flags.port !== undefined) {
+        port = Number(flags.port);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          console.log(`  \x1b[31m❌ --port 必须是 1-65535 的整数（收到: ${flags.port}）\x1b[0m`);
+          process.exit(1);
+        }
+      }
+      await startOperatorConsole({
+        host,
+        port,
+        noOpen: flags["no-open"] === "true",
+        operatorPrincipalId: process.env.USER ?? "human-local-operator",
+        pth: {
+          baseUrl: process.env.PTH_URL ?? getConfigValue("pth.url"),
+          token: process.env.PTH_TOKEN ?? getConfigValue("pth.token"),
+        },
+        n30: {
+          baseUrl: process.env.N30_URL ?? getConfigValue("n30.url"),
+        },
+      });
+      break;
+    }
     case "help":
     case "-h":
       if (passthrough[0]) printCommandHelp(passthrough[0]);

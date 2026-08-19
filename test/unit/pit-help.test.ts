@@ -11,15 +11,16 @@ function capture(fn: () => void): string {
 describe("printHelp（分组）", () => {
   it("含全部组标题", () => {
     const out = capture(printHelp);
-    for (const g of ["日常使用", "可视化 TUI", "模板与配置", "远端程序", "Agent", "系统与维护"]) {
+    for (const g of ["日常使用", "可视化 TUI", "Operator Console", "模板与配置", "远端程序", "Agent", "系统与维护"]) {
       expect(out).toContain(g);
     }
   });
-  it("含 tui/hub 命令", () => {
+  it("含 tui/hub/operator 命令", () => {
     const out = capture(printHelp);
     expect(out).toContain("tui dashboard");
     expect(out).toContain("tui lab");
     expect(out).toContain("hub submit");
+    expect(out).toContain("operator [--port p] [--no-open]");
   });
   it("无 tenant 残留（已改名 template）", () => {
     const out = capture(printHelp);
@@ -55,6 +56,13 @@ describe("printCommandHelp", () => {
     const out = capture(() => printCommandHelp("start"));
     expect(out).toContain("start");
     expect(out).toContain("--template");
+  });
+  it("operator → 含用法、--port 与 --no-open", () => {
+    const out = capture(() => printCommandHelp("operator"));
+    expect(out).toContain("ptl operator");
+    expect(out).toContain("--port");
+    expect(out).toContain("--no-open");
+    expect(out).toContain("127.0.0.1");
   });
   it("未知命令 → 退化 printHelp（含分组标题）", () => {
     const out = capture(() => printCommandHelp("nonexistent-cmd"));

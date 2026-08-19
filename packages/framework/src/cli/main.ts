@@ -34,6 +34,12 @@ const HELP_GROUPS: HelpGroup[] = [
     ],
   },
   {
+    title: "Operator Console", intro: "仅监听 127.0.0.1 的本地 Web 控制台",
+    commands: [
+      ["operator [--port p] [--no-open]", "启动 PTL Operator Console（一次性 bootstrap 链接）"],
+    ],
+  },
+  {
     title: "模板与配置",
     commands: [
       ["template ls|new|rm|rename", "模板管理"],
@@ -205,6 +211,12 @@ const COMMAND_HELP: Record<string, { usage: string; desc: string; flags?: Array<
     examples: ["ptl start", "ptl start --template dev", "ptl start --bg --name coding"],
   },
   tui: { usage: "ptl tui [dashboard|lab]", desc: "打开可视化 TUI 面板（默认 dashboard）" },
+  operator: {
+    usage: "ptl operator [--port p] [--host 127.0.0.1] [--no-open]",
+    desc: "启动仅监听 127.0.0.1 的 PTL Operator Console（一次性 bootstrap 链接）",
+    flags: [["--port <n>", "监听端口（默认随机可用端口）"], ["--host <127.0.0.1>", "只允许 127.0.0.1"], ["--no-open", "不自动打开浏览器，仅打印链接"]],
+    examples: ["ptl operator", "ptl operator --port 8787 --no-open"],
+  },
   hub: { usage: "ptl hub <submit|run|programs|dev|request|requests|respond|observe|debug>", desc: "PTH 远端程序管理 + 回退请求通道 + 观测 + 调试" },
   onboard: { usage: "ptl onboard", desc: "首次导引向导：环境检查→配置→模板→验证" },
   doctor: { usage: "ptl doctor", desc: "完整健康检查 + 交互修复" },
