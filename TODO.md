@@ -2,10 +2,42 @@
 
 > 未执行方案的统一入口与执行顺序见 [剩余工作总控计划](./docs/superpowers/plans/2026-08-15-remaining-work-program.md)。
 
+## v1.3.0 / N32 专业计算角色 + 可执行教程 + Web 运行视图
+
+> 目标：四个专业计算 Role（Assembly / Computational Chemistry / Lean 4 / Symbolic Mathematics）
+> 与一个 technical-educator Role 共用五类记忆和统一运行核心；以 Jupyter Notebook 交付可执行教程；
+> 同版本完成 N30 O0–O4 Web 运行观测台。设计：
+> [N32 v1.3 专业计算设计](./docs/pth/n32-v13-professional-computing-design.md)。
+>
+> 实施拆为两份独立计划：
+> [专业计算与 Notebook](./docs/superpowers/plans/2026-08-19-v13-professional-computing.md)；
+> [N30 运行观测台](./docs/superpowers/plans/2026-08-19-n30-runtime-observatory.md)。
+> N31 统一 Workflow DAG 留到 2.0，本版本只验证已有设施的真实可用性。
+
+- [ ] **M0 三种 Work Mode**：新增服务端盖章的 `intake/optimize/run` 与 `WorkEnvelope`；
+  普通任务默认 run，IntakeRun 固定 intake，优化任务固定 optimize；委派继承，跨模式只能新建工作项；
+  Trigger/lease/outbox/N30 保持正交。
+- [ ] **P0 五类记忆**：`MemoryType` 增加 `index`；建立稳定版本索引、现有记忆集合索引、
+  精确 locator 与受同一授权/预算约束的惰性正文读取。
+- [ ] **P1 共享专业运行契约**：冻结 `ProfessionalRuntimeAdapter`、作业结果、版本锁、
+  resource/artifact/trace 约束；新增五个默认 0 副本 Role Definition。
+- [ ] **P2 Assembly + Lean 4**：真实三 ISA 非平凡例程；真实 Lean 4/Lake/Mathlib 工程，
+  无 `sorry/admit`、干净构建通过。
+- [ ] **P3 Wolfram + Computational Chemistry**：Wolfram 许可证与假设/数值复核；
+  Psi4 分子任务；Quantum ESPRESSO 周期 SCF；资源、收敛和版本全部结构化。
+- [ ] **P4 Jupyter 教程**：technical-educator 把四类已验证作业转为 Notebook；
+  干净 kernel Run All；相应专业 Role 复核；无隐藏状态/凭据/宿主路径。
+- [ ] **P5 N30 O0–O4**：完成本机管理员甘特图、CPU/RSS/Heap/Network 折线、
+  PTH 时间线、WorkMode 筛选、SSE reconcile、freshness 和告警验收；O5 后置。
+- [ ] **P6 v1.3 权威验收**：真实工具链全部执行，N29 门禁不回退，全量/lint/build 绿，
+  skip manifest 无新增，acceptance envelope 绑定 clean commit。
+
+执行顺序：**M0 → P0 → P1 → P2 → P3/P4**；P5 可并行，最终与 M0/P0–P4 一起进入 P6。
+
 ## N30 统一运行观测台（C 方案——分层待办，2026-08-19 已确认布局）
 
 > 目标：用共享时间轴把“系统正在执行什么”与“消耗了多少资源”关联起来。主视图采用
-> Job → Task → Intake Stage 分层甘特图，CPU / RSS / Heap / Network 使用同步折线图；
+> Job → Task → Intake / Optimize / Professional Stage 分层甘特图，CPU / RSS / Heap / Network 使用同步折线图；
 > 点击阶段后联动展示 Worker、Role、Batch、Trace、事件与所选窗口资源统计。
 > 设计稿：[N30 统一运行观测台设计](./docs/pth/n30-runtime-observatory-design.md)。
 >
@@ -13,7 +45,7 @@
 > 长期历史存储后置。现有 `deploy/docker-monitor` 是 UI/容器采样适配器，PTH Gateway
 > 只新增 tenant-scoped、read-only 的观测端口，不把观测状态写回任务或摄入状态机。
 
-- [ ] **O0 设计与安全契约**：冻结 `TimelineInterval`、`ResourceSample`、`RuntimeEvent`、
+- [ ] **O0 设计与安全契约**：冻结 `RuntimeInterval`、`ResourceSample`、`RuntimeDelta`、
   `RuntimeSnapshot` DTO；定义统一 ID、父子关系、时间语义、Freshness Contract、状态颜色、采样精度与降级行为；
   明确 loopback-only、server-side token、tenant 由认证上下文盖章、Docker Socket 不出服务端。
   - 完成条件：设计稿、威胁边界与 DTO 合同通过评审；旧 `/metrics`、kernel status/events

@@ -56,6 +56,14 @@ _Avoid_: 一次性大改、不可逆自动演化
 
 ## 认知编排
 
+**Work Mode（工作模式）**:
+每个有限工作项的目的分类，只有 intake、optimize、run 三种；它回答“为什么工作”，可在系统中并发存在，不是全局互斥状态或执行进度。
+_Avoid_: Workflow Status、Role、全局运行模式、Task kind
+
+**Work Envelope（工作封套）**:
+由服务端盖章的工作身份与约束，绑定 Work Mode、目标、authority/budget policy、父工作和因果链；委派默认继承，跨模式必须创建新工作项。
+_Avoid_: Task payload 自报字段、Workflow Revision、Execution Grant、原地 mode 切换
+
 **Role Definition（角色定义）**:
 版本化、持久的工作方式承诺，描述职责、产物、动作面，并可收窄系统认知预算；它不是一个运行进程或知识分类。
 _Avoid_: Worker、学科、进程、副本、worker type
@@ -95,6 +103,26 @@ _Avoid_: Cognitive Budget、Memory Visibility、Worker 数量、软目标
 **Cognitive Budget（认知预算）**:
 由系统上限与 Role Definition 的可选声明共同收窄、并由 Worker Replica 在任务中强制执行的版本化硬上限，约束实际准入 Task Working Set 的记忆、Skill 与工具面。
 _Avoid_: Responsibility Capacity、吞吐配额、Worker 数量、模型上下文窗口别名、软建议
+
+**Memory Type（记忆类型）**:
+描述记忆用途的稳定分类；当前五类为 setting、wiki、skill、log、index。类型不决定租户可见性、责任归属或物理存储。
+_Avoid_: Memory Region、kind、ACL、独立数据库
+
+**Index Memory（索引记忆）**:
+只保存资源身份、稳定版本、artifact hash、精确 locator 与许可信息的轻量导航记忆；正文按任务需要经授权和预算惰性载入。
+_Avoid_: 全文副本、向量库同义词、Skill index、Memory Directory
+
+**Professional Computational Role（专业计算角色）**:
+对一种可验证专业工作方法负责的 Role Definition；它消费共享记忆并通过获准的专业 Runtime Adapter 工作，不拥有软件进程或私有知识库。
+_Avoid_: 软件插件、Kernel、Worker type、学科目录
+
+**Professional Runtime Adapter（专业运行适配器）**:
+把统一 Execution Runtime 契约收窄为某个专业软件的类型化输入、受限执行、取消、诊断和 artifact 输出；不得接受 LLM 自报的任意命令行。
+_Avoid_: Role、Workflow、通用 shell、外部软件本身
+
+**Executable Tutorial Notebook（可执行教程 Notebook）**:
+由已验证执行产物编译出的 Jupyter 教学投影，绑定环境锁、来源 artifact 和专业复核；历史 cell 输出不是成功证据。
+_Avoid_: Knowledge truth、运行日志、普通文档、人工截图
 
 ## 任务执行
 
