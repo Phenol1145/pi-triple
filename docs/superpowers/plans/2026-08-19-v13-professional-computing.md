@@ -33,6 +33,8 @@
 ### Task 0: Work Mode and Server-Stamped Work Envelope
 
 **Files:**
+- Create: `packages/shared/src/work-mode.ts`
+- Modify: `packages/shared/src/index.ts`
 - Create: `src/pth/contracts/work-mode.ts`
 - Modify: `src/pth/contracts/index.ts`
 - Modify: `src/pth/contracts/tasking.ts`
@@ -49,7 +51,7 @@
 
 **Interfaces:**
 - Consumes: trusted task publish/delegate, IntakeRun creation, optimizer/system templates, tenant scope and causation IDs.
-- Produces: `WorkMode`, `WorkEnvelope`, `createServerWorkEnvelope()`, `assertWorkModeImmutable()`, inherited delegation stamping, explicit `createCrossModeWork()` and durable `tasks.work_mode`.
+- Produces: shared JSON protocol `WorkMode`, PTH-owned `WorkEnvelope`, `createServerWorkEnvelope()`, `assertWorkModeImmutable()`, inherited delegation stamping, explicit `createCrossModeWork()` and durable `tasks.work_mode`.
 
 - [ ] **Step 1: Write failing pure contract tests**
 
@@ -78,9 +80,12 @@ Expected: FAIL on missing exports.
 - [ ] **Step 3: Implement the pure contract and server-only constructor**
 
 ```ts
+// packages/shared/src/work-mode.ts — PTL/PTH JSON protocol literal only.
 export const WORK_MODES = ["intake", "optimize", "run"] as const;
 export type WorkMode = (typeof WORK_MODES)[number];
 
+// src/pth/contracts/work-mode.ts — PTH domain envelope owns authority/budget/causation.
+import type { WorkMode } from "@away_from/shared";
 export interface WorkEnvelope {
   workId: string;
   mode: WorkMode;
@@ -126,7 +131,7 @@ Run: `npx vitest run test/pth-contracts/work-mode.test.ts test/pth-tasking/task-
 Expected: PASS, zero skipped tests.
 
 ```bash
-git add src/pth/contracts/work-mode.ts src/pth/contracts/index.ts src/pth/contracts/tasking.ts src/pth/contracts/knowledge-intake.ts src/pth/kernel/storage/schema.ts src/pth/kernel/storage/task-store-pg.ts src/pth/tasking/task-control-service.ts src/pth/kernel/templates.ts src/pth/kernel/execution/optimizer-loop.ts test/pth-contracts/work-mode.test.ts test/pth-tasking/task-control-service.test.ts test/pth-knowledge-intake/knowledge-intake-pg.test.ts test/pth-composition/work-mode-classification.test.ts
+git add packages/shared/src/work-mode.ts packages/shared/src/index.ts src/pth/contracts/work-mode.ts src/pth/contracts/index.ts src/pth/contracts/tasking.ts src/pth/contracts/knowledge-intake.ts src/pth/kernel/storage/schema.ts src/pth/kernel/storage/task-store-pg.ts src/pth/tasking/task-control-service.ts src/pth/kernel/templates.ts src/pth/kernel/execution/optimizer-loop.ts test/pth-contracts/work-mode.test.ts test/pth-tasking/task-control-service.test.ts test/pth-knowledge-intake/knowledge-intake-pg.test.ts test/pth-composition/work-mode-classification.test.ts
 git commit -m "feat(work): classify intake optimize and run"
 ```
 
@@ -715,8 +720,8 @@ git commit -m "feat(tutorials): add executable jupyter guide pipeline"
 - Modify: `TODO.md`
 
 **Interfaces:**
-- Consumes: Tasks 1–9 and the N30 acceptance envelope from the separate N30 plan.
-- Produces: mechanical M0/P0–P6 decision, version report and commit-bound acceptance envelope.
+- Consumes: Tasks 1–9 plus the N30 and N33 acceptance envelopes from their separate plans.
+- Produces: mechanical M0/P0–P7 decision, version report and commit-bound acceptance envelope.
 
 - [ ] **Step 1: Write the composition test before the evaluator**
 
@@ -732,7 +737,7 @@ The evaluator reports exact denominators for memory types, adapters, real job ca
 
 - [ ] **Step 4: Implement acceptance driver**
 
-The driver records evaluated commit, clean-tree state, professional dependency preflight, focused test JSON, full test JSON, lint, build, N29 regression envelope and N30 envelope. Environment absence is `EVALUATION-INCOMPLETE`; any started non-zero gate is NO-GO.
+The driver records evaluated commit, clean-tree state, professional dependency preflight, focused test JSON, full test JSON, lint, build, N29 regression envelope, N30 envelope and N33 Operator Console envelope. Environment absence is `EVALUATION-INCOMPLETE`; any started non-zero gate is NO-GO.
 
 - [ ] **Step 5: Run the complete authority sequence**
 
@@ -750,7 +755,7 @@ Run: `npm run build`
 
 Run: `node --import tsx scripts/accept-v13.ts`
 
-Expected: GO only when all professional dependencies, N29 regressions and the N30 envelope pass with no new skips.
+Expected: GO only when all professional dependencies, N29 regressions and the N30/N33 envelopes pass with no new skips.
 
 - [ ] **Step 6: Commit implementation evidence, then generate the final report commit**
 

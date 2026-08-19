@@ -1,9 +1,13 @@
 ---
-status: accepted
+status: amended
 date: 2026-08-18
+amended_by: 0006-ptl-human-interface-role-boundary
 ---
 
 # PTH 拥有 Human Interaction 协议，交互角色不进入 batch
+
+> 2026-08-19 修订：协议与持久状态仍归 PTH；`human-interface` 语义角色及展示/成稿职责改归 PTL。
+> 见 [ADR-0006](./0006-ptl-human-interface-role-boundary.md)。
 
 背景：ADR-0001 已将 PTL 与 PTH 定义为独立产品，并取消“PTL 是 PTH 前端”的关系；此后
 `human-interface` 被从 PTH worker 谱系移除，交互职责被笼统归给 PTL。这个处理混淆了

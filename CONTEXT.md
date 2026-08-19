@@ -16,6 +16,10 @@ _Avoid_: 后端、执行层、服务器端任务平台、agent 联邦平台
 PTL（或任何调用方）调用 PTH 的规范接口。
 _Avoid_: HTTP 桥（仅作为兼容通道保留）
 
+**PTL Operator Console（PTL 操作台）**:
+PTL 提供的本机人类操作界面，统一呈现观测、命令预览、显式确认与验收结果；它通过规范适配器调用 PTH，但不拥有或复制 PTH 的任务、摄入、优化、记忆与配置事实。
+_Avoid_: PTH 前端、PTH 状态源、通用 Workflow 引擎、浏览器直连管理凭据
+
 **PTH Host**:
 选择产品 Profile、装配获准模块并拥有其生命周期的进程。
 _Avoid_: Core、kernel server、application singleton
@@ -176,13 +180,33 @@ _Avoid_: Shared sandbox secret、kernel ID
 
 ## 人机交互
 
+**Operator Session（操作会话）**:
+PTL Operator Console 中绑定一个本机稳定主体、短期浏览器会话与防重放凭证的交互上下文；它只保护操作通道，不是 PTH Interaction Session 或业务事实。
+_Avoid_: PTH Session、租户身份、长期登录态、审批记录
+
+**Operator Command（操作命令）**:
+在 PTL 中经类型化配置、预览摘要与显式确认后，编译为一个 PTH 原生动作的短期命令；提交后由 Task、Intake Run 或 Optimizer 等原生实体继续成为事实源。
+_Avoid_: Workflow Definition、任意 shell、第二任务状态机、可原地跨 Work Mode 变更
+
+**Operator Review（操作验收）**:
+操作台对原生运行事实与冻结验收证据的只读判定和人类确认；它不替代 Trust Policy、Knowledge Verdict、Approval Decision 或各领域的权威验收 envelope。
+_Avoid_: 点击即晋升、浏览器自报成功、通用人工 verdict
+
+**Observation Plane（观测面）**:
+从权威状态构造的有界只读投影与时效标记；丢失、陈旧或不可用必须显式呈现，且观测故障不得改变业务状态。
+_Avoid_: Control Plane、第二事实源、无界查询、实时事件即历史真相
+
+**Operator Control Plane（操作控制面）**:
+把已确认 Operator Command 映射到获准原生写入口的窄边界；只允许登记动作，禁止通用转发、任意 SQL、任意 shell 与浏览器持有服务凭据。
+_Avoid_: Observation Plane、PTH Module、通用 API 代理、Docker 控制面
+
 **Human Interaction（人机交互）**:
 PTH 中解释用户输入、形成可确认任务意图，并在执行需要人类参与时维持连续交互的领域边界。
 _Avoid_: PTL 前端、聊天 UI、Workflow approval
 
 **human-interface（交互角色）**:
-提出结构化意图与任务稿件、调整用户可见表达的按需语义角色；它不拥有权威状态，也不是任务池 worker。
-_Avoid_: human-interface worker、审批状态机、用户本人
+PTL 中提出结构化意图与任务稿件、调整用户可见表达的按需语义角色；它不拥有 PTH 权威状态，也不是 PTH 任务池 worker。
+_Avoid_: PTH human-interface worker、审批状态机、用户本人、浏览器会话
 
 **Interaction Channel Adapter（交互通道适配器）**:
 把具体界面的输入输出翻译为 Human Interaction 规范协议的边界组件。

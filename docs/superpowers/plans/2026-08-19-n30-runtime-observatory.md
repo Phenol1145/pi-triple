@@ -24,6 +24,7 @@
 - Any stale source freezes and marks its affected lanes/series; it does not silently continue as current.
 - Browser rendering uses no new frontend framework or runtime dependency.
 - The observatory is read-only and must remain unavailable without affecting PTH execution.
+- N33 may embed the observatory only through a same-origin GET/SSE proxy; N30 never accepts control requests or PTH write credentials.
 - Each task follows TDD and ends in an independently reviewable commit.
 
 ---
@@ -36,7 +37,7 @@
 - Create: `test/pth-contracts/runtime-observation.test.ts`
 
 **Interfaces:**
-- Consumes: canonical `WorkMode` plus tenant/task/job/intake/optimizer/professional-job/worker/role/trace identifiers.
+- Consumes: canonical JSON protocol `WorkMode` from `@away_from/shared` plus tenant/task/job/intake/optimizer/professional-job/worker/role/trace identifiers.
 - Produces: `RuntimeInterval`, `ResourceSample`, `RuntimeDelta`, `RuntimeSnapshot`, `FreshnessState`, WorkMode filters, validators and stable ID helpers.
 
 - [ ] **Step 1: Write failing DTO invariant tests**
@@ -277,6 +278,7 @@ git commit -m "feat(observe): reconcile docker and pth runtime streams"
 **Interfaces:**
 - Consumes: browser runtime snapshot/deltas from Task 4.
 - Produces: shared time-window state, hierarchical Gantt model, resource-series model, selection/details model and rendered C-layout page.
+- Produces for N33: `?embed=1&base=/observe` mode with the same charts/state and no duplicated renderer.
 
 - [ ] **Step 1: Write pure UI state tests**
 
@@ -296,11 +298,15 @@ Gantt lanes are Job → Task → Intake/Professional Stage, with service lanes b
 
 Clicking a bar selects the same time window on resource charts and displays Worker, Role, Batch, Trace, retry, error and usage. Brushing the resource chart updates the Gantt window. Keyboard navigation and textual summaries cover non-pointer access.
 
-- [ ] **Step 5: Add browser acceptance tests**
+- [ ] **Step 5: Add validated embed mode**
+
+`embed=1` hides only the standalone chrome. A `base` value must be a same-origin absolute path without scheme, host, `..` or encoded slash; snapshot/events resolve under that base. Embed mode remains GET/SSE-only and cannot receive Operator Session or control state.
+
+- [ ] **Step 6: Add browser acceptance tests**
 
 Verify initial snapshot, live upsert, reconnect, pause, hierarchy, linked zoom, missing data, stale state and Docker/PTH unavailable banners. Check that page source/local storage contains no token or Docker socket path.
 
-- [ ] **Step 6: Run and commit**
+- [ ] **Step 7: Run and commit**
 
 Run: `npx vitest run test/unit/docker-monitor-ui-state.test.ts test/unit/docker-monitor-charts.test.ts test/browser/runtime-observatory.test.ts`
 

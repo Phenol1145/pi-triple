@@ -6,12 +6,13 @@
 
 > 目标：四个专业计算 Role（Assembly / Computational Chemistry / Lean 4 / Symbolic Mathematics）
 > 与一个 technical-educator Role 共用五类记忆和统一运行核心；以 Jupyter Notebook 交付可执行教程；
-> 同版本完成 N30 O0–O4 Web 运行观测台。设计：
+> 同版本完成 N30 O0–O4 只读运行观测面与 N33 五页 PTL Operator Console。设计：
 > [N32 v1.3 专业计算设计](./docs/pth/n32-v13-professional-computing-design.md)。
 >
-> 实施拆为两份独立计划：
+> 实施拆为三份独立计划：
 > [专业计算与 Notebook](./docs/superpowers/plans/2026-08-19-v13-professional-computing.md)；
-> [N30 运行观测台](./docs/superpowers/plans/2026-08-19-n30-runtime-observatory.md)。
+> [N30 运行观测台](./docs/superpowers/plans/2026-08-19-n30-runtime-observatory.md)；
+> [N33 PTL 五页操作台](./docs/superpowers/plans/2026-08-19-v13-ptl-operator-console.md)。
 > N31 统一 Workflow DAG 留到 2.0，本版本只验证已有设施的真实可用性。
 
 - [ ] **M0 三种 Work Mode**：新增服务端盖章的 `intake/optimize/run` 与 `WorkEnvelope`；
@@ -27,12 +28,37 @@
   Psi4 分子任务；Quantum ESPRESSO 周期 SCF；资源、收敛和版本全部结构化。
 - [ ] **P4 Jupyter 教程**：technical-educator 把四类已验证作业转为 Notebook；
   干净 kernel Run All；相应专业 Role 复核；无隐藏状态/凭据/宿主路径。
-- [ ] **P5 N30 O0–O4**：完成本机管理员甘特图、CPU/RSS/Heap/Network 折线、
-  PTH 时间线、WorkMode 筛选、SSE reconcile、freshness 和告警验收；O5 后置。
-- [ ] **P6 v1.3 权威验收**：真实工具链全部执行，N29 门禁不回退，全量/lint/build 绿，
+- [ ] **P5 N30 O0–O4 只读观测面**：完成本机管理员甘特图、CPU/RSS/Heap/Network 折线、
+  PTH 时间线、WorkMode 筛选、SSE reconcile、freshness 和告警验收；保持独立只读，O5 后置。
+- [ ] **P6 N33 PTL Operator Console**：完成总览/运行/调试/记忆/配置五页；浏览器壳与
+  Docker/PTH 权限分离；run/intake/optimize 只经登记原生动作；后三页只读；配置 secret 恒定打码；
+  不引入统一 Workflow 或 PTH human-interface worker。
+- [ ] **P7 v1.3 权威验收**：真实工具链全部执行，N29 门禁不回退，N30/N33 envelope 均绿，
+  浏览器安全/时效/可访问性验收通过，全量/lint/build 绿，
   skip manifest 无新增，acceptance envelope 绑定 clean commit。
 
-执行顺序：**M0 → P0 → P1 → P2 → P3/P4**；P5 可并行，最终与 M0/P0–P4 一起进入 P6。
+执行顺序：**M0 → P0 → P1 → P2 → P3/P4**；P5 可并行；P6 先依赖 P5 的读面再接控制面；
+最终 M0/P0–P6 一起进入 P7。
+
+## N33 PTL 五页 Operator Console（2026-08-19 已确认）
+
+> 目标：PTL 提供本机人类操作台，固定五页为总览、运行、调试、记忆、配置。N30 保持只读
+> Observation Plane；只有运行页可经预览/确认调用登记的 PTH 原生动作。设计：
+> [N33 v1.3 PTL 五页操作台](./docs/pth/n33-v13-ptl-operator-console-design.md)。
+> 实施计划：[2026-08-19 v1.3 PTL Operator Console](./docs/superpowers/plans/2026-08-19-v13-ptl-operator-console.md)。
+
+- [ ] **C0 安全壳**：loopback-only、单次 bootstrap、HttpOnly cookie、CSRF、五页导航、静态资源打包；
+  浏览器不接触 PTH/N30 token、Docker Socket 或软件凭据。
+- [ ] **C1 总览**：同源只读代理 N30 `embed=1`；N30 故障只降级总览，不影响其余页面。
+- [ ] **C2 只读面**：新增有界 Worker/Memory/Config/Role 投影；调试、记忆、配置均无写路由；
+  记忆饼图同时以条目数和 UTF-8 bytes 为分母，近期修改取十条 revision event。
+- [ ] **C3 原生命令**：run/task.publish、intake/subscription.create+run.trigger、
+  optimize/suggestion.apply 依次接入；每次 submit 必须匹配未过期单次 preview digest 和 idempotency key。
+- [ ] **C4 权威验收**：五页、三 mode、freshness、跨租户、XSS、CSRF、stale/replay、secret/token leak、
+  真浏览器可访问性与故障隔离全部进入 commit-bound envelope。
+
+实施顺序：**C0 → C1 → C2 → C3 → C4**。C2 可按 Debug/Memory/Config 三页并行；
+配置编辑、Worker 控制、浏览器私钥、远程多用户和 2.0 Workflow 编辑器均后置。
 
 ## N30 统一运行观测台（C 方案——分层待办，2026-08-19 已确认布局）
 
