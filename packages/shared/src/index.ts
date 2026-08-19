@@ -1,4 +1,5 @@
 export * from "./config.js";
+export * from "./work-mode.js";
 export * from "./tmux.js";
 export * from "./session-backend.js";
 export * from "./tmux-backend.js";
