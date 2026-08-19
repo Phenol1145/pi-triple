@@ -17,6 +17,7 @@
     "scripts/accept-n29-minimal-intake.ts",
     "scripts/eval-n29-minimal-intake.ts",
     "scripts/pth-intake-subscribe.ts",
+    "scripts/n29-canary-gpe-wikipedia.ts",
     "src/pth/contracts/knowledge-intake.ts",
     "src/pth/contracts/knowledge-intake-attestation.ts",
     "src/pth/execution/knowledge-intake/index.ts",
