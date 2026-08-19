@@ -30,6 +30,7 @@
 | [最小可信摄入内环验收报告](./pth/n29-minimal-intake-report.md) | 再复核修复后权威版 **EVALUATION-INCOMPLETE（全部门禁绿；仅 canary/G8-b/G10-partial 余项）** · `16abccb` · P0-1~P0-9/P1-1~P1-3 全修 · 29 sentinel exact 覆盖 |
 | [最小可信摄入内环 envelope](./pth/n29-minimal-intake-acceptance.json) | 唯一权威 envelope（focused 355 零 skip/build/lint/三 typecheck/full 2609 全绿）· 绑定 `16abccb` |
 | [最小可信摄入内环再次验收反馈](./pth/n29-minimal-intake-reacceptance-feedback.md) | 当前 HEAD 独立复核 **NOT ACCEPTED / NO-GO** · 跨租户 outbox · stage CAS / Trust Policy / admission / official 旁路 · 修复顺序与复验条件 |
+| [统一运行观测台设计](./pth/n30-runtime-observatory-design.md) | C 方案 · Job/Task/Intake 甘特图 · CPU/RSS/Heap/Network 同轴折线 · Freshness Contract · O0–O5 分层交付 |
 | [Role/Memory/Worker 可行性设计](./pth/n28-role-memory-orchestration-design.md) | Role Lineage · WorkerReplica · 重叠记忆责任区 · 分层检索 · 统一认知预算 |
 | [Role/Memory/Worker 实施计划](./pth/n28-role-memory-orchestration-implementation-plan.md) | N27 含 R6 的最终报告校正后执行 · 七个可审查任务 · 12 条 gold query · 1,000 组预算探针 · GO/NO-GO 判定 |
 | [Role/Memory/Worker 可行性报告](./pth/n28-feasibility-report.md) | **GO** · 第二轮复核修复后权威版 · `7e76180` · H1–H6 全 PASS · 四门禁全绿 · 合同 v1.1 人工批准 |

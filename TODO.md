@@ -7,13 +7,14 @@
 > 目标：用共享时间轴把“系统正在执行什么”与“消耗了多少资源”关联起来。主视图采用
 > Job → Task → Intake Stage 分层甘特图，CPU / RSS / Heap / Network 使用同步折线图；
 > 点击阶段后联动展示 Worker、Role、Batch、Trace、事件与所选窗口资源统计。
+> 设计稿：[N30 统一运行观测台设计](./docs/pth/n30-runtime-observatory-design.md)。
 >
 > 边界：先做本机管理员专用，不公开 Docker Socket 或 PTH 管理令牌；租户自助访问与
 > 长期历史存储后置。现有 `deploy/docker-monitor` 是 UI/容器采样适配器，PTH Gateway
 > 只新增 tenant-scoped、read-only 的观测端口，不把观测状态写回任务或摄入状态机。
 
 - [ ] **O0 设计与安全契约**：冻结 `TimelineInterval`、`ResourceSample`、`RuntimeEvent`、
-  `RuntimeSnapshot` DTO；定义统一 ID、父子关系、时间语义、状态颜色、采样精度与降级行为；
+  `RuntimeSnapshot` DTO；定义统一 ID、父子关系、时间语义、Freshness Contract、状态颜色、采样精度与降级行为；
   明确 loopback-only、server-side token、tenant 由认证上下文盖章、Docker Socket 不出服务端。
   - 完成条件：设计稿、威胁边界与 DTO 合同通过评审；旧 `/metrics`、kernel status/events
     行为保持兼容。
@@ -31,12 +32,12 @@
 - [ ] **O3 统一联动与实时增量**：Docker Monitor 作为本机观测聚合适配器，服务端合并
   Docker 样本与 PTH 只读快照/事件；浏览器只连接一个 `/events` SSE。点击甘特条时，
   资源图按同一时间窗高亮，并展示 Worker、重试、错误、usage 与相关事件。
-  - 完成条件：初始 snapshot + 增量 upsert 不重不漏；SSE 重连后可恢复当前状态；时钟偏差、
+  - 完成条件：push 降低延迟、5 秒 durable snapshot reconcile 修复丢失；初始 snapshot + 增量 upsert 不重不漏；SSE 重连后可恢复当前状态；时钟偏差、
     缺失资源样本、PTH 暂不可用均有显式 UI 状态；甘特与折线时间轴误差不超过一个采样周期。
 - [ ] **O4 告警与运行验收**：加入 heartbeat stale/dead、队列积压、CPU/RSS 阈值、任务超时
   与摄入阶段停滞告警；告警仅为观测结果，不直接触发控制动作。补真实 Docker + PTH
   组合测试、长时间采样、资源上限、SSE 重放和浏览器可访问性验收。
-  - 完成条件：每类告警均有正/负探针；故障注入能定位到具体 Task/Worker/Batch；看板异常
+  - 完成条件：资源/activity/timeline P95 分别 ≤5s/2s/10s 且分母非零；每类告警均有正/负探针；故障注入能定位到具体 Task/Worker/Batch；看板异常
     不影响 PTH 执行；feature 默认关闭且可独立回滚。
 - [ ] **O5 租户访问与持久历史（后置）**：在本机管理员 MVP 稳定后，再增加稳定 principal、
   tenant/space 授权、审计和租户视图；资源历史接 Prometheus-compatible adapter 或等价
