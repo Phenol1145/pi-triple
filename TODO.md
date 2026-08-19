@@ -1,6 +1,51 @@
-# TODO（2026-08-15 对齐真实进度）
+# TODO（2026-08-19 对齐真实进度）
 
 > 未执行方案的统一入口与执行顺序见 [剩余工作总控计划](./docs/superpowers/plans/2026-08-15-remaining-work-program.md)。
+
+## N30 统一运行观测台（C 方案——分层待办，2026-08-19 已确认布局）
+
+> 目标：用共享时间轴把“系统正在执行什么”与“消耗了多少资源”关联起来。主视图采用
+> Job → Task → Intake Stage 分层甘特图，CPU / RSS / Heap / Network 使用同步折线图；
+> 点击阶段后联动展示 Worker、Role、Batch、Trace、事件与所选窗口资源统计。
+>
+> 边界：先做本机管理员专用，不公开 Docker Socket 或 PTH 管理令牌；租户自助访问与
+> 长期历史存储后置。现有 `deploy/docker-monitor` 是 UI/容器采样适配器，PTH Gateway
+> 只新增 tenant-scoped、read-only 的观测端口，不把观测状态写回任务或摄入状态机。
+
+- [ ] **O0 设计与安全契约**：冻结 `TimelineInterval`、`ResourceSample`、`RuntimeEvent`、
+  `RuntimeSnapshot` DTO；定义统一 ID、父子关系、时间语义、状态颜色、采样精度与降级行为；
+  明确 loopback-only、server-side token、tenant 由认证上下文盖章、Docker Socket 不出服务端。
+  - 完成条件：设计稿、威胁边界与 DTO 合同通过评审；旧 `/metrics`、kernel status/events
+    行为保持兼容。
+- [ ] **O1 本机服务观测 MVP**：扩展 `deploy/docker-monitor`，补容器启动/存活甘特图，
+  以服务端 ring buffer 保留最近 1 小时 CPU、RSS、Heap/limit、Network 样本；修正根
+  `monitor` 脚本的迁移后路径；前端实现时间范围切换、暂停实时流与断线重连。
+  - 完成条件：无 PTH 数据也可独立运行；8 小时采样内存有硬上限；Docker 不可用时页面
+    明确降级而非伪造零值；默认只监听 loopback。
+- [ ] **O2 PTH 执行时间线**：新增只读 `RuntimeObservationFacade` 与
+  `/api/v1/observe/timeline`；从 durable Task / Job / Intake Run / Attempt 数据投影
+  Job → Task → Stage 区间，运行中记录以 `endAt=null` 表示；Worker、Role、Batch、Trace
+  作为关联字段，不复制领域状态机。
+  - 完成条件：completed / running / waiting / retry / failed 区间可复现；tenant/space
+    越权查询为零；分页、时间窗和最大返回量 fail-closed；时间线不依赖 ActivityHub 内存历史。
+- [ ] **O3 统一联动与实时增量**：Docker Monitor 作为本机观测聚合适配器，服务端合并
+  Docker 样本与 PTH 只读快照/事件；浏览器只连接一个 `/events` SSE。点击甘特条时，
+  资源图按同一时间窗高亮，并展示 Worker、重试、错误、usage 与相关事件。
+  - 完成条件：初始 snapshot + 增量 upsert 不重不漏；SSE 重连后可恢复当前状态；时钟偏差、
+    缺失资源样本、PTH 暂不可用均有显式 UI 状态；甘特与折线时间轴误差不超过一个采样周期。
+- [ ] **O4 告警与运行验收**：加入 heartbeat stale/dead、队列积压、CPU/RSS 阈值、任务超时
+  与摄入阶段停滞告警；告警仅为观测结果，不直接触发控制动作。补真实 Docker + PTH
+  组合测试、长时间采样、资源上限、SSE 重放和浏览器可访问性验收。
+  - 完成条件：每类告警均有正/负探针；故障注入能定位到具体 Task/Worker/Batch；看板异常
+    不影响 PTH 执行；feature 默认关闭且可独立回滚。
+- [ ] **O5 租户访问与持久历史（后置）**：在本机管理员 MVP 稳定后，再增加稳定 principal、
+  tenant/space 授权、审计和租户视图；资源历史接 Prometheus-compatible adapter 或等价
+  时序后端，浏览器与 Docker Monitor 不作为长期事实源。
+  - 完成条件：跨租户可见性矩阵全绿；token 不进入浏览器存储/日志；历史查询有 retention、
+    downsampling 和成本上限；没有后端时仍保留 O1–O4 的本机模式。
+
+实施顺序：**O0 → O1 → O2 → O3 → O4**；O5 单独立项。O1 可独立交付，O2 不依赖
+前端，O3 只组合已经验收的两个读面。任何阶段完成都不得外推为 O5 已具备。
 
 ## N14 实施批次（2026-08-18 开工——设计 docs/pth/n14-sensor-controller-four-dims.md §6）
 - [x] **P0 契约**：tool-reg 条目格式 + `__tool_spec__` 校验（`packages/pth-memory/src/tool-reg.ts`）
