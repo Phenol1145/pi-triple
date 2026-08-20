@@ -204,6 +204,39 @@ export class PthClient {
     return (await res.json()) as ObserveSession;
   }
 
+  /** 观测：记忆概要（N33 Task 7 只读记忆页） */
+  async observeMemorySummary(): Promise<unknown> {
+    return this.requestJson("/api/v1/observe/memory/summary", { method: "GET", headers: this.headers() });
+  }
+
+  /** 观测：记忆条目列表（N33 Task 7；limit/cursor 由服务端 fail-closed） */
+  async observeMemoryEntries(query: {
+    type?: string; kind?: string; status?: string; anchor?: string; cursor?: string; limit?: number;
+  }): Promise<unknown> {
+    const params = new URLSearchParams();
+    for (const key of ["type", "kind", "status", "anchor", "cursor"] as const) {
+      const v = query[key];
+      if (typeof v === "string" && v !== "") params.set(key, v);
+    }
+    if (typeof query.limit === "number") params.set("limit", String(query.limit));
+    const qs = params.size > 0 ? `?${params.toString()}` : "";
+    return this.requestJson(`/api/v1/observe/memory/entries${qs}`, { method: "GET", headers: this.headers() });
+  }
+
+  /** 观测：记忆条目精确读取（惰性 detail） */
+  async observeMemoryEntry(id: string): Promise<unknown> {
+    return this.requestJson(`/api/v1/observe/memory/entries/${encodeURIComponent(id)}`, {
+      method: "GET", headers: this.headers(),
+    });
+  }
+
+  /** 观测：记忆条目最近修订（固定 limit=10） */
+  async observeMemoryRevisions(id: string): Promise<unknown> {
+    return this.requestJson(`/api/v1/observe/memory/entries/${encodeURIComponent(id)}/revisions`, {
+      method: "GET", headers: this.headers(),
+    });
+  }
+
   /** 观测：Worker 检查列表（N33 Task 6 只读调试页） */
   async listObserveWorkers(): Promise<unknown[]> {
     const data = await this.requestJson("/api/v1/observe/workers", {

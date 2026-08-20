@@ -21,6 +21,7 @@ const PAGES = ["overview", "work", "debug", "memory", "config"];
 const N30_EMBED_URL = "/observe/?embed=1&base=/observe";
 
 import { createDebugViewModel, DEBUG_POLL_MS } from "./debug.js";
+import { createMemoryViewModel } from "./memory.js";
 
 const state = {
   csrfToken: null,
@@ -48,6 +49,7 @@ function switchPage(pageId) {
   }
   if (pageId === "work") void ensureWorkLoaded();
   if (pageId === "debug") void ensureDebugLoaded();
+  if (pageId === "memory") void ensureMemoryLoaded();
 }
 
 function bindNav() {
@@ -181,6 +183,169 @@ async function ensureDebugLoaded() {
   }
   await pollDebug();
   if (!debugTimer) debugTimer = setInterval(() => void pollDebug(), DEBUG_POLL_MS);
+}
+
+// ── N33 Task 7：memory 只读页（双 SVG 饼图 + 分页 + 惰性 detail + 十条修订） ──
+
+let memoryVm = null;
+let memorySelectedId = null;
+
+const MEMORY_PIE_COLORS = {
+  setting: "#5b8def", wiki: "#3fa66a", skill: "#e0a33a", log: "#9a7bdf", index: "#d66a9c",
+};
+
+function renderMemoryPie(svgId, tableId, chart, label) {
+  const svg = document.getElementById(svgId);
+  const table = document.getElementById(tableId);
+  if (!svg || !table) return;
+  svg.replaceChildren();
+  if (chart.empty) {
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", "100"); circle.setAttribute("cy", "100"); circle.setAttribute("r", "70");
+    circle.setAttribute("fill", "#ddd");
+    svg.append(circle);
+    table.textContent = `${label}：0（空）`;
+    return;
+  }
+  let angle = 0;
+  const total = chart.total;
+  for (const slice of chart.slices) {
+    if (slice.value === 0) continue;
+    const sweep = slice.ratio * Math.PI * 2;
+    const x1 = 100 + Math.sin(angle) * 80;
+    const y1 = 100 - Math.cos(angle) * 80;
+    const x2 = 100 + Math.sin(angle + sweep) * 80;
+    const y2 = 100 - Math.cos(angle + sweep) * 80;
+    const large = sweep > Math.PI ? 1 : 0;
+    const d = `M 100 100 L ${x1} ${y1} A 80 80 0 ${large} 1 ${x2} ${y2} Z`;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", d);
+    path.setAttribute("fill", MEMORY_PIE_COLORS[slice.type] ?? "#999");
+    svg.append(path);
+    angle += sweep;
+  }
+  table.textContent = chart.slices
+    .filter((s) => s.value > 0)
+    .map((s) => `${s.type}: ${s.value}（${(s.ratio * 100).toFixed(1)}%）`)
+    .join("\n") || `${label}：0`;
+}
+
+function renderMemory() {
+  if (!memoryVm) return;
+  const view = memoryVm.view();
+  renderMemoryPie("memory-pie-count", "memory-pie-count-table", view.charts.count, "count");
+  renderMemoryPie("memory-pie-bytes", "memory-pie-bytes-table", view.charts.bytes, "bytes");
+  const tbody = document.querySelector("#memory-list tbody");
+  if (tbody) tbody.replaceChildren();
+  const empty = document.getElementById("memory-empty");
+  if (empty) empty.hidden = view.entries.length !== 0;
+  for (const row of view.entries) {
+    const tr = document.createElement("tr");
+    tr.className = row.id === memorySelectedId ? "selected" : "";
+    for (const key of ["id", "type", "kind", "status", "updatedAt"]) {
+      const td = document.createElement("td");
+      td.textContent = row[key] === undefined || row[key] === null ? "" : String(row[key]);
+      tr.append(td);
+    }
+    tr.addEventListener("click", () => {
+      memorySelectedId = row.id;
+      renderMemory();
+      void loadMemoryDetail(row.id);
+    });
+    tbody?.append(tr);
+  }
+  const loadMore = document.getElementById("memory-load-more");
+  if (loadMore) loadMore.hidden = !view.cursor;
+  const revisions = document.querySelector("#memory-revisions tbody");
+  if (revisions) {
+    revisions.replaceChildren();
+    for (const r of view.revisions) {
+      const tr = document.createElement("tr");
+      for (const key of ["action", "revision", "time", "type"]) {
+        const td = document.createElement("td");
+        td.textContent = r[key] === undefined || r[key] === null ? "" : String(r[key]);
+        tr.append(td);
+      }
+      revisions.append(tr);
+    }
+  }
+  const degraded = document.getElementById("memory-degraded");
+  if (degraded) degraded.hidden = !view.degraded;
+}
+
+async function loadMemoryDetail(id) {
+  try {
+    const res = await fetch(`/api/memory/entries/${encodeURIComponent(id)}`, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const detail = await res.json();
+    memoryVm.ingestDetail(detail ?? { id, tombstone: true });
+    const revRes = await fetch(`/api/memory/entries/${encodeURIComponent(id)}/revisions`, { credentials: "same-origin" });
+    if (revRes.ok) memoryVm.ingestRevisions(await revRes.json());
+  } catch {
+    memoryVm.ingestDetail({ id, tombstone: true });
+    memoryVm.ingestRevisions([]);
+  }
+  const box = document.getElementById("memory-detail");
+  if (box) {
+    const detail = memoryVm.view().detail;
+    box.hidden = false;
+    box.replaceChildren(createEl("h2", detail?.id ?? id));
+    if (detail?.tombstone) box.append(createEl("p", "条目已删除或不可读（tombstone 元数据）"));
+    else {
+      box.append(createEl("p", `type ${detail?.type ?? "—"} · kind ${detail?.kind ?? "—"} · status ${detail?.status ?? "—"}`));
+      const pre = document.createElement("pre");
+      pre.textContent = typeof detail?.content === "string" ? detail.content.slice(0, 4000) : "—";
+      box.append(pre);
+    }
+  }
+}
+
+async function loadMemoryPage(reset) {
+  if (!memoryVm) return;
+  const f = memoryVm.view().filters;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(f)) if (value) params.set(key, value);
+  if (!reset && memoryVm.view().cursor) params.set("cursor", memoryVm.view().cursor);
+  params.set("limit", "20");
+  try {
+    const res = await fetch(`/api/memory/entries?${params.toString()}`, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    memoryVm.ingestPage(await res.json());
+    memoryVm.markDegraded(false);
+  } catch {
+    memoryVm.markDegraded(true);
+  }
+  renderMemory();
+}
+
+async function ensureMemoryLoaded() {
+  if (!memoryVm) {
+    memoryVm = createMemoryViewModel();
+    for (const [id, key] of [
+      ["memory-filter-type", "type"],
+      ["memory-filter-kind", "kind"],
+      ["memory-filter-status", "status"],
+      ["memory-filter-anchor", "anchor"],
+    ]) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("change", () => {
+          memoryVm.setFilter(key, el.value);
+          memorySelectedId = null;
+          void loadMemoryPage(true);
+        });
+      }
+    }
+    const loadMore = document.getElementById("memory-load-more");
+    if (loadMore) loadMore.addEventListener("click", () => void loadMemoryPage(false));
+  }
+  try {
+    const res = await fetch("/api/memory/summary", { credentials: "same-origin" });
+    if (res.ok) memoryVm.ingestSummary(await res.json());
+  } catch {
+    /* summary 失败仅标记降级，列表仍独立尝试 */
+  }
+  await loadMemoryPage(true);
 }
 
 async function ensureWorkLoaded() {

@@ -83,6 +83,12 @@ export interface PthOperatorClient {
   listOptimizerSuggestions(): Promise<readonly PthOptimizerSuggestionView[]>;
   applyOptimizerSuggestion(input: { id: string }): Promise<PthOptimizerApplyResult>;
   listWorkers(): Promise<readonly unknown[]>;
+  getMemorySummary(): Promise<unknown>;
+  listMemoryEntries(query: {
+    type?: string; kind?: string; status?: string; anchor?: string; cursor?: string; limit?: number;
+  }): Promise<unknown>;
+  getMemoryEntry(id: string): Promise<unknown>;
+  getMemoryRevisions(id: string): Promise<unknown>;
 }
 
 function asString(value: unknown): string | undefined {
@@ -220,6 +226,22 @@ export function createPthOperatorClient(deps: {
 
     async listWorkers() {
       return await inner.listObserveWorkers();
+    },
+
+    async getMemorySummary() {
+      return await inner.observeMemorySummary();
+    },
+
+    async listMemoryEntries(query) {
+      return await inner.observeMemoryEntries(query);
+    },
+
+    async getMemoryEntry(id) {
+      return await inner.observeMemoryEntry(id);
+    },
+
+    async getMemoryRevisions(id) {
+      return await inner.observeMemoryRevisions(id);
     },
 
     async applyOptimizerSuggestion(input) {
