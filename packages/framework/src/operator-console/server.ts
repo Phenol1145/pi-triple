@@ -9,8 +9,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { isWorkMode, getConfigValue } from "@away_from/shared";
 import {
-  ASSET_MIME,
-  KNOWN_ASSETS,
   parseCookieHeader,
   readJsonBody,
   sendEmpty,
@@ -277,21 +275,14 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
     const method = req.method ?? "GET";
 
     // ── 静态资源（只服务已知文件名，fixed MIME，同源无 CORS） ──
-    if (pathname === "/") {
+    const assetName = pathname === "/" ? "index.html" : pathname.slice(1);
+    const asset = assets.get(assetName);
+    if (asset) {
       if (method !== "GET" && method !== "HEAD") {
         sendEmpty(res, 405, { allow: "GET, HEAD" });
         return;
       }
-      sendText(res, 200, assets.get("index.html")!.toString("utf8"), ASSET_MIME["index.html"]!);
-      return;
-    }
-    const assetName = pathname.slice(1);
-    if (KNOWN_ASSETS.has(assetName) && pathname === `/${assetName}`) {
-      if (method !== "GET" && method !== "HEAD") {
-        sendEmpty(res, 405, { allow: "GET, HEAD" });
-        return;
-      }
-      sendText(res, 200, assets.get(assetName)!.toString("utf8"), ASSET_MIME[assetName]!);
+      sendText(res, 200, asset.buffer.toString("utf8"), asset.mime);
       return;
     }
 
