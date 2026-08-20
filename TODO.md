@@ -24,9 +24,9 @@
 - [x] **B1 基础重构**：协议/边界/文档固化（API v1、OpenAPI、契约测试、product-boundaries）`5fa256f`；
 - [x] **B2 PTH 侧 Web/CLI 边界**：PTH 操作 CLI/Web 归 PTH（`pth web`），PTL 只保留便捷调用；`64effcf`；
 - [x] **B3 现有 Console 先搬迁再扩展**：operator-console 迁至 `@away_from/pth-console`，五页能力零回退（lint/build/Playwright 4·4/full 353 文件 3060 通过 9 跳过）；`64effcf`；
-- [ ] **R1 ContainerRuntimeAdapter 接口**：`id/probe/version/socket/features` + 三个只读方法；
-- [ ] **R2 运行时选择协议**：显式 env 优先 → socket 白名单自动 probe → 多可用 fail-closed；
-- [ ] **R3 container-runtime-lock.json**：允许 runtime、版本约束、probe 定义；
+- [x] **R1 ContainerRuntimeAdapter 接口**：`id/probe/version/socket/features` + `list/inspect/stats` 三个只读方法；`f6a18f3`；
+- [x] **R2 运行时选择协议**：`PI_CONTAINER_RUNTIME` 显式优先 → lock socket 白名单自动 probe → 多可用 fail-closed；`f6a18f3`；
+- [x] **R3 container-runtime-lock.json**：允许 runtime、`*|>=|>|<=|<|=` 版本约束、GET probe/version 定义；`f6a18f3`；
 - [ ] **R4 Docker/OrbStack adapter 归一化**：当前 docker-api.js 改造为契约实现；
 - [ ] **R5 Podman adapter 验证抽象**：作为第二实现跑同一 contract 测试；
 - [ ] **R6 /health 与日志暴露**：runtime id/version/socket/采集能力；
