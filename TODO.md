@@ -15,6 +15,20 @@
 - [x] **T9 v1.4 权威验收**：eval/accept、N29/N30/N33 不回退、full 351 文件 3053+9 基线；
 - [x] **T10 发布 v1.4.0**：版本 bump、release.sh、报告/envelope。
 
+## v1.5 候选 / 容器运行时 adapter 协议（待产品形态确认后启动）
+
+> 状态：已讨论、未实现。协议设计见会话结论，落地前先过产品预期形态。
+
+- [ ] **R0 产品预期形态确认**：目标用户/观测对象/运行环境/指标口径/告警与页面形态；
+- [ ] **R1 ContainerRuntimeAdapter 接口**：`id/probe/version/socket/features` + 三个只读方法；
+- [ ] **R2 运行时选择协议**：显式 env 优先 → socket 白名单自动 probe → 多可用 fail-closed；
+- [ ] **R3 container-runtime-lock.json**：允许 runtime、版本约束、probe 定义；
+- [ ] **R4 Docker/OrbStack adapter 归一化**：当前 docker-api.js 改造为契约实现；
+- [ ] **R5 Podman adapter 验证抽象**：作为第二实现跑同一 contract 测试；
+- [ ] **R6 /health 与日志暴露**：runtime id/version/socket/采集能力；
+- [ ] **R7 协议文档**：`docs/pth/container-runtime-adapter-protocol.md`；
+- [ ] **R8 权威验收**：contract 测试、focused/full 不回退。
+
 ## v1.3.0 / N32 专业计算角色 + 可执行教程 + Web 运行视图
 
 > 目标：四个专业计算 Role（Assembly / Computational Chemistry / Lean 4 / Symbolic Mathematics）
