@@ -238,6 +238,8 @@ export async function main() {
         port,
         noOpen: flags["no-open"] === "true",
         operatorPrincipalId: process.env.USER ?? "human-local-operator",
+        tenant: process.env.PTH_OPERATOR_TENANT ?? getConfigValue("operator.tenant"),
+        space: process.env.PTH_OPERATOR_SPACE ?? getConfigValue("operator.space"),
         pth: {
           baseUrl: process.env.PTH_URL ?? getConfigValue("pth.url"),
           token: process.env.PTH_TOKEN ?? getConfigValue("pth.token"),

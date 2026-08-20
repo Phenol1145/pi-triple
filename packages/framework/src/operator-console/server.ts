@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { isWorkMode } from "@away_from/shared";
+import { isWorkMode, getConfigValue } from "@away_from/shared";
 import {
   createOperatorSessionManager,
   OPERATOR_COOKIE_NAME,
@@ -405,15 +405,26 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
         return;
       }
       if (pathname === "/api/config/ptl") {
-        // 本机 shell 的 redacted 事实：只暴露 loopback/端口/能力布尔面，绝不含 token/路径/连接串。
+        // 本机 shell 的 redacted 事实：只暴露 loopback/端口/能力布尔面与枚举 descriptor，
+        // 绝不含 token/路径/连接串。tenant/space 只来自服务端配置，浏览器无法自报覆盖。
+        const ptlDescriptor = (key: string, group: string, source: string, value: unknown, restartRequired = false) => ({
+          key, group, type: "string", scope: "session", source, runtimeMutable: false,
+          restartRequired, description: "", secret: false, defaultValue: null,
+          effectiveValue: value === undefined || value === null ? null : String(value),
+        });
         sendJson(res, 200, {
           items: [
-            { key: "host", group: "ptl.server", source: "default", value: deps.host },
-            { key: "port", group: "ptl.server", source: "default", value: deps.port },
-            { key: "operatorPrincipalId", group: "ptl.session", source: "default", value: "human-local-operator" },
-            { key: "pthChannel", group: "ptl.channels", source: pthOperatorClient ? "configured" : "unknown", value: pthOperatorClient ? "enabled" : "disabled" },
-            { key: "n30Channel", group: "ptl.channels", source: deps.n30.baseUrl ? "configured" : "unknown", value: deps.n30.baseUrl ? "enabled" : "disabled" },
-            { key: "workChannel", group: "ptl.channels", source: workService ? "configured" : "unknown", value: workService ? "enabled" : "disabled" },
+            ptlDescriptor("host", "ptl.server", "default", deps.host ?? BIND_HOST, true),
+            ptlDescriptor("port", "ptl.server", "default", deps.port ?? "auto"),
+            ptlDescriptor("operatorPrincipalId", "ptl.session", "default", deps.operatorPrincipalId ?? "human-local-operator"),
+            ptlDescriptor("operatorTenant", "ptl.session", "server-config", operatorTenant),
+            ptlDescriptor("operatorSpace", "ptl.session", "server-config", operatorSpace),
+            ptlDescriptor("template", "ptl.agent", "ptl-config", getConfigValue("template.alias") ?? getConfigValue("template")),
+            ptlDescriptor("model", "ptl.agent", "ptl-config", getConfigValue("model")),
+            ptlDescriptor("provider", "ptl.agent", "ptl-config", getConfigValue("provider")),
+            ptlDescriptor("pthChannel", "ptl.channels", pthOperatorClient ? "configured" : "unknown", pthOperatorClient ? "enabled" : "disabled"),
+            ptlDescriptor("n30Channel", "ptl.channels", deps.n30.baseUrl ? "configured" : "unknown", deps.n30.baseUrl ? "enabled" : "disabled"),
+            ptlDescriptor("workChannel", "ptl.channels", workService ? "configured" : "unknown", workService ? "enabled" : "disabled"),
           ],
         });
         return;
