@@ -10,7 +10,7 @@
 - [x] **T1 应用壳**：topbar/sidebar/响应式导航/命令面板/错误边界/断连横幅；
 - [x] **T2 组件原语**：Button/Card/Table/Dialog/Toast/Skeleton/Empty/Error/Pagination；
 - [x] **T3–T6 五页重构**：Overview/Work/Debug/Memory/Config；
-- [ ] **T7 Playwright 视觉与交互验收**：bootstrap/五页/断网/secret/focus/移动端/暗色主题；
+- [x] **T7 Playwright 视觉与交互验收**：bootstrap/五页/断网/secret/focus/移动端/暗色主题；
 - [x] **T8 服务端资产 manifest 与安全门**：无 innerHTML、secret 零泄漏、DTO/CSRF 不回退；
 - [ ] **T9 v1.4 权威验收**：eval/accept、N29/N30/N33 不回退、full 351 文件 3053+9 基线；
 - [ ] **T10 发布 v1.4.0**：版本 bump、release.sh、报告/envelope。
