@@ -5,8 +5,8 @@
  * --dry-run 只校验+打包，不上传。
  */
 import fs from "node:fs";
-import { packProgram } from "./pack.js";
-import { PthClient } from "./client.js";
+import { packProgram } from "@away_from/pth-console";
+import { PthClient } from "@away_from/pth-console";
 
 export async function cmdSubmit(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const dryRun = flags["dry-run"] === "true";

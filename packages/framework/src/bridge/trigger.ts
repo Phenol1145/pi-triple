@@ -16,7 +16,7 @@
  *   ptl hub trigger toggle <id> [--on|--off]
  *   ptl hub trigger reload
  */
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 
 /** 从 pi-triple.json 配置构造客户端；未配置时给出引导并退出。 */
 function requireClient(): PthClient {

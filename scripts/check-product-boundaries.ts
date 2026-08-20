@@ -15,16 +15,29 @@ const PTH_CORE_PREFIXES = [
   "src/pth/",
   "packages/pth-memory/src/",
   "packages/pth-sandbox/src/",
+  "packages/pth-console/src/",
   "packages/mailbox/src/",
 ];
 
 const PTL_ONLY_PREFIXES = [
+  "packages/framework/src/bridge/",
   "packages/framework/src/cli/",
   "packages/framework/src/commands/",
   "packages/framework/src/containers/",
   "packages/framework/src/session/",
   "packages/framework/src/tui-",
 ];
+
+const PTL_PACKAGE_TARGETS = ["@away_from/framework"];
+const PTH_PACKAGE_TARGETS = [
+  "@away_from/pth-console",
+  "@away_from/pth-memory",
+  "@away_from/pth-sandbox",
+  "@away_from/mailbox",
+];
+
+/** 产品形态明确允许的 PTL → PTH 便捷调用入口（ptl hub 等经 pth-console 访问 PTH）。 */
+const ALLOWED_PTL_TO_PTH_TARGETS = new Set(["@away_from/pth-console"]);
 
 const PTL_ONLY_FILES = new Set([
   "packages/framework/src/env.ts",
@@ -36,8 +49,8 @@ const PTL_ONLY_FILES = new Set([
 ]);
 
 const TRANSITIONAL_PREFIXES = [
-  "packages/framework/src/bridge/",
-  "packages/framework/src/operator-console/",
+  "packages/pth-console/src/bridge/",
+  "packages/pth-console/src/operator-console/",
 ];
 
 const SCAN_ROOTS = ["src", "packages"];
@@ -82,7 +95,7 @@ function importTargets(source: string): Array<{ line: number; target: string }> 
   let match: RegExpExecArray | null;
   while ((match = re.exec(source))) {
     const target = (match[1] ?? match[2] ?? "").trim();
-    if (!target || target.startsWith("node:") || target.startsWith("@") || target.startsWith(".")) continue;
+    if (!target || target.startsWith("node:") || target.startsWith(".")) continue;
     out.push({ line: lineAt(source, match.index), target });
   }
   return out;
@@ -122,12 +135,12 @@ export function collectProductBoundaryViolations(roots: string[] = SCAN_ROOTS): 
     const source = readFileSync(file, "utf8");
     for (const imp of importTargets(source)) {
       const target = imp.target;
-      const pthTarget = PTH_CORE_PREFIXES.some((prefix) => target.startsWith(prefix.replace(/\/$/, "/")));
-      const ptlTarget = PTL_ONLY_FILES.has(target) || PTL_ONLY_PREFIXES.some((prefix) => target.startsWith(prefix.replace(/\/$/, "/")));
+      const pthTarget = PTH_PACKAGE_TARGETS.includes(target) || PTH_CORE_PREFIXES.some((prefix) => target.startsWith(prefix.replace(/\/$/, "/")));
+      const ptlTarget = PTL_PACKAGE_TARGETS.includes(target) || PTL_ONLY_FILES.has(target) || PTL_ONLY_PREFIXES.some((prefix) => target.startsWith(prefix.replace(/\/$/, "/")));
       if (pth && ptlTarget) {
         violations.push({ rule: "pth-imports-ptl", file: rel, line: imp.line, target });
       }
-      if (ptl && pthTarget) {
+      if (ptl && pthTarget && !ALLOWED_PTL_TO_PTH_TARGETS.has(target)) {
         violations.push({ rule: "ptl-imports-pth", file: rel, line: imp.line, target });
       }
     }

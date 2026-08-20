@@ -3,7 +3,7 @@
  *
  * 列出 PTH 上已提交的程序。
  */
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 import { printBanner } from "../cli/main.js";
 
 export async function cmdPrograms(_flags: Record<string, string>): Promise<void> {

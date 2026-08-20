@@ -7,7 +7,7 @@
  *   ptl hub request "<description>" --slot <slotHint> [--urgency low|medium|high]
  *   ptl hub requests（列表——open 优先）
  */
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 import { printBanner } from "../cli/main.js";
 
 export async function cmdHubRequest(passthrough: string[], flags: Record<string, string>): Promise<void> {

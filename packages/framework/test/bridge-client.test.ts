@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { PthClient } from "../src/bridge/client.js";
+import { PthClient } from "../../pth-console/src/bridge/client.js";
 
 describe("PthClient（bridge/client 拆分后公共面）", () => {
   const client = new PthClient("http://127.0.0.1:3000", "test-token");

@@ -201,4 +201,4 @@ ptl hub kernel batch remove 1     # 缩容
 
 - Skill：`pth-tasks`（pi 会话内 `/pthtask` 全套 + 任务描述写法）
 - PTH 侧：`docs/pth/kernel.md`（任务池/REPL/记忆闭环）· `docs/superpowers/specs/2026-08-08-pth-task-resolver-design.md`（任务链 payload.flow）
-- 桥实现：`packages/framework/src/bridge/{kernel,submit,client}.ts`
+- 桥实现：`packages/pth-console/src/bridge/{kernel,submit,client}.ts`

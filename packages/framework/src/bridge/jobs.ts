@@ -13,7 +13,7 @@
 
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 
 const JOBS_DIR = ".perf-bench/jobs";
 

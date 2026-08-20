@@ -10,7 +10,7 @@
  *
  * print/json 双模式：缺省表格打印；--json 输出原样 JSON。
  */
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 import { printBanner } from "../cli/main.js";
 
 export async function cmdHubObserve(passthrough: string[], flags: Record<string, string>): Promise<void> {

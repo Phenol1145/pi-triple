@@ -4,7 +4,7 @@
  * 远端运行程序，SSE 流式打印到终端。
  * k=v 参数 → input object；孤立词 → input.text。
  */
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 
 /**
  * 解析 k=v 参数：k=v 对进 object，孤立词进 text。

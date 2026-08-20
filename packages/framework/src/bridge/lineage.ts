@@ -8,7 +8,7 @@
  *   ptl hub lineage reject <id> [--reason x]          拒绝（archived）
  */
 
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 
 interface ProposalEntry {
   id: string;

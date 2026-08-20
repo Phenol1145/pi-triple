@@ -6,7 +6,7 @@
  *   ptl hub console             概览（kernel + sandbox 摘要）
  */
 
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 
 interface KernelStatus {
   kernel?: { connected?: boolean };

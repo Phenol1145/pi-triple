@@ -10,7 +10,7 @@ import {
 } from "../commands.js";
 import { printBanner } from "./main.js";
 import { cmdAgentRun, cmdAgentClean } from "./agent.js";
-import { PthClient } from "../bridge/client.js";
+import { PthClient } from "@away_from/pth-console";
 import { execSessionLs } from "../commands/session.js";
 import { execTraceLs } from "../commands/trace.js";
 import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, execEnvFork, parseEnvPatch } from "../env.js";

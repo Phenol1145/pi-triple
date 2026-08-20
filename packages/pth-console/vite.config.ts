@@ -6,7 +6,7 @@ import { defineConfig, type Plugin } from "vite";
 import preact from "@preact/preset-vite";
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
-const webRoot = join(packageRoot, "web", "operator-console-src");
+const webRoot = join(packageRoot, "web-src");
 const outDir = join(packageRoot, "dist", "operator-console", "public");
 
 function mimeFor(file: string): string {

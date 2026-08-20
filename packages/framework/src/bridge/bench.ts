@@ -22,7 +22,7 @@
 
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 
 const BENCH_DIR = ".perf-bench";
 const POLL_MS = 1000;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { PthClient } from "../packages/framework/src/bridge/client.js";
+import { PthClient } from "../packages/pth-console/src/bridge/client.js";
 
 // mock global fetch：记录请求，返回可配置响应
 function mockFetch(handler: (url: string, init: RequestInit) => { status: number; body: unknown }) {

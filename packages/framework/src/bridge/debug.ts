@@ -9,7 +9,7 @@
  * 依赖 Node ≥22 内置 WebSocket（undici）——零新增依赖。
  * 协议：见 src/pth/gateway/routes-debug.ts 头注释（input/output/error/closed）。
  */
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 import type { Interface as ReadlineInterface } from "node:readline";
 
 // ─── 可测试核心：WS 调试会话客户端 ────────────────────────────────

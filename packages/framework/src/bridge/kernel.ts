@@ -10,7 +10,7 @@
  *   ptl hub kernel batch remove [n]
  *   ptl hub kernel status
  */
-import { PthClient } from "./client.js";
+import { PthClient } from "@away_from/pth-console";
 import { printBanner } from "../cli/main.js";
 
 function requireClient(): PthClient {

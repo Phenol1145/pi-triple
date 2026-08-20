@@ -8,8 +8,8 @@
  * 人类补全流程闭环：建单 → ptl hub requests 可见 → 本地构建 → respond 上传填槽 → 请求闭合。
  */
 import fs from "node:fs";
-import { packProgram } from "./pack.js";
-import { PthClient } from "./client.js";
+import { packProgram } from "@away_from/pth-console";
+import { PthClient } from "@away_from/pth-console";
 
 export async function cmdHubRespond(passthrough: string[], _flags: Record<string, string>): Promise<void> {
   const requestId = passthrough[0];

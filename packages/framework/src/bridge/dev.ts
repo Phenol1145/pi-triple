@@ -6,7 +6,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { packProgram } from "./pack.js";
+import { packProgram } from "@away_from/pth-console";
 import { pipeToProcess } from "./pipe.js";
 
 export async function cmdDev(dir: string, passthrough: string[], flags: Record<string, string>): Promise<void> {
@@ -27,7 +27,7 @@ export async function cmdDev(dir: string, passthrough: string[], flags: Record<s
   let manifest;
   try {
     const raw = JSON.parse(fs.readFileSync(path.join(absDir, "agent.json"), "utf-8"));
-    const { validateManifest } = await import("./manifest.js");
+    const { validateManifest } = await import("@away_from/pth-console");
     const v = validateManifest(raw);
     if (!v.ok) {
       console.log("  \x1b[31m❌ agent.json 无效:\x1b[0m");

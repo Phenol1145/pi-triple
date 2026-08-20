@@ -22,4 +22,6 @@ deploy/generated/
 
 # Playwright 运行产物（截图基线在 e2e/screenshots 内提交）
 packages/framework/playwright-report/
+packages/pth-console/playwright-report/
 packages/framework/test-results/
+packages/pth-console/test-results/
