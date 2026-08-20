@@ -1,11 +1,13 @@
 /**
- * PTL Operator Console — 壳与占位（页面逻辑在后续 Task 实现）。
+ * PTL Operator Console — 壳 + Overview 只读 N30 同源代理消费。
  *
  * 安全约定：只使用 textContent / DOM createElement 渲染任何运行时值；
  * 绝不使用 innerHTML。URL fragment 中的一次性 bootstrap token 在兑换后立即清除。
+ * Overview 只通过同源 /observe/* 消费 N30 观测面；浏览器不接触 N30 凭据/端点。
  */
 
 const PAGES = ["overview", "work", "debug", "memory", "config"];
+const N30_EMBED_URL = "/observe/?embed=1&base=/observe";
 
 const state = {
   csrfToken: null,
@@ -54,6 +56,78 @@ function renderBootstrapError(message) {
   root.appendChild(notice);
 }
 
+function initOverview() {
+  const root = document.getElementById("page-overview");
+  if (!root) return;
+
+  const placeholder = root.querySelector(".placeholder");
+  if (placeholder) placeholder.remove();
+
+  const status = createEl("div");
+  status.id = "overview-degraded";
+  status.className = "overview-banner";
+  status.hidden = true;
+
+  const statusText = createEl("span", "N30 不可用：只读观测数据源连接失败。");
+  status.appendChild(statusText);
+
+  const retry = createEl("button", "重试");
+  retry.id = "overview-retry";
+  retry.type = "button";
+  retry.className = "btn";
+  status.appendChild(retry);
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "overview-embed";
+  iframe.className = "overview-embed";
+  iframe.src = N30_EMBED_URL;
+  iframe.title = "N30 运行观测台";
+  iframe.loading = "lazy";
+
+  const freshness = createEl("span");
+  freshness.id = "overview-freshness";
+  freshness.className = "overview-freshness";
+
+  root.appendChild(status);
+  root.appendChild(iframe);
+  root.appendChild(freshness);
+
+  retry.addEventListener("click", () => {
+    iframe.src = N30_EMBED_URL;
+    void refreshOverview(status, freshness, iframe);
+  });
+
+  void refreshOverview(status, freshness, iframe);
+}
+
+function formatSourceFreshness(snapshot) {
+  if (!snapshot || typeof snapshot.collectedAt !== "number") return "数据时间 —";
+  const time = new Date(snapshot.collectedAt).toLocaleTimeString();
+  const sources = Array.isArray(snapshot.sources) ? snapshot.sources : [];
+  if (sources.length === 0) return `数据时间 ${time}`;
+  const fresh = sources.filter((s) => s && s.state === "fresh").length;
+  return `数据时间 ${time} · ${fresh}/${sources.length} 来源 fresh`;
+}
+
+async function refreshOverview(status, freshness, iframe) {
+  status.hidden = true;
+  freshness.textContent = "连接 N30…";
+  try {
+    const res = await fetch("/observe/snapshot", {
+      cache: "no-store",
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const snapshot = await res.json();
+    freshness.textContent = formatSourceFreshness(snapshot);
+    status.hidden = true;
+  } catch {
+    status.hidden = false;
+    freshness.textContent = "N30 不可用：只读观测数据源连接失败。";
+    void iframe;
+  }
+}
+
 async function bootstrapFromFragment() {
   bindNav();
 
@@ -96,6 +170,7 @@ async function bootstrapFromFragment() {
   history.replaceState(null, "", "/#/overview");
   setSessionState(`已连接：${state.operatorPrincipalId}`);
   switchPage("overview");
+  initOverview();
 }
 
 bootstrapFromFragment();

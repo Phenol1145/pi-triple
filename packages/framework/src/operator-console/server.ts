@@ -18,6 +18,11 @@ import {
   type OperatorSessionClock,
   type OperatorSessionManager,
 } from "./session.js";
+import {
+  createN30ReadOnlyProxy,
+  isN30ReadOnlyProxyPath,
+  type N30ReadOnlyProxy,
+} from "./n30-proxy.js";
 
 export interface OperatorConsolePthDeps {
   readonly baseUrl?: string;
@@ -163,6 +168,11 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
     assets.set(filename, readFileSync(fullPath));
   }
 
+  // N30 只读同源代理：只接受服务端配置的 loopback URL；未配置时 /observe/* 显式降级。
+  const n30Proxy: N30ReadOnlyProxy | null = deps.n30.baseUrl
+    ? createN30ReadOnlyProxy({ baseUrl: deps.n30.baseUrl })
+    : null;
+
   const server: Server = createServer((req, res) => {
     void handle(req, res).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
@@ -265,6 +275,39 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
+    // ── /observe/*：N30 只读同源代理（GET-only，显式白名单，无 catch-all） ──
+    if (isN30ReadOnlyProxyPath(pathname)) {
+      if (method !== "GET") {
+        sendJson(res, 403, {
+          error: { code: "READ_ONLY_PROXY", message: "N30 observability proxy is read-only; only GET is allowed" },
+        });
+        return;
+      }
+      if (!hostMatches(req)) {
+        sendJson(res, 403, { error: { code: "FORBIDDEN_HOST", message: "forged host" } });
+        return;
+      }
+      const sessionToken = parseCookieHeader(req.headers.cookie).get(OPERATOR_COOKIE_NAME);
+      if (!sessionToken || !sessions.authenticate(sessionToken)) {
+        sendJson(res, 401, { error: { code: "UNAUTHORIZED", message: "missing or expired session" } });
+        return;
+      }
+      if (!n30Proxy) {
+        sendJson(res, 502, {
+          error: { code: "N30_NOT_CONFIGURED", message: "N30 observability source is not configured" },
+        });
+        return;
+      }
+      await n30Proxy.handle(req, res, pathname);
+      return;
+    }
+
+    // /observe 前缀的非白名单路径 fail-closed 404（不落到未知页面 302）。
+    if (pathname.startsWith("/observe")) {
+      sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown observe route" } });
+      return;
+    }
+
     // ── API（显式路由；未知 /api/* 一律 JSON 404） ──
     if (pathname === "/api/session/bootstrap") {
       if (method !== "POST") {
@@ -363,6 +406,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
   }
 
   async function close(): Promise<void> {
+    if (n30Proxy) await n30Proxy.close();
     if (!server.listening) return;
     await new Promise<void>((resolve, reject) => {
       server.close((err) => (err ? reject(err) : resolve()));
