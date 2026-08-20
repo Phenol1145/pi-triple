@@ -44,6 +44,8 @@
 | [v1.3 专业计算权威验收报告](./pth/v13-professional-computing-report.md) | 权威版 **GO** · `cf8615c` · focused 82/0 · full 3053/0/9 · 12 项 sabotage 全翻转 |
 | [v1.3 专业计算 envelope](./pth/v13-professional-computing-envelope.json) | 唯一权威 envelope **GO** · reasons=0 · 绑定 `cf8615c` · N29/N30/N33 全 GO |
 | [模块化与复用率审计](./pth/modularity-reuse-audit.md) | 483 生产文件/93.8K LOC · 无循环依赖 · 生产重复率 0.01% · 测试重复收敛建议 |
+| [v1.4 Operator Console UX 验收报告](./pth/v14-operator-console-ux-report.md) | 权威版 **GO** · `a9f1f16` · Playwright 4/4 · focused 141/0 · full 3053/0/9 |
+| [v1.4 Operator Console UX envelope](./pth/v14-operator-console-ux-envelope.json) | 唯一权威 envelope **GO** · reasons=0 · 绑定 `a9f1f16` · N29/N30/N33 全 GO |
 | [统一 Workflow DAG 薄腰设计](./pth/n31-unified-workflow-dag-design.md) | **2.0 目标架构** · 1.x 只做真实设施验证 · 构造约束锁定不可变/可变边界 · 原生执行器保持分立 |
 | [Role/Memory/Worker 可行性设计](./pth/n28-role-memory-orchestration-design.md) | Role Lineage · WorkerReplica · 重叠记忆责任区 · 分层检索 · 统一认知预算 |
 | [Role/Memory/Worker 实施计划](./pth/n28-role-memory-orchestration-implementation-plan.md) | N27 含 R6 的最终报告校正后执行 · 七个可审查任务 · 12 条 gold query · 1,000 组预算探针 · GO/NO-GO 判定 |
