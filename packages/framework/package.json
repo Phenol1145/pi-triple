@@ -10,9 +10,19 @@
   "files": [
     "dist"
   ],
+  "scripts": {
+    "build:web": "vite build",
+    "typecheck:web": "tsc --noEmit -p web/operator-console-src/tsconfig.json"
+  },
   "dependencies": {
-    "@away_from/shared": "file:../shared",
     "@away_from/infra": "file:../infra",
+    "@away_from/shared": "file:../shared",
     "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@preact/preset-vite": "^2.10.6",
+    "preact": "^10.29.8",
+    "vite": "^7.3.6"
   }
 }

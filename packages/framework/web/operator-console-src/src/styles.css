@@ -1,0 +1,313 @@
+/* PTL Operator Console — v1.4 design tokens (T0 scaffold) */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces & text */
+  --color-bg: light-dark(#f6f7f9, #0e1116);
+  --color-surface: light-dark(#ffffff, #161b22);
+  --color-surface-raised: light-dark(#ffffff, #1c232d);
+  --color-border: light-dark(#d9dee5, #2c3641);
+  --color-text: light-dark(#1b2330, #e6ebf2);
+  --color-text-muted: light-dark(#5b6675, #93a1b2);
+
+  /* Accents & status */
+  --color-accent: light-dark(#2563eb, #5b9bff);
+  --color-accent-contrast: light-dark(#ffffff, #0b1220);
+  --color-ok: light-dark(#15803d, #4ade80);
+  --color-warn: light-dark(#b45309, #fbbf24);
+  --color-danger: light-dark(#b91c1c, #f87171);
+
+  /* Spacing scale (4px base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* Radius & shadow */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.08);
+  --shadow-md: 0 4px 16px rgb(15 23 42 / 0.12);
+
+  /* Type */
+  --font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans", sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Layout */
+  --topbar-height: 3.25rem;
+  --sidebar-width: 13rem;
+  --bottom-nav-height: 3.5rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --- Shell layout --- */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  height: var(--topbar-height);
+  padding: 0 var(--space-5);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.topbar__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.topbar__title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.shell__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-3);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-5) var(--space-6);
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+/* --- UI primitives --- */
+
+.ui-button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  color: var(--color-text);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.ui-button--ghost:hover {
+  background: light-dark(rgb(15 23 42 / 0.05), rgb(230 235 242 / 0.06));
+}
+
+.ui-button--primary,
+.ui-button.is-active {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  background: var(--color-surface-raised);
+}
+
+.ui-badge--ok {
+  color: var(--color-ok);
+  border-color: color-mix(in srgb, var(--color-ok) 40%, transparent);
+}
+
+.ui-badge--warn {
+  color: var(--color-warn);
+  border-color: color-mix(in srgb, var(--color-warn) 40%, transparent);
+}
+
+.ui-badge--danger {
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 40%, transparent);
+}
+
+.ui-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+}
+
+.ui-card__title {
+  margin: 0 0 var(--space-3);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.ui-card__body > :first-child {
+  margin-top: 0;
+}
+
+.ui-card__body > :last-child {
+  margin-bottom: 0;
+}
+
+.ui-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.ui-page-header__title {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.ui-page-header__subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
+
+.ui-page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* --- Responsive: sidebar collapses to a bottom nav --- */
+
+@media (max-width: 720px) {
+  .topbar {
+    padding: 0 var(--space-4);
+  }
+
+  .shell__body {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 10;
+    flex-direction: row;
+    width: auto;
+    height: var(--bottom-nav-height);
+    padding: var(--space-2);
+    border-right: none;
+    border-top: 1px solid var(--color-border);
+    overflow-x: auto;
+  }
+
+  .sidebar .ui-button {
+    flex: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .content {
+    padding: var(--space-4);
+    padding-bottom: calc(var(--bottom-nav-height) + var(--space-4));
+  }
+}
