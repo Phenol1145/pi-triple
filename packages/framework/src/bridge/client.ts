@@ -353,12 +353,13 @@ export class PthClient {
 
   // ── kernel 任务/批次（任务工具 Task 3）────────────────────
 
-  /** 发布 PTH 任务（kernel tasks 表） */
+  /** 发布 PTH 任务（kernel tasks 表）；payload 可选（任务链 flow 声明 / WorkEnvelope 盖章等路由信息） */
   async publishTask(input: {
     title: string;
     text: string;
     createdBy: string;
     tags?: string[];
+    payload?: Record<string, unknown>;
   }): Promise<{ id: string; status: string } & Record<string, unknown>> {
     const res = await this.request("/api/v1/kernel/tasks", {
       method: "POST",
@@ -497,5 +498,63 @@ export class PthClient {
       watchdog: { crashLog: Array<Record<string, unknown>> };
       collectedAt: number;
     };
+  }
+
+  // ── N33 Task 5：intake 原生动作窄面（PTL operator console 的 PTH 入口）──
+
+  /** 创建知识摄入订阅（scope 由 PTH 端 auth token 决定；不得携带 manifest/私钥） */
+  async createIntakeSubscription(input: {
+    canonicalUri: string;
+    domainId: string;
+    recrawlIntervalMs: number;
+    declared: { sourceType: string; contentType: string; license: string };
+    idempotencyKey?: string;
+    expectedPolicyId?: string;
+    expectedPolicyVersion?: string;
+    expectedPolicyDigest?: string;
+  }): Promise<Record<string, unknown>> {
+    const res = await this.request("/api/v1/intake/subscriptions", {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) await this.throwError(res, "创建摄入订阅失败");
+    return (await res.json()) as Record<string, unknown>;
+  }
+
+  /** 摄入订阅详情（404 → null） */
+  async getIntakeSubscription(id: string): Promise<Record<string, unknown> | null> {
+    const res = await this.request(`/api/v1/intake/subscriptions/${encodeURIComponent(id)}`, {
+      method: "GET",
+      headers: this.headers(),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) await this.throwError(res, "摄入订阅详情失败");
+    return (await res.json()) as Record<string, unknown>;
+  }
+
+  /** 手动触发一次摄入 run（幂等键去重：重复键返回原 run） */
+  async triggerIntakeRun(input: {
+    subscriptionId: string;
+    idempotencyKey: string;
+  }): Promise<Record<string, unknown>> {
+    const res = await this.request("/api/v1/intake/runs", {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) await this.throwError(res, "触发摄入 run 失败");
+    return (await res.json()) as Record<string, unknown>;
+  }
+
+  /** 摄入 run 状态（404 → null） */
+  async getIntakeRun(id: string): Promise<Record<string, unknown> | null> {
+    const res = await this.request(`/api/v1/intake/runs/${encodeURIComponent(id)}`, {
+      method: "GET",
+      headers: this.headers(),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) await this.throwError(res, "摄入 run 状态失败");
+    return (await res.json()) as Record<string, unknown>;
   }
 }

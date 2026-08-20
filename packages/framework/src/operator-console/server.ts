@@ -10,6 +10,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { isWorkMode } from "@away_from/shared";
 import {
   createOperatorSessionManager,
   OPERATOR_COOKIE_NAME,
@@ -23,6 +24,23 @@ import {
   isN30ReadOnlyProxyPath,
   type N30ReadOnlyProxy,
 } from "./n30-proxy.js";
+import {
+  createOperatorWorkService,
+  OperatorWorkError,
+  type OperatorWorkService,
+} from "./preview-store.js";
+import { createInMemoryChannelAudit, createOperatorChannelAudit } from "./channel-audit.js";
+import { createOperatorActionRegistry } from "./action-registry.js";
+import { createPthOperatorClient } from "./pth-operator-client.js";
+import { createRunTaskPublishAdapter } from "./actions/run-actions.js";
+import {
+  createIntakeRunTriggerAdapter,
+  createIntakeSubscriptionCreateAdapter,
+} from "./actions/intake-actions.js";
+import { createOptimizeSuggestionApplyAdapter } from "./actions/optimize-actions.js";
+import type { NativeWorkRef, OperatorContext } from "./contracts.js";
+
+const NATIVE_WORK_KINDS = new Set(["task", "professional-job", "intake-run", "optimizer-work"]);
 
 export interface OperatorConsolePthDeps {
   readonly baseUrl?: string;
@@ -32,6 +50,13 @@ export interface OperatorConsolePthDeps {
 
 export interface OperatorConsoleN30Deps {
   readonly baseUrl?: string;
+}
+
+export interface OperatorConsoleWorkDeps {
+  /** 测试/组合注入的 work service；缺省时由 pth.baseUrl+token 自动装配三个原生 adapter。 */
+  readonly service?: OperatorWorkService;
+  /** 通道审计 JSONL 落盘路径（0600/O_APPEND）；缺省内存审计（进程内）。 */
+  readonly auditPath?: string;
 }
 
 export interface OperatorConsoleServerDeps {
@@ -46,6 +71,11 @@ export interface OperatorConsoleServerDeps {
   /** 服务端持有的 PTH/N30 端点；本 Task 不暴露给浏览器，只作为 API 壳依赖。 */
   readonly pth: OperatorConsolePthDeps;
   readonly n30: OperatorConsoleN30Deps;
+  /** work 页操作上下文 tenant/space（应与 pth token 声明一致）；缺省 default/ts。 */
+  readonly tenant?: string;
+  readonly space?: string;
+  /** N33 Task 5：work 页一次性预览/确认/提交通道。 */
+  readonly work?: OperatorConsoleWorkDeps;
 }
 
 export interface OperatorConsoleServer {
@@ -172,6 +202,28 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
   const n30Proxy: N30ReadOnlyProxy | null = deps.n30.baseUrl
     ? createN30ReadOnlyProxy({ baseUrl: deps.n30.baseUrl })
     : null;
+  // ── N33 Task 5：work 页通道装配（registry + 三个原生 adapter + 一次性预览服务）──
+  const operatorTenant = deps.tenant ?? "default";
+  const operatorSpace = deps.space ?? "ts";
+  const workService: OperatorWorkService | null = (() => {
+    if (deps.work?.service) return deps.work.service;
+    if (!deps.pth.baseUrl || !deps.pth.token) return null;
+    // PTH token 只闭包进 server 侧 client；任何响应/静态资源都不得包含它。
+    const client = createPthOperatorClient({ baseUrl: deps.pth.baseUrl, token: deps.pth.token });
+    const registry = createOperatorActionRegistry();
+    registry.register(createRunTaskPublishAdapter({ client }));
+    registry.register(createIntakeSubscriptionCreateAdapter({ client }));
+    registry.register(createIntakeRunTriggerAdapter({ client }));
+    registry.register(createOptimizeSuggestionApplyAdapter({ client }));
+    const audit = deps.work?.auditPath
+      ? createOperatorChannelAudit({ filePath: deps.work.auditPath })
+      : createInMemoryChannelAudit();
+    return createOperatorWorkService({ registry, audit });
+  })();
+
+  function operatorContext(): OperatorContext {
+    return { tenant: operatorTenant, space: operatorSpace };
+  }
 
   const server: Server = createServer((req, res) => {
     void handle(req, res).catch((err: unknown) => {
@@ -243,6 +295,41 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return false;
     }
     return true;
+  }
+
+  /** 已认证 GET 的统一守卫：Host + cookie 会话（GET 无 CSRF 要求）。 */
+  function requireSessionGet(req: IncomingMessage, res: ServerResponse): boolean {
+    if (!hostMatches(req)) {
+      sendJson(res, 403, { error: { code: "FORBIDDEN_HOST", message: "forged host" } });
+      return false;
+    }
+    const sessionToken = parseCookieHeader(req.headers.cookie).get(OPERATOR_COOKIE_NAME);
+    if (!sessionToken || !sessions.authenticate(sessionToken)) {
+      sendJson(res, 401, { error: { code: "UNAUTHORIZED", message: "missing or expired session" } });
+      return false;
+    }
+    return true;
+  }
+
+  /** work 通道错误映射：归一化 code → 语义化 HTTP 状态；绝不透传原生错误正文外的信息。 */
+  function sendWorkError(res: ServerResponse, err: unknown): void {
+    if (err instanceof OperatorWorkError) {
+      const status =
+        err.code === "PREVIEW_EXPIRED" ? 410
+          : err.code === "PREVIEW_CONSUMED" || err.code === "IDEMPOTENCY_CONFLICT" || err.code === "PREVIEW_IN_FLIGHT" ? 409
+            : err.code === "UNKNOWN_ACTION" ? 404
+              : err.code === "PENDING_LIMIT" ? 429
+                : err.code === "NATIVE_SUBMIT_ERROR" ? 502
+                  : 400;
+      sendJson(res, status, { error: { code: err.code, message: err.message } });
+      return;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    if (/unknown operator action/i.test(message)) {
+      sendJson(res, 404, { error: { code: "UNKNOWN_ACTION", message } });
+      return;
+    }
+    sendJson(res, 400, { error: { code: "WORK_REJECTED", message } });
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -368,8 +455,163 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
-    if (pathname === "/api/session/logout") {
+    // ── N33 Task 5：work 页一次性预览/确认/提交/原生状态路由 ──
+    // 全部是显式路由；未登记动作在 registry.get 处 404；未装配 work service → 503。
+    if (pathname === "/api/work/actions") {
+      if (method !== "GET" && method !== "HEAD") {
+        sendEmpty(res, 405, { allow: "GET, HEAD" });
+        return;
+      }
+      if (!requireSessionGet(req, res)) return;
+      if (!workService) {
+        sendJson(res, 503, { error: { code: "WORK_UNAVAILABLE", message: "work channel not assembled (missing pth baseUrl/token)" } });
+        return;
+      }
+      sendJson(res, 200, {
+        actions: workService.listActions(),
+        tenant: operatorTenant,
+        space: operatorSpace,
+      });
+      return;
+    }
+
+    if (pathname === "/api/work/preview") {
       if (method !== "POST") {
+        sendEmpty(res, 405, { allow: "POST" });
+        return;
+      }
+      if (!guardAuthenticatedPost(req, res)) return;
+      if (!workService) {
+        sendJson(res, 503, { error: { code: "WORK_UNAVAILABLE", message: "work channel not assembled" } });
+        return;
+      }
+      let body: unknown;
+      try {
+        body = await readJsonBody(req);
+      } catch (err) {
+        sendJson(res, 400, { error: { code: "BAD_REQUEST", message: err instanceof Error ? err.message : String(err) } });
+        return;
+      }
+      const b = (body ?? {}) as Record<string, unknown>;
+      if (!isWorkMode(b.mode) || typeof b.action !== "string" || b.action.trim() === "") {
+        sendJson(res, 400, { error: { code: "BAD_REQUEST", message: "mode/action required" } });
+        return;
+      }
+      try {
+        const preview = await workService.preview(b.mode, b.action, b.input ?? {}, operatorContext());
+        sendJson(res, 200, { preview, tenant: operatorTenant, space: operatorSpace });
+      } catch (err) {
+        sendWorkError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === "/api/work/submit") {
+      if (method !== "POST") {
+        sendEmpty(res, 405, { allow: "POST" });
+        return;
+      }
+      if (!guardAuthenticatedPost(req, res)) return;
+      if (!workService) {
+        sendJson(res, 503, { error: { code: "WORK_UNAVAILABLE", message: "work channel not assembled" } });
+        return;
+      }
+      let body: unknown;
+      try {
+        body = await readJsonBody(req);
+      } catch (err) {
+        sendJson(res, 400, { error: { code: "BAD_REQUEST", message: err instanceof Error ? err.message : String(err) } });
+        return;
+      }
+      try {
+        const ref = await workService.submit(body as never, operatorContext());
+        sendJson(res, 200, { ref });
+      } catch (err) {
+        sendWorkError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === "/api/work/evaluate") {
+      if (method !== "POST") {
+        sendEmpty(res, 405, { allow: "POST" });
+        return;
+      }
+      if (!guardAuthenticatedPost(req, res)) return;
+      if (!workService) {
+        sendJson(res, 503, { error: { code: "WORK_UNAVAILABLE", message: "work channel not assembled" } });
+        return;
+      }
+      let body: unknown;
+      try {
+        body = await readJsonBody(req);
+      } catch (err) {
+        sendJson(res, 400, { error: { code: "BAD_REQUEST", message: err instanceof Error ? err.message : String(err) } });
+        return;
+      }
+      const b = (body ?? {}) as Record<string, unknown>;
+      if (!isWorkMode(b.mode) || typeof b.kind !== "string" || !NATIVE_WORK_KINDS.has(b.kind) || typeof b.id !== "string" || b.id === "") {
+        sendJson(res, 400, { error: { code: "BAD_REQUEST", message: "mode/kind/id required" } });
+        return;
+      }
+      // tenant/space 由服务端盖章——body 永远不接受 tenantId（跨 tenant 引用在 service 层拒绝）。
+      const ref: NativeWorkRef = {
+        mode: b.mode,
+        kind: b.kind as NativeWorkRef["kind"],
+        id: b.id,
+        tenantId: operatorTenant,
+        submittedAt: typeof b.submittedAt === "string" ? b.submittedAt : "",
+      };
+      try {
+        sendJson(res, 200, { acceptance: await workService.evaluate(ref, operatorContext()) });
+      } catch (err) {
+        sendWorkError(res, err);
+      }
+      return;
+    }
+
+    if (pathname.startsWith("/api/work/native/")) {
+      if (method !== "GET" && method !== "HEAD") {
+        sendEmpty(res, 405, { allow: "GET, HEAD" });
+        return;
+      }
+      if (!requireSessionGet(req, res)) return;
+      if (!workService) {
+        sendJson(res, 503, { error: { code: "WORK_UNAVAILABLE", message: "work channel not assembled" } });
+        return;
+      }
+      const parts = pathname.slice("/api/work/native/".length).split("/").filter((s) => s !== "");
+      if (parts.length !== 2) {
+        sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown native ref path" } });
+        return;
+      }
+      const [kindRaw, idRaw] = parts as [string, string];
+      let modeParam: string | null = null;
+      try {
+        modeParam = new URL(requestUrl, `http://${BIND_HOST}`).searchParams.get("mode");
+      } catch { /* pathname 已验证过 */ }
+      const kind = decodeURIComponent(kindRaw);
+      const id = decodeURIComponent(idRaw);
+      if (!NATIVE_WORK_KINDS.has(kind) || !modeParam || !isWorkMode(modeParam) || id === "") {
+        sendJson(res, 400, { error: { code: "BAD_REQUEST", message: "native ref requires kind/id and a valid ?mode=" } });
+        return;
+      }
+      const ref: NativeWorkRef = {
+        mode: modeParam,
+        kind: kind as NativeWorkRef["kind"],
+        id,
+        tenantId: operatorTenant,
+        submittedAt: "",
+      };
+      try {
+        sendJson(res, 200, { projection: await workService.inspect(ref, operatorContext()) });
+      } catch (err) {
+        sendWorkError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === "/api/session/logout") {      if (method !== "POST") {
         sendEmpty(res, 405, { allow: "POST" });
         return;
       }
