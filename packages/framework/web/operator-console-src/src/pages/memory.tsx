@@ -4,7 +4,7 @@ import { Card, EmptyState, PageHeader } from "../ui";
 export default function MemoryPage() {
   return (
     <section class="page" data-page-root="memory">
-      <PageHeader title="Memory" subtitle="记忆视图" />
+      <PageHeader title="Memory" description="记忆视图" />
       <Card>
         <EmptyState title="页面将在 T3–T6 接入" description="当前为占位内容。" />
       </Card>

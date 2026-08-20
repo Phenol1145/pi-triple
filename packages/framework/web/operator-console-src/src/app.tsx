@@ -9,6 +9,7 @@ import { PageSkeleton } from "./components/PageSkeleton";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { Button } from "./ui";
+import { Toaster } from "./toast";
 
 export type PageId = "overview" | "work" | "debug" | "memory" | "config";
 
@@ -91,6 +92,7 @@ export function App() {
         onClose={closePalette}
         onNavigate={navigate}
       />
+      <Toaster />
     </div>
   );
 }

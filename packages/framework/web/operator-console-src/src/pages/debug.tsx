@@ -4,7 +4,7 @@ import { Card, EmptyState, PageHeader } from "../ui";
 export default function DebugPage() {
   return (
     <section class="page" data-page-root="debug">
-      <PageHeader title="Debug" subtitle="调试视图" />
+      <PageHeader title="Debug" description="调试视图" />
       <Card>
         <EmptyState title="页面将在 T3–T6 接入" description="当前为占位内容。" />
       </Card>

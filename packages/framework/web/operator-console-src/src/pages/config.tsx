@@ -4,7 +4,7 @@ import { Card, EmptyState, PageHeader } from "../ui";
 export default function ConfigPage() {
   return (
     <section class="page" data-page-root="config">
-      <PageHeader title="Config" subtitle="配置视图" />
+      <PageHeader title="Config" description="配置视图" />
       <Card>
         <EmptyState title="页面将在 T3–T6 接入" description="当前为占位内容。" />
       </Card>

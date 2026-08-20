@@ -40,7 +40,7 @@ function SessionPill() {
     return <Badge tone="neutral">会话加载中…</Badge>;
   }
   if (session.state === "expired") {
-    return <Badge tone="warn">会话失效</Badge>;
+    return <Badge tone="warning">会话失效</Badge>;
   }
   if (session.state === "failed") {
     return <Badge tone="danger">连接异常</Badge>;
@@ -49,7 +49,7 @@ function SessionPill() {
   const expiryMs = sessionExpiryMs(session.expiresAt);
   const countdown =
     expiryMs === null ? "无到期信息" : formatCountdown(expiryMs - now);
-  const tone = expiryMs !== null && expiryMs - now <= 0 ? "warn" : "ok";
+  const tone = expiryMs !== null && expiryMs - now <= 0 ? "warning" : "success";
   const principal = session.operatorPrincipalId ?? "operator";
   return (
     <span class="session-pill" title={`会话到期倒计时 ${countdown}`}>
