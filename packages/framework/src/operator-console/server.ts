@@ -7,11 +7,19 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 import { isWorkMode, getConfigValue } from "@away_from/shared";
+import {
+  ASSET_MIME,
+  KNOWN_ASSETS,
+  parseCookieHeader,
+  readJsonBody,
+  sendEmpty,
+  sendJson,
+  sendText,
+  sendUpstreamFailure,
+} from "./server-http.js";
+import { loadOperatorConsoleAssets } from "./server-assets.js";
+import { handleInspectionRoutes } from "./routes-inspection.js";
 import {
   createOperatorSessionManager,
   OPERATOR_COOKIE_NAME,
@@ -97,104 +105,6 @@ export interface OperatorConsoleServer {
 }
 
 const BIND_HOST = "127.0.0.1";
-const ASSET_MIME: Record<string, string> = {
-  "index.html": "text/html; charset=utf-8",
-  "styles.css": "text/css; charset=utf-8",
-  "app.js": "text/javascript; charset=utf-8",
-  "debug.js": "text/javascript; charset=utf-8",
-  "memory.js": "text/javascript; charset=utf-8",
-  "config.js": "text/javascript; charset=utf-8",
-};
-const KNOWN_ASSETS = new Set(Object.keys(ASSET_MIME));
-const MAX_JSON_BODY_BYTES = 16 * 1024;
-
-function sendJson(res: ServerResponse, status: number, payload: unknown, extraHeaders: Record<string, string> = {}): void {
-  const body = JSON.stringify(payload);
-  res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "content-length": Buffer.byteLength(body),
-    "cache-control": "no-store",
-    ...extraHeaders,
-  });
-  res.end(body);
-}
-
-function sendText(res: ServerResponse, status: number, body: string, contentType: string, extraHeaders: Record<string, string> = {}): void {
-  res.writeHead(status, {
-    "content-type": contentType,
-    "content-length": Buffer.byteLength(body),
-    "cache-control": "no-store",
-    ...extraHeaders,
-  });
-  res.end(body);
-}
-
-function sendEmpty(res: ServerResponse, status: number, extraHeaders: Record<string, string> = {}): void {
-  res.writeHead(status, { "cache-control": "no-store", ...extraHeaders });
-  res.end();
-}
-
-/**
- * 上游失败只回传稳定 code + 可关联 requestId。上游正文/错误字符串可能含
- * token、DB URL、内部诊断或专业软件凭据，一律不进浏览器响应。
- */
-function sendUpstreamFailure(res: ServerResponse, code: string): void {
-  sendJson(res, 502, {
-    error: {
-      code,
-      message: "upstream PTH request failed; the raw response is never forwarded to the browser",
-      requestId: randomUUID(),
-    },
-  });
-}
-
-function parseCookieHeader(header: string | undefined): Map<string, string> {
-  const cookies = new Map<string, string>();
-  if (!header) return cookies;
-  for (const part of header.split(";")) {
-    const eq = part.indexOf("=");
-    if (eq === -1) continue;
-    const name = part.slice(0, eq).trim();
-    const value = part.slice(eq + 1).trim();
-    if (name) cookies.set(name, value);
-  }
-  return cookies;
-}
-
-function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    req.on("data", (chunk: Buffer) => {
-      size += chunk.length;
-      if (size > MAX_JSON_BODY_BYTES) {
-        reject(new Error("request body too large"));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on("end", () => {
-      if (chunks.length === 0) {
-        resolve(undefined);
-        return;
-      }
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-      } catch {
-        reject(new Error("invalid JSON body"));
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
-function resolveAssetDirectory(): string {
-  // 编译产物：dist/operator-console/public；源码 tsx/vitest：web/operator-console
-  const compiled = fileURLToPath(new URL("./public/", import.meta.url));
-  const source = fileURLToPath(new URL("../../web/operator-console/", import.meta.url));
-  return existsSync(path.join(compiled, "index.html")) ? compiled : source;
-}
 
 export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): OperatorConsoleServer {
   const host = deps.host ?? BIND_HOST;
@@ -214,15 +124,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
   });
   sessions.issueBootstrapToken(operatorPrincipalId, bootstrapToken);
 
-  const assetDir = resolveAssetDirectory();
-  const assets = new Map<string, Buffer>();
-  for (const filename of KNOWN_ASSETS) {
-    const fullPath = path.join(assetDir, filename);
-    if (!existsSync(fullPath)) {
-      throw new Error(`operator console asset missing: ${fullPath}`);
-    }
-    assets.set(filename, readFileSync(fullPath));
-  }
+  const assets = loadOperatorConsoleAssets();
 
   // N30 只读同源代理：只接受服务端配置的 loopback URL；未配置时 /observe/* 显式降级。
   const n30Proxy: N30ReadOnlyProxy | null = deps.n30.baseUrl
@@ -393,148 +295,18 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
-    // ── /api/config|roles：只读配置与角色目录（GET-only；无写路由） ──
-    if (pathname === "/api/config/ptl" || pathname === "/api/config/pth" || pathname === "/api/roles") {
-      if (method !== "GET") {
-        sendEmpty(res, 405, { allow: "GET" });
-        return;
-      }
-      const sessionToken = parseCookieHeader(req.headers.cookie).get(OPERATOR_COOKIE_NAME);
-      if (!sessionToken || !sessions.authenticate(sessionToken)) {
-        sendJson(res, 401, { error: { code: "UNAUTHORIZED", message: "missing or expired session" } });
-        return;
-      }
-      if (pathname === "/api/config/ptl") {
-        // 本机 shell 的 redacted 事实：只暴露 loopback/端口/能力布尔面与枚举 descriptor，
-        // 绝不含 token/路径/连接串。tenant/space 只来自服务端配置，浏览器无法自报覆盖。
-        const ptlDescriptor = (key: string, group: string, source: string, value: unknown, restartRequired = false) => ({
-          key, group, type: "string", scope: "session", source, runtimeMutable: false,
-          restartRequired, description: "", secret: false, defaultValue: null,
-          effectiveValue: value === undefined || value === null ? null : String(value),
-        });
-        sendJson(res, 200, {
-          items: [
-            ptlDescriptor("host", "ptl.server", "default", deps.host ?? BIND_HOST, true),
-            ptlDescriptor("port", "ptl.server", "default", deps.port ?? "auto"),
-            ptlDescriptor("operatorPrincipalId", "ptl.session", "default", deps.operatorPrincipalId ?? "human-local-operator"),
-            ptlDescriptor("operatorTenant", "ptl.session", "server-config", operatorTenant),
-            ptlDescriptor("operatorSpace", "ptl.session", "server-config", operatorSpace),
-            ptlDescriptor("template", "ptl.agent", "ptl-config", getConfigValue("template.alias") ?? getConfigValue("template")),
-            ptlDescriptor("model", "ptl.agent", "ptl-config", getConfigValue("model")),
-            ptlDescriptor("provider", "ptl.agent", "ptl-config", getConfigValue("provider")),
-            ptlDescriptor("pthChannel", "ptl.channels", pthOperatorClient ? "configured" : "unknown", pthOperatorClient ? "enabled" : "disabled"),
-            ptlDescriptor("n30Channel", "ptl.channels", deps.n30.baseUrl ? "configured" : "unknown", deps.n30.baseUrl ? "enabled" : "disabled"),
-            ptlDescriptor("workChannel", "ptl.channels", workService ? "configured" : "unknown", workService ? "enabled" : "disabled"),
-          ],
-        });
-        return;
-      }
-      if (!pthOperatorClient) {
-        sendJson(res, 503, { error: { code: "CONFIG_UNAVAILABLE", message: "pth inspection channel not assembled" } });
-        return;
-      }
-      try {
-        if (pathname === "/api/config/pth") {
-          sendJson(res, 200, toBrowserPthConfig(await pthOperatorClient.getPthConfig()));
-        } else {
-          sendJson(res, 200, toBrowserRoles(await pthOperatorClient.getPthRoles()));
-        }
-      } catch {
-        sendUpstreamFailure(res, "PTH_UNAVAILABLE");
-      }
-      return;
-    }
-    if (pathname.startsWith("/api/config") || pathname.startsWith("/api/roles")) {
-      sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown config/roles route" } });
-      return;
-    }
-
-    // ── /api/memory/*：只读记忆浏览器（GET-only；limit 101 拒绝；无写路由） ──
-    if (pathname.startsWith("/api/memory")) {
-      if (method !== "GET") {
-        sendEmpty(res, 405, { allow: "GET" });
-        return;
-      }
-      const sessionToken = parseCookieHeader(req.headers.cookie).get(OPERATOR_COOKIE_NAME);
-      if (!sessionToken || !sessions.authenticate(sessionToken)) {
-        sendJson(res, 401, { error: { code: "UNAUTHORIZED", message: "missing or expired session" } });
-        return;
-      }
-      if (!pthOperatorClient) {
-        sendJson(res, 503, { error: { code: "MEMORY_UNAVAILABLE", message: "pth inspection channel not assembled" } });
-        return;
-      }
-      const url = new URL(req.url ?? "/", "http://operator-console.internal");
-      const limitRaw = url.searchParams.get("limit");
-      if (limitRaw !== null) {
-        const limit = Number(limitRaw);
-        if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
-          sendJson(res, 400, { error: { code: "BAD_REQUEST", message: "limit must be an integer in 1..100" } });
-          return;
-        }
-      }
-      try {
-        if (pathname === "/api/memory/summary") {
-          sendJson(res, 200, await pthOperatorClient.getMemorySummary());
-          return;
-        }
-        if (pathname === "/api/memory/entries") {
-          const query = {
-            type: url.searchParams.get("type") ?? undefined,
-            kind: url.searchParams.get("kind") ?? undefined,
-            status: url.searchParams.get("status") ?? undefined,
-            anchor: url.searchParams.get("anchor") ?? undefined,
-            cursor: url.searchParams.get("cursor") ?? undefined,
-            ...(limitRaw !== null ? { limit: Number(limitRaw) } : {}),
-          };
-          sendJson(res, 200, toBrowserMemoryPage(await pthOperatorClient.listMemoryEntries(query)));
-          return;
-        }
-        const entryMatch = /^\/api\/memory\/entries\/([^/]+)$/.exec(pathname);
-        if (entryMatch) {
-          const id = decodeURIComponent(entryMatch[1]!);
-          sendJson(res, 200, toBrowserMemoryDetail(await pthOperatorClient.getMemoryEntry(id)));
-          return;
-        }
-        const revisionMatch = /^\/api\/memory\/entries\/([^/]+)\/revisions$/.exec(pathname);
-        if (revisionMatch) {
-          const id = decodeURIComponent(revisionMatch[1]!);
-          sendJson(res, 200, toBrowserMemoryRevisions(await pthOperatorClient.getMemoryRevisions(id)));
-          return;
-        }
-        sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown memory route" } });
-        return;
-      } catch {
-        sendUpstreamFailure(res, "PTH_UNAVAILABLE");
-        return;
-      }
-    }
-
-    // ── /api/debug/*：只读调试页（GET-only；未知路径 404，POST 一律 405/404） ──
-    if (pathname === "/api/debug/workers") {
-      if (method !== "GET") {
-        sendEmpty(res, 405, { allow: "GET" });
-        return;
-      }
-      const sessionToken = parseCookieHeader(req.headers.cookie).get(OPERATOR_COOKIE_NAME);
-      if (!sessionToken || !sessions.authenticate(sessionToken)) {
-        sendJson(res, 401, { error: { code: "UNAUTHORIZED", message: "missing or expired session" } });
-        return;
-      }
-      if (!pthOperatorClient) {
-        sendJson(res, 503, { error: { code: "DEBUG_UNAVAILABLE", message: "pth inspection channel not assembled" } });
-        return;
-      }
-      try {
-        const workers = toBrowserDebugWorkers(await pthOperatorClient.listWorkers());
-        sendJson(res, 200, { workers, tenant: operatorTenant, space: operatorSpace });
-      } catch {
-        sendUpstreamFailure(res, "PTH_UNAVAILABLE");
-      }
-      return;
-    }
-    if (pathname.startsWith("/api/debug")) {
-      sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown debug route" } });
+    // ── /api/config|roles、/api/memory/*、/api/debug/*：只读巡检路由 ──
+    if (await handleInspectionRoutes(req, res, pathname, method, {
+      host: deps.host,
+      port: deps.port,
+      operatorPrincipalId,
+      sessions,
+      pthOperatorClient,
+      workService,
+      operatorTenant,
+      operatorSpace,
+      n30Configured: Boolean(deps.n30.baseUrl),
+    })) {
       return;
     }
 
