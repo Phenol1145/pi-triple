@@ -21,9 +21,9 @@
 > 下一迭代：基础重构优先；PTH 完整操作台「先搬迁再扩展」；服务端权限模型留白。
 
 - [x] **R0 产品预期形态确认**：已对齐定位/入口/双引擎/交互策略/部署/迁移路径；
-- [ ] **B1 基础重构**：继续固化协议/边界/文档（API v1、OpenAPI、契约测试）；
-- [ ] **B2 PTH 侧 Web/CLI 边界**：把 PTH 操作 CLI/Web 归属 PTH；PTL 回归环境工具；
-- [ ] **B3 现有 Console 先搬迁再扩展**：代码迁至 PTH 包，保持五页能力不回退；
+- [x] **B1 基础重构**：协议/边界/文档固化（API v1、OpenAPI、契约测试、product-boundaries）`5fa256f`；
+- [x] **B2 PTH 侧 Web/CLI 边界**：PTH 操作 CLI/Web 归 PTH（`pth web`），PTL 只保留便捷调用；`64effcf`；
+- [x] **B3 现有 Console 先搬迁再扩展**：operator-console 迁至 `@away_from/pth-console`，五页能力零回退（lint/build/Playwright 4·4/full 353 文件 3060 通过 9 跳过）；`64effcf`；
 - [ ] **R1 ContainerRuntimeAdapter 接口**：`id/probe/version/socket/features` + 三个只读方法；
 - [ ] **R2 运行时选择协议**：显式 env 优先 → socket 白名单自动 probe → 多可用 fail-closed；
 - [ ] **R3 container-runtime-lock.json**：允许 runtime、版本约束、probe 定义；
