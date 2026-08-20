@@ -82,6 +82,7 @@ export interface PthOperatorClient {
   getIntakeRun(id: string): Promise<PthIntakeRunView | null>;
   listOptimizerSuggestions(): Promise<readonly PthOptimizerSuggestionView[]>;
   applyOptimizerSuggestion(input: { id: string }): Promise<PthOptimizerApplyResult>;
+  listWorkers(): Promise<readonly unknown[]>;
 }
 
 function asString(value: unknown): string | undefined {
@@ -215,6 +216,10 @@ export function createPthOperatorClient(deps: {
           ...(asString(row.preview) !== undefined ? { preview: asString(row.preview) } : {}),
           ...(asString(row.created_at) !== undefined ? { created_at: asString(row.created_at) } : {}),
         }));
+    },
+
+    async listWorkers() {
+      return await inner.listObserveWorkers();
     },
 
     async applyOptimizerSuggestion(input) {

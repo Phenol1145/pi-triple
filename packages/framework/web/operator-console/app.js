@@ -20,6 +20,8 @@
 const PAGES = ["overview", "work", "debug", "memory", "config"];
 const N30_EMBED_URL = "/observe/?embed=1&base=/observe";
 
+import { createDebugViewModel, DEBUG_POLL_MS } from "./debug.js";
+
 const state = {
   csrfToken: null,
   operatorPrincipalId: null,
@@ -45,6 +47,7 @@ function switchPage(pageId) {
     if (nav) nav.classList.toggle("active", id === pageId);
   }
   if (pageId === "work") void ensureWorkLoaded();
+  if (pageId === "debug") void ensureDebugLoaded();
 }
 
 function bindNav() {
@@ -89,6 +92,96 @@ const work = {
   preview: null,
   pollTimer: null,
 };
+
+// ── N33 Task 6：debug 只读页（2s 权威快照轮询；无控制动作） ──
+
+let debugVm = null;
+let debugTimer = null;
+let debugSelectedWorker = null;
+
+function renderDebug() {
+  if (!debugVm) return;
+  const view = debugVm.view();
+  const freshness = document.getElementById("debug-freshness");
+  if (freshness) {
+    freshness.textContent = view.freshnessState;
+    freshness.className = "debug-freshness " + view.freshnessState;
+  }
+  const list = document.getElementById("debug-worker-list");
+  const empty = document.getElementById("debug-empty");
+  if (list) list.replaceChildren();
+  if (empty) empty.hidden = view.workers.length !== 0;
+  for (const w of view.workers) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "debug-worker-card" + (debugSelectedWorker === w.workerId ? " selected" : "");
+    card.append(
+      createEl("strong", w.workerId),
+      createEl("span", ` — ${w.roleId}@${w.roleRevision} — ${w.workMode} — ${w.lifecycle}`),
+    );
+    card.addEventListener("click", () => {
+      debugSelectedWorker = w.workerId;
+      renderDebugDetail(w);
+      renderDebug();
+    });
+    if (list) list.append(card);
+  }
+  const detail = document.getElementById("debug-worker-detail");
+  if (detail && !view.workers.some((w) => w.workerId === debugSelectedWorker)) detail.hidden = true;
+}
+
+function renderDebugDetail(w) {
+  const detail = document.getElementById("debug-worker-detail");
+  if (!detail) return;
+  detail.hidden = false;
+  detail.replaceChildren(
+    createEl("h2", w.workerId),
+    createEl("p", `batch ${w.batchId} · task ${w.taskId} · lease ${w.leaseId} · heartbeat ${w.heartbeatAt}`),
+    createEl("p", `Working Set ${w.workingSet.count} 项：${w.workingSet.ids.join(", ") || "—"}`),
+    createEl("p", `工具：${w.toolNames.join(", ") || "—"} · 技能：${w.skillIds.join(", ") || "—"}`),
+  );
+  const regions = document.createElement("ul");
+  for (const r of w.regions) {
+    regions.append(createEl("li", `${r.regionId} (权重 ${r.weights})`));
+  }
+  detail.append(regions);
+}
+
+async function pollDebug() {
+  try {
+    const res = await fetch("/api/debug/workers", { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`debug workers HTTP ${res.status}`);
+    const payload = await res.json();
+    const workers = Array.isArray(payload) ? payload : Array.isArray(payload?.workers) ? payload.workers : [];
+    if (debugVm) debugVm.ingest(workers, Date.now());
+    const degraded = document.getElementById("debug-degraded");
+    if (degraded) degraded.hidden = true;
+  } catch {
+    const degraded = document.getElementById("debug-degraded");
+    if (degraded) degraded.hidden = false;
+  }
+  renderDebug();
+}
+
+async function ensureDebugLoaded() {
+  if (!debugVm) {
+    debugVm = createDebugViewModel();
+    const bindFilter = (id, key) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("input", () => {
+        debugVm.setFilter(key, el.value);
+        renderDebug();
+      });
+    };
+    bindFilter("debug-filter-worker", "workerId");
+    bindFilter("debug-filter-role", "roleId");
+    bindFilter("debug-filter-mode", "workMode");
+    bindFilter("debug-filter-lifecycle", "lifecycle");
+  }
+  await pollDebug();
+  if (!debugTimer) debugTimer = setInterval(() => void pollDebug(), DEBUG_POLL_MS);
+}
 
 async function ensureWorkLoaded() {
   if (work.loaded || !state.csrfToken) return;

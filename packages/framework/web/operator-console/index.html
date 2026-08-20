@@ -32,7 +32,33 @@
       </section>
       <section class="page" id="page-debug" data-page-root="debug" hidden>
         <h1>Debug</h1>
-        <p class="placeholder">Debug 页面将在后续任务实现。</p>
+        <p class="page-note">只读：Worker 检查投影，2 秒轮询；无任何控制动作。</p>
+        <div class="debug-toolbar">
+          <label>Worker ID <input id="debug-filter-worker" type="text" placeholder="包含匹配"></label>
+          <label>Role ID <input id="debug-filter-role" type="text" placeholder="精确匹配"></label>
+          <label>WorkMode
+            <select id="debug-filter-mode">
+              <option value="all">all</option>
+              <option value="run">run</option>
+              <option value="intake">intake</option>
+              <option value="optimize">optimize</option>
+            </select>
+          </label>
+          <label>Lifecycle
+            <select id="debug-filter-lifecycle">
+              <option value="all">all</option>
+              <option value="running">running</option>
+              <option value="idle">idle</option>
+              <option value="waiting">waiting</option>
+              <option value="failed">failed</option>
+            </select>
+          </label>
+          <span id="debug-freshness" class="debug-freshness" aria-live="polite"></span>
+        </div>
+        <p id="debug-empty" class="debug-empty" hidden>无匹配 Worker。</p>
+        <div id="debug-worker-list" class="debug-worker-list"></div>
+        <div id="debug-worker-detail" class="debug-worker-detail" hidden></div>
+        <div id="debug-degraded" class="debug-degraded" hidden>PTH 检查投影不可用——只读页显式降级。</div>
       </section>
       <section class="page" id="page-memory" data-page-root="memory" hidden>
         <h1>Memory</h1>

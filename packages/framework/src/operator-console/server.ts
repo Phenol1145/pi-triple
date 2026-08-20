@@ -31,7 +31,7 @@ import {
 } from "./preview-store.js";
 import { createInMemoryChannelAudit, createOperatorChannelAudit } from "./channel-audit.js";
 import { createOperatorActionRegistry } from "./action-registry.js";
-import { createPthOperatorClient } from "./pth-operator-client.js";
+import { createPthOperatorClient, type PthOperatorClient } from "./pth-operator-client.js";
 import { createRunTaskPublishAdapter } from "./actions/run-actions.js";
 import {
   createIntakeRunTriggerAdapter,
@@ -205,11 +205,15 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
   // ── N33 Task 5：work 页通道装配（registry + 三个原生 adapter + 一次性预览服务）──
   const operatorTenant = deps.tenant ?? "default";
   const operatorSpace = deps.space ?? "ts";
+  // PTH token 只闭包进 server 侧 client；任何响应/静态资源都不得包含它。
+  const pthOperatorClient: PthOperatorClient | null =
+    deps.pth.baseUrl && deps.pth.token
+      ? createPthOperatorClient({ baseUrl: deps.pth.baseUrl, token: deps.pth.token })
+      : null;
   const workService: OperatorWorkService | null = (() => {
     if (deps.work?.service) return deps.work.service;
-    if (!deps.pth.baseUrl || !deps.pth.token) return null;
-    // PTH token 只闭包进 server 侧 client；任何响应/静态资源都不得包含它。
-    const client = createPthOperatorClient({ baseUrl: deps.pth.baseUrl, token: deps.pth.token });
+    if (!pthOperatorClient) return null;
+    const client = pthOperatorClient;
     const registry = createOperatorActionRegistry();
     registry.register(createRunTaskPublishAdapter({ client }));
     registry.register(createIntakeSubscriptionCreateAdapter({ client }));
@@ -359,6 +363,34 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
         return;
       }
       sendText(res, 200, assets.get(assetName)!.toString("utf8"), ASSET_MIME[assetName]!);
+      return;
+    }
+
+    // ── /api/debug/*：只读调试页（GET-only；未知路径 404，POST 一律 405/404） ──
+    if (pathname === "/api/debug/workers") {
+      if (method !== "GET") {
+        sendEmpty(res, 405, { allow: "GET" });
+        return;
+      }
+      const sessionToken = parseCookieHeader(req.headers.cookie).get(OPERATOR_COOKIE_NAME);
+      if (!sessionToken || !sessions.authenticate(sessionToken)) {
+        sendJson(res, 401, { error: { code: "UNAUTHORIZED", message: "missing or expired session" } });
+        return;
+      }
+      if (!pthOperatorClient) {
+        sendJson(res, 503, { error: { code: "DEBUG_UNAVAILABLE", message: "pth inspection channel not assembled" } });
+        return;
+      }
+      try {
+        const workers = await pthOperatorClient.listWorkers();
+        sendJson(res, 200, { workers, tenant: operatorTenant, space: operatorSpace });
+      } catch (err) {
+        sendJson(res, 502, { error: { code: "PTH_UNAVAILABLE", message: err instanceof Error ? err.message : String(err) } });
+      }
+      return;
+    }
+    if (pathname.startsWith("/api/debug")) {
+      sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown debug route" } });
       return;
     }
 

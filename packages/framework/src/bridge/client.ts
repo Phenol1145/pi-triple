@@ -204,6 +204,19 @@ export class PthClient {
     return (await res.json()) as ObserveSession;
   }
 
+  /** 观测：Worker 检查列表（N33 Task 6 只读调试页） */
+  async listObserveWorkers(): Promise<unknown[]> {
+    const data = await this.requestJson("/api/v1/observe/workers", {
+      method: "GET",
+      headers: this.headers(),
+    });
+    if (Array.isArray(data)) return data as unknown[];
+    if (typeof data === "object" && data !== null && Array.isArray((data as { items?: unknown }).items)) {
+      return (data as { items: unknown[] }).items as unknown[];
+    }
+    return [];
+  }
+
   /** 观测：trace 时间线（全部 entry） */
   async getObserveTrace(id: string): Promise<ObserveTrace> {
     const res = await this.request(`/api/v1/observe/trace/${encodeURIComponent(id)}`, {

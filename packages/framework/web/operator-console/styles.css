@@ -253,3 +253,17 @@ body {
   color: #c0392b;
   font-size: 0.9rem;
 }
+
+/* ── N33 Task 6：debug 只读页 ── */
+.debug-toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin-bottom: 1rem; }
+.debug-toolbar label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; }
+.debug-freshness { padding: 0.25rem 0.5rem; border-radius: 4px; }
+.debug-freshness.fresh { background: #d9f2d9; }
+.debug-freshness.lagging { background: #fff3cd; }
+.debug-freshness.stale { background: #f8d7da; }
+.debug-freshness.unknown { background: #eee; }
+.debug-worker-list { display: grid; gap: 0.5rem; }
+.debug-worker-card { border: 1px solid var(--border, #ccc); border-radius: 6px; padding: 0.75rem; cursor: pointer; }
+.debug-worker-card.selected { outline: 2px solid #4a7dff; }
+.debug-worker-detail { border-top: 1px dashed var(--border, #ccc); margin-top: 1rem; padding-top: 1rem; }
+.debug-degraded { color: #842029; background: #f8d7da; border-radius: 6px; padding: 0.75rem; margin-top: 1rem; }
