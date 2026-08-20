@@ -31,12 +31,19 @@
 | [最小可信摄入内环 envelope](./pth/n29-minimal-intake-acceptance.json) | 唯一权威 envelope **MIN_INNER_LOOP_GO**（focused 361 零 skip/build/lint/三 typecheck/full 2615+9 冻结 skip 全绿 · 六项 realism gates 全 satisfied）· 绑定 `c6d0156` |
 | [最小可信摄入内环再次验收反馈](./pth/n29-minimal-intake-reacceptance-feedback.md) | 当前 HEAD 独立复核 **NOT ACCEPTED / NO-GO** · 跨租户 outbox · stage CAS / Trust Policy / admission / official 旁路 · 修复顺序与复验条件 |
 | [统一运行观测台设计](./pth/n30-runtime-observatory-design.md) | C 方案 · Job/Task/Intake 甘特图 · CPU/RSS/Heap/Network 同轴折线 · Freshness Contract · O0–O5 分层交付 |
+| [N30 运行观测台验收报告](./pth/n30-runtime-observatory-report.md) | 权威版 **GO** · `c3a2e5a` · focused 104/0 · full 3010/0/9 · 三 realism gates 全 satisfied |
+| [N30 运行观测台 envelope](./pth/n30-runtime-observatory-envelope.json) | 唯一权威 envelope **GO** · reasons=0 · 绑定 `c3a2e5a` |
 | [v1.3 PTL 五页操作台设计](./pth/n33-v13-ptl-operator-console-design.md) | 总览/运行/调试/记忆/配置 · N30 只读观测面 · 三 WorkMode 原生命令 · 浏览器与服务凭据隔离 |
-| [PTL 五页操作台再次验收反馈](./pth/n33-operator-console-reacceptance-feedback.md) | 当前 HEAD 独立复核 **NOT ACCEPTED / NO-GO** · 模块图 401 · 上游错误泄露 · DTO 错位 · Task 幂等旁路 · 修复与复验条件 |
+| [PTL 五页操作台再次验收反馈](./pth/n33-operator-console-reacceptance-feedback.md) | 历史独立复核 **NOT ACCEPTED / NO-GO**（P0/P1 已全部关闭）· 模块图 401 · 上游错误泄露 · DTO 错位 · Task 幂等旁路 · 修复与复验条件 |
+| [N33 五页操作台验收报告](./pth/n33-operator-console-report.md) | 权威版 **GO** · `16475b0` · focused 172/0 · full 3016/0/9 · 4 P0 + 4 P1 全关闭 |
+| [N33 五页操作台 envelope](./pth/n33-operator-console-envelope.json) | 唯一权威 envelope **GO** · reasons=0 · 绑定 `16475b0` |
 | [v1.3 专业计算角色与可执行教程设计](./pth/n32-v13-professional-computing-design.md) | intake/optimize/run · Assembly / Computational Chemistry / Lean 4 / Wolfram · technical-educator · 五类共享记忆 · Jupyter · N30 联动 |
 | [v1.3 专业计算实施计划](./superpowers/plans/2026-08-19-v13-professional-computing.md) | Index Memory → 统一专业适配器 → 四类真实垂直切片 → Notebook → 权威验收 |
 | [N30 运行观测台实施计划](./superpowers/plans/2026-08-19-n30-runtime-observatory.md) | O0–O4 · 只读时间线 · 有界采样 · SSE reconcile · 甘特/折线联动 |
 | [v1.3 PTL 五页操作台实施计划](./superpowers/plans/2026-08-19-v13-ptl-operator-console.md) | 安全本机壳 → N30 总览 → 有界 Worker/Memory/Config/Role 读面 → 三 mode 原生命令 → 浏览器权威门 |
+| [v1.3 专业计算权威验收报告](./pth/v13-professional-computing-report.md) | 权威版 **GO** · `cf8615c` · focused 82/0 · full 3053/0/9 · 12 项 sabotage 全翻转 |
+| [v1.3 专业计算 envelope](./pth/v13-professional-computing-envelope.json) | 唯一权威 envelope **GO** · reasons=0 · 绑定 `cf8615c` · N29/N30/N33 全 GO |
+| [模块化与复用率审计](./pth/modularity-reuse-audit.md) | 483 生产文件/93.8K LOC · 无循环依赖 · 生产重复率 0.01% · 测试重复收敛建议 |
 | [统一 Workflow DAG 薄腰设计](./pth/n31-unified-workflow-dag-design.md) | **2.0 目标架构** · 1.x 只做真实设施验证 · 构造约束锁定不可变/可变边界 · 原生执行器保持分立 |
 | [Role/Memory/Worker 可行性设计](./pth/n28-role-memory-orchestration-design.md) | Role Lineage · WorkerReplica · 重叠记忆责任区 · 分层检索 · 统一认知预算 |
 | [Role/Memory/Worker 实施计划](./pth/n28-role-memory-orchestration-implementation-plan.md) | N27 含 R6 的最终报告校正后执行 · 七个可审查任务 · 12 条 gold query · 1,000 组预算探针 · GO/NO-GO 判定 |

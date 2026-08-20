@@ -15,27 +15,27 @@
 > [N33 PTL 五页操作台](./docs/superpowers/plans/2026-08-19-v13-ptl-operator-console.md)。
 > N31 统一 Workflow DAG 留到 2.0，本版本只验证已有设施的真实可用性。
 
-- [ ] **M0 三种 Work Mode**：新增服务端盖章的 `intake/optimize/run` 与 `WorkEnvelope`；
+- [x] **M0 三种 Work Mode**：新增服务端盖章的 `intake/optimize/run` 与 `WorkEnvelope`；
   普通任务默认 run，IntakeRun 固定 intake，优化任务固定 optimize；委派继承，跨模式只能新建工作项；
   Trigger/lease/outbox/N30 保持正交。
-- [ ] **P0 五类记忆**：`MemoryType` 增加 `index`；建立稳定版本索引、现有记忆集合索引、
+- [x] **P0 五类记忆**：`MemoryType` 增加 `index`；建立稳定版本索引、现有记忆集合索引、
   精确 locator 与受同一授权/预算约束的惰性正文读取。
-- [ ] **P1 共享专业运行契约**：冻结 `ProfessionalRuntimeAdapter`、作业结果、版本锁、
+- [x] **P1 共享专业运行契约**：冻结 `ProfessionalRuntimeAdapter`、作业结果、版本锁、
   resource/artifact/trace 约束；新增五个默认 0 副本 Role Definition。
-- [ ] **P2 Assembly + Lean 4**：真实三 ISA 非平凡例程；真实 Lean 4/Lake/Mathlib 工程，
+- [x] **P2 Assembly + Lean 4**：真实三 ISA 非平凡例程；真实 Lean 4/Lake/Mathlib 工程，
   无 `sorry/admit`、干净构建通过。
-- [ ] **P3 Wolfram + Computational Chemistry**：Wolfram 许可证与假设/数值复核；
+- [x] **P3 Wolfram + Computational Chemistry**：Wolfram 许可证与假设/数值复核；
   Psi4 分子任务；Quantum ESPRESSO 周期 SCF；资源、收敛和版本全部结构化。
-- [ ] **P4 Jupyter 教程**：technical-educator 把四类已验证作业转为 Notebook；
+- [x] **P4 Jupyter 教程**：technical-educator 把四类已验证作业转为 Notebook；
   干净 kernel Run All；相应专业 Role 复核；无隐藏状态/凭据/宿主路径。
-- [ ] **T10 权威门**：`scripts/v13-authority-gates.ts`（12 项 sabotage 单点翻转）+
+- [x] **T10 权威门**：`scripts/v13-authority-gates.ts`（12 项 sabotage 单点翻转）+
   `scripts/eval-v13-professional-computing.ts`（双跑字节一致、精确分母）+
   `scripts/accept-v13.ts`（focused/full/lint/build/N29/N30/N33 绑定）+
   `test/pth-composition/v13-professional-computing.test.ts`（共享记忆/四 Replica/双 handoff）；
   与 P4 lane 合并后进入 P7。
-- [ ] **P5 N30 O0–O4 只读观测面**：完成本机管理员甘特图、CPU/RSS/Heap/Network 折线、
+- [x] **P5 N30 O0–O4 只读观测面**：完成本机管理员甘特图、CPU/RSS/Heap/Network 折线、
   PTH 时间线、WorkMode 筛选、SSE reconcile、freshness 和告警验收；保持独立只读，O5 后置。
-- [ ] **P6 N33 PTL Operator Console**：完成总览/运行/调试/记忆/配置五页；浏览器壳与
+- [x] **P6 N33 PTL Operator Console**：完成总览/运行/调试/记忆/配置五页；浏览器壳与
   Docker/PTH 权限分离；run/intake/optimize 只经登记原生动作；后三页只读；配置 secret 恒定打码；
   不引入统一 Workflow 或 PTH human-interface worker。
 - [ ] **P7 v1.3 权威验收**：真实工具链全部执行，N29 门禁不回退，N30/N33 envelope 均绿，
