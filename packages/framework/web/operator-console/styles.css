@@ -78,3 +78,148 @@ body {
 .placeholder {
   opacity: 0.6;
 }
+
+/* ── N33 Task 5：Work 页面 ── */
+.work-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.work-tab {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 0.4rem;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.work-tab.active {
+  border-color: rgba(128, 128, 128, 0.7);
+  background: rgba(128, 128, 128, 0.2);
+  font-weight: 600;
+}
+
+.work-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+  max-width: 36rem;
+}
+
+.work-action-item {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 0.4rem;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.work-action-item.active {
+  border-color: rgba(128, 128, 128, 0.7);
+  background: rgba(128, 128, 128, 0.18);
+}
+
+.work-form {
+  max-width: 36rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 0.5rem;
+}
+
+.work-form h2, .work-preview-panel h2, .work-status h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.work-desc {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.work-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.work-field input, .work-field textarea {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(128, 128, 128, 0.45);
+  border-radius: 0.35rem;
+  background: transparent;
+}
+
+.work-field-hint {
+  font-size: 0.78rem;
+  opacity: 0.65;
+}
+
+.work-preview-btn, .work-confirm-btn, .work-cancel-btn {
+  align-self: flex-start;
+  padding: 0.45rem 1rem;
+  border: 1px solid rgba(128, 128, 128, 0.5);
+  border-radius: 0.4rem;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.work-confirm-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.work-preview-panel, .work-status {
+  margin-top: 1rem;
+  max-width: 40rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  border-radius: 0.5rem;
+}
+
+.work-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.work-facts dt { font-weight: 600; }
+.work-facts dd { margin: 0; word-break: break-all; }
+
+.work-normalized {
+  margin: 0;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  background: rgba(128, 128, 128, 0.12);
+  border-radius: 0.35rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.work-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.work-error {
+  color: #c0392b;
+  font-size: 0.9rem;
+}

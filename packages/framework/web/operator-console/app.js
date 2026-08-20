@@ -1,8 +1,15 @@
 /**
- * PTL Operator Console — 壳与占位（页面逻辑在后续 Task 实现）。
+ * PTL Operator Console — 壳 + Work 页面（N33 Task 5 Step 6）。
  *
  * 安全约定：只使用 textContent / DOM createElement 渲染任何运行时值；
  * 绝不使用 innerHTML。URL fragment 中的一次性 bootstrap token 在兑换后立即清除。
+ * 浏览器永远拿不到 PTH/N30 token——所有原生调用由服务端代理。
+ *
+ * Work 页契约：
+ *  - 三个 mode tab（run/intake/optimize），表单由服务端字段描述驱动；
+ *  - 预览 → 确认 → 提交 → 原生状态轮询；不创建任何通用 workflow 状态；
+ *  - 高风险动作必须输入动作标签（action 字符串）才能确认；
+ *  - 确认按钮永远不是初始焦点（焦点落在「取消」上）。
  */
 
 const PAGES = ["overview", "work", "debug", "memory", "config"];
@@ -31,6 +38,7 @@ function switchPage(pageId) {
     const nav = document.querySelector(`[data-page="${id}"]`);
     if (nav) nav.classList.toggle("active", id === pageId);
   }
+  if (pageId === "work") void ensureWorkLoaded();
 }
 
 function bindNav() {
@@ -44,6 +52,366 @@ function bindNav() {
     });
   }
 }
+
+/** 带 CSRF 的同源 API 调用；401/403 时把会话状态置为未连接。 */
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers ?? {}) };
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  if (state.csrfToken) headers["X-PTL-CSRF"] = state.csrfToken;
+  const res = await fetch(path, { ...opts, headers });
+  if (res.status === 401 || res.status === 403) setSessionState("未连接");
+  const text = await res.text();
+  let payload = null;
+  try { payload = text ? JSON.parse(text) : null; } catch { payload = { raw: text }; }
+  if (!res.ok) {
+    const err = new Error(payload?.error?.message ?? `HTTP ${res.status}`);
+    err.status = res.status;
+    err.code = payload?.error?.code;
+    throw err;
+  }
+  return payload;
+}
+
+// ─── Work 页面 ───
+
+const work = {
+  loaded: false,
+  actions: [],
+  tenant: null,
+  space: null,
+  selectedAction: null,
+  preview: null,
+  pollTimer: null,
+};
+
+async function ensureWorkLoaded() {
+  if (work.loaded || !state.csrfToken) return;
+  const root = document.getElementById("page-work");
+  if (!root) return;
+  try {
+    const data = await api("/api/work/actions");
+    work.actions = Array.isArray(data.actions) ? data.actions : [];
+    work.tenant = data.tenant ?? null;
+    work.space = data.space ?? null;
+    work.loaded = true;
+    renderWorkPage();
+  } catch (err) {
+    const placeholder = root.querySelector(".placeholder");
+    if (placeholder) placeholder.textContent = `Work 通道不可用：${err.message}`;
+  }
+}
+
+function renderWorkPage() {
+  const root = document.getElementById("page-work");
+  if (!root) return;
+  root.replaceChildren();
+  root.appendChild(createEl("h1", "Work"));
+  root.appendChild(createEl("p", `操作上下文 tenant=${work.tenant} space=${work.space}（服务端盖章，不可在表单中修改）。`));
+
+  const modes = ["run", "intake", "optimize"];
+  const tabs = createEl("div");
+  tabs.className = "work-tabs";
+  const panels = createEl("div");
+  panels.className = "work-panels";
+
+  for (const mode of modes) {
+    const actions = work.actions.filter((a) => a.mode === mode);
+    const tab = createEl("button", `${mode}（${actions.length}）`);
+    tab.type = "button";
+    tab.className = "work-tab";
+    tab.dataset.mode = mode;
+    tab.addEventListener("click", () => {
+      for (const t of tabs.querySelectorAll(".work-tab")) t.classList.toggle("active", t === tab);
+      renderModePanel(panels, mode, actions);
+    });
+    tabs.appendChild(tab);
+  }
+  root.appendChild(tabs);
+  root.appendChild(panels);
+  const first = tabs.querySelector(".work-tab");
+  if (first) first.click();
+}
+
+function renderModePanel(panels, mode, actions) {
+  panels.replaceChildren();
+  if (actions.length === 0) {
+    panels.appendChild(createEl("p", `${mode} 模式没有已登记的原生动作。`));
+    return;
+  }
+  const list = createEl("div");
+  list.className = "work-action-list";
+  for (const action of actions) {
+    const btn = createEl("button", `${action.action} — ${action.descriptor.title}`);
+    btn.type = "button";
+    btn.className = "work-action-item";
+    btn.addEventListener("click", () => {
+      for (const b of list.querySelectorAll(".work-action-item")) b.classList.toggle("active", b === btn);
+      renderActionForm(panels, action);
+    });
+    list.appendChild(btn);
+  }
+  panels.appendChild(list);
+  const formHost = createEl("div");
+  formHost.className = "work-form-host";
+  panels.appendChild(formHost);
+}
+
+function renderActionForm(panels, action) {
+  stopPolling();
+  work.selectedAction = action;
+  work.preview = null;
+  const host = panels.querySelector(".work-form-host");
+  if (!host) return;
+  host.replaceChildren();
+
+  const form = createEl("form");
+  form.className = "work-form";
+  form.noValidate = true;
+  form.appendChild(createEl("h2", action.descriptor.title));
+  if (action.descriptor.description) {
+    const desc = createEl("p", action.descriptor.description);
+    desc.className = "work-desc";
+    form.appendChild(desc);
+  }
+
+  const inputs = new Map();
+  for (const field of action.descriptor.fields ?? []) {
+    const label = createEl("label", `${field.name}${field.required ? " *" : ""}`);
+    label.className = "work-field";
+    let control;
+    if (field.type === "boolean") {
+      control = createEl("input");
+      control.type = "checkbox";
+    } else if (field.type === "number") {
+      control = createEl("input");
+      control.type = "number";
+      control.step = "1";
+    } else if (field.type === "object" || field.type === "array") {
+      control = createEl("textarea");
+      control.rows = 3;
+      control.placeholder = field.type === "array" ? '["a","b"]' : '{"k":"v"}';
+    } else {
+      control = createEl("input");
+      control.type = "text";
+    }
+    control.name = field.name;
+    if (field.description) {
+      const hint = createEl("span", field.description);
+      hint.className = "work-field-hint";
+      label.appendChild(control);
+      label.appendChild(hint);
+    } else {
+      label.appendChild(control);
+    }
+    inputs.set(field.name, { field, control });
+    form.appendChild(label);
+  }
+
+  const previewBtn = createEl("button", "生成预览");
+  previewBtn.type = "submit";
+  previewBtn.className = "work-preview-btn";
+  form.appendChild(previewBtn);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void doPreview(action, inputs, host);
+  });
+  host.appendChild(form);
+}
+
+function collectInput(inputs) {
+  const out = {};
+  for (const [name, { field, control }] of inputs) {
+    const raw = field.type === "boolean" ? control.checked : control.value;
+    if (field.type === "boolean") {
+      if (raw) out[name] = true;
+      continue;
+    }
+    const text = String(raw).trim();
+    if (text === "") continue;
+    if (field.type === "number") {
+      const n = Number(text);
+      if (!Number.isFinite(n)) throw new Error(`字段 ${name} 需要有限数字`);
+      out[name] = n;
+    } else if (field.type === "object" || field.type === "array") {
+      let parsed;
+      try { parsed = JSON.parse(text); } catch { throw new Error(`字段 ${name} 需要合法 JSON`); }
+      out[name] = parsed;
+    } else {
+      out[name] = text;
+    }
+  }
+  return out;
+}
+
+async function doPreview(action, inputs, host) {
+  stopPolling();
+  const old = host.querySelector(".work-preview-panel");
+  if (old) old.remove();
+  let input;
+  try {
+    input = collectInput(inputs);
+  } catch (err) {
+    renderError(host, err.message);
+    return;
+  }
+  try {
+    const data = await api("/api/work/preview", {
+      method: "POST",
+      body: JSON.stringify({ mode: action.mode, action: action.action, input }),
+    });
+    work.preview = data.preview;
+    renderPreviewPanel(host, action, data);
+  } catch (err) {
+    renderError(host, `预览被拒绝：${err.message}`);
+  }
+}
+
+function renderError(host, message) {
+  const box = createEl("p", message);
+  box.className = "work-error";
+  host.appendChild(box);
+}
+
+function renderPreviewPanel(host, action, data) {
+  const preview = data.preview;
+  const panel = createEl("div");
+  panel.className = "work-preview-panel";
+  panel.appendChild(createEl("h2", "确认预览"));
+
+  const facts = createEl("dl");
+  facts.className = "work-facts";
+  const addFact = (k, v) => {
+    facts.appendChild(createEl("dt", k));
+    facts.appendChild(createEl("dd", v));
+  };
+  addFact("tenant / space", `${data.tenant} / ${data.space}`);
+  addFact("原生目标", preview.nativeTarget);
+  addFact("可逆性", preview.impact.reversible ? "可逆" : "不可逆");
+  addFact("风险", preview.impact.risk);
+  addFact("影响面", preview.impact.scope);
+  addFact("过期时间", `${preview.expiresAt}（过期后需重新预览）`);
+  addFact("digest", preview.previewDigest);
+  panel.appendChild(facts);
+
+  const summaryTitle = createEl("h3", "归一化摘要");
+  panel.appendChild(summaryTitle);
+  const summary = createEl("ul");
+  for (const line of preview.summary ?? []) summary.appendChild(createEl("li", line));
+  panel.appendChild(summary);
+
+  const normalized = createEl("pre", JSON.stringify(preview.normalizedInput, null, 2));
+  normalized.className = "work-normalized";
+  panel.appendChild(normalized);
+
+  // ── 确认区：高风险需输入动作标签；确认按钮永远不是初始焦点 ──
+  const confirmBox = createEl("div");
+  confirmBox.className = "work-confirm";
+  const confirmBtn = createEl("button", `确认提交 ${action.action}`);
+  confirmBtn.type = "button";
+  confirmBtn.className = "work-confirm-btn";
+  const cancelBtn = createEl("button", "取消");
+  cancelBtn.type = "button";
+  cancelBtn.className = "work-cancel-btn";
+
+  if (preview.impact.risk === "high") {
+    confirmBtn.disabled = true;
+    const typeLabel = createEl("label", `高风险操作：请输入动作标签 ${action.action} 以启用确认`);
+    typeLabel.className = "work-field";
+    const typeInput = createEl("input");
+    typeInput.type = "text";
+    typeInput.autocomplete = "off";
+    typeInput.addEventListener("input", () => {
+      confirmBtn.disabled = typeInput.value !== action.action;
+    });
+    typeLabel.appendChild(typeInput);
+    confirmBox.appendChild(typeLabel);
+  }
+
+  confirmBtn.addEventListener("click", () => void doSubmit(host, action, preview, panel));
+  cancelBtn.addEventListener("click", () => {
+    panel.remove();
+    work.preview = null;
+  });
+  confirmBox.appendChild(cancelBtn);
+  confirmBox.appendChild(confirmBtn);
+  panel.appendChild(confirmBox);
+  host.appendChild(panel);
+  // 初始焦点落在「取消」——确认按钮不能是默认焦点
+  cancelBtn.focus();
+}
+
+async function doSubmit(host, action, preview, panel) {
+  const idempotencyKey = crypto.randomUUID();
+  try {
+    const data = await api("/api/work/submit", {
+      method: "POST",
+      body: JSON.stringify({
+        previewId: preview.previewId,
+        previewDigest: preview.previewDigest,
+        idempotencyKey,
+      }),
+    });
+    panel.remove();
+    renderNativeStatus(host, action, data.ref);
+  } catch (err) {
+    renderError(panel, `提交失败：${err.message}`);
+  }
+}
+
+function stopPolling() {
+  if (work.pollTimer) {
+    clearInterval(work.pollTimer);
+    work.pollTimer = null;
+  }
+}
+
+function renderNativeStatus(host, action, ref) {
+  stopPolling();
+  const box = createEl("div");
+  box.className = "work-status";
+  box.appendChild(createEl("h2", "原生状态"));
+  const refLine = createEl("p", `${ref.mode}/${ref.kind} ${ref.id}（tenant=${ref.tenantId}，submittedAt=${ref.submittedAt}）`);
+  box.appendChild(refLine);
+  const statusLine = createEl("p", "状态：加载中…");
+  box.appendChild(statusLine);
+
+  const evalBtn = createEl("button", "评估验收");
+  evalBtn.type = "button";
+  const evidenceBox = createEl("pre");
+  evidenceBox.className = "work-normalized";
+  evalBtn.addEventListener("click", async () => {
+    try {
+      const data = await api("/api/work/evaluate", {
+        method: "POST",
+        body: JSON.stringify({ mode: ref.mode, kind: ref.kind, id: ref.id, submittedAt: ref.submittedAt }),
+      });
+      const a = data.acceptance;
+      evidenceBox.textContent = JSON.stringify(
+        { accepted: a.accepted, evidence: a.evidence }, null, 2,
+      );
+    } catch (err) {
+      evidenceBox.textContent = `验收查询失败：${err.message}`;
+    }
+  });
+  box.appendChild(evalBtn);
+  box.appendChild(evidenceBox);
+  host.appendChild(box);
+
+  const poll = async () => {
+    try {
+      const data = await api(
+        `/api/work/native/${encodeURIComponent(ref.kind)}/${encodeURIComponent(ref.id)}?mode=${encodeURIComponent(ref.mode)}`,
+      );
+      statusLine.textContent = `状态：${data.projection.status}（observedAt=${data.projection.observedAt}）`;
+    } catch (err) {
+      statusLine.textContent = `状态查询失败：${err.message}`;
+    }
+  };
+  void poll();
+  work.pollTimer = setInterval(() => void poll(), 2000);
+}
+
+// ─── bootstrap ───
 
 function renderBootstrapError(message) {
   setSessionState("未连接");
