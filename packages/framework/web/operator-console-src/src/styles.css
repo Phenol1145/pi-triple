@@ -1,6 +1,8 @@
 /* PTL Operator Console — v1.4 design tokens (T0 scaffold) */
 
 :root {
+  /* Color tokens below use light-dark(); the data-theme attribute on <html>
+     selects the active scheme (system = follow the OS preference). */
   color-scheme: light dark;
 
   /* Surfaces & text */
@@ -44,6 +46,18 @@
   --topbar-height: 3.25rem;
   --sidebar-width: 13rem;
   --bottom-nav-height: 3.5rem;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="system"] {
+  color-scheme: light dark;
 }
 
 *,
@@ -276,11 +290,229 @@ body {
   gap: var(--space-2);
 }
 
+/* --- Session pill & banners --- */
+
+.session-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.session-pill__countdown {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  min-width: 5ch;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.875rem;
+}
+
+.banner--warn {
+  color: var(--color-warn);
+  border-color: color-mix(in srgb, var(--color-warn) 40%, transparent);
+}
+
+.banner--danger {
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 40%, transparent);
+}
+
+.topbar__theme-toggle,
+.topbar__palette-button {
+  white-space: nowrap;
+}
+
+/* --- Command palette (<dialog>) --- */
+
+.palette {
+  border: none;
+  padding: 0;
+  background: transparent;
+  max-width: min(32rem, calc(100vw - 2 * var(--space-4)));
+  width: 100%;
+}
+
+.palette::backdrop {
+  background: rgb(15 23 42 / 0.45);
+}
+
+.palette__panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.palette__input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.palette__input:focus {
+  outline: none;
+}
+
+.palette__list {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2);
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.palette__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: var(--color-text);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.palette__item.is-active {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.palette__item.is-active .palette__item-hint {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.palette__item-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.palette__empty {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* --- Suspense skeleton --- */
+
+.page-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+.page-skeleton__line,
+.page-skeleton__block {
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 25%,
+    var(--color-surface-raised) 50%,
+    var(--color-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: page-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.page-skeleton__line {
+  height: 0.875rem;
+  width: 60%;
+}
+
+.page-skeleton__line--title {
+  height: 1.5rem;
+  width: 40%;
+}
+
+.page-skeleton__block {
+  height: 10rem;
+  width: 100%;
+}
+
+@keyframes page-skeleton-pulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* --- Error boundary fallback --- */
+
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 40%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.error-boundary__title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.error-boundary__detail {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* --- Empty state --- */
+
+.ui-empty-state {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.ui-empty-state__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.ui-empty-state__description {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+}
+
 /* --- Responsive: sidebar collapses to a bottom nav --- */
 
 @media (max-width: 720px) {
   .topbar {
     padding: 0 var(--space-4);
+  }
+
+  .topbar__palette-button {
+    display: none;
+  }
+
+  .session-pill__countdown {
+    display: none;
   }
 
   .shell__body {

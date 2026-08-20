@@ -57,6 +57,25 @@ export function Card(props: CardProps) {
   );
 }
 
+export interface EmptyStateProps {
+  title: string;
+  description?: string;
+  children?: ComponentChildren;
+}
+
+export function EmptyState(props: EmptyStateProps) {
+  const { title, description, children } = props;
+  return (
+    <div class="ui-empty-state">
+      <p class="ui-empty-state__title">{title}</p>
+      {description ? (
+        <p class="ui-empty-state__description">{description}</p>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
 export interface PageHeaderProps {
   title: string;
   subtitle?: string;

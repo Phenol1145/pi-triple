@@ -1,92 +1,96 @@
-import { useState } from "preact/hooks";
-import { Badge, Button, Card, PageHeader } from "./ui";
+import type { ComponentType } from "preact";
+import { Suspense, lazy } from "preact/compat";
+import { useCallback, useEffect, useState } from "preact/hooks";
+import { refreshSession, sessionStore } from "./session";
+import { useStore } from "./store";
+import { CommandPalette } from "./components/CommandPalette";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { PageSkeleton } from "./components/PageSkeleton";
+import { Sidebar } from "./components/Sidebar";
+import { Topbar } from "./components/Topbar";
+import { Button } from "./ui";
 
 export type PageId = "overview" | "work" | "debug" | "memory" | "config";
 
-interface PageDef {
-  id: PageId;
-  label: string;
-  title: string;
-  description: string;
-}
+const OverviewPage = lazy(() => import("./pages/overview"));
+const WorkPage = lazy(() => import("./pages/work"));
+const DebugPage = lazy(() => import("./pages/debug"));
+const MemoryPage = lazy(() => import("./pages/memory"));
+const ConfigPage = lazy(() => import("./pages/config"));
 
-const PAGES: ReadonlyArray<PageDef> = [
-  {
-    id: "overview",
-    label: "Overview",
-    title: "Overview",
-    description: "Fleet health, recent activity, and operator alerts at a glance.",
-  },
-  {
-    id: "work",
-    label: "Work",
-    title: "Work",
-    description: "Tasks, sessions, and pipelines currently in flight.",
-  },
-  {
-    id: "debug",
-    label: "Debug",
-    title: "Debug",
-    description: "Inspection tools, traces, and diagnostic probes.",
-  },
-  {
-    id: "memory",
-    label: "Memory",
-    title: "Memory",
-    description: "Memory store contents, indexes, and retention state.",
-  },
-  {
-    id: "config",
-    label: "Config",
-    title: "Config",
-    description: "Effective configuration and runtime parameters.",
-  },
-];
+const PAGE_COMPONENTS: Record<PageId, ComponentType> = {
+  overview: OverviewPage,
+  work: WorkPage,
+  debug: DebugPage,
+  memory: MemoryPage,
+  config: ConfigPage,
+};
+
+function SessionBanner() {
+  const session = useStore(sessionStore);
+
+  if (session.state === "expired") {
+    return (
+      <div class="banner banner--warn" role="alert">
+        <span>会话已失效，需要新的一次性链接。请向管理员索取新的访问链接。</span>
+      </div>
+    );
+  }
+  if (session.state === "failed") {
+    return (
+      <div class="banner banner--danger" role="alert">
+        <span>
+          无法连接服务器，控制台处于降级模式。数据可能不是最新。
+        </span>
+        <Button variant="ghost" onClick={() => void refreshSession()}>
+          重试连接
+        </Button>
+      </div>
+    );
+  }
+  return null;
+}
 
 export function App() {
   const [page, setPage] = useState<PageId>("overview");
-  const active = PAGES.find((candidate) => candidate.id === page) ?? PAGES[0];
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
+  const navigate = useCallback((next: PageId) => setPage(next), []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const ActivePage = PAGE_COMPONENTS[page];
 
   return (
     <div class="shell">
-      <header class="topbar">
-        <div class="topbar__brand">
-          <span class="topbar__logo" aria-hidden="true">
-            PTL
-          </span>
-          <span class="topbar__title">Operator Console</span>
-        </div>
-        <div class="topbar__meta">
-          <Badge tone="ok">loopback</Badge>
-          <Badge tone="neutral">v1.4 T0 scaffold</Badge>
-        </div>
-      </header>
+      <Topbar onOpenPalette={openPalette} />
+      <SessionBanner />
       <div class="shell__body">
-        <nav class="sidebar" aria-label="Console pages">
-          {PAGES.map((candidate) => (
-            <Button
-              key={candidate.id}
-              variant={candidate.id === page ? "primary" : "ghost"}
-              active={candidate.id === page}
-              onClick={() => setPage(candidate.id)}
-            >
-              {candidate.label}
-            </Button>
-          ))}
-        </nav>
+        <Sidebar activePage={page} onNavigate={navigate} />
         <main class="content">
-          <section class="page" data-page-root={active.id} key={active.id}>
-            <PageHeader title={active.title} subtitle={active.description} />
-            <Card title={`${active.label} — placeholder`}>
-              <p>
-                This page is a v1.4 T0 scaffold placeholder. Feature content
-                migrates from the legacy console in later tasks; server
-                behavior is unchanged.
-              </p>
-            </Card>
-          </section>
+          <ErrorBoundary region="当前页面">
+            <Suspense fallback={<PageSkeleton />}>
+              <ActivePage key={page} />
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
+      <CommandPalette
+        open={paletteOpen}
+        onClose={closePalette}
+        onNavigate={navigate}
+      />
     </div>
   );
 }
