@@ -62,7 +62,38 @@
       </section>
       <section class="page" id="page-memory" data-page-root="memory" hidden>
         <h1>Memory</h1>
-        <p class="placeholder">Memory 页面将在后续任务实现。</p>
+        <p class="page-note">只读：双饼图（条数 / UTF-8 字节）+ 有界列表 + 惰性详情与最近十条修订。</p>
+        <div class="memory-charts">
+          <div>
+            <h2>Count</h2>
+            <svg id="memory-pie-count" viewBox="0 0 200 200" role="img" aria-label="memory count pie"></svg>
+            <p id="memory-pie-count-table" class="memory-pie-table"></p>
+          </div>
+          <div>
+            <h2>UTF-8 bytes</h2>
+            <svg id="memory-pie-bytes" viewBox="0 0 200 200" role="img" aria-label="memory bytes pie"></svg>
+            <p id="memory-pie-bytes-table" class="memory-pie-table"></p>
+          </div>
+        </div>
+        <div class="memory-toolbar">
+          <label>Type <input id="memory-filter-type" placeholder="wiki/skill/..."></label>
+          <label>Kind <input id="memory-filter-kind"></label>
+          <label>Status <input id="memory-filter-status"></label>
+          <label>Anchor <input id="memory-filter-anchor"></label>
+          <button type="button" id="memory-load-more">下一页</button>
+        </div>
+        <p id="memory-empty" hidden>无匹配记忆。</p>
+        <table class="memory-list" id="memory-list">
+          <thead><tr><th>ID</th><th>Type</th><th>Kind</th><th>Status</th><th>Updated</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="memory-detail" class="memory-detail" hidden></div>
+        <h2>Recent revisions（恰好 10 条）</h2>
+        <table class="memory-revisions" id="memory-revisions">
+          <thead><tr><th>Action</th><th>Revision</th><th>Time</th><th>Type</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="memory-degraded" class="debug-degraded" hidden>PTH 记忆投影不可用——只读页显式降级。</div>
       </section>
       <section class="page" id="page-config" data-page-root="config" hidden>
         <h1>Config</h1>

@@ -366,6 +366,67 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
+    // ── /api/memory/*：只读记忆浏览器（GET-only；limit 101 拒绝；无写路由） ──
+    if (pathname.startsWith("/api/memory")) {
+      if (method !== "GET") {
+        sendEmpty(res, 405, { allow: "GET" });
+        return;
+      }
+      const sessionToken = parseCookieHeader(req.headers.cookie).get(OPERATOR_COOKIE_NAME);
+      if (!sessionToken || !sessions.authenticate(sessionToken)) {
+        sendJson(res, 401, { error: { code: "UNAUTHORIZED", message: "missing or expired session" } });
+        return;
+      }
+      if (!pthOperatorClient) {
+        sendJson(res, 503, { error: { code: "MEMORY_UNAVAILABLE", message: "pth inspection channel not assembled" } });
+        return;
+      }
+      const url = new URL(req.url ?? "/", "http://operator-console.internal");
+      const limitRaw = url.searchParams.get("limit");
+      if (limitRaw !== null) {
+        const limit = Number(limitRaw);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+          sendJson(res, 400, { error: { code: "BAD_REQUEST", message: "limit must be an integer in 1..100" } });
+          return;
+        }
+      }
+      try {
+        if (pathname === "/api/memory/summary") {
+          sendJson(res, 200, await pthOperatorClient.getMemorySummary());
+          return;
+        }
+        if (pathname === "/api/memory/entries") {
+          const query = {
+            type: url.searchParams.get("type") ?? undefined,
+            kind: url.searchParams.get("kind") ?? undefined,
+            status: url.searchParams.get("status") ?? undefined,
+            anchor: url.searchParams.get("anchor") ?? undefined,
+            cursor: url.searchParams.get("cursor") ?? undefined,
+            ...(limitRaw !== null ? { limit: Number(limitRaw) } : {}),
+          };
+          sendJson(res, 200, await pthOperatorClient.listMemoryEntries(query));
+          return;
+        }
+        const entryMatch = /^\/api\/memory\/entries\/([^/]+)$/.exec(pathname);
+        if (entryMatch) {
+          const id = decodeURIComponent(entryMatch[1]!);
+          sendJson(res, 200, await pthOperatorClient.getMemoryEntry(id));
+          return;
+        }
+        const revisionMatch = /^\/api\/memory\/entries\/([^/]+)\/revisions$/.exec(pathname);
+        if (revisionMatch) {
+          const id = decodeURIComponent(revisionMatch[1]!);
+          sendJson(res, 200, await pthOperatorClient.getMemoryRevisions(id));
+          return;
+        }
+        sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown memory route" } });
+        return;
+      } catch (err) {
+        sendJson(res, 502, { error: { code: "PTH_UNAVAILABLE", message: err instanceof Error ? err.message : String(err) } });
+        return;
+      }
+    }
+
     // ── /api/debug/*：只读调试页（GET-only；未知路径 404，POST 一律 405/404） ──
     if (pathname === "/api/debug/workers") {
       if (method !== "GET") {
