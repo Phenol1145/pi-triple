@@ -237,6 +237,16 @@ export class PthClient {
     });
   }
 
+  /** 观测：PTH 配置投影（N33 Task 8 只读配置页） */
+  async observeConfig(): Promise<unknown> {
+    return this.requestJson("/api/v1/observe/config", { method: "GET", headers: this.headers() });
+  }
+
+  /** 观测：PTH 角色目录（N33 Task 8） */
+  async observeRoles(): Promise<unknown> {
+    return this.requestJson("/api/v1/observe/roles", { method: "GET", headers: this.headers() });
+  }
+
   /** 观测：Worker 检查列表（N33 Task 6 只读调试页） */
   async listObserveWorkers(): Promise<unknown[]> {
     const data = await this.requestJson("/api/v1/observe/workers", {

@@ -89,6 +89,8 @@ export interface PthOperatorClient {
   }): Promise<unknown>;
   getMemoryEntry(id: string): Promise<unknown>;
   getMemoryRevisions(id: string): Promise<unknown>;
+  getPthConfig(): Promise<unknown>;
+  getPthRoles(): Promise<unknown>;
 }
 
 function asString(value: unknown): string | undefined {
@@ -242,6 +244,14 @@ export function createPthOperatorClient(deps: {
 
     async getMemoryRevisions(id) {
       return await inner.observeMemoryRevisions(id);
+    },
+
+    async getPthConfig() {
+      return await inner.observeConfig();
+    },
+
+    async getPthRoles() {
+      return await inner.observeRoles();
     },
 
     async applyOptimizerSuggestion(input) {

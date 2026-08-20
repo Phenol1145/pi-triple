@@ -366,6 +366,51 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
+    // ── /api/config|roles：只读配置与角色目录（GET-only；无写路由） ──
+    if (pathname === "/api/config/ptl" || pathname === "/api/config/pth" || pathname === "/api/roles") {
+      if (method !== "GET") {
+        sendEmpty(res, 405, { allow: "GET" });
+        return;
+      }
+      const sessionToken = parseCookieHeader(req.headers.cookie).get(OPERATOR_COOKIE_NAME);
+      if (!sessionToken || !sessions.authenticate(sessionToken)) {
+        sendJson(res, 401, { error: { code: "UNAUTHORIZED", message: "missing or expired session" } });
+        return;
+      }
+      if (pathname === "/api/config/ptl") {
+        // 本机 shell 的 redacted 事实：只暴露 loopback/端口/能力布尔面，绝不含 token/路径/连接串。
+        sendJson(res, 200, {
+          items: [
+            { key: "host", group: "ptl.server", source: "default", value: deps.host },
+            { key: "port", group: "ptl.server", source: "default", value: deps.port },
+            { key: "operatorPrincipalId", group: "ptl.session", source: "default", value: "human-local-operator" },
+            { key: "pthChannel", group: "ptl.channels", source: pthOperatorClient ? "configured" : "unknown", value: pthOperatorClient ? "enabled" : "disabled" },
+            { key: "n30Channel", group: "ptl.channels", source: deps.n30.baseUrl ? "configured" : "unknown", value: deps.n30.baseUrl ? "enabled" : "disabled" },
+            { key: "workChannel", group: "ptl.channels", source: workService ? "configured" : "unknown", value: workService ? "enabled" : "disabled" },
+          ],
+        });
+        return;
+      }
+      if (!pthOperatorClient) {
+        sendJson(res, 503, { error: { code: "CONFIG_UNAVAILABLE", message: "pth inspection channel not assembled" } });
+        return;
+      }
+      try {
+        if (pathname === "/api/config/pth") {
+          sendJson(res, 200, await pthOperatorClient.getPthConfig());
+        } else {
+          sendJson(res, 200, await pthOperatorClient.getPthRoles());
+        }
+      } catch (err) {
+        sendJson(res, 502, { error: { code: "PTH_UNAVAILABLE", message: err instanceof Error ? err.message : String(err) } });
+      }
+      return;
+    }
+    if (pathname.startsWith("/api/config") || pathname.startsWith("/api/roles")) {
+      sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown config/roles route" } });
+      return;
+    }
+
     // ── /api/memory/*：只读记忆浏览器（GET-only；limit 101 拒绝；无写路由） ──
     if (pathname.startsWith("/api/memory")) {
       if (method !== "GET") {

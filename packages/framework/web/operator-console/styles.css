@@ -281,3 +281,9 @@ body {
 .memory-list tbody tr { cursor: pointer; }
 .memory-list tbody tr.selected { background: #eaf1ff; }
 .memory-detail { border-top: 1px dashed var(--border, #ccc); margin-top: 1rem; padding-top: 1rem; }
+
+/* ── N33 Task 8：config 只读页 ── */
+.config-toolbar { display: flex; gap: 0.75rem; align-items: end; margin: 1rem 0; flex-wrap: wrap; }
+.config-table { border-collapse: collapse; width: 100%; }
+.config-table th, .config-table td { border: 1px solid var(--border, #ccc); padding: 0.4rem; text-align: left; font-size: 0.88rem; }
+.config-table td.redacted { font-family: monospace; }

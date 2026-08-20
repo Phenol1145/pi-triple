@@ -22,6 +22,7 @@ const N30_EMBED_URL = "/observe/?embed=1&base=/observe";
 
 import { createDebugViewModel, DEBUG_POLL_MS } from "./debug.js";
 import { createMemoryViewModel } from "./memory.js";
+import { createConfigViewModel } from "./config.js";
 
 const state = {
   csrfToken: null,
@@ -50,6 +51,7 @@ function switchPage(pageId) {
   if (pageId === "work") void ensureWorkLoaded();
   if (pageId === "debug") void ensureDebugLoaded();
   if (pageId === "memory") void ensureMemoryLoaded();
+  if (pageId === "config") void ensureConfigLoaded();
 }
 
 function bindNav() {
@@ -346,6 +348,89 @@ async function ensureMemoryLoaded() {
     /* summary 失败仅标记降级，列表仍独立尝试 */
   }
   await loadMemoryPage(true);
+}
+
+// ── N33 Task 8：config 只读页（PTL/PTH/Roles 三 tab，无表单无保存） ──
+
+let configVm = null;
+
+function renderConfig() {
+  if (!configVm) return;
+  const view = configVm.view();
+  for (const el of document.querySelectorAll("[data-config-panel]")) {
+    el.hidden = el.getAttribute("data-config-panel") !== view.tab;
+  }
+  const renderTable = (selector, rows, columns) => {
+    const tbody = document.querySelector(selector);
+    if (!tbody) return;
+    tbody.replaceChildren();
+    for (const row of rows) {
+      const tr = document.createElement("tr");
+      for (const key of columns) {
+        const td = document.createElement("td");
+        const value = row[key];
+        td.textContent = value === null || value === undefined ? "" : Array.isArray(value) ? value.join(", ") : String(value);
+        if (value === "***") td.className = "redacted";
+        tr.append(td);
+      }
+      tbody.append(tr);
+    }
+  };
+  renderTable("#config-tab-ptl tbody", view.ptlConfig, ["key", "group", "source", "value"]);
+  renderTable("#config-tab-pth tbody", view.pthConfig, ["key", "group", "type", "defaultValue", "effectiveValue", "source", "scope", "restartRequired"]);
+  renderTable("#config-tab-roles tbody", view.roles, ["id", "parent", "revision", "family", "tags", "capabilities", "defaultReplicas", "loadPolicyRef"]);
+  const degraded = document.getElementById("config-degraded");
+  if (degraded) degraded.hidden = !view.degraded;
+}
+
+async function ensureConfigLoaded() {
+  if (!configVm) {
+    configVm = createConfigViewModel();
+    for (const btn of document.querySelectorAll("[data-config-tab]")) {
+      btn.addEventListener("click", () => {
+        configVm.setTab(btn.getAttribute("data-config-tab"));
+        renderConfig();
+      });
+    }
+    const search = document.getElementById("config-search");
+    if (search) {
+      search.addEventListener("input", () => {
+        configVm.setSearch(search.value);
+        renderConfig();
+      });
+    }
+    const roleFilter = document.getElementById("config-role-filter");
+    if (roleFilter) {
+      roleFilter.addEventListener("input", () => {
+        configVm.setRoleFilter(roleFilter.value);
+        renderConfig();
+      });
+    }
+  }
+  let degraded = false;
+  try {
+    const ptlRes = await fetch("/api/config/ptl", { credentials: "same-origin" });
+    if (ptlRes.ok) configVm.ingestPtl((await ptlRes.json()).items ?? []);
+    else degraded = true;
+  } catch {
+    degraded = true;
+  }
+  try {
+    const pthRes = await fetch("/api/config/pth", { credentials: "same-origin" });
+    if (pthRes.ok) configVm.ingestPth((await pthRes.json()).items ?? []);
+    else degraded = true;
+  } catch {
+    degraded = true;
+  }
+  try {
+    const rolesRes = await fetch("/api/roles", { credentials: "same-origin" });
+    if (rolesRes.ok) configVm.ingestRoles((await rolesRes.json()).items ?? await rolesRes.json());
+    else degraded = true;
+  } catch {
+    degraded = true;
+  }
+  configVm.markDegraded(degraded);
+  renderConfig();
 }
 
 async function ensureWorkLoaded() {

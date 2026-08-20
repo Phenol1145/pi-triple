@@ -97,7 +97,33 @@
       </section>
       <section class="page" id="page-config" data-page-root="config" hidden>
         <h1>Config</h1>
-        <p class="placeholder">Config 页面将在后续任务实现。</p>
+        <p class="page-note">只读：PTL/PTH 配置与角色目录；secret 恒定打码，无任何表单输入或保存。</p>
+        <div class="config-toolbar">
+          <label>Search <input id="config-search" placeholder="key/group/source"></label>
+          <button type="button" data-config-tab="ptl">PTL</button>
+          <button type="button" data-config-tab="pth">PTH</button>
+          <button type="button" data-config-tab="roles">Roles</button>
+        </div>
+        <div id="config-tab-ptl" data-config-panel="ptl">
+          <table class="config-table">
+            <thead><tr><th>Key</th><th>Group</th><th>Source</th><th>Value</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="config-tab-pth" data-config-panel="pth" hidden>
+          <table class="config-table">
+            <thead><tr><th>Key</th><th>Group</th><th>Type</th><th>Default</th><th>Effective</th><th>Source</th><th>Scope</th><th>Restart</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="config-tab-roles" data-config-panel="roles" hidden>
+          <label>Role filter <input id="config-role-filter"></label>
+          <table class="config-table">
+            <thead><tr><th>ID</th><th>Parent</th><th>Revision</th><th>Family</th><th>Tags</th><th>Capabilities</th><th>Default replicas</th><th>Load policy</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="config-degraded" class="debug-degraded" hidden>PTH 配置/角色投影不可用——只读页显式降级。</div>
       </section>
     </main>
   </div>
