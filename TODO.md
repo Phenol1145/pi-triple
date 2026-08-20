@@ -28,6 +28,11 @@
   Psi4 分子任务；Quantum ESPRESSO 周期 SCF；资源、收敛和版本全部结构化。
 - [ ] **P4 Jupyter 教程**：technical-educator 把四类已验证作业转为 Notebook；
   干净 kernel Run All；相应专业 Role 复核；无隐藏状态/凭据/宿主路径。
+- [ ] **T10 权威门**：`scripts/v13-authority-gates.ts`（12 项 sabotage 单点翻转）+
+  `scripts/eval-v13-professional-computing.ts`（双跑字节一致、精确分母）+
+  `scripts/accept-v13.ts`（focused/full/lint/build/N29/N30/N33 绑定）+
+  `test/pth-composition/v13-professional-computing.test.ts`（共享记忆/四 Replica/双 handoff）；
+  与 P4 lane 合并后进入 P7。
 - [ ] **P5 N30 O0–O4 只读观测面**：完成本机管理员甘特图、CPU/RSS/Heap/Network 折线、
   PTH 时间线、WorkMode 筛选、SSE reconcile、freshness 和告警验收；保持独立只读，O5 后置。
 - [ ] **P6 N33 PTL Operator Console**：完成总览/运行/调试/记忆/配置五页；浏览器壳与
