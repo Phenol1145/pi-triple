@@ -19,3 +19,7 @@ deploy/generated/
 
 # PTH 性能基准归档（循环①——V8 优化数据积累）
 .perf-bench/
+
+# Playwright 运行产物（截图基线在 e2e/screenshots 内提交）
+packages/framework/playwright-report/
+packages/framework/test-results/

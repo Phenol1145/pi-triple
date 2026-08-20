@@ -24,7 +24,7 @@ interface WorkerRow {
   leaseId: string | null;
   heartbeatAt: string | null;
   regions: Array<{ regionId: string; weights: number | null }>;
-  workingSet: { ids: string[] };
+  workingSet: string[] | { ids: string[] };
   toolNames: string[];
   skillIds: string[];
 }
@@ -158,10 +158,14 @@ export default function DebugPage() {
                   {
                     key: "workingSet",
                     label: "Working Set",
-                    render: (row) =>
-                      row.workingSet.ids.length === 0
+                    render: (row) => {
+                      const ids = Array.isArray(row.workingSet)
+                        ? row.workingSet
+                        : (row.workingSet?.ids ?? []);
+                      return ids.length === 0
                         ? "—"
-                        : row.workingSet.ids.map((id) => <Badge key={id}>{id}</Badge>),
+                        : ids.map((id) => <Badge key={id}>{id}</Badge>);
+                    },
                   },
                 ]}
                 rows={visible as Array<WorkerRow & Record<string, unknown>>}

@@ -12,7 +12,9 @@
   ],
   "scripts": {
     "build:web": "vite build",
-    "typecheck:web": "tsc --noEmit -p web/operator-console-src/tsconfig.json"
+    "typecheck:web": "tsc --noEmit -p web/operator-console-src/tsconfig.json",
+    "test:e2e": "playwright test",
+    "test:e2e:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@away_from/infra": "file:../infra",
