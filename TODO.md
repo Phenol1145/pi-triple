@@ -15,11 +15,15 @@
 - [x] **T9 v1.4 权威验收**：eval/accept、N29/N30/N33 不回退、full 351 文件 3053+9 基线；
 - [x] **T10 发布 v1.4.0**：版本 bump、release.sh、报告/envelope。
 
-## v1.5 候选 / 容器运行时 adapter 协议（待产品形态确认后启动）
+## v1.5 / 产品形态与基础重构（已确认，待实施）
 
-> 状态：已讨论、未实现。协议设计见会话结论，落地前先过产品预期形态。
+> 产品形态基线：[Pi-Triple 产品形态](./product-shape.md)。
+> 下一迭代：基础重构优先；PTH 完整操作台「先搬迁再扩展」；服务端权限模型留白。
 
-- [ ] **R0 产品预期形态确认**：目标用户/观测对象/运行环境/指标口径/告警与页面形态；
+- [x] **R0 产品预期形态确认**：已对齐定位/入口/双引擎/交互策略/部署/迁移路径；
+- [ ] **B1 基础重构**：继续固化协议/边界/文档（API v1、OpenAPI、契约测试）；
+- [ ] **B2 PTH 侧 Web/CLI 边界**：把 PTH 操作 CLI/Web 归属 PTH；PTL 回归环境工具；
+- [ ] **B3 现有 Console 先搬迁再扩展**：代码迁至 PTH 包，保持五页能力不回退；
 - [ ] **R1 ContainerRuntimeAdapter 接口**：`id/probe/version/socket/features` + 三个只读方法；
 - [ ] **R2 运行时选择协议**：显式 env 优先 → socket 白名单自动 probe → 多可用 fail-closed；
 - [ ] **R3 container-runtime-lock.json**：允许 runtime、版本约束、probe 定义；
