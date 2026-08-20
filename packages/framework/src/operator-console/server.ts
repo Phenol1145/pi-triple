@@ -1,12 +1,13 @@
 /**
  * operator-console/server.ts — loopback-only HTTP server（import-safe factory）
  *
- * 路由表显式，无 catch-all proxy。只服务三个已知静态资源文件名；
+ * 路由表显式，无 catch-all proxy。只服务六个冻结的静态资源文件名；
  * 未知 /api/* 一律 JSON 404；未知页面路径仅在认证后 302 到 /#/overview。
  * 不开启 CORS。浏览器侧拿不到 PTH/N30 token 或 Docker socket 路径。
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -32,6 +33,14 @@ import {
 import { createInMemoryChannelAudit, createOperatorChannelAudit } from "./channel-audit.js";
 import { createOperatorActionRegistry } from "./action-registry.js";
 import { createPthOperatorClient, type PthOperatorClient } from "./pth-operator-client.js";
+import {
+  toBrowserDebugWorkers,
+  toBrowserMemoryDetail,
+  toBrowserMemoryPage,
+  toBrowserMemoryRevisions,
+  toBrowserPthConfig,
+  toBrowserRoles,
+} from "./browser-dto.js";
 import { createRunTaskPublishAdapter } from "./actions/run-actions.js";
 import {
   createIntakeRunTriggerAdapter,
@@ -92,6 +101,9 @@ const ASSET_MIME: Record<string, string> = {
   "index.html": "text/html; charset=utf-8",
   "styles.css": "text/css; charset=utf-8",
   "app.js": "text/javascript; charset=utf-8",
+  "debug.js": "text/javascript; charset=utf-8",
+  "memory.js": "text/javascript; charset=utf-8",
+  "config.js": "text/javascript; charset=utf-8",
 };
 const KNOWN_ASSETS = new Set(Object.keys(ASSET_MIME));
 const MAX_JSON_BODY_BYTES = 16 * 1024;
@@ -120,6 +132,20 @@ function sendText(res: ServerResponse, status: number, body: string, contentType
 function sendEmpty(res: ServerResponse, status: number, extraHeaders: Record<string, string> = {}): void {
   res.writeHead(status, { "cache-control": "no-store", ...extraHeaders });
   res.end();
+}
+
+/**
+ * 上游失败只回传稳定 code + 可关联 requestId。上游正文/错误字符串可能含
+ * token、DB URL、内部诊断或专业软件凭据，一律不进浏览器响应。
+ */
+function sendUpstreamFailure(res: ServerResponse, code: string): void {
+  sendJson(res, 502, {
+    error: {
+      code,
+      message: "upstream PTH request failed; the raw response is never forwarded to the browser",
+      requestId: randomUUID(),
+    },
+  });
 }
 
 function parseCookieHeader(header: string | undefined): Map<string, string> {
@@ -230,9 +256,8 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
   }
 
   const server: Server = createServer((req, res) => {
-    void handle(req, res).catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      sendJson(res, 500, { error: { code: "INTERNAL", message } });
+    void handle(req, res).catch(() => {
+      sendJson(res, 500, { error: { code: "INTERNAL", message: "internal operator console error" } });
     });
   });
 
@@ -315,7 +340,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
     return true;
   }
 
-  /** work 通道错误映射：归一化 code → 语义化 HTTP 状态；绝不透传原生错误正文外的信息。 */
+  /** work 通道错误映射：归一化 code → 语义化 HTTP 状态；上游正文绝不透传。 */
   function sendWorkError(res: ServerResponse, err: unknown): void {
     if (err instanceof OperatorWorkError) {
       const status =
@@ -325,15 +350,17 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
               : err.code === "PENDING_LIMIT" ? 429
                 : err.code === "NATIVE_SUBMIT_ERROR" ? 502
                   : 400;
-      sendJson(res, status, { error: { code: err.code, message: err.message } });
+      const message = err.code === "NATIVE_SUBMIT_ERROR"
+        ? "native submit failed; retry with the same idempotency key"
+        : err.message;
+      sendJson(res, status, { error: { code: err.code, message } });
       return;
     }
-    const message = err instanceof Error ? err.message : String(err);
-    if (/unknown operator action/i.test(message)) {
-      sendJson(res, 404, { error: { code: "UNKNOWN_ACTION", message } });
+    if (/unknown operator action/i.test(err instanceof Error ? err.message : String(err))) {
+      sendJson(res, 404, { error: { code: "UNKNOWN_ACTION", message: "unknown operator action" } });
       return;
     }
-    sendJson(res, 400, { error: { code: "WORK_REJECTED", message } });
+    sendJson(res, 400, { error: { code: "WORK_REJECTED", message: "work channel rejected the request" } });
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -397,12 +424,12 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       }
       try {
         if (pathname === "/api/config/pth") {
-          sendJson(res, 200, await pthOperatorClient.getPthConfig());
+          sendJson(res, 200, toBrowserPthConfig(await pthOperatorClient.getPthConfig()));
         } else {
-          sendJson(res, 200, await pthOperatorClient.getPthRoles());
+          sendJson(res, 200, toBrowserRoles(await pthOperatorClient.getPthRoles()));
         }
-      } catch (err) {
-        sendJson(res, 502, { error: { code: "PTH_UNAVAILABLE", message: err instanceof Error ? err.message : String(err) } });
+      } catch {
+        sendUpstreamFailure(res, "PTH_UNAVAILABLE");
       }
       return;
     }
@@ -449,25 +476,25 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
             cursor: url.searchParams.get("cursor") ?? undefined,
             ...(limitRaw !== null ? { limit: Number(limitRaw) } : {}),
           };
-          sendJson(res, 200, await pthOperatorClient.listMemoryEntries(query));
+          sendJson(res, 200, toBrowserMemoryPage(await pthOperatorClient.listMemoryEntries(query)));
           return;
         }
         const entryMatch = /^\/api\/memory\/entries\/([^/]+)$/.exec(pathname);
         if (entryMatch) {
           const id = decodeURIComponent(entryMatch[1]!);
-          sendJson(res, 200, await pthOperatorClient.getMemoryEntry(id));
+          sendJson(res, 200, toBrowserMemoryDetail(await pthOperatorClient.getMemoryEntry(id)));
           return;
         }
         const revisionMatch = /^\/api\/memory\/entries\/([^/]+)\/revisions$/.exec(pathname);
         if (revisionMatch) {
           const id = decodeURIComponent(revisionMatch[1]!);
-          sendJson(res, 200, await pthOperatorClient.getMemoryRevisions(id));
+          sendJson(res, 200, toBrowserMemoryRevisions(await pthOperatorClient.getMemoryRevisions(id)));
           return;
         }
         sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown memory route" } });
         return;
-      } catch (err) {
-        sendJson(res, 502, { error: { code: "PTH_UNAVAILABLE", message: err instanceof Error ? err.message : String(err) } });
+      } catch {
+        sendUpstreamFailure(res, "PTH_UNAVAILABLE");
         return;
       }
     }
@@ -488,10 +515,10 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
         return;
       }
       try {
-        const workers = await pthOperatorClient.listWorkers();
+        const workers = toBrowserDebugWorkers(await pthOperatorClient.listWorkers());
         sendJson(res, 200, { workers, tenant: operatorTenant, space: operatorSpace });
-      } catch (err) {
-        sendJson(res, 502, { error: { code: "PTH_UNAVAILABLE", message: err instanceof Error ? err.message : String(err) } });
+      } catch {
+        sendUpstreamFailure(res, "PTH_UNAVAILABLE");
       }
       return;
     }

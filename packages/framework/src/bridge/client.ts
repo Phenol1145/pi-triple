@@ -416,6 +416,8 @@ export class PthClient {
     createdBy: string;
     tags?: string[];
     payload?: Record<string, unknown>;
+    /** N33 复验收 P0-4：tenant-scoped 原生幂等键，重复发布收敛到首次任务。 */
+    idempotencyKey?: string;
   }): Promise<{ id: string; status: string } & Record<string, unknown>> {
     const res = await this.request("/api/v1/kernel/tasks", {
       method: "POST",

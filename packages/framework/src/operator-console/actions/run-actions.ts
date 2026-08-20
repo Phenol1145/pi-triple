@@ -105,7 +105,7 @@ export function createRunTaskPublishAdapter(
       );
     },
 
-    async submit(preview, context: OperatorContext) {
+    async submit(preview, context: OperatorContext, idempotencyKey?: string) {
       const input = preview.normalizedInput as { title: string; text: string; tags?: string[] };
       // M0 WorkEnvelope：服务端盖章，mode=run 不可原地改变；causation 绑定本次预览。
       const work = {
@@ -120,6 +120,7 @@ export function createRunTaskPublishAdapter(
         title: input.title,
         text: input.text,
         ...(input.tags ? { tags: input.tags } : {}),
+        ...(idempotencyKey ? { idempotencyKey } : {}),
         payload: {
           work,
           operatorPreviewId: preview.previewId,

@@ -105,6 +105,8 @@ export interface OperatorModeAdapter<TInput = unknown> {
   submit(
     preview: OperatorCommandPreview,
     context: OperatorContext,
+    /** N33 复验收 P0-4：由 preview-store 传入的幂等键；原生边界必须复用该键。 */
+    idempotencyKey?: string,
   ): Promise<NativeWorkRef>;
   inspect(
     ref: NativeWorkRef,

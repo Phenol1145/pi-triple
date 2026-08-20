@@ -296,7 +296,9 @@ async function loadMemoryDetail(id) {
     else {
       box.append(createEl("p", `type ${detail?.type ?? "—"} · kind ${detail?.kind ?? "—"} · status ${detail?.status ?? "—"}`));
       const pre = document.createElement("pre");
-      pre.textContent = typeof detail?.content === "string" ? detail.content.slice(0, 4000) : "—";
+      pre.textContent = typeof detail?.content === "string"
+        ? detail.content.slice(0, 4000)
+        : `正文不进入只读 Memory 视图；该条目正文约 ${detail?.contentBytes ?? 0} 字节`;
       box.append(pre);
     }
   }
@@ -424,8 +426,10 @@ async function ensureConfigLoaded() {
   }
   try {
     const rolesRes = await fetch("/api/roles", { credentials: "same-origin" });
-    if (rolesRes.ok) configVm.ingestRoles((await rolesRes.json()).items ?? await rolesRes.json());
-    else degraded = true;
+    if (rolesRes.ok) {
+      const payload = await rolesRes.json();
+      configVm.ingestRoles(Array.isArray(payload) ? payload : payload?.items ?? []);
+    } else degraded = true;
   } catch {
     degraded = true;
   }

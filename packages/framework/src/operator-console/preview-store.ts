@@ -331,7 +331,7 @@ export function createOperatorWorkService(deps: OperatorWorkServiceDeps): Operat
 
   async function callNativeSubmit(record: PreviewRecord, ledger: IdempotencyRecord, context: OperatorContext): Promise<NativeWorkRef> {
     try {
-      const ref = await record.adapter.submit(record.preview, context);
+      const ref = await record.adapter.submit(record.preview, context, ledger.key);
       await underMutex(() => {
         record.status = "consumed";
         record.ref = ref;

@@ -62,6 +62,7 @@ export interface PthOperatorClient {
     text: string;
     tags?: readonly string[];
     payload?: Readonly<Record<string, unknown>>;
+    idempotencyKey?: string;
   }): Promise<PthTaskPublishResult>;
   getTask(id: string): Promise<PthTaskView | null>;
   createIntakeSubscription(input: {
@@ -128,6 +129,7 @@ export function createPthOperatorClient(deps: {
         createdBy: "ptl-operator-console",
         ...(input.tags ? { tags: [...input.tags] } : {}),
         ...(input.payload ? { payload: input.payload } : {}),
+        ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
       });
       return { id: requireString(raw.id, "task id"), status: requireString(raw.status, "task status") };
     },
