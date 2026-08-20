@@ -38,7 +38,7 @@
 - [x] **P6 N33 PTL Operator Console**：完成总览/运行/调试/记忆/配置五页；浏览器壳与
   Docker/PTH 权限分离；run/intake/optimize 只经登记原生动作；后三页只读；配置 secret 恒定打码；
   不引入统一 Workflow 或 PTH human-interface worker。
-- [ ] **P7 v1.3 权威验收**：真实工具链全部执行，N29 门禁不回退，N30/N33 envelope 均绿，
+- [x] **P7 v1.3 权威验收**：真实工具链全部执行，N29 门禁不回退，N30/N33 envelope 均绿，
   浏览器安全/时效/可访问性验收通过，全量/lint/build 绿，
   skip manifest 无新增，acceptance envelope 绑定 clean commit。
 
