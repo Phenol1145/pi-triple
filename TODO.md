@@ -6,7 +6,7 @@
 
 > 计划：[v1.4 PTL Operator Console UX](./docs/superpowers/plans/2026-08-21-v14-operator-console-ux.md)。
 
-- [ ] **T0 构建链路 + 设计 token**：Preact/Vite/Playwright devDeps；dist 静态产物 + asset-manifest；
+- [x] **T0 构建链路 + 设计 token**：Preact/Vite/Playwright devDeps；dist 静态产物 + asset-manifest；
 - [ ] **T1 应用壳**：topbar/sidebar/响应式导航/命令面板/错误边界/断连横幅；
 - [ ] **T2 组件原语**：Button/Card/Table/Dialog/Toast/Skeleton/Empty/Error/Pagination；
 - [ ] **T3–T6 五页重构**：Overview/Work/Debug/Memory/Config；
