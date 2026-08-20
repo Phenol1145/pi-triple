@@ -32,6 +32,7 @@
 | [最小可信摄入内环再次验收反馈](./pth/n29-minimal-intake-reacceptance-feedback.md) | 当前 HEAD 独立复核 **NOT ACCEPTED / NO-GO** · 跨租户 outbox · stage CAS / Trust Policy / admission / official 旁路 · 修复顺序与复验条件 |
 | [统一运行观测台设计](./pth/n30-runtime-observatory-design.md) | C 方案 · Job/Task/Intake 甘特图 · CPU/RSS/Heap/Network 同轴折线 · Freshness Contract · O0–O5 分层交付 |
 | [v1.3 PTL 五页操作台设计](./pth/n33-v13-ptl-operator-console-design.md) | 总览/运行/调试/记忆/配置 · N30 只读观测面 · 三 WorkMode 原生命令 · 浏览器与服务凭据隔离 |
+| [PTL 五页操作台再次验收反馈](./pth/n33-operator-console-reacceptance-feedback.md) | 当前 HEAD 独立复核 **NOT ACCEPTED / NO-GO** · 模块图 401 · 上游错误泄露 · DTO 错位 · Task 幂等旁路 · 修复与复验条件 |
 | [v1.3 专业计算角色与可执行教程设计](./pth/n32-v13-professional-computing-design.md) | intake/optimize/run · Assembly / Computational Chemistry / Lean 4 / Wolfram · technical-educator · 五类共享记忆 · Jupyter · N30 联动 |
 | [v1.3 专业计算实施计划](./superpowers/plans/2026-08-19-v13-professional-computing.md) | Index Memory → 统一专业适配器 → 四类真实垂直切片 → Notebook → 权威验收 |
 | [N30 运行观测台实施计划](./superpowers/plans/2026-08-19-n30-runtime-observatory.md) | O0–O4 · 只读时间线 · 有界采样 · SSE reconcile · 甘特/折线联动 |
