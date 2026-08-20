@@ -48,7 +48,7 @@ export default function DebugPage() {
   const load = useCallback(async () => {
     setLoadState("loading");
     try {
-      const payload = await apiFetch<{ workers: WorkerRow[] }>("/api/debug/workers");
+      const payload = await apiFetch<{ workers: WorkerRow[] }>("/api/v1/debug/workers");
       setWorkers(payload.workers ?? []);
       setLoadState("ready");
     } catch (error) {

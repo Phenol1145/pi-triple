@@ -90,7 +90,7 @@ export default function WorkPage() {
   const loadActions = useCallback(async () => {
     setLoadState("loading");
     try {
-      const payload = await apiFetch<{ actions: ActionListing[] }>("/api/work/actions");
+      const payload = await apiFetch<{ actions: ActionListing[] }>("/api/v1/work/actions");
       setActions(payload.actions ?? []);
       setLoadState("ready");
     } catch (error) {
@@ -139,7 +139,7 @@ export default function WorkPage() {
     if (!selected) return;
     setPreviewing(true);
     try {
-      const response = await apiFetch<PreviewResponse>("/api/work/preview", {
+      const response = await apiFetch<PreviewResponse>("/api/v1/work/preview", {
         method: "POST",
         body: { mode, action: selected.action, input: normalizedInput() },
       });
@@ -158,7 +158,7 @@ export default function WorkPage() {
     setSubmitting(true);
     try {
       const response = await apiFetch<{ ref: { mode: WorkMode; kind: string; id: string; submittedAt: string } }>(
-        "/api/work/submit",
+        "/api/v1/work/submit",
         {
           method: "POST",
           body: {
@@ -183,7 +183,7 @@ export default function WorkPage() {
     if (!ref) return;
     setEvaluating(true);
     try {
-      const response = await apiFetch<AcceptanceResponse>("/api/work/evaluate", {
+      const response = await apiFetch<AcceptanceResponse>("/api/v1/work/evaluate", {
         method: "POST",
         body: {
           mode: ref.mode,

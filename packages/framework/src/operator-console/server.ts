@@ -274,6 +274,19 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
     }
     const method = req.method ?? "GET";
 
+    // 协议 v1：旧版未版本化路径（/api/…）过渡重写到 /api/v1/…；规范客户端直接使用 /api/v1。
+    if (pathname.startsWith("/api/") && !pathname.startsWith("/api/v1/")) {
+      pathname = `/api/v1${pathname.slice("/api".length)}`;
+    }
+    if (pathname === "/api/v1/version") {
+      if (method !== "GET" && method !== "HEAD") {
+        sendEmpty(res, 405, { allow: "GET, HEAD" });
+        return;
+      }
+      sendJson(res, 200, { api: "v1", service: "ptl-operator-console", version: "1.4.0" });
+      return;
+    }
+
     // ── 静态资源（只服务已知文件名，fixed MIME，同源无 CORS） ──
     const assetName = pathname === "/" ? "index.html" : pathname.slice(1);
     const asset = assets.get(assetName);
@@ -335,7 +348,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
     }
 
     // ── API（显式路由；未知 /api/* 一律 JSON 404） ──
-    if (pathname === "/api/session/bootstrap") {
+    if (pathname === "/api/v1/session/bootstrap") {
       if (method !== "POST") {
         sendEmpty(res, 405, { allow: "POST" });
         return;
@@ -371,7 +384,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
-    if (pathname === "/api/session") {
+    if (pathname === "/api/v1/session") {
       if (method !== "GET" && method !== "HEAD") {
         sendEmpty(res, 405, { allow: "GET, HEAD" });
         return;
@@ -396,7 +409,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
 
     // ── N33 Task 5：work 页一次性预览/确认/提交/原生状态路由 ──
     // 全部是显式路由；未登记动作在 registry.get 处 404；未装配 work service → 503。
-    if (pathname === "/api/work/actions") {
+    if (pathname === "/api/v1/work/actions") {
       if (method !== "GET" && method !== "HEAD") {
         sendEmpty(res, 405, { allow: "GET, HEAD" });
         return;
@@ -414,7 +427,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
-    if (pathname === "/api/work/preview") {
+    if (pathname === "/api/v1/work/preview") {
       if (method !== "POST") {
         sendEmpty(res, 405, { allow: "POST" });
         return;
@@ -445,7 +458,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
-    if (pathname === "/api/work/submit") {
+    if (pathname === "/api/v1/work/submit") {
       if (method !== "POST") {
         sendEmpty(res, 405, { allow: "POST" });
         return;
@@ -471,7 +484,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
-    if (pathname === "/api/work/evaluate") {
+    if (pathname === "/api/v1/work/evaluate") {
       if (method !== "POST") {
         sendEmpty(res, 405, { allow: "POST" });
         return;
@@ -509,7 +522,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
-    if (pathname.startsWith("/api/work/native/")) {
+    if (pathname.startsWith("/api/v1/work/native/")) {
       if (method !== "GET" && method !== "HEAD") {
         sendEmpty(res, 405, { allow: "GET, HEAD" });
         return;
@@ -519,7 +532,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
         sendJson(res, 503, { error: { code: "WORK_UNAVAILABLE", message: "work channel not assembled" } });
         return;
       }
-      const parts = pathname.slice("/api/work/native/".length).split("/").filter((s) => s !== "");
+      const parts = pathname.slice("/api/v1/work/native/".length).split("/").filter((s) => s !== "");
       if (parts.length !== 2) {
         sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown native ref path" } });
         return;
@@ -550,7 +563,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
-    if (pathname === "/api/session/logout") {      if (method !== "POST") {
+    if (pathname === "/api/v1/session/logout") {      if (method !== "POST") {
         sendEmpty(res, 405, { allow: "POST" });
         return;
       }
@@ -562,7 +575,7 @@ export function createOperatorConsoleServer(deps: OperatorConsoleServerDeps): Op
       return;
     }
 
-    if (pathname.startsWith("/api/")) {
+    if (pathname.startsWith("/api/v1/")) {
       sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown api route" } });
       return;
     }

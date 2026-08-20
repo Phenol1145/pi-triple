@@ -57,13 +57,13 @@ export async function handleInspectionRoutes(
   deps: InspectionRouteDeps,
 ): Promise<boolean> {
   // ── /api/config|roles：只读配置与角色目录（GET-only；无写路由） ──
-  if (pathname === "/api/config/ptl" || pathname === "/api/config/pth" || pathname === "/api/roles") {
+  if (pathname === "/api/v1/config/ptl" || pathname === "/api/v1/config/pth" || pathname === "/api/v1/roles") {
     if (method !== "GET") {
       sendEmpty(res, 405, { allow: "GET" });
       return true;
     }
     if (!requireInspectionSession(req, res, deps)) return true;
-    if (pathname === "/api/config/ptl") {
+    if (pathname === "/api/v1/config/ptl") {
       // 本机 shell 的 redacted 事实：只暴露 loopback/端口/能力布尔面与枚举 descriptor，
       // 绝不含 token/路径/连接串。tenant/space 只来自服务端配置，浏览器无法自报覆盖。
       const ptlDescriptor = (key: string, group: string, source: string, value: unknown, restartRequired = false) => ({
@@ -93,7 +93,7 @@ export async function handleInspectionRoutes(
       return true;
     }
     try {
-      if (pathname === "/api/config/pth") {
+      if (pathname === "/api/v1/config/pth") {
         sendJson(res, 200, toBrowserPthConfig(await deps.pthOperatorClient.getPthConfig()));
       } else {
         sendJson(res, 200, toBrowserRoles(await deps.pthOperatorClient.getPthRoles()));
@@ -103,13 +103,13 @@ export async function handleInspectionRoutes(
     }
     return true;
   }
-  if (pathname.startsWith("/api/config") || pathname.startsWith("/api/roles")) {
+  if (pathname.startsWith("/api/v1/config") || pathname.startsWith("/api/v1/roles")) {
     sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown config/roles route" } });
     return true;
   }
 
   // ── /api/memory/*：只读记忆浏览器（GET-only；limit 101 拒绝；无写路由） ──
-  if (pathname.startsWith("/api/memory")) {
+  if (pathname.startsWith("/api/v1/memory")) {
     if (method !== "GET") {
       sendEmpty(res, 405, { allow: "GET" });
       return true;
@@ -129,11 +129,11 @@ export async function handleInspectionRoutes(
       }
     }
     try {
-      if (pathname === "/api/memory/summary") {
+      if (pathname === "/api/v1/memory/summary") {
         sendJson(res, 200, await deps.pthOperatorClient.getMemorySummary());
         return true;
       }
-      if (pathname === "/api/memory/entries") {
+      if (pathname === "/api/v1/memory/entries") {
         const query = {
           type: url.searchParams.get("type") ?? undefined,
           kind: url.searchParams.get("kind") ?? undefined,
@@ -145,13 +145,13 @@ export async function handleInspectionRoutes(
         sendJson(res, 200, toBrowserMemoryPage(await deps.pthOperatorClient.listMemoryEntries(query)));
         return true;
       }
-      const entryMatch = /^\/api\/memory\/entries\/([^/]+)$/.exec(pathname);
+      const entryMatch = /^\/api\/v1\/memory\/entries\/([^/]+)$/.exec(pathname);
       if (entryMatch) {
         const id = decodeURIComponent(entryMatch[1]!);
         sendJson(res, 200, toBrowserMemoryDetail(await deps.pthOperatorClient.getMemoryEntry(id)));
         return true;
       }
-      const revisionMatch = /^\/api\/memory\/entries\/([^/]+)\/revisions$/.exec(pathname);
+      const revisionMatch = /^\/api\/v1\/memory\/entries\/([^/]+)\/revisions$/.exec(pathname);
       if (revisionMatch) {
         const id = decodeURIComponent(revisionMatch[1]!);
         sendJson(res, 200, toBrowserMemoryRevisions(await deps.pthOperatorClient.getMemoryRevisions(id)));
@@ -166,7 +166,7 @@ export async function handleInspectionRoutes(
   }
 
   // ── /api/debug/*：只读调试页（GET-only；未知路径 404，POST 一律 405/404） ──
-  if (pathname === "/api/debug/workers") {
+  if (pathname === "/api/v1/debug/workers") {
     if (method !== "GET") {
       sendEmpty(res, 405, { allow: "GET" });
       return true;
@@ -184,7 +184,7 @@ export async function handleInspectionRoutes(
     }
     return true;
   }
-  if (pathname.startsWith("/api/debug")) {
+  if (pathname.startsWith("/api/v1/debug")) {
     sendJson(res, 404, { error: { code: "NOT_FOUND", message: "unknown debug route" } });
     return true;
   }

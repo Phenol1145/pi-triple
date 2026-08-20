@@ -15,7 +15,7 @@ test.describe("Operator Console v1.4", () => {
     sharedPage.on("console", (message) => {
       if (message.type() === "error") console.log(`[console.error] ${message.text()}`);
     });
-    await sharedPage.goto(`http://127.0.0.1:3194/#${TOKEN}`);
+    await sharedPage.goto(`http://127.0.0.1:3197/#${TOKEN}`);
     await expect(sharedPage.locator("[data-page-root]").first()).toBeVisible();
     await expect(sharedPage.getByText("playwright-operator").first()).toBeVisible({ timeout: 10_000 });
   });

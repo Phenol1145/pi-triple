@@ -64,9 +64,9 @@ export default function ConfigPage() {
     setLoadState("loading");
     try {
       const [ptlPayload, pthPayload, rolesPayload] = await Promise.all([
-        apiFetch<{ items: ConfigEntry[] }>("/api/config/ptl"),
-        apiFetch<{ items: ConfigEntry[] }>("/api/config/pth"),
-        apiFetch<{ items: RoleEntry[] }>("/api/roles"),
+        apiFetch<{ items: ConfigEntry[] }>("/api/v1/config/ptl"),
+        apiFetch<{ items: ConfigEntry[] }>("/api/v1/config/pth"),
+        apiFetch<{ items: RoleEntry[] }>("/api/v1/roles"),
       ]);
       setPtl(ptlPayload.items ?? []);
       setPth(pthPayload.items ?? []);

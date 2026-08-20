@@ -71,7 +71,7 @@ function applyReady(payload: SessionPayload): void {
 export async function bootstrapSession(): Promise<void> {
   const token = extractFragmentToken();
   if (token) {
-    const exchange = fetch("/api/session/bootstrap", {
+    const exchange = fetch("/api/v1/session/bootstrap", {
       method: "POST",
       credentials: "same-origin",
       headers: { "content-type": "application/json" },
@@ -106,14 +106,14 @@ export async function bootstrapSession(): Promise<void> {
 }
 
 /**
- * Re-check the cookie session via GET /api/session.
+ * Re-check the cookie session via GET /api/v1/session.
  * 200 -> ready, 401 -> expired (operator needs a fresh one-time link),
  * network failure -> failed/degraded.
  */
 export async function refreshSession(): Promise<void> {
   let response: Response;
   try {
-    response = await fetch("/api/session", { credentials: "same-origin" });
+    response = await fetch("/api/v1/session", { credentials: "same-origin" });
   } catch {
     sessionStore.update({ state: "failed", failureKind: "network" });
     return;

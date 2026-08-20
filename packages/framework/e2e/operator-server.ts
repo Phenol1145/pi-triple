@@ -8,9 +8,9 @@ import { createOperatorConsoleServer } from "../dist/operator-console/index.js";
 
 const TOKEN = "e".repeat(64);
 const PTH_TOKEN = "playwright-fake-pth-token";
-const PORT = 3194;
-const PTH_PORT = 3195;
-const N30_PORT = 3196;
+const PORT = 3197;
+const PTH_PORT = 3198;
+const N30_PORT = 3199;
 
 function send(res: http.ServerResponse, status: number, body: unknown): void {
   const text = JSON.stringify(body);

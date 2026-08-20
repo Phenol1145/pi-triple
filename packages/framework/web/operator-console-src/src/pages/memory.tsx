@@ -60,9 +60,9 @@ export default function MemoryPage() {
     setLoadState("loading");
     try {
       const [nextSummary, page] = await Promise.all([
-        apiFetch<MemorySummary>("/api/memory/summary"),
+        apiFetch<MemorySummary>("/api/v1/memory/summary"),
         apiFetch<MemoryPageResponse>(
-          `/api/memory/entries?limit=20${typeFilter ? `&type=${encodeURIComponent(typeFilter)}` : ""}`,
+          `/api/v1/memory/entries?limit=20${typeFilter ? `&type=${encodeURIComponent(typeFilter)}` : ""}`,
         ),
       ]);
       setSummary(nextSummary);
@@ -84,7 +84,7 @@ export default function MemoryPage() {
     setLoadingMore(true);
     try {
       const page = await apiFetch<MemoryPageResponse>(
-        `/api/memory/entries?limit=20&cursor=${encodeURIComponent(cursor)}${typeFilter ? `&type=${encodeURIComponent(typeFilter)}` : ""}`,
+        `/api/v1/memory/entries?limit=20&cursor=${encodeURIComponent(cursor)}${typeFilter ? `&type=${encodeURIComponent(typeFilter)}` : ""}`,
       );
       setItems((prev) => [...prev, ...(page.items ?? [])]);
       setCursor(page.cursor);
@@ -101,7 +101,7 @@ export default function MemoryPage() {
     setDetailLoading(true);
     try {
       const rows = await apiFetch<RevisionRow[]>(
-        `/api/memory/entries/${encodeURIComponent(item.id)}/revisions`,
+        `/api/v1/memory/entries/${encodeURIComponent(item.id)}/revisions`,
       );
       setRevisions(rows ?? []);
     } catch {
