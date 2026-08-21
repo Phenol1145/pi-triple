@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T11:24:29.390Z",
+  "generatedAt": "2026-08-21T11:36:00.967Z",
   "decisions": {
     "topology": [
       "pi-triple-deps",
@@ -82,6 +82,8 @@
         "test/pth-runner",
         "test/pth-tasking",
         "test/browser",
+        "test/helpers.ts",
+        "test/setup.ts",
         "test/unit/agent-engine-recover.test.ts",
         "test/unit/agent-engine-session-persist.test.ts",
         "test/unit/async-iterable-bridge.test.ts",
@@ -128,6 +130,8 @@
         "test/unit/tool-platform.test.ts",
         "docs/pth",
         "scripts/pth-cli.ts",
+        "scripts/check-pth-boundaries.ts",
+        "scripts/check-pth-config.ts",
         "scripts/accept-n28-feasibility.ts",
         "scripts/accept-n29-minimal-intake.ts",
         "scripts/accept-n30-runtime-observatory.ts",
