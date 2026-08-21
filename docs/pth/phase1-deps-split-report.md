@@ -7,7 +7,7 @@
 
 - 本地仓库：`/Users/anzhize/pi-triple-deps`（git filter-repo 2.47.0 按路径历史拆分）
 - 拆分历史：主仓 1,468 个 commit 按 `packages/shared` / `packages/infra` 过滤保留
-- deps 仓当前 HEAD：`358bcc0`（root scaffold + 版本 bump + shared 模板自包含/tmux 子路径导出）
+- deps 仓当前 HEAD：`179c5ab`（root scaffold + shared 模板自包含/tmux 子路径导出 + Phase 4 README/CI）
 
 ## 2. 仓库形态
 
@@ -39,7 +39,7 @@ pi-triple-deps
 
 ## 4. 发布状态
 
-GitHub ✅ 已推送：https://github.com/Phenol1145/pi-triple-deps（origin/main = `358bcc0`）
+GitHub ✅ 已推送：https://github.com/Phenol1145/pi-triple-deps（origin/main = `179c5ab`）
 
 npm ⏳ 待用户执行（需先在 npm 设置生成 Granular Access Token；当前 Web 登录 token 直接发布会被 npm 403 拒绝）：
 

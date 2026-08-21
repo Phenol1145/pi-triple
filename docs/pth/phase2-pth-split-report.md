@@ -7,7 +7,7 @@
 
 - 本地仓库：`/Users/anzhize/pi-triple-pth`（git filter-repo 2.47.0 按路径历史拆分）
 - 拆分历史：主仓 801 个 commit 按 PTH 路径过滤保留
-- PTH 仓 HEAD：`5e12d9c`（Phase 2 根脚手架 + 测试归属补全 + shared integrity 同步）
+- PTH 仓 HEAD：`bfd740e`（Phase 2 根脚手架 + 测试归属补全 + Phase 4 README/文档收尾）
 
 ## 2. 仓库形态
 
@@ -59,7 +59,7 @@ pi-triple-pth
 
 ## 5. 发布状态
 
-GitHub ✅ 已推送：https://github.com/Phenol1145/pi-triple-pth（origin/main = `5e12d9c`）
+GitHub ✅ 已推送：https://github.com/Phenol1145/pi-triple-pth（origin/main = `bfd740e`）
 
 npm 依赖先决条件：`@away_from/shared@1.5.0` 与 `@away_from/infra@1.5.0` 真实 npm publish 后，
 PTH 仓可执行最终复验（当前已用本地 registry 按同一 tarball 验证过）：

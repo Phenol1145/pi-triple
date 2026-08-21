@@ -7,7 +7,7 @@
 
 - 本地仓库：`/Users/anzhize/pi-triple-ptl`（git filter-repo 2.47.0，两轮过滤）
 - 拆分历史：主仓 210 个 commit（先按 PTL 路径保留，再 `--invert-paths` 剔除 PTH/deps 测试）
-- PTL 仓 HEAD：`2dd04da`（Phase 3 根脚手架 + 安装体验修正，已 squash 为单 commit）
+- PTL 仓 HEAD：`8fb5ed8`（Phase 3 根脚手架 + Phase 4 README/文档收尾）
 - GitHub：https://github.com/Phenol1145/pi-triple-ptl（PUBLIC，已推送）
 
 ## 2. 仓库形态
@@ -61,7 +61,7 @@ pi-triple-ptl
 
 ## 5. 发布状态
 
-GitHub ✅ 已推送（origin/main = `2dd04da`）。
+GitHub ✅ 已推送（origin/main = `8fb5ed8`）。
 
 npm 依赖先决条件（待用户执行，deps 仓 `358bcc0` 已就绪）：
 
