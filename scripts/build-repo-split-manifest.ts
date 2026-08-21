@@ -110,6 +110,7 @@ const PTH: RepoSplitRepo = {
     "extensions/pth-tasks",
     "toolstore",
     "deploy/Dockerfile",
+    "deploy/Dockerfile.dev",
     "deploy/docker-compose.yaml",
     "deploy/docker-compose.dev.yaml",
     "deploy/docker-monitor",

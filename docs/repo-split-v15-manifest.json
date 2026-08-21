@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T11:36:00.967Z",
+  "generatedAt": "2026-08-21T11:46:20.155Z",
   "decisions": {
     "topology": [
       "pi-triple-deps",
@@ -54,6 +54,7 @@
         "extensions/pth-tasks",
         "toolstore",
         "deploy/Dockerfile",
+        "deploy/Dockerfile.dev",
         "deploy/docker-compose.yaml",
         "deploy/docker-compose.dev.yaml",
         "deploy/docker-monitor",
