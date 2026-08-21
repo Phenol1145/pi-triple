@@ -31,6 +31,7 @@
 - [x] **D1 项目整理第一阶段**：docs 分类清单 + `deps/host/container/config + dual` 代码运行时规划（先清单后搬迁，暂不物理移动）；链接校验入 lint；`4501618`；
 - [x] **S2 Phase 0 交互收敛**：原 ptl hub 的 PTH 命令全部迁入 pth CLI（program/request/respond/observe/debug/bench/job/console/lineage/trigger/kernel）；ptl hub 退役，ptl stack/program dev 落位；framework 不再依赖 pth-console；`a3c3c28`；
 - [x] **S3 Phase 1 deps 拆仓（本地）**：filter-repo 拆出 `pi-triple-deps`；shared/infra@1.5.0；72 tests 全绿；本地 pack + sha256；发布命令见 `docs/pth/phase1-deps-split-report.md`；`ec9771d`；
+- [x] **S3 Phase 2 pth 拆仓（本地）**：filter-repo 拆出 `pi-triple-pth`（HEAD `89c0346`）；依赖切 npm `@away_from/{shared,infra}@^1.5.0`；根 bin 编译化；PTH-only Dockerfile/compose；lint/build 全绿、full 276 files/2525 tests/0 fail/9 skip、Playwright 4/4、`pth up` 全栈+任务回归通过；报告 `docs/pth/phase2-pth-split-report.md`；
 - [x] **S1 PTL/PTH 三仓拆分设计**：ptl/pth/deps + archive；`ptl hub` 退役、PTH 交互面收敛 pth-console；filter-repo 路径清单与命令迁移映射（未执行拆仓）；`c361c79`；
 - [ ] **R4 Docker/OrbStack adapter 归一化**：当前 docker-api.js 改造为契约实现；
 - [ ] **R5 Podman adapter 验证抽象**：作为第二实现跑同一 contract 测试；

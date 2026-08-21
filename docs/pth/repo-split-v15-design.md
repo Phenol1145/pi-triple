@@ -1,7 +1,7 @@
 # PTL/PTH 仓库拆分设计（v1.5）
 
-> 状态：设计已批准；**Phase 0（交互收敛）与 Phase 1（pi-triple-deps 本地拆仓+pack）已完成**；Phase 2–4 待执行。
-> Phase 1 报告：[phase1-deps-split-report.md](./phase1-deps-split-report.md)。
+> 状态：设计已批准；**Phase 0（交互收敛）· Phase 1（pi-triple-deps 本地拆仓+pack）· Phase 2（pi-triple-pth 本地拆仓）已完成**；Phase 3–4 待执行。
+> Phase 1 报告：[phase1-deps-split-report.md](./phase1-deps-split-report.md) · Phase 2 报告：[phase2-pth-split-report.md](./phase2-pth-split-report.md)。
 > 机器清单：[repo-split-v15-manifest.json](../repo-split-v15-manifest.json)。
 > 历史依据：[2026-08-08 仓库拆分 SPEC](../superpowers/specs/2026-08-08-repo-split-design.md)（本设计是其 1.5 修订版）。
 
@@ -56,7 +56,7 @@
 
 - npm workspace：`pth-memory` → `pth-sandbox` → `pth-console`
 - 根源码 `src/pth`；测试 `test/pth-*/`、`packages/*/test`
-- `pth` bin 指向 `packages/pth-console/dist/cli.js`（交互/launcher/web 同包）
+- `pth` bin 指向根编译产物 `dist/cli/pth-cli.js`（源码 `src/cli/pth-cli.ts`；pth-console 作为库导出 launcher/commands/web）
 - 部署：`deploy/Dockerfile`、`docker-compose*.yaml`、`docker-monitor`、locks、`.env.pth.secrets.example`
 - 构建序：deps 包已发布 → `pth-memory` → `pth-sandbox` → `pth-console` → 根 `tsc`
 - Dockerfile.dev 从旧仓复制并裁剪为 PTH 专用 dev 镜像
@@ -81,7 +81,7 @@
 
 1. **Phase 0（本仓准备）✅ 已完成**：`ptl hub` → `pth`（program 程序面 + request/observe/… 同名命令）；`ptl stack`/`ptl program dev` 落位；framework 去掉 pth-console 依赖；测试随命令迁移；全量回归。
 2. **Phase 1 ✅ 已完成（本地）**：filter-repo 拆出 `/Users/anzhize/pi-triple-deps`；shared/infra 升 1.5.0；lint/build/72 tests 全绿；`npm pack` 两个 tgz 与 sha256 已产出；npm publish / GitHub push 命令见报告。
-3. **Phase 2**：filter-repo 拆 `pi-triple-pth` → 依赖切 npm 版本 → 构建/启动/任务回归。
+3. **Phase 2 ✅ 已完成（本地）**：filter-repo 拆出 `/Users/anzhize/pi-triple-pth`；依赖切 npm 版本；根 bin 编译化（`src/cli/pth-cli.ts` → `dist/cli/pth-cli.js`）；部署裁剪为 PTH-only；构建/lint/2525 tests/Playwright 4·4/`pth up` 全栈+任务回归全绿。报告：`docs/pth/phase2-pth-split-report.md`。
 4. **Phase 3**：filter-repo 拆 `pi-triple-ptl` → 依赖切 npm 版本 → ptl 安装/PTL 回归。
 5. **Phase 4**：旧仓 archive；三仓 README/CI/文档索引独立化。
 
