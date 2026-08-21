@@ -106,6 +106,33 @@ describe("selectContainerRuntime（R2）", () => {
     });
   });
 
+  it("同一 id 多个 socket 同时可用 → 显式 id 也 fail-closed", async () => {
+    const lock = parseContainerRuntimeLock({
+      version: 1,
+      runtimes: [{
+        ...baseLock().runtimes[2]!,
+        id: "podman",
+        sockets: [PODMAN_SOCK, "/run/user/999/podman/podman.sock"],
+      }],
+    });
+    const outcome = factoryWith({
+      [`podman@${PODMAN_SOCK}`]: ok("podman", "5.3.1"),
+      ["podman@/run/user/999/podman/podman.sock"]: ok("podman", "5.3.1"),
+    });
+    await expect(selectContainerRuntime({
+      lock,
+      env: { ...ENV, PI_CONTAINER_RUNTIME: "podman" },
+      createCandidate: outcome,
+    })).rejects.toMatchObject({ code: "AMBIGUOUS_RUNTIME" });
+
+    const selected = await selectContainerRuntime({
+      lock,
+      env: { ...ENV, PI_CONTAINER_RUNTIME: "podman", PI_CONTAINER_RUNTIME_SOCKET: PODMAN_SOCK },
+      createCandidate: outcome,
+    });
+    expect(selected).toMatchObject({ id: "podman", socket: PODMAN_SOCK, source: "env" });
+  });
+
   it("显式 runtime 未在 lock 声明或 allowed=false 都拒绝", async () => {
     const outcome = factoryWith({});
     await expect(selectContainerRuntime({

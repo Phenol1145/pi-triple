@@ -208,23 +208,31 @@ async function selectExplicit(
 
   const probed: ContainerRuntimeProbeRecord[] = [];
   for (const candidate of matching) {
-    const record = await probeCandidate(candidate);
-    probed.push(record);
-    if (record.available) {
-      return {
-        id: record.id,
-        socket: record.socket,
-        version: record.version!,
-        source: "env",
-        probed,
-      };
-    }
+    probed.push(await probeCandidate(candidate));
   }
-  throw new ContainerRuntimeSelectionError(
-    "EXPLICIT_RUNTIME_UNAVAILABLE",
-    `explicit container runtime ${explicitId} is unavailable (${probed.map((r) => r.reason ?? "ok").join("; ")})`,
+  const available = probed.filter((record) => record.available);
+  if (available.length > 1) {
+    throw new ContainerRuntimeSelectionError(
+      "AMBIGUOUS_RUNTIME",
+      `multiple sockets are available for explicit runtime ${explicitId}; set ${CONTAINER_RUNTIME_SOCKET_ENV} to pick one: ${available.map((r) => r.socket).join(", ")}`,
+      probed,
+    );
+  }
+  const picked = available[0];
+  if (!picked) {
+    throw new ContainerRuntimeSelectionError(
+      "EXPLICIT_RUNTIME_UNAVAILABLE",
+      `explicit container runtime ${explicitId} is unavailable (${probed.map((r) => r.reason ?? "ok").join("; ")})`,
+      probed,
+    );
+  }
+  return {
+    id: picked.id,
+    socket: picked.socket,
+    version: picked.version!,
+    source: "env",
     probed,
-  );
+  };
 }
 
 function messageOf(error: unknown): string {
