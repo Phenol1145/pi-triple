@@ -29,6 +29,7 @@
 - [x] **R3 container-runtime-lock.json**：允许 runtime、`*|>=|>|<=|<|=` 版本约束、GET probe/version 定义；`f6a18f3`；
 - [x] **L1 PTH compose 启动器**：`pth init/up/down/status/logs`；依赖顺序起栈 + 自动种 operator token + health/version 验证；`0588e5d`；
 - [x] **D1 项目整理第一阶段**：docs 分类清单 + `deps/host/container/config + dual` 代码运行时规划（先清单后搬迁，暂不物理移动）；链接校验入 lint；`4501618`；
+- [x] **S1 PTL/PTH 三仓拆分设计**：ptl/pth/deps + archive；`ptl hub` 退役、PTH 交互面收敛 pth-console；filter-repo 路径清单与命令迁移映射（未执行拆仓）；`c361c79`；
 - [ ] **R4 Docker/OrbStack adapter 归一化**：当前 docker-api.js 改造为契约实现；
 - [ ] **R5 Podman adapter 验证抽象**：作为第二实现跑同一 contract 测试；
 - [ ] **R6 /health 与日志暴露**：runtime id/version/socket/采集能力；
