@@ -74,18 +74,20 @@ ptl tui dashboard    # 系统总控 TUI
 ### PTH：自然语言解释器试运行
 
 ```bash
-# 先构建 dist（见上方 Quick Start 或 Development 节），再启动
-# 独立 postgres/redis 见 docs/pth/deployment.md
-DATABASE_URL=... REDIS_URL=... PORT=33100 node dist/pth/main.js
+# 推荐：docker compose 全栈一条命令（postgres+redis+pi-platform+sandbox）
+npm run pth -- init          # 初始化 deploy/.env.pth.secrets（编辑替换示例密钥）
+npm run pth -- up            # 等 healthy + 自动种 operator token + 打印 PTH_API/PTH_TOKEN
+npm run pth -- submit "统计 memory 库 scorecard 数" --role memory-stats --tags stats
+npm run pth -- wait <taskId>
 
-# 发布任务 + 启动 worker
+# 或裸机试运行（先 build；独立 postgres/redis 见 docs/pth/deployment.md）
+DATABASE_URL=... REDIS_URL=... PORT=33100 node dist/pth/main.js
 curl -X POST http://localhost:33100/api/v1/kernel/tasks \
   -d '{"title":"demo","text":"return {sum:[1,2,3].reduce((a,b)=>a+b)}","createdBy":"demo","tags":["demo"]}' \
   -H "Authorization: Bearer <token>"
-ptl hub kernel batch add 2     # 启动 2 个 worker
 
 # 可观测
-curl http://localhost:33100/metrics   # Prometheus 四层指标
+curl http://localhost:3000/metrics   # Prometheus 四层指标
 ```
 
 ---
