@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T12:34:15.308Z",
+  "generatedAt": "2026-08-21T13:37:57.197Z",
   "decisions": {
     "topology": [
       "pi-triple-deps",
@@ -23,6 +23,7 @@
       "filterRepoPaths": [
         "packages/shared",
         "packages/infra",
+        "test/shared-barrel.test.ts",
         "test/unit/model-router.test.ts",
         "test/unit/platform.test.ts",
         "test/unit/sdk-paths.test.ts",
@@ -85,6 +86,11 @@
         "test/browser",
         "test/helpers.ts",
         "test/setup.ts",
+        "test/integration/engine-lifecycle.test.ts",
+        "test/integration/storage.test.ts",
+        "test/ptl-kernel-bridge.test.ts",
+        "test/zz-agent-dbg.test.ts",
+        "packages/framework/test/bridge-client.test.ts",
         "test/unit/agent-engine-recover.test.ts",
         "test/unit/agent-engine-session-persist.test.ts",
         "test/unit/async-iterable-bridge.test.ts",
@@ -128,6 +134,8 @@
         "test/unit/sandbox-bash-forward.test.ts",
         "test/unit/sandbox-degraded.test.ts",
         "test/unit/session-pool.test.ts",
+        "test/unit/session-pool-redis.test.ts",
+        "test/unit/slot-binding.test.ts",
         "test/unit/tool-platform.test.ts",
         "docs/pth",
         "scripts/pth-cli.ts",
@@ -158,6 +166,8 @@
         "scripts/pth-boundaries-core.ts",
         "scripts/pth-boundaries.baseline.json",
         "scripts/pth-intake-subscribe.ts",
+        "scripts/ext-check.ts",
+        "scripts/gen-project-map.ts",
         "scripts/r6-composition-acceptance.ts",
         "scripts/seed-k5-pilot.ts",
         "scripts/seed-tool-reg.ts",
@@ -181,7 +191,7 @@
         "scripts/check-doc-links.ts",
         "scripts/lane-worktrees.sh"
       ],
-      "notes": "bin: pth → packages/pth-console/dist/cli.js（承接原 ptl hub 的 PTH 交互面 + launcher/web）。Dockerfile.dev 需复制并裁剪为 PTH dev 专用。"
+      "notes": "bin: pth → dist/cli/pth-cli.js（根 tsc 编译；pth-console 作为库导出 launcher/commands/web）。Dockerfile.dev 为 PTH 专用 node dev 镜像。"
     },
     "ptl": {
       "name": "pi-triple-ptl",
@@ -198,11 +208,16 @@
         "extensions/_shared",
         "extensions/pit-control",
         "extensions/pit-providers",
+        "extensions/dev-container",
+        "extensions/mailbox",
+        "extensions/.gitignore",
         "config/settings.json",
         "config/SYSTEM.md",
         "deploy/Dockerfile.dev",
+        "deploy/pth.deployment.json",
         "test/unit",
         "test/integration",
+        "test/e2e-framework.test.ts",
         "test/concurrent-wal.test.ts",
         "test/env-cli-e2e.test.ts",
         "test/env-fork.test.ts",
@@ -212,9 +227,8 @@
         "test/stop-all.test.ts",
         "test/telemetry.test.ts",
         "docs/ptl",
-        "scripts/ext-check.ts",
-        "scripts/gen-project-map.ts",
-        "scripts/check-release-clean.sh"
+        "scripts/check-release-clean.sh",
+        "scripts/check-product-boundaries.ts"
       ],
       "postFilterRemovePaths": [
         "test/unit/agent-engine-recover.test.ts",
@@ -260,6 +274,8 @@
         "test/unit/sandbox-bash-forward.test.ts",
         "test/unit/sandbox-degraded.test.ts",
         "test/unit/session-pool.test.ts",
+        "test/unit/session-pool-redis.test.ts",
+        "test/unit/slot-binding.test.ts",
         "test/unit/tool-platform.test.ts",
         "test/unit/model-router.test.ts",
         "test/unit/platform.test.ts",
@@ -267,7 +283,11 @@
         "test/unit/session-backend.test.ts",
         "test/unit/session-state.test.ts",
         "test/unit/warnings.test.ts",
-        "test/unit/workspace-manager.test.ts"
+        "test/unit/workspace-manager.test.ts",
+        "test/integration/engine-lifecycle.test.ts",
+        "test/integration/storage.test.ts",
+        "test/unit/repo-split-manifest.test.ts",
+        "packages/framework/test/bridge-client.test.ts"
       ],
       "copyBoth": [
         "tsconfig.base.json",

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-/** 仓库内 AGENTS.md 模板源（相对本模块文件解析：packages/shared/src 下三级 ../ 回到仓库根 docs/ptl/templates；依赖 package.json files 含 docs/ptl/templates） */
-export const AGENTS_TPL_PATH = path.resolve(import.meta.dirname, "../../../docs/ptl/templates/AGENTS.md.tpl");
+/** 包内 AGENTS.md 模板源（src 与 dist 同级解析到 packages/shared/docs——npm 包 files 同时带 docs，发布后同样可用） */
+export const AGENTS_TPL_PATH = path.resolve(import.meta.dirname, "../docs/ptl/templates/AGENTS.md.tpl");
 
 export function renderTemplateAgents(tplContent: string, templateId: string, alias: string): string {
   return tplContent

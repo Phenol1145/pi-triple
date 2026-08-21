@@ -7,7 +7,7 @@
 
 - 本地仓库：`/Users/anzhize/pi-triple-pth`（git filter-repo 2.47.0 按路径历史拆分）
 - 拆分历史：主仓 801 个 commit 按 PTH 路径过滤保留
-- PTH 仓 HEAD：`89c0346`（Phase 2 根脚手架 + PTH-only 部署裁剪）
+- PTH 仓 HEAD：`5e12d9c`（Phase 2 根脚手架 + 测试归属补全 + shared integrity 同步）
 
 ## 2. 仓库形态
 
@@ -39,7 +39,7 @@ pi-triple-pth
 | `npm install`（本地 registry 模拟已发布 deps） | ✅ 606 packages |
 | `npm run lint` | ✅ tsc ×4 + web typecheck + pth-boundaries 0 + pth-config + product-boundaries 0 + docs-links |
 | `npm run build` | ✅ pth-memory → pth-sandbox → pth-console → vite(14 assets) → 根 tsc |
-| `npm test`（full） | ✅ **276 files / 2525 tests / 2516 pass / 0 fail / 9 skip** |
+| `npm test`（full，Phase 3 复验） | ✅ **283 files / 2572 tests / 2563 pass / 0 fail / 9 skip** |
 | `pth` bin 冒烟 | ✅ help / roles / config / templates / status / submit |
 | Playwright | ✅ **4/4**（operator console 五页基线） |
 | Docker build | ✅ `pi-triple-pth` + `pi-triple-pth-sandbox`（经 `NPM_CONFIG_REGISTRY` build-arg） |
@@ -59,7 +59,7 @@ pi-triple-pth
 
 ## 5. 发布状态
 
-GitHub ✅ 已推送：https://github.com/Phenol1145/pi-triple-pth（origin/main = `89c0346`）
+GitHub ✅ 已推送：https://github.com/Phenol1145/pi-triple-pth（origin/main = `5e12d9c`）
 
 npm 依赖先决条件：`@away_from/shared@1.5.0` 与 `@away_from/infra@1.5.0` 真实 npm publish 后，
 PTH 仓可执行最终复验（当前已用本地 registry 按同一 tarball 验证过）：
