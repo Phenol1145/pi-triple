@@ -146,6 +146,7 @@ const PTH: RepoSplitRepo = {
     "scripts/pth-cli.ts",
     "scripts/check-pth-boundaries.ts",
     "scripts/check-pth-config.ts",
+    "scripts/check-product-boundaries.ts",
     "scripts/accept-n28-feasibility.ts",
     "scripts/accept-n29-minimal-intake.ts",
     "scripts/accept-n30-runtime-observatory.ts",

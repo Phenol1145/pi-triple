@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T11:46:20.155Z",
+  "generatedAt": "2026-08-21T12:34:15.308Z",
   "decisions": {
     "topology": [
       "pi-triple-deps",
@@ -133,6 +133,7 @@
         "scripts/pth-cli.ts",
         "scripts/check-pth-boundaries.ts",
         "scripts/check-pth-config.ts",
+        "scripts/check-product-boundaries.ts",
         "scripts/accept-n28-feasibility.ts",
         "scripts/accept-n29-minimal-intake.ts",
         "scripts/accept-n30-runtime-observatory.ts",
