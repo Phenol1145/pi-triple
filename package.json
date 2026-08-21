@@ -37,6 +37,7 @@
     "check:product-boundaries": "tsx scripts/check-product-boundaries.ts",
     "docs:manifest": "tsx scripts/build-docs-manifest.ts",
     "check:docs-links": "tsx scripts/check-doc-links.ts",
+    "repo-split:manifest": "tsx scripts/build-repo-split-manifest.ts",
     "pth": "tsx scripts/pth-cli.ts"
   },
   "dependencies": {

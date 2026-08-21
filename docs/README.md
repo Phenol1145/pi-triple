@@ -64,6 +64,7 @@
 - [Human Interaction 协议](./pth/n25-human-interaction-protocol-design.md)
 - [统一运行观测台设计](./pth/n30-runtime-observatory-design.md)
 - [v1.3 专业计算设计](./pth/n32-v13-professional-computing-design.md)
+- [PTL/PTH 仓库拆分设计](./pth/repo-split-v15-design.md)
 - [v1.4 Operator Console UX 报告](./pth/v14-operator-console-ux-report.md)
 - [最近发布说明](./releases/)
 
