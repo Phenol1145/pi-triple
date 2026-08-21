@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T10:54:25.482Z",
+  "generatedAt": "2026-08-21T11:24:29.390Z",
   "decisions": {
     "topology": [
       "pi-triple-deps",
@@ -24,7 +24,6 @@
         "packages/shared",
         "packages/infra",
         "test/unit/model-router.test.ts",
-        "test/unit/multi-mode.test.ts",
         "test/unit/platform.test.ts",
         "test/unit/sdk-paths.test.ts",
         "test/unit/session-backend.test.ts",
@@ -257,7 +256,6 @@
         "test/unit/session-pool.test.ts",
         "test/unit/tool-platform.test.ts",
         "test/unit/model-router.test.ts",
-        "test/unit/multi-mode.test.ts",
         "test/unit/platform.test.ts",
         "test/unit/sdk-paths.test.ts",
         "test/unit/session-backend.test.ts",

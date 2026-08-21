@@ -32,7 +32,6 @@ export interface CommandMigration {
 
 const DEPS_UNIT_TESTS = [
   "test/unit/model-router.test.ts",
-  "test/unit/multi-mode.test.ts",
   "test/unit/platform.test.ts",
   "test/unit/sdk-paths.test.ts",
   "test/unit/session-backend.test.ts",
