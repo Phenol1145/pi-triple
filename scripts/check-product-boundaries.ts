@@ -20,10 +20,11 @@ const PTH_CORE_PREFIXES = [
 ];
 
 const PTL_ONLY_PREFIXES = [
-  "packages/framework/src/bridge/",
   "packages/framework/src/cli/",
   "packages/framework/src/commands/",
   "packages/framework/src/containers/",
+  "packages/framework/src/program-dev/",
+  "packages/framework/src/stack/",
   "packages/framework/src/session/",
   "packages/framework/src/tui-",
 ];
@@ -35,9 +36,6 @@ const PTH_PACKAGE_TARGETS = [
   "@away_from/pth-sandbox",
   "@away_from/mailbox",
 ];
-
-/** 产品形态明确允许的 PTL → PTH 便捷调用入口（ptl hub 等经 pth-console 访问 PTH）。 */
-const ALLOWED_PTL_TO_PTH_TARGETS = new Set(["@away_from/pth-console"]);
 
 const PTL_ONLY_FILES = new Set([
   "packages/framework/src/env.ts",
@@ -140,7 +138,7 @@ export function collectProductBoundaryViolations(roots: string[] = SCAN_ROOTS): 
       if (pth && ptlTarget) {
         violations.push({ rule: "pth-imports-ptl", file: rel, line: imp.line, target });
       }
-      if (ptl && pthTarget && !ALLOWED_PTL_TO_PTH_TARGETS.has(target)) {
+      if (ptl && pthTarget) {
         violations.push({ rule: "ptl-imports-pth", file: rel, line: imp.line, target });
       }
     }

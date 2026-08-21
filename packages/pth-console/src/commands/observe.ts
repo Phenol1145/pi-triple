@@ -1,29 +1,29 @@
 /**
- * bridge/observe.ts — ptl hub observe 命令（F/WP4 Task 21）
+ * bridge/observe.ts — pth observe 命令（F/WP4 Task 21）
  *
  * 远程观测（只读）——数据源为 Redis 会话痕迹（WP5 前先行交付）：
  *
- *   ptl hub observe sessions [--json]         会话列表
- *   ptl hub observe session <id> [--json]     会话详情（meta）
- *   ptl hub observe trace <id> [--json]       trace 时间线
- *   ptl hub observe events [--json]           事件查询（EventLog 代理——WP5 Task 28 交付）
+ *   pth observe sessions [--json]         会话列表
+ *   pth observe session <id> [--json]     会话详情（meta）
+ *   pth observe trace <id> [--json]       trace 时间线
+ *   pth observe events [--json]           事件查询（EventLog 代理——WP5 Task 28 交付）
  *
  * print/json 双模式：缺省表格打印；--json 输出原样 JSON。
  */
-import { PthClient } from "@away_from/pth-console";
-import { printBanner } from "../cli/main.js";
+import { PthClient } from "../bridge/client.js";
+import { printPthBanner } from "./banner.js";
 
 export async function cmdHubObserve(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const what = passthrough[0];
   if (!what || !["sessions", "session", "trace", "events"].includes(what)) {
-    console.log("  用法: ptl hub observe <sessions|session <id>|trace <id>|events> [--json]");
+    console.log("  用法: pth observe <sessions|session <id>|trace <id>|events> [--json]");
     process.exit(1);
   }
 
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
+    console.log("  配置: export PTH_URL=<url> PTH_TOKEN=<token>");
     process.exit(1);
   }
 
@@ -34,7 +34,7 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
         console.log(JSON.stringify(sessions, null, 2));
         return;
       }
-      printBanner();
+      printPthBanner();
       console.log("  \x1b[1m远程会话（Redis 会话痕迹）\x1b[0m");
       if (sessions.length === 0) {
         console.log("\n  暂无会话痕迹。");
@@ -49,7 +49,7 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
           const updated = s.updatedAt.slice(0, 16).replace("T", " ");
           console.log(`  \x1b[1m${id}\x1b[0m${project}${state}${entries}  ${updated}  ${s.model}`);
         }
-        console.log("\n  详情: \x1b[36mptl hub observe session <id>\x1b[0m   trace: \x1b[36mptl hub observe trace <id>\x1b[0m");
+        console.log("\n  详情: \x1b[36mpth observe session <id>\x1b[0m   trace: \x1b[36mpth observe trace <id>\x1b[0m");
       }
       console.log("");
       return;
@@ -58,7 +58,7 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
     if (what === "session") {
       const id = passthrough[1];
       if (!id) {
-        console.log("  用法: ptl hub observe session <id>");
+        console.log("  用法: pth observe session <id>");
         process.exit(1);
       }
       const meta = await client.getObserveSession(id);
@@ -66,7 +66,7 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
         console.log(JSON.stringify(meta, null, 2));
         return;
       }
-      printBanner();
+      printPthBanner();
       console.log("  \x1b[1m会话详情\x1b[0m");
       console.log("");
       console.log(`  sessionId:    ${meta.sessionId}`);
@@ -84,7 +84,7 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
     if (what === "trace") {
       const id = passthrough[1];
       if (!id) {
-        console.log("  用法: ptl hub observe trace <id>");
+        console.log("  用法: pth observe trace <id>");
         process.exit(1);
       }
       const trace = await client.getObserveTrace(id);
@@ -92,7 +92,7 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
         console.log(JSON.stringify(trace, null, 2));
         return;
       }
-      printBanner();
+      printPthBanner();
       console.log(`  \x1b[1mtrace 时间线\x1b[0m  ${trace.sessionId.slice(0, 12)}…  (${trace.entries.length} 条)`);
       console.log("");
       for (const e of trace.entries) {
@@ -124,7 +124,7 @@ export async function cmdHubObserve(passthrough: string[], flags: Record<string,
       console.log(JSON.stringify(result, null, 2));
       return;
     }
-    printBanner();
+    printPthBanner();
     console.log("  \x1b[1m事件查询（常驻会话 EventLog 代理）\x1b[0m");
     console.log("");
     if (result.count === 0) {

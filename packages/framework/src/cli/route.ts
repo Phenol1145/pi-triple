@@ -1,30 +1,13 @@
 /**
- * ptl/route — 命令路由决策（纯函数）+ tui/hub 分发实现（依赖注入，便于测试）
+ * ptl/route — 命令路由决策（纯函数）+ tui 分发实现（依赖注入，便于测试）。
  *
- * 纯决策部分（resolveTuiPanel / getDeprecatedMigration / 常量表）无副作用；
- * cmdTui/cmdHub 通过注入 launcher/handlers 实现可测试。
+ * PTH 交互已迁移到 pth CLI（packages/pth-console/src/commands），
+ * 本文件不再承载 ptl hub 分发。
  */
 
-import path from "node:path";
 import {
-  loadConfig, resolveTemplateId, getTemplateAlias, getDefaultTemplateId, pitHome,
+  loadConfig, resolveTemplateId, getTemplateAlias, getDefaultTemplateId,
 } from "@away_from/shared";
-import { cmdSubmit } from "../bridge/submit.js";
-import { cmdHubConsole } from "../bridge/console.js";
-import { cmdHubLineage } from "../bridge/lineage.js";
-import { cmdHubTrigger } from "../bridge/trigger.js";
-import { cmdRun } from "../bridge/run.js";
-import { cmdPrograms } from "../bridge/programs.js";
-import { cmdDev } from "../bridge/dev.js";
-import { cmdHubRequest, cmdHubRequests } from "../bridge/request.js";
-import { cmdHubRespond } from "../bridge/respond.js";
-import { cmdHubObserve } from "../bridge/observe.js";
-import { cmdHubDebug } from "../bridge/debug.js";
-import { cmdHubDeploy, cmdHubStatus, cmdHubLogs, cmdHubUpgrade, cmdHubExec } from "../bridge/containers.js";
-import { cmdHubBench } from "../bridge/bench.js";
-import { cmdHubJobSubmit, cmdHubJobStatus, cmdHubJobFetch } from "../bridge/jobs.js";
-import { cmdKernelStatus, cmdKernelTasksAdd, cmdKernelTasksLs, cmdKernelTasksCancel, cmdKernelWait, cmdKernelBatchAdd, cmdKernelBatchRemove, cmdKernelBatchWorker, cmdKernelTemplatesLs } from "../bridge/kernel.js";
-import { printNamespaceHelp } from "./main.js";
 
 // ─── TUI ───────────────────────────────────────────────────
 
@@ -38,20 +21,16 @@ export function resolveTuiPanel(subcommand: string | undefined): TuiPanel {
   throw new Error(`未知 TUI 面板: "${subcommand}"（可用: dashboard | lab）`);
 }
 
-// ─── hub ───────────────────────────────────────────────────
-
-export const HUB_COMMANDS = ["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug", "deploy", "status", "logs", "upgrade", "exec", "bench", "job", "console", "lineage", "trigger"] as const;
-export type HubCommand = (typeof HUB_COMMANDS)[number];
-
 // ─── deprecated（clean break：旧命令仅提示迁移）────────────────
 
 export const DEPRECATED_COMMANDS: Record<string, string> = {
   ui: "ptl tui dashboard",
   lab: "ptl tui lab",
-  submit: "ptl hub submit",
-  run: "ptl hub run",
-  programs: "ptl hub programs",
-  dev: "ptl hub dev",
+  hub: "pth <submit|program|request|observe|debug|bench|job|console|lineage|trigger|kernel>（PTH 交互）与 ptl stack（容器运维）",
+  submit: "pth program submit",
+  run: "pth program run",
+  programs: "pth program list",
+  dev: "ptl program dev",
 };
 
 /** 旧命令 → 迁移提示文案；未废弃返回 null。 */
@@ -95,7 +74,6 @@ export const defaultTuiLauncher: TuiLauncher = async (opts) => {
   }
   const templateId = resolved?.ok ? resolved.id : getDefaultTemplateId(cfg);
   const templateAlias = getTemplateAlias(templateId, cfg);
-  const home = pitHome();
   if (flags.global === "true") {
   } else {
   }
@@ -110,171 +88,4 @@ export async function cmdTui(
 ): Promise<void> {
   const panel = resolveTuiPanel(subcommand);
   await launch({ panel, flags });
-}
-
-// ─── cmdHub 实现 ───────────────────────────────────────────
-
-export type HubHandlers = {
-  submit: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  console: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  lineage: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  trigger: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  run: (name: string, args: string[], flags: Record<string, string>) => Promise<void>;
-  programs: (flags: Record<string, string>) => Promise<void>;
-  dev: (dir: string, passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  request: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  requests: (flags: Record<string, string>) => Promise<void>;
-  respond: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  observe: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  debug: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  kernel: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  deploy: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  status: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  logs: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  upgrade: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  exec: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  bench: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-  job: (passthrough: string[], flags: Record<string, string>) => Promise<void>;
-};
-
-export const defaultHubHandlers: HubHandlers = {
-  submit: cmdSubmit,
-  console: cmdHubConsole,
-  lineage: cmdHubLineage,
-  trigger: cmdHubTrigger,
-  run: cmdRun,
-  programs: cmdPrograms,
-  dev: cmdDev,
-  request: cmdHubRequest,
-  requests: cmdHubRequests,
-  respond: cmdHubRespond,
-  observe: cmdHubObserve,
-  debug: cmdHubDebug,
-  deploy: cmdHubDeploy,
-  status: cmdHubStatus,
-  logs: cmdHubLogs,
-  upgrade: cmdHubUpgrade,
-  exec: cmdHubExec,
-  bench: cmdHubBench,
-  job: async (passthrough, flags) => {
-    const [sub, ...rest] = passthrough;
-    if (sub === "submit") return cmdHubJobSubmit(rest, flags);
-    if (sub === "status") return cmdHubJobStatus(rest, flags);
-    if (sub === "fetch") return cmdHubJobFetch(rest, flags);
-    console.log("  用法: ptl hub job submit <计划> [--tasks n] | status [id] | fetch <id>");
-  },
-  kernel: async (passthrough, flags) => {
-    const [sub, ...rest] = passthrough;
-    switch (sub) {
-      case "tasks":
-        if (rest[0] === "add") return cmdKernelTasksAdd(rest.slice(1), flags);
-        if (rest[0] === "ls") return cmdKernelTasksLs(flags);
-        if (rest[0] === "cancel") return cmdKernelTasksCancel(rest.slice(1), flags);
-        console.log("  用法: ptl hub kernel tasks add \"<描述>\" [--tags a,b] | ls [--limit n] | cancel <id> [--recursive]");
-        return;
-      case "wait":
-        return cmdKernelWait(rest, flags);
-      case "templates":
-        if (rest[0] === "ls" || rest.length === 0) return cmdKernelTemplatesLs(rest, flags);
-        console.log("  用法: ptl hub kernel templates ls");
-        return;
-      case "batch":
-        if (rest[0] === "add") return cmdKernelBatchAdd(rest.slice(1), flags);
-        if (rest[0] === "remove") return cmdKernelBatchRemove(rest.slice(1), flags);
-        if (rest[0] === "worker") return cmdKernelBatchWorker(rest.slice(1), flags);
-        console.log("  用法: ptl hub kernel batch add [n] | remove [n] | worker <pause|resume|remove|add> <batchId> <role> [copies]");
-        return;
-      case "status":
-        return cmdKernelStatus(rest, flags);
-      default:
-        console.log([
-          "  ptl hub kernel tasks add \"<描述>\" [--tags a,b]   发布 PTH 任务",
-          "  ptl hub kernel tasks add --template <id> --key v… 模板发布",
-          "  ptl hub kernel templates ls                       模板列表",
-          "  ptl hub kernel tasks ls [--limit n]              任务列表",
-          "  ptl hub kernel wait <taskId> [--follow]          等待任务终态（--follow 实时打印 path/childResult）",
-          "  ptl hub kernel tasks cancel <id> [--recursive]   取消任务（沿派发树传播）",
-          "  ptl hub kernel batch add [n]                     启动 batch",
-          "  ptl hub kernel batch remove [n]                  停止 batch",
-          "  ptl hub kernel status                            运行状态全景",
-          "  ptl hub console [--kernel|--sandbox]             活动状态观测台（核心/沙盒）",
-          "  ptl hub console --follow                         活动状态流式输出（任务接取/轮次/token）",
-          "  ptl hub lineage <tree|proposals|show|approve|reject>  角色谱系（分化监督层）",
-          "  ptl hub trigger <ls|add|rm|toggle|reload>           事件触发规则管理",
-        ].join("\n"));
-    }
-  },
-};
-
-/** ptl hub <submit|run|programs|dev> — 分发到 bridge 命令；无/未知子命令打印命名空间帮助。 */
-export async function cmdHub(
-  subcommand: string | undefined,
-  passthrough: string[],
-  flags: Record<string, string>,
-  handlers: HubHandlers = defaultHubHandlers,
-): Promise<void> {
-  switch (subcommand) {
-    case "submit":
-      await handlers.submit(passthrough, flags);
-      break;
-    case "run":
-      await handlers.run(passthrough[0] ?? "", passthrough.slice(1), flags);
-      break;
-    case "programs":
-      await handlers.programs(flags);
-      break;
-    case "dev":
-      await handlers.dev(passthrough[0] ?? "", passthrough.slice(1), flags);
-      break;
-    case "request":
-      await handlers.request(passthrough, flags);
-      break;
-    case "requests":
-      await handlers.requests(flags);
-      break;
-    case "respond":
-      await handlers.respond(passthrough, flags);
-      break;
-    case "observe":
-      await handlers.observe(passthrough, flags);
-      break;
-    case "debug":
-      await handlers.debug(passthrough, flags);
-      break;
-    case "kernel":
-      await handlers.kernel(passthrough, flags);
-      break;
-    case "deploy":
-      await handlers.deploy(passthrough, flags);
-      break;
-    case "status":
-      await handlers.status(passthrough, flags);
-      break;
-    case "logs":
-      await handlers.logs(passthrough, flags);
-      break;
-    case "upgrade":
-      await handlers.upgrade(passthrough, flags);
-      break;
-    case "exec":
-      await handlers.exec(passthrough, flags);
-      break;
-    case "bench":
-      await handlers.bench(passthrough, flags);
-      break;
-    case "console":
-      await handlers.console(passthrough, flags);
-      break;
-    case "lineage":
-      await handlers.lineage(passthrough, flags);
-      break;
-    case "trigger":
-      await handlers.trigger(passthrough, flags);
-      break;
-    case "job":
-      await handlers.job(passthrough, flags);
-      break;
-    default:
-      printNamespaceHelp("hub");
-  }
 }

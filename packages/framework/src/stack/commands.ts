@@ -1,14 +1,14 @@
 /**
- * bridge/containers.ts —— ptl hub 容器运维命令族（容器抽象 v0.7）
+ * stack/commands.ts —— ptl stack 容器运维命令族（容器抽象 v0.7）
  *
  * 声明式部署描述（pth.deployment.json）→ 容器后端接口 → 后端实现。
  * 本机运维：deploy/status/logs/upgrade/exec——不再手写 docker compose 命令。
  *
- *   ptl hub deploy [--backend docker] [--rebuild]   # 部署（build + up）
- *   ptl hub status [--service <s>]                  # 服务状态
- *   ptl hub logs <service> [--tail n]               # 日志
- *   ptl hub upgrade                                 # 重建镜像 + 重启
- *   ptl hub exec <service> -- <cmd...>              # 容器内命令
+ *   ptl stack deploy [--backend docker] [--rebuild]   # 部署（build + up）
+ *   ptl stack status [--service <s>]                  # 服务状态
+ *   ptl stack logs <service> [--tail n]               # 日志
+ *   ptl stack upgrade                                 # 重建镜像 + 重启
+ *   ptl stack exec <service> -- <cmd...>              # 容器内命令
  *
  * 后端选择：--backend docker|podman|k8s（v0.7 仅 docker——其他为扩展点）。
  */
@@ -38,7 +38,7 @@ function stateColor(state: string): string {
   }
 }
 
-export async function cmdHubDeploy(passthrough: string[], flags: Record<string, string>): Promise<void> {
+export async function cmdStackDeploy(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const backendKind = (flags.backend ?? "docker") as BackendKind;
   const rebuild = flags.rebuild === "true" || flags.rebuild === "1" || Boolean(flags.rebuild);
   const dep = await loadDeployment(deploymentPath(process.cwd()));
@@ -56,7 +56,7 @@ export async function cmdHubDeploy(passthrough: string[], flags: Record<string, 
   console.log(color("  ✓ 部署完成（健康检查就绪后可用）", 32));
 }
 
-export async function cmdHubStatus(passthrough: string[], flags: Record<string, string>): Promise<void> {
+export async function cmdStackStatus(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const backendKind = (flags.backend ?? "docker") as BackendKind;
   const service = flags.service;
   const dep = await loadDeployment(deploymentPath(process.cwd()));
@@ -67,7 +67,7 @@ export async function cmdHubStatus(passthrough: string[], flags: Record<string, 
   }
   const rows = service ? st.services.filter((s) => s.name === service || s.name.includes(service)) : st.services;
   if (rows.length === 0) {
-    console.log(color(`  · 无运行服务${service ? `（${service}）` : ""}——ptl hub deploy 拉起`, 90));
+    console.log(color(`  · 无运行服务${service ? `（${service}）` : ""}——ptl stack deploy 拉起`, 90));
     return;
   }
   for (const s of rows) {
@@ -75,12 +75,12 @@ export async function cmdHubStatus(passthrough: string[], flags: Record<string, 
   }
 }
 
-export async function cmdHubLogs(passthrough: string[], flags: Record<string, string>): Promise<void> {
+export async function cmdStackLogs(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const backendKind = (flags.backend ?? "docker") as BackendKind;
   const service = passthrough[0];
   const tail = Number(flags.tail ?? 100);
   if (!service) {
-    console.log(color("  ❌ ptl hub logs <service> [--tail n]", 31));
+    console.log(color("  ❌ ptl stack logs <service> [--tail n]", 31));
     process.exit(1);
   }
   const dep = await loadDeployment(deploymentPath(process.cwd()));
@@ -89,7 +89,7 @@ export async function cmdHubLogs(passthrough: string[], flags: Record<string, st
   console.log(out || color(`  · ${service} 无日志`, 90));
 }
 
-export async function cmdHubUpgrade(passthrough: string[], flags: Record<string, string>): Promise<void> {
+export async function cmdStackUpgrade(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const backendKind = (flags.backend ?? "docker") as BackendKind;
   const dep = await loadDeployment(deploymentPath(process.cwd()));
   const backend = await getBackend(backendKind);
@@ -98,12 +98,12 @@ export async function cmdHubUpgrade(passthrough: string[], flags: Record<string,
   console.log(color("  ✓ 升级完成", 32));
 }
 
-export async function cmdHubExec(passthrough: string[], flags: Record<string, string>): Promise<void> {
+export async function cmdStackExec(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const backendKind = (flags.backend ?? "docker") as BackendKind;
   const service = passthrough[0];
   const cmd = passthrough.slice(1);
   if (!service || cmd.length === 0) {
-    console.log(color("  ❌ ptl hub exec <service> -- <cmd...>", 31));
+    console.log(color("  ❌ ptl stack exec <service> -- <cmd...>", 31));
     process.exit(1);
   }
   const dep = await loadDeployment(deploymentPath(process.cwd()));

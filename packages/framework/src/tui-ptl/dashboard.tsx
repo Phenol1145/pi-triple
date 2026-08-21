@@ -272,7 +272,7 @@ export function DashboardPage({ height, enabled = true, onNotify, onCommand, onM
           {focus === 2 ? <Text dimColor>{scrollHint(traceW, traces.length)}</Text> : null}
         </Text>
         {focus === 2 && (traces.length === 0 ? (
-          <Text dimColor>  无追踪 — 运行 ptl hub kernel/submit 任务后显示</Text>
+          <Text dimColor>  无追踪 — 运行 pth submit / pth kernel 任务后显示</Text>
         ) : traces.length > 0 ? (
           <DataTable
             columns={traceCols}

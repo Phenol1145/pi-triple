@@ -1,12 +1,12 @@
 /**
- * ptl hub console —— PTH 活动状态观测台（API 覆盖补齐后的命令行面）
+ * pth console —— PTH 活动状态观测台（API 覆盖补齐后的命令行面）
  *
- *   ptl hub console --kernel    核心活动状态（batches/workers/当前任务/任务队列/autopilot）
- *   ptl hub console --sandbox   沙盒活动状态（kernel 池/编译统计/debug 会话）
- *   ptl hub console             概览（kernel + sandbox 摘要）
+ *   pth console --kernel    核心活动状态（batches/workers/当前任务/任务队列/autopilot）
+ *   pth console --sandbox   沙盒活动状态（kernel 池/编译统计/debug 会话）
+ *   pth console             概览（kernel + sandbox 摘要）
  */
 
-import { PthClient } from "@away_from/pth-console";
+import { PthClient } from "../bridge/client.js";
 
 interface KernelStatus {
   kernel?: { connected?: boolean };

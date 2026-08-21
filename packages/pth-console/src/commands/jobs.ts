@@ -4,16 +4,16 @@
  * 交互层工作流：写计划 → 提交 job（批量任务）→ 【脱手】立即返回 job id——
  * 主会话不阻塞，继续处理其他事物；PTH 任务池异步执行；需要时查状态/收产物。
  *
- *   ptl hub job submit <plan> [--tasks n] [--tags a,b]   # 提交（计划 → 批量任务）——立即返回
- *   ptl hub job status [id]                              # job 列表 / 单 job 进度
- *   ptl hub job fetch <id>                               # 收产物（任务结果汇总）
+ *   pth job submit <plan> [--tasks n] [--tags a,b]   # 提交（计划 → 批量任务）——立即返回
+ *   pth job status [id]                              # job 列表 / 单 job 进度
+ *   pth job fetch <id>                               # 收产物（任务结果汇总）
  *
  * 性能伴随（V8 优化铺垫）：fetch 时汇总 exec 耗时——job 执行数据归档 .perf-bench/jobs/。
  */
 
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { PthClient } from "@away_from/pth-console";
+import { PthClient } from "../bridge/client.js";
 
 const JOBS_DIR = ".perf-bench/jobs";
 
@@ -21,7 +21,7 @@ function requireClient(): PthClient {
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
+    console.log("  配置: export PTH_URL=<url> PTH_TOKEN=<token>");
     process.exit(1);
   }
   return client;
@@ -43,7 +43,7 @@ export async function cmdHubJobSubmit(passthrough: string[], flags: Record<strin
   const client = requireClient();
   const plan = passthrough.join(" ");
   if (!plan) {
-    console.log("  用法: ptl hub job submit <计划文本> [--tasks n] [--tags a,b]");
+    console.log("  用法: pth job submit <计划文本> [--tasks n] [--tags a,b]");
     
     return;
   }
@@ -53,14 +53,14 @@ export async function cmdHubJobSubmit(passthrough: string[], flags: Record<strin
 
   const res = await client.requestJson("/api/v1/kernel/jobs", {
     method: "POST",
-    body: JSON.stringify({ plan, tasks, createdBy: process.env.USER ?? "ptl" }),
+    body: JSON.stringify({ plan, tasks, createdBy: process.env.USER ?? "pth" }),
   });
 
   console.log("  \x1b[1mjob 已提交（交互层脱手——PTH 异步执行）\x1b[0m");
   console.log(`    jobId:   ${(res as { jobId?: string }).jobId}`);
   console.log(`    任务数:  ${(res as { tasks?: number }).tasks ?? tasks.length}`);
   console.log(`    脱手说明: 主会话可继续处理其他事物`);
-  console.log(`    收取:   \x1b[36mptl hub job status ${(res as { jobId?: string }).jobId}\x1b[0m 进度 · \x1b[36mptl hub job fetch ${(res as { jobId?: string }).jobId}\x1b[0m 产物`);
+  console.log(`    收取:   \x1b[36mpth job status ${(res as { jobId?: string }).jobId}\x1b[0m 进度 · \x1b[36mpth job fetch ${(res as { jobId?: string }).jobId}\x1b[0m 产物`);
 }
 
 export async function cmdHubJobStatus(passthrough: string[], flags: Record<string, string>): Promise<void> {
@@ -78,7 +78,7 @@ export async function cmdHubJobStatus(passthrough: string[], flags: Record<strin
     return;
   }
   const res = await client.requestJson("/api/v1/kernel/jobs", { method: "GET" }) as { jobs: Array<{ jobId: string; total: number; completed: number; failed: number; status: string; createdAt: string }> };
-  if (res.jobs.length === 0) { console.log("  · 无 job——ptl hub job submit 提交"); return; }
+  if (res.jobs.length === 0) { console.log("  · 无 job——pth job submit 提交"); return; }
   console.log("  \x1b[1m异步 jobs（脱手任务）\x1b[0m");
   for (const j of res.jobs) {
     const mark = j.status === "completed" ? "\x1b[32m●\x1b[0m" : "\x1b[33m◐\x1b[0m";
@@ -89,7 +89,7 @@ export async function cmdHubJobStatus(passthrough: string[], flags: Record<strin
 export async function cmdHubJobFetch(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const client = requireClient();
   const id = passthrough[0];
-  if (!id) { console.log("  用法: ptl hub job fetch <jobId>"); return; }
+  if (!id) { console.log("  用法: pth job fetch <jobId>"); return; }
   const detail = await client.requestJson(`/api/v1/kernel/jobs/${encodeURIComponent(id)}`, { method: "GET" }) as {
     jobId: string; status: string; total: number; completed: number; failed: number;
     tasks: Array<{ id: string; title: string; status: string; role: string | null; result: { value?: unknown; durationMs?: number } | null; error: string | null }>;

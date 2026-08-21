@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { launchPi, buildPiLaunch } from "../launcher.js";
 import { loadConfig, resolveTemplateId, getDefaultTemplateId } from "@away_from/shared";
-import type { ProgramManifest } from "@away_from/pth-console";
+import type { ProgramManifest } from "@away_from/shared";
 
 export async function pipeToProcess(
   absDir: string,

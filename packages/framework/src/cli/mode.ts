@@ -10,7 +10,6 @@ import {
 } from "../commands.js";
 import { printBanner } from "./main.js";
 import { cmdAgentRun, cmdAgentClean } from "./agent.js";
-import { PthClient } from "@away_from/pth-console";
 import { execSessionLs } from "../commands/session.js";
 import { execTraceLs } from "../commands/trace.js";
 import { execEnvCreate, execEnvList, execEnvShow, execEnvSet, execEnvRm, execEnvFork, parseEnvPatch } from "../env.js";
@@ -64,18 +63,8 @@ const JSON_ROUTERS: Record<string, JsonRouter> = {
     if (sub === "clean") { cmdAgentClean({}, passthrough); return { ok: true }; }
     return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "agent 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
   },
-  hub: async (sub) => {
-    if (sub === "programs") {
-      const client = PthClient.fromConfig();
-      if (!client) return { ok: false, error: { code: "NOT_CONFIGURED", message: "未配置 PTH 连接（ptl config set pth.url/pth.token）" } };
-      try {
-        const programs = await client.list();
-        return { ok: true, data: { programs } };
-      } catch (err: any) {
-        return { ok: false, error: { code: "PTH_UNREACHABLE", message: err?.message ?? String(err) } };
-      }
-    }
-    return { ok: false, error: { code: "UNSUPPORTED_JSON", message: "hub 子命令 " + (sub ?? "(无)") + " 不支持 --json" } };
+  hub: async () => {
+    return { ok: false, error: { code: "MIGRATED_TO_PTH", message: "ptl hub 已退役——PTH 交互请使用 pth CLI（pth program/request/observe/debug/bench/job/console/lineage/trigger/kernel）；容器运维用 ptl stack" } };
   },
   session: async (sub) => {
     if (sub === "ls" || sub === "") return execSessionLs(["--json"]);

@@ -234,9 +234,9 @@ const PTL: RepoSplitRepo = {
 };
 
 export const COMMAND_MIGRATIONS: CommandMigration[] = [
-  { from: "ptl hub submit <dir>", to: "pth submit <dir>", impl: "framework/src/bridge/submit.ts → pth-console/src/commands/submit.ts", kind: "pth" },
-  { from: "ptl hub run <name> [k=v…]", to: "pth run <name> [k=v…]", impl: "bridge/run.ts → pth-console/src/commands/run.ts", kind: "pth" },
-  { from: "ptl hub programs", to: "pth programs", impl: "bridge/programs.ts → pth-console/src/commands/programs.ts", kind: "pth" },
+  { from: "ptl hub submit <dir>", to: "pth program submit <dir>", impl: "framework/src/bridge/submit.ts → pth-console/src/commands/submit.ts", kind: "pth" },
+  { from: "ptl hub run <name> [k=v…]", to: "pth program run <name> [k=v…]", impl: "bridge/run.ts → pth-console/src/commands/run.ts", kind: "pth" },
+  { from: "ptl hub programs", to: "pth program list", impl: "bridge/programs.ts → pth-console/src/commands/programs.ts", kind: "pth" },
   { from: "ptl hub request/requests", to: "pth request / pth requests", impl: "bridge/request.ts → pth-console/src/commands/request.ts", kind: "pth" },
   { from: "ptl hub respond <id> <dir>", to: "pth respond <id> <dir>", impl: "bridge/respond.ts → pth-console/src/commands/respond.ts", kind: "pth" },
   { from: "ptl hub observe …", to: "pth observe …", impl: "bridge/observe.ts → pth-console/src/commands/observe.ts", kind: "pth" },

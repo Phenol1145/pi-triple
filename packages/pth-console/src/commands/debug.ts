@@ -1,15 +1,15 @@
 /**
- * bridge/debug.ts — ptl hub debug 命令（F/WP4 Task 22）
+ * bridge/debug.ts — pth debug 命令（F/WP4 Task 22）
  *
  * 交互式调试接入：stdin 每行 → {type:"input"} → pth /ws/debug → sandbox 调试区
  * （Task 14 容器内 PTL/pi 会话所在容器）执行 → 输出回显 stdout。
  *
- *   ptl hub debug [sandbox|<sessionId>]      （缺省 sandbox；sessionId 经 ?sessionId= 透传）
+ *   pth debug [sandbox|<sessionId>]      （缺省 sandbox；sessionId 经 ?sessionId= 透传）
  *
  * 依赖 Node ≥22 内置 WebSocket（undici）——零新增依赖。
  * 协议：见 src/pth/gateway/routes-debug.ts 头注释（input/output/error/closed）。
  */
-import { PthClient } from "@away_from/pth-console";
+import { PthClient } from "../bridge/client.js";
 import type { Interface as ReadlineInterface } from "node:readline";
 
 // ─── 可测试核心：WS 调试会话客户端 ────────────────────────────────
@@ -113,7 +113,7 @@ export async function cmdHubDebug(passthrough: string[], _flags: Record<string, 
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
+    console.log("  配置: export PTH_URL=<url> PTH_TOKEN=<token>");
     process.exit(1);
   }
 

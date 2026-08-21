@@ -1,26 +1,26 @@
 /**
- * bridge/request.ts — ptl hub request / ptl hub requests 命令（F/WP4 Task 20）
+ * bridge/request.ts — pth request / pth requests 命令（F/WP4 Task 20）
  *
  * 手动建单（spec §5.4——自动触发判定[watchdog/T 参数]留 E 阶段）：模拟根回退节点
  * 的透传行为——人类/PTL 主动创建构件缺口请求。
  *
- *   ptl hub request "<description>" --slot <slotHint> [--urgency low|medium|high]
- *   ptl hub requests（列表——open 优先）
+ *   pth request "<description>" --slot <slotHint> [--urgency low|medium|high]
+ *   pth requests（列表——open 优先）
  */
-import { PthClient } from "@away_from/pth-console";
-import { printBanner } from "../cli/main.js";
+import { PthClient } from "../bridge/client.js";
+import { printPthBanner } from "./banner.js";
 
 export async function cmdHubRequest(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const description = passthrough[0];
   if (!description) {
-    console.log('  用法: ptl hub request "<description>" --slot <slotHint> [--urgency low|medium|high]');
+    console.log('  用法: pth request "<description>" --slot <slotHint> [--urgency low|medium|high]');
     process.exit(1);
   }
 
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
+    console.log("  配置: export PTH_URL=<url> PTH_TOKEN=<token>");
     process.exit(1);
   }
 
@@ -43,18 +43,18 @@ export async function cmdHubRequests(_flags: Record<string, string>): Promise<vo
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
+    console.log("  配置: export PTH_URL=<url> PTH_TOKEN=<token>");
     process.exit(1);
   }
 
   try {
     const reqs = await client.listFallbackRequests();
 
-    printBanner();
+    printPthBanner();
     console.log("  \x1b[1m回退请求列表\x1b[0m");
 
     if (reqs.length === 0) {
-      console.log("\n  暂无回退请求。建单: ptl hub request \"<description>\" --slot <slotHint>");
+      console.log("\n  暂无回退请求。建单: pth request \"<description>\" --slot <slotHint>");
     } else {
       console.log("");
       console.log(`  \x1b[2m${"REQUEST_ID".padEnd(40)}URGENCY STATUS  CREATED  DESCRIPTION\x1b[0m`);
@@ -66,7 +66,7 @@ export async function cmdHubRequests(_flags: Record<string, string>): Promise<vo
         console.log(`  \x1b[1m${id}\x1b[0m${urgency}${status} ${date}  ${r.description}`);
         if (r.slotHint) console.log(`  ${"".padEnd(40)}slot: ${r.slotHint}`);
       }
-      console.log("\n  补全: \x1b[36mptl hub respond <requestId> <dir>\x1b[0m");
+      console.log("\n  补全: \x1b[36mpth respond <requestId> <dir>\x1b[0m");
     }
     console.log("");
   } catch (err: any) {

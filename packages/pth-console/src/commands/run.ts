@@ -1,10 +1,10 @@
 /**
- * bridge/run.ts — ptl run 命令
+ * commands/run.ts — pth run 命令
  *
  * 远端运行程序，SSE 流式打印到终端。
  * k=v 参数 → input object；孤立词 → input.text。
  */
-import { PthClient } from "@away_from/pth-console";
+import { PthClient } from "../bridge/client.js";
 
 /**
  * 解析 k=v 参数：k=v 对进 object，孤立词进 text。
@@ -31,14 +31,14 @@ function parseInput(args: string[]): string | Record<string, string> {
 
 export async function cmdRun(name: string, args: string[], flags: Record<string, string>): Promise<void> {
   if (!name) {
-    console.log("  用法: ptl hub run <program> [k=v...] [--version N]");
+    console.log("  用法: pth run <program> [k=v...] [--version N]");
     process.exit(1);
   }
 
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
+    console.log("  配置: export PTH_URL=<url> PTH_TOKEN=<token>");
     process.exit(1);
   }
 

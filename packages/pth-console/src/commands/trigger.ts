@@ -1,5 +1,5 @@
 /**
- * bridge/trigger.ts — ptl hub trigger 命令族
+ * bridge/trigger.ts — pth trigger 命令族
  *
  * PTH trigger 组件（事件触发任务）的 PTL 交互层：经 PthClient HTTP 访问
  * gateway /api/v1/kernel/triggers 路由：
@@ -9,21 +9,21 @@
  *   DELETE /api/v1/kernel/triggers/:id        删除
  *   POST   /api/v1/kernel/triggers/reload     立即重载
  *
- *   ptl hub trigger ls
- *   ptl hub trigger add --name <n> --event <e> [--role <r>]
+ *   pth trigger ls
+ *   pth trigger add --name <n> --event <e> [--role <r>]
  *        [--task-title <t> --task-text <x> | --json '{...}'] [--once] [--max-fires <n>]
- *   ptl hub trigger rm <id>
- *   ptl hub trigger toggle <id> [--on|--off]
- *   ptl hub trigger reload
+ *   pth trigger rm <id>
+ *   pth trigger toggle <id> [--on|--off]
+ *   pth trigger reload
  */
-import { PthClient } from "@away_from/pth-console";
+import { PthClient } from "../bridge/client.js";
 
 /** 从 pi-triple.json 配置构造客户端；未配置时给出引导并退出。 */
 function requireClient(): PthClient {
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
+    console.log("  配置: export PTH_URL=<url> PTH_TOKEN=<token>");
     process.exit(1);
   }
   return client;
@@ -40,13 +40,13 @@ function parseIntFlag(flags: Record<string, string>, key: string): number | unde
 /** trigger 缺省用法打印（无子命令 / 未知子命令时） */
 function printUsage(): void {
   console.log([
-    "  ptl hub trigger ls                                     触发器列表（id/name/event/match/enabled）",
-    "  ptl hub trigger add --name <n> --event <e>             创建触发器",
+    "  pth trigger ls                                     触发器列表（id/name/event/match/enabled）",
+    "  pth trigger add --name <n> --event <e>             创建触发器",
     "        [--role <role>] [--task-title <t> --task-text <x> | --json '{...}']",
     "        [--once] [--max-fires <n>]",
-    "  ptl hub trigger rm <id>                                删除触发器",
-    "  ptl hub trigger toggle <id> [--on|--off]               启用/禁用（缺省翻转当前状态）",
-    "  ptl hub trigger reload                                 立即重载触发器",
+    "  pth trigger rm <id>                                删除触发器",
+    "  pth trigger toggle <id> [--on|--off]               启用/禁用（缺省翻转当前状态）",
+    "  pth trigger reload                                 立即重载触发器",
   ].join("\n"));
 }
 
@@ -102,7 +102,7 @@ async function triggerLs(flags: Record<string, string>): Promise<void> {
     }
     console.log("═══ 触发器（event → task）═══");
     if (triggers.length === 0) {
-      console.log("\n  暂无触发器。创建: ptl hub trigger add --name x --event task.done");
+      console.log("\n  暂无触发器。创建: pth trigger add --name x --event task.done");
       return;
     }
     console.log(`  ${"ID".padEnd(26)} ${"NAME".padEnd(20)} ${"EVENT".padEnd(18)} ${"MATCH".padEnd(16)} ENABLED`);
@@ -146,7 +146,7 @@ async function triggerAdd(passthrough: string[], flags: Record<string, string>):
   const event = flags.event ?? jsonExtra?.event;
   if (!name || !event) {
     console.log(
-      "  用法: ptl hub trigger add --name <n> --event <e> [--role <r>] " +
+      "  用法: pth trigger add --name <n> --event <e> [--role <r>] " +
         "[--task-title <t> --task-text <x> | --json '{...}'] [--once] [--max-fires <n>]",
     );
     process.exit(1);
@@ -183,7 +183,7 @@ async function triggerAdd(passthrough: string[], flags: Record<string, string>):
     console.log(`    name:    ${name}`);
     console.log(`    event:   ${event}`);
     console.log(`    enabled: ${String(created?.enabled ?? true)}`);
-    console.log("  查看: \x1b[36mptl hub trigger ls\x1b[0m   禁用: \x1b[36mptl hub trigger toggle <id> --off\x1b[0m");
+    console.log("  查看: \x1b[36mpth trigger ls\x1b[0m   禁用: \x1b[36mpth trigger toggle <id> --off\x1b[0m");
   } catch (err: any) {
     console.log(`\x1b[31m❌ 创建触发器失败: ${err.message}\x1b[0m`);
     process.exit(1);
@@ -192,7 +192,7 @@ async function triggerAdd(passthrough: string[], flags: Record<string, string>):
 
 async function triggerRm(id: string | undefined): Promise<void> {
   if (!id) {
-    console.log("  用法: ptl hub trigger rm <id>");
+    console.log("  用法: pth trigger rm <id>");
     process.exit(1);
   }
   const client = requireClient();
@@ -208,7 +208,7 @@ async function triggerRm(id: string | undefined): Promise<void> {
 
 async function triggerToggle(id: string | undefined, flags: Record<string, string>): Promise<void> {
   if (!id) {
-    console.log("  用法: ptl hub trigger toggle <id> [--on|--off]");
+    console.log("  用法: pth trigger toggle <id> [--on|--off]");
     process.exit(1);
   }
   const client = requireClient();

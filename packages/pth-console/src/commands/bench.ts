@@ -5,10 +5,10 @@
  * （路由/认领/执行/refine 各阶段 + 系统快照）——归档 .perf-bench/ 积累趋势数据——
  * 为下一个版本 V8 引擎专项优化做铺垫。
  *
- *   ptl hub bench            跑全量基准（7 类代表性任务）+ 归档 + 与最新对比
- *   ptl hub bench --task ts  只跑单类任务
- *   ptl hub bench --list     列出历史基准
- *   ptl hub bench --compare  对比最近两次基准
+ *   pth bench            跑全量基准（7 类代表性任务）+ 归档 + 与最新对比
+ *   pth bench --task ts  只跑单类任务
+ *   pth bench --list     列出历史基准
+ *   pth bench --compare  对比最近两次基准
  *
  * 基准任务集（代表性——覆盖各执行路径）：
  *   ts-calc    纯 ts 计算（路由/认领/执行基线）
@@ -22,7 +22,7 @@
 
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { PthClient } from "@away_from/pth-console";
+import { PthClient } from "../bridge/client.js";
 
 const BENCH_DIR = ".perf-bench";
 const POLL_MS = 1000;
@@ -76,7 +76,7 @@ function requireClient(): PthClient {
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
+    console.log("  配置: export PTH_URL=<url> PTH_TOKEN=<token>");
     process.exit(1);
   }
   return client;
@@ -153,7 +153,7 @@ export async function cmdHubBench(passthrough: string[], flags: Record<string, s
   // --list：历史基准
   if (flags.list === "true" || flags.list === "1") {
     const reports = await listReports();
-    if (reports.length === 0) { console.log("  · 无历史基准——运行 ptl hub bench"); return; }
+    if (reports.length === 0) { console.log("  · 无历史基准——运行 pth bench"); return; }
     console.log("  \x1b[1m历史基准（.perf-bench/）\x1b[0m");
     for (const r of reports) {
       console.log(`    ${r.file}  ${r.ts}  completed=${r.summary.completed}/${r.summary.total}  avgExec=${r.summary.avgExecMs}ms`);
@@ -164,7 +164,7 @@ export async function cmdHubBench(passthrough: string[], flags: Record<string, s
   // --compare：最近两次对比
   if (flags.compare === "true" || flags.compare === "1") {
     const reports = await listReports();
-    if (reports.length < 2) { console.log("  · 不足两次基准——运行 ptl hub bench 积累"); return; }
+    if (reports.length < 2) { console.log("  · 不足两次基准——运行 pth bench 积累"); return; }
     const [latest, prev] = reports;
     const curR = JSON.parse(await readFile(join(await benchDir(), latest.file), "utf8")) as BenchReport;
     const prevR = JSON.parse(await readFile(join(await benchDir(), prev.file), "utf8")) as BenchReport;

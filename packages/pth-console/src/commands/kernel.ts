@@ -1,23 +1,23 @@
 /**
- * bridge/kernel.ts — ptl hub kernel 命令族（任务工具 Task 3）
+ * bridge/kernel.ts — pth kernel 命令族（任务工具 Task 3）
  *
  * PTL 作为交互层：经 PthClient HTTP 访问 PTH gateway /kernel/* 路由，
  * 发布任务 / 查状态 / 控制 batch / 运行状态全景（监控面板铺垫）。
  *
- *   ptl hub kernel tasks add "<描述>" [--tags x,y]
- *   ptl hub kernel tasks ls [--limit n]
- *   ptl hub kernel batch add [n]
- *   ptl hub kernel batch remove [n]
- *   ptl hub kernel status
+ *   pth kernel tasks add "<描述>" [--tags x,y]
+ *   pth kernel tasks ls [--limit n]
+ *   pth kernel batch add [n]
+ *   pth kernel batch remove [n]
+ *   pth kernel status
  */
-import { PthClient } from "@away_from/pth-console";
-import { printBanner } from "../cli/main.js";
+import { PthClient } from "../bridge/client.js";
+import { printPthBanner } from "./banner.js";
 
 function requireClient(): PthClient {
   const client = PthClient.fromConfig();
   if (!client) {
     console.log("  \x1b[31m❌ 未配置 PTH 连接\x1b[0m");
-    console.log("  配置: ptl config set pth.url <url>  &&  ptl config set pth.token <token>");
+    console.log("  配置: export PTH_URL=<url> PTH_TOKEN=<token>");
     process.exit(1);
   }
   return client;
@@ -31,7 +31,7 @@ function parseTags(flags: Record<string, string>): string[] | undefined {
 }
 
 export async function cmdKernelTasksAdd(passthrough: string[], flags: Record<string, string>): Promise<void> {
-  // 模板发布：ptl hub kernel tasks add --template recon-doc --url X --anchors a,b
+  // 模板发布：pth kernel tasks add --template recon-doc --url X --anchors a,b
   if (flags.template) {
     const client = requireClient();
     const params: Record<string, unknown> = {};
@@ -44,28 +44,28 @@ export async function cmdKernelTasksAdd(passthrough: string[], flags: Record<str
     if (flags.anchors) params.anchors = flags.anchors.split(",").map((a) => a.trim()).filter(Boolean);
     try {
       const task = await client.publishTemplateTask(templateId, params, {
-        createdBy: process.env.USER ?? "ptl",
+        createdBy: process.env.USER ?? "pth",
         tags: parseTags(flags),
       });
-      printBanner();
+      printPthBanner();
       console.log(`  \x1b[1m[模板 ${templateId}] 任务已发布\x1b[0m`);
       console.log(`    id:     ${task.id}`);
       console.log(`    status: ${task.status}`);
-      console.log("  查看: \x1b[36mptl hub kernel tasks ls\x1b[0m");
+      console.log("  查看: \x1b[36mpth kernel tasks ls\x1b[0m");
       return;
     } catch (err: any) {
       console.log(`\x1b[31m❌ 模板发布失败: ${err.message}\x1b[0m`);
-      console.log("  模板列表: ptl hub kernel templates ls");
+      console.log("  模板列表: pth kernel templates ls");
       process.exit(1);
     }
   }
 
   const desc = passthrough.join(" ");
   if (!desc) {
-    console.log("  用法: ptl hub kernel tasks add \"<任务描述>\" --tags <角色标签>");
+    console.log("  用法: pth kernel tasks add \"<任务描述>\" --tags <角色标签>");
     console.log("        角色标签（必填其一）：code/test/analysis/research/plan/design/recon/memory/accept/origin…");
     console.log("        （任务池纯化：只面向自然语言——严格标签校验；调试代码执行走 kernel exec 通道）");
-    console.log("        ptl hub kernel tasks add --template <id> --url <x> [--anchors a,b] [--section S]");
+    console.log("        pth kernel tasks add --template <id> --url <x> [--anchors a,b] [--section S]");
     process.exit(1);
   }
   const client = requireClient();
@@ -73,15 +73,15 @@ export async function cmdKernelTasksAdd(passthrough: string[], flags: Record<str
     const task = await client.publishTask({
       title: desc.slice(0, 80),
       text: desc,
-      createdBy: process.env.USER ?? "ptl",
+      createdBy: process.env.USER ?? "pth",
       tags: parseTags(flags),
     });
-    printBanner();
+    printPthBanner();
     console.log("  \x1b[1m任务已发布\x1b[0m");
     console.log(`    id:     ${task.id}`);
     console.log(`    status: ${task.status}`);
     console.log(`    title:  ${task.title}`);
-    console.log("  查看: \x1b[36mptl hub kernel tasks ls\x1b[0m  状态: \x1b[36mptl hub kernel status\x1b[0m");
+    console.log("  查看: \x1b[36mpth kernel tasks ls\x1b[0m  状态: \x1b[36mpth kernel status\x1b[0m");
   } catch (err: any) {
     console.log(`\x1b[31m❌ 发布任务失败: ${err.message}\x1b[0m`);
     process.exit(1);
@@ -92,7 +92,7 @@ export async function cmdKernelTemplatesLs(_passthrough: string[], _flags: Recor
   const client = requireClient();
   try {
     const templates = await client.listTemplates();
-    printBanner();
+    printPthBanner();
     console.log("  \x1b[1mPTH 任务模板\x1b[0m");
     if (templates.length === 0) {
       console.log("\n  暂无模板。");
@@ -105,7 +105,7 @@ export async function cmdKernelTemplatesLs(_passthrough: string[], _flags: Recor
         if (params) console.log(`      参数: ${params}`);
       }
       console.log("");
-      console.log("  发布: \x1b[36mptl hub kernel tasks add --template <id> --key value...\x1b[0m");
+      console.log("  发布: \x1b[36mpth kernel tasks add --template <id> --key value...\x1b[0m");
     }
     console.log("");
   } catch (err: any) {
@@ -119,10 +119,10 @@ export async function cmdKernelTasksLs(flags: Record<string, string>): Promise<v
   const limit = flags.limit ? parseInt(flags.limit, 10) || 20 : 20;
   try {
     const tasks = await client.listTasks({ limit });
-    printBanner();
+    printPthBanner();
     console.log("  \x1b[1mPTH 任务列表\x1b[0m");
     if (tasks.length === 0) {
-      console.log("\n  暂无任务。发布: \x1b[36mptl hub kernel tasks add \"<描述>\"\x1b[0m");
+      console.log("\n  暂无任务。发布: \x1b[36mpth kernel tasks add \"<描述>\"\x1b[0m");
     } else {
       console.log("");
       console.log(`  \x1b[2m${"ID".padEnd(12)}${"STATUS".padEnd(12)}TITLE\x1b[0m`);
@@ -142,13 +142,13 @@ export async function cmdKernelTasksLs(flags: Record<string, string>): Promise<v
 export async function cmdKernelTasksCancel(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const id = passthrough[0];
   if (!id) {
-    console.log("  用法: ptl hub kernel tasks cancel <taskId> [--recursive]");
+    console.log("  用法: pth kernel tasks cancel <taskId> [--recursive]");
     process.exit(1);
   }
   const client = requireClient();
   try {
     const r = await client.cancelTask(id, { recursive: "recursive" in flags });
-    printBanner();
+    printPthBanner();
     console.log(`  \x1b[1m任务取消\x1b[0m  ${id}`);
     console.log(`    cancelled: ${r.cancelled}`);
     for (const t of r.taskIds) console.log(`    - ${t}`);
@@ -189,11 +189,11 @@ async function waitOnce(client: PthClient, id: string): Promise<{ terminal: bool
   return isTerminalStatus(status) ? { terminal: true, ok: status === "completed" } : { terminal: false, ok: true };
 }
 
-/** ptl hub kernel wait <taskId> [--follow] [--timeout ms]：等待任务终态；--follow 经 SSE 实时打印 path/childResult */
+/** pth kernel wait <taskId> [--follow] [--timeout ms]：等待任务终态；--follow 经 SSE 实时打印 path/childResult */
 export async function cmdKernelWait(passthrough: string[], flags: Record<string, string>): Promise<void> {
   const id = passthrough[0];
   if (!id) {
-    console.log("  用法: ptl hub kernel wait <taskId> [--follow] [--timeout ms]");
+    console.log("  用法: pth kernel wait <taskId> [--follow] [--timeout ms]");
     process.exit(1);
   }
   const client = requireClient();
@@ -263,7 +263,7 @@ export async function cmdKernelWait(passthrough: string[], flags: Record<string,
 }
 
 export async function cmdKernelBatchAdd(passthrough: string[], flags: Record<string, string>): Promise<void> {
-  // ptl hub kernel batch add [n] [--role developer] [--copies 2] [--weights developer:3,analyst:2]
+  // pth kernel batch add [n] [--role developer] [--copies 2] [--weights developer:3,analyst:2]
   const n = Math.min(Math.max(parseInt(passthrough[0] ?? "1", 10) || 1, 1), 10);
   const client = requireClient();
   try {
@@ -272,10 +272,10 @@ export async function cmdKernelBatchAdd(passthrough: string[], flags: Record<str
       copies: flags.copies ? parseInt(flags.copies, 10) : undefined,
       weights: flags.weights,
     });
-    printBanner();
+    printPthBanner();
     console.log(`  \x1b[1m已启动 ${res.spawned} 个 batch（${res.mode}）\x1b[0m`);
     for (const b of res.batches) console.log(`    ${b.id.slice(0, 8)}  pid=${b.pid}  workers=[${b.workers?.join(",") ?? "?"}]`);
-    console.log("  状态: \x1b[36mptl hub kernel status\x1b[0m");
+    console.log("  状态: \x1b[36mpth kernel status\x1b[0m");
   } catch (err: any) {
     console.log(`\x1b[31m❌ 启动 batch 失败: ${err.message}\x1b[0m`);
     process.exit(1);
@@ -287,7 +287,7 @@ export async function cmdKernelBatchRemove(passthrough: string[], _flags: Record
   const client = requireClient();
   try {
     const res = await client.batchRemove(n);
-    printBanner();
+    printPthBanner();
     console.log(`  \x1b[1m已停止 ${res.stopped} 个 batch\x1b[0m`);
   } catch (err: any) {
     console.log(`\x1b[31m❌ 停止 batch 失败: ${err.message}\x1b[0m`);
@@ -296,19 +296,19 @@ export async function cmdKernelBatchRemove(passthrough: string[], _flags: Record
 }
 
 export async function cmdKernelBatchWorker(passthrough: string[], _flags: Record<string, string>): Promise<void> {
-  // ptl hub kernel batch worker <action> <batchId> <role> [copies]
+  // pth kernel batch worker <action> <batchId> <role> [copies]
   const [action, batchId, role, copiesRaw] = passthrough;
   if (!["pause", "resume", "remove", "add"].includes(action ?? "") || !batchId || !role) {
-    console.log("  用法: ptl hub kernel batch worker <pause|resume|remove|add> <batchId> <role> [copies]");
+    console.log("  用法: pth kernel batch worker <pause|resume|remove|add> <batchId> <role> [copies]");
     process.exit(1);
   }
   const client = requireClient();
   try {
     const res = await client.workerControl(batchId, action!, role, copiesRaw ? parseInt(copiesRaw, 10) || 1 : undefined);
-    printBanner();
+    printPthBanner();
     console.log(`  \x1b[1mworker ${action} ${role}\x1b[0m @ ${batchId.slice(0, 8)}`);
     console.log(`    batch: ${res.batchId} · action: ${res.action}${res.copies ? ` · copies: ${res.copies}` : ""}`);
-    console.log("  状态: \x1b[36mptl hub kernel status\x1b[0m");
+    console.log("  状态: \x1b[36mpth kernel status\x1b[0m");
   } catch (err: any) {
     console.log(`\x1b[31m❌ worker 控制失败: ${err.message}\x1b[0m`);
     process.exit(1);
@@ -319,7 +319,7 @@ export async function cmdKernelStatus(_passthrough: string[], _flags: Record<str
   const client = requireClient();
   try {
     const s = await client.kernelStatus();
-    printBanner();
+    printPthBanner();
     console.log("  \x1b[1mPTH kernel 运行状态\x1b[0m");
     console.log("");
     console.log(`  kernel: ${s.kernel.connected ? "\x1b[32mconnected\x1b[0m" : "\x1b[31mdisconnected\x1b[0m"}`);

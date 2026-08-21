@@ -11,15 +11,17 @@ function capture(fn: () => void): string {
 describe("printHelp（分组）", () => {
   it("含全部组标题", () => {
     const out = capture(printHelp);
-    for (const g of ["日常使用", "可视化 TUI", "Operator Console", "模板与配置", "远端程序", "Agent", "系统与维护"]) {
+    for (const g of ["日常使用", "可视化 TUI", "Operator Console", "模板与配置", "容器运维与本地程序调试", "PTH 交互", "Agent", "系统与维护"]) {
       expect(out).toContain(g);
     }
   });
-  it("含 tui/hub/operator 命令", () => {
+  it("含 tui/stack/program/pth 命令", () => {
     const out = capture(printHelp);
     expect(out).toContain("tui dashboard");
     expect(out).toContain("tui lab");
-    expect(out).toContain("hub submit");
+    expect(out).toContain("stack deploy");
+    expect(out).toContain("program dev");
+    expect(out).toContain("pth submit");
     expect(out).toContain("operator [--port p] [--no-open]");
   });
   it("无 tenant 残留（已改名 template）", () => {
@@ -40,9 +42,9 @@ describe("printGettingStarted", () => {
 });
 
 describe("printNamespaceHelp", () => {
-  it("hub → 列出 submit/run/programs/dev", () => {
+  it("hub → 显示迁移提示（pth/stack/program）", () => {
     const out = capture(() => printNamespaceHelp("hub"));
-    for (const c of ["submit", "run", "programs", "dev"]) expect(out).toContain(c);
+    for (const c of ["已退役", "pth program submit/run/list", "ptl stack"]) expect(out).toContain(c);
   });
   it("tui → 列出 dashboard/lab", () => {
     const out = capture(() => printNamespaceHelp("tui"));

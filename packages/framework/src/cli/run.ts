@@ -10,8 +10,12 @@ import { cmdPi, cmdStart, cmdAttach, cmdSwitch, cmdDetach, cmdRestore } from "./
 import { cmdConfig } from "./config-cmd.js";
 import { resolveMode, routeJsonCommand, doPrintCommand } from "./mode.js";
 import { cmdMigrate, handleUpdate, handleInstallRemove, handleShared } from "./admin.js";
-import { cmdTui, cmdHub, getDeprecatedMigration } from "./route.js";
+import { cmdTui, getDeprecatedMigration } from "./route.js";
 import { cmdAgentRun, cmdAgentClean } from "./agent.js";
+import { cmdDev as cmdProgramDev } from "../program-dev/dev.js";
+import {
+  cmdStackDeploy, cmdStackStatus, cmdStackLogs, cmdStackUpgrade, cmdStackExec,
+} from "../stack/commands.js";
 import { emitJsonError, getConfigValue } from "@away_from/shared";
 import { dispatchCommand } from "../commands/dispatch.js";
 import { registerPiSessionProvider } from "../session/pi-provider.js";
@@ -194,9 +198,34 @@ export async function main() {
     case "config":
       cmdConfig(subcommand, passthrough);
       break;
-    case "hub":
-      await cmdHub(subcommand, passthrough, flags);
+    case "hub": {
+      console.log(`  \x1b[33m⚠️  ptl hub 已退役：PTH 交互请使用 \`npm run pth -- <cmd>\`\x1b[0m`);
+      console.log(`  PTH: pth submit | program submit/run/list | request(s) | respond | observe | debug | bench | job | console | lineage | trigger | kernel`);
+      console.log(`  本地: ptl program dev <dir>（pi 调试）· ptl stack deploy/status/logs/upgrade/exec（容器运维）`);
+      process.exit(1);
+    }
+    case "program": {
+      if (subcommand === "dev") {
+        await cmdProgramDev(passthrough[0] ?? "", passthrough.slice(1), flags);
+        break;
+      }
+      console.log("  用法: ptl program dev <dir> [pi args...]");
       break;
+    }
+    case "stack": {
+      switch (subcommand) {
+        case "deploy": await cmdStackDeploy(passthrough, flags); break;
+        case "status": await cmdStackStatus(passthrough, flags); break;
+        case "logs": await cmdStackLogs(passthrough, flags); break;
+        case "upgrade": await cmdStackUpgrade(passthrough, flags); break;
+        case "exec": await cmdStackExec(passthrough, flags); break;
+        default: {
+          console.log("  用法: ptl stack <deploy|status|logs|upgrade|exec> …");
+          break;
+        }
+      }
+      break;
+    }
     case "ui":
     case "lab":
     case "submit":

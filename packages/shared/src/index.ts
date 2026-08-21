@@ -17,3 +17,5 @@ export * from "./paths.js";
 export * from "./presence.js";
 export { Registry } from "./registry.js";
 export type { RegistryEntry as MailboxRegistryEntry } from "./registry.js";
+
+export * from "./program-manifest.js";

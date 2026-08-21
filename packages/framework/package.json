@@ -13,7 +13,6 @@
   "scripts": {},
   "dependencies": {
     "@away_from/infra": "file:../infra",
-    "@away_from/pth-console": "file:../pth-console",
     "@away_from/shared": "file:../shared",
     "zod": "^4.0.0"
   }

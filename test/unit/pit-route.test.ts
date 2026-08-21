@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
-  resolveTuiPanel, TUI_PANELS, HUB_COMMANDS,
+  resolveTuiPanel, TUI_PANELS,
   DEPRECATED_COMMANDS, getDeprecatedMigration,
 } from "../../packages/framework/src/cli/route.js";
-import { cmdTui, type TuiLaunchOpts, cmdHub, type HubHandlers } from "../../packages/framework/src/cli/route.js";
+import { cmdTui, type TuiLaunchOpts } from "../../packages/framework/src/cli/route.js";
 
 describe("resolveTuiPanel", () => {
   it("无子命令 → dashboard", () => {
@@ -23,12 +23,6 @@ describe("resolveTuiPanel", () => {
   });
 });
 
-describe("HUB_COMMANDS", () => {
-  it("含 submit/run/programs/dev/request/requests/respond/observe/debug + 容器运维族（deploy/status/logs/upgrade/exec）", () => {
-    expect(HUB_COMMANDS).toEqual(["submit", "run", "programs", "dev", "request", "requests", "respond", "observe", "debug", "deploy", "status", "logs", "upgrade", "exec", "bench", "job", "console", "lineage", "trigger"]);
-  });
-});
-
 describe("getDeprecatedMigration", () => {
   it("ui → ptl tui dashboard", () => {
     expect(getDeprecatedMigration("ui")).toMatch(/ptl tui dashboard/);
@@ -36,18 +30,22 @@ describe("getDeprecatedMigration", () => {
   it("lab → ptl tui lab", () => {
     expect(getDeprecatedMigration("lab")).toMatch(/ptl tui lab/);
   });
-  it("submit/run/programs/dev → ptl hub …", () => {
-    expect(getDeprecatedMigration("submit")).toMatch(/ptl hub submit/);
-    expect(getDeprecatedMigration("run")).toMatch(/ptl hub run/);
-    expect(getDeprecatedMigration("programs")).toMatch(/ptl hub programs/);
-    expect(getDeprecatedMigration("dev")).toMatch(/ptl hub dev/);
+  it("submit/run/programs/dev → pth program / ptl program dev", () => {
+    expect(getDeprecatedMigration("submit")).toMatch(/pth program submit/);
+    expect(getDeprecatedMigration("run")).toMatch(/pth program run/);
+    expect(getDeprecatedMigration("programs")).toMatch(/pth program list/);
+    expect(getDeprecatedMigration("dev")).toMatch(/ptl program dev/);
+  });
+  it("hub → pth CLI / ptl stack 迁移提示", () => {
+    expect(getDeprecatedMigration("hub")).toMatch(/pth <submit|program|request|observe|debug|bench|job|console|lineage|trigger|kernel>/);
+    expect(getDeprecatedMigration("hub")).toMatch(/ptl stack/);
   });
   it("未废弃命令 → null", () => {
     expect(getDeprecatedMigration("start")).toBeNull();
     expect(getDeprecatedMigration("tui")).toBeNull();
   });
-  it("DEPRECATED_COMMANDS 恰好 6 条", () => {
-    expect(Object.keys(DEPRECATED_COMMANDS).sort()).toEqual(["dev","lab","programs","run","submit","ui"]);
+  it("DEPRECATED_COMMANDS 恰好 7 条", () => {
+    expect(Object.keys(DEPRECATED_COMMANDS).sort()).toEqual(["dev", "hub", "lab", "programs", "run", "submit", "ui"]);
   });
   it("原型链键（toString/constructor/__proto__）→ null", () => {
     expect(getDeprecatedMigration("toString")).toBeNull();
@@ -88,121 +86,9 @@ describe("cmdTui", () => {
   });
 });
 
-describe("cmdHub", () => {
-  function fakeHandlers() {
-    const calls: Array<[string, unknown[]]> = [];
-    const h: HubHandlers = {
-      submit: async (...a: unknown[]) => { calls.push(["submit", a]); },
-      run: async (...a: unknown[]) => { calls.push(["run", a]); },
-      programs: async (...a: unknown[]) => { calls.push(["programs", a]); },
-      dev: async (...a: unknown[]) => { calls.push(["dev", a]); },
-      request: async (...a: unknown[]) => { calls.push(["request", a]); },
-      requests: async (...a: unknown[]) => { calls.push(["requests", a]); },
-      respond: async (...a: unknown[]) => { calls.push(["respond", a]); },
-      observe: async (...a: unknown[]) => { calls.push(["observe", a]); },
-      debug: async (...a: unknown[]) => { calls.push(["debug", a]); },
-    };
-    return { calls, h };
-  }
-
-  it("hub submit my-agent → handlers.submit([my-agent], flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("submit", ["my-agent"], { dry: "true" }, h);
-    expect(calls[0][0]).toBe("submit");
-    expect(calls[0][1][0]).toEqual(["my-agent"]);
-    expect(calls[0][1][1]).toEqual({ dry: "true" });
-  });
-
-  it("hub run reviewer repo=./x → handlers.run(name, restArgs, flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("run", ["reviewer", "repo=./x", "pr=42"], {}, h);
-    expect(calls[0][0]).toBe("run");
-    expect(calls[0][1][0]).toBe("reviewer");
-    expect(calls[0][1][1]).toEqual(["repo=./x", "pr=42"]);
-  });
-
-  it("hub programs → handlers.programs(flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("programs", [], { json: "true" }, h);
-    expect(calls[0][0]).toBe("programs");
-    expect(calls[0][1][0]).toEqual({ json: "true" });
-  });
-
-  it("hub dev my-agent → handlers.dev(dir, rest, flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("dev", ["my-agent"], {}, h);
-    expect(calls[0][0]).toBe("dev");
-    expect(calls[0][1][0]).toBe("my-agent");
-  });
-
-  it("hub request <desc> --slot s --urgency high → handlers.request(passthrough, flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("request", ["缺一个审核 agent"], { slot: "slot-a", urgency: "high" }, h);
-    expect(calls[0][0]).toBe("request");
-    expect(calls[0][1][0]).toEqual(["缺一个审核 agent"]);
-    expect(calls[0][1][1]).toEqual({ slot: "slot-a", urgency: "high" });
-  });
-
-  it("hub requests → handlers.requests(flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("requests", [], { json: "true" }, h);
-    expect(calls[0][0]).toBe("requests");
-    expect(calls[0][1][0]).toEqual({ json: "true" });
-  });
-
-  it("hub respond <id> <dir> → handlers.respond(passthrough, flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("respond", ["req-1", "./my-agent"], {}, h);
-    expect(calls[0][0]).toBe("respond");
-    expect(calls[0][1][0]).toEqual(["req-1", "./my-agent"]);
-    expect(calls[0][1][1]).toEqual({});
-  });
-
-  it("hub observe sessions --json → handlers.observe(passthrough, flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("observe", ["sessions"], { json: "true" }, h);
-    expect(calls[0][0]).toBe("observe");
-    expect(calls[0][1][0]).toEqual(["sessions"]);
-    expect(calls[0][1][1]).toEqual({ json: "true" });
-  });
-
-  it("hub observe trace <id> → handlers.observe(passthrough, flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("observe", ["trace", "s-1"], {}, h);
-    expect(calls[0][0]).toBe("observe");
-    expect(calls[0][1][0]).toEqual(["trace", "s-1"]);
-  });
-
-  it("hub debug sandbox → handlers.debug(passthrough, flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("debug", ["sandbox"], {}, h);
-    expect(calls[0][0]).toBe("debug");
-    expect(calls[0][1][0]).toEqual(["sandbox"]);
-    expect(calls[0][1][1]).toEqual({});
-  });
-
-  it("hub debug <sessionId> → handlers.debug(passthrough, flags)", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("debug", ["sess-abc"], {}, h);
-    expect(calls[0][0]).toBe("debug");
-    expect(calls[0][1][0]).toEqual(["sess-abc"]);
-  });
-
-  it("hub（无子命令）→ 打印帮助，不调用任何 handler", async () => {
-    const { calls, h } = fakeHandlers();
-    await cmdHub("", [], {}, h);
-    expect(calls).toHaveLength(0);
-  });
-});
-
-describe("operator 命令边界（ptl operator 是 top-level，不属于 hub/tui/deprecated）", () => {
+describe("operator 命令边界", () => {
   it("operator 不是 deprecated 命令，也不属于 TUI 面板", () => {
     expect(getDeprecatedMigration("operator")).toBeNull();
     expect(TUI_PANELS).not.toContain("operator");
-  });
-
-  it("HUB_COMMANDS 保留 hub console（PTH bridge 活动观测台），operator 不进入 hub 子命令", () => {
-    expect(HUB_COMMANDS).toContain("console");
-    expect(HUB_COMMANDS).not.toContain("operator");
   });
 });

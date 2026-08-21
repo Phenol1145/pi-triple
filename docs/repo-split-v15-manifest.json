@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T10:24:19.103Z",
+  "generatedAt": "2026-08-21T10:54:25.482Z",
   "decisions": {
     "topology": [
       "pi-triple-deps",
@@ -279,19 +279,19 @@
   "commandMigrations": [
     {
       "from": "ptl hub submit <dir>",
-      "to": "pth submit <dir>",
+      "to": "pth program submit <dir>",
       "impl": "framework/src/bridge/submit.ts → pth-console/src/commands/submit.ts",
       "kind": "pth"
     },
     {
       "from": "ptl hub run <name> [k=v…]",
-      "to": "pth run <name> [k=v…]",
+      "to": "pth program run <name> [k=v…]",
       "impl": "bridge/run.ts → pth-console/src/commands/run.ts",
       "kind": "pth"
     },
     {
       "from": "ptl hub programs",
-      "to": "pth programs",
+      "to": "pth program list",
       "impl": "bridge/programs.ts → pth-console/src/commands/programs.ts",
       "kind": "pth"
     },

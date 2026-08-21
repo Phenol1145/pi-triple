@@ -1,14 +1,14 @@
 /**
- * ptl hub lineage —— 角色谱系监督层（树状分化——有监督自动化）
+ * pth lineage —— 角色谱系监督层（树状分化——有监督自动化）
  *
- *   ptl hub lineage tree                  谱系树（Origin → 中间层 → 叶子——文本渲染）
- *   ptl hub lineage proposals [--all]     分化建议列表（默认 draft 待审——refine 任务 3 产出）
- *   ptl hub lineage show <id>             建议详情（子任务/建议角色/理由/置信度）
- *   ptl hub lineage approve <id> [--json overrides]   批准 → 注册新角色（树生长——batch 热上线）
- *   ptl hub lineage reject <id> [--reason x]          拒绝（archived）
+ *   pth lineage tree                  谱系树（Origin → 中间层 → 叶子——文本渲染）
+ *   pth lineage proposals [--all]     分化建议列表（默认 draft 待审——refine 任务 3 产出）
+ *   pth lineage show <id>             建议详情（子任务/建议角色/理由/置信度）
+ *   pth lineage approve <id> [--json overrides]   批准 → 注册新角色（树生长——batch 热上线）
+ *   pth lineage reject <id> [--reason x]          拒绝（archived）
  */
 
-import { PthClient } from "@away_from/pth-console";
+import { PthClient } from "../bridge/client.js";
 
 interface ProposalEntry {
   id: string;
@@ -53,13 +53,13 @@ export async function cmdHubLineage(passthrough: string[], flags: Record<string,
         } catch { parent = e.anchors[0] ?? "?"; }
         console.log(`  ${e.id}  [${e.status}]  parent=${parent}  建议=${suggested}`);
       }
-      console.log(`\n详情：ptl hub lineage show <id>　批准：ptl hub lineage approve <id>`);
+      console.log(`\n详情：pth lineage show <id>　批准：pth lineage approve <id>`);
       return;
     }
 
     case "show": {
       const id = rest[0];
-      if (!id) { console.error("用法: ptl hub lineage show <id>"); return; }
+      if (!id) { console.error("用法: pth lineage show <id>"); return; }
       const e = await client.requestJson(`/api/v1/kernel/memory/${encodeURIComponent(id)}`, { method: "GET" }) as { id: string; status: string; content: string };
       console.log(`═══ 分化建议 ${e.id} [${e.status}] ═══`);
       try {
@@ -84,7 +84,7 @@ export async function cmdHubLineage(passthrough: string[], flags: Record<string,
 
     case "approve": {
       const id = rest[0];
-      if (!id) { console.error("用法: ptl hub lineage approve <id> [--json '{\"tags\":[...]}']"); return; }
+      if (!id) { console.error("用法: pth lineage approve <id> [--json '{\"tags\":[...]}']"); return; }
       let overrides: Record<string, unknown> | undefined;
       if (flags.json) {
         try { overrides = JSON.parse(flags.json) as Record<string, unknown>; }
@@ -102,7 +102,7 @@ export async function cmdHubLineage(passthrough: string[], flags: Record<string,
 
     case "reject": {
       const id = rest[0];
-      if (!id) { console.error("用法: ptl hub lineage reject <id> [--reason 理由]"); return; }
+      if (!id) { console.error("用法: pth lineage reject <id> [--reason 理由]"); return; }
       const d = await client.requestJson("/api/v1/kernel/lineage/reject", {
         method: "POST",
         body: JSON.stringify({ proposalId: id, reason: flags.reason }),
@@ -114,11 +114,11 @@ export async function cmdHubLineage(passthrough: string[], flags: Record<string,
 
     default:
       console.log([
-        "  ptl hub lineage tree                          谱系树（Origin → 中间层 → 叶子）",
-        "  ptl hub lineage proposals [--all]             分化建议列表（默认待审 draft）",
-        "  ptl hub lineage show <id>                     建议详情",
-        "  ptl hub lineage approve <id> [--json ovr]     批准分化——新角色上线",
-        "  ptl hub lineage reject <id> [--reason x]      拒绝分化建议",
+        "  pth lineage tree                          谱系树（Origin → 中间层 → 叶子）",
+        "  pth lineage proposals [--all]             分化建议列表（默认待审 draft）",
+        "  pth lineage show <id>                     建议详情",
+        "  pth lineage approve <id> [--json ovr]     批准分化——新角色上线",
+        "  pth lineage reject <id> [--reason x]      拒绝分化建议",
       ].join("\n"));
   }
 }
