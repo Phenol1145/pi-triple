@@ -146,7 +146,8 @@ export function collectProductBoundaryViolations(roots: string[] = SCAN_ROOTS): 
   return { violations, transitionalFiles, scannedFiles: files.length };
 }
 
-if (process.argv[1] && import.meta.url === fileURLToPath(new URL(process.argv[1], import.meta.url))) {
+const invokedDirectly = process.argv[1]?.endsWith("check-product-boundaries.ts") ?? false;
+if (invokedDirectly) {
   const report = collectProductBoundaryViolations();
   console.log(`── product-boundaries：扫描 ${report.scannedFiles} 文件 · 过渡区 ${report.transitionalFiles.length} 个`);
   if (report.violations.length > 0) {

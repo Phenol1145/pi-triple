@@ -252,6 +252,7 @@ services:
       - workspaces:/data/workspaces     # 与 pth/sandbox 共享（可选——cwd 语义一致）
       - ${HOME}/ai-teach-jupyter:/works/ai-teach-jupyter:rw
       - ${HOME}/pi-platform:/works/pi-platform:rw
+      - ${HOME}/pi-triple-pth:/works/pi-triple-pth:rw   # v1.5 拆仓过渡：PTH 仓 jupyter 专业测试通道
       - ${HOME}/docs:/works/docs:rw
       - ${HOME}/lifelab:/works/labs/lifelab:rw
       - ${HOME}/Projects:/works/Projects:rw
