@@ -7,7 +7,7 @@
 
 - 本地仓库：`/Users/anzhize/pi-triple-deps`（git filter-repo 2.47.0 按路径历史拆分）
 - 拆分历史：主仓 1,468 个 commit 按 `packages/shared` / `packages/infra` 过滤保留
-- deps 仓当前 HEAD：`5a4ddd3`（root scaffold + 版本 bump）
+- deps 仓当前 HEAD：`358bcc0`（root scaffold + 版本 bump + shared 模板自包含/tmux 子路径导出）
 
 ## 2. 仓库形态
 
@@ -25,19 +25,21 @@ pi-triple-deps
 - `npm install` ✅
 - `npm run lint` ✅（两包 tsc --noEmit）
 - `npm run build` ✅
-- `npm test` ✅：11 files / 72 tests / 0 fail
+- `npm test` ✅：12 files / 73 tests / 0 fail
 - `npm run pack:tgz` ✅
 
 ### tgz sha256
 
 | 文件 | sha256 |
 |------|--------|
-| `dist-tgz/away_from-shared-1.5.0.tgz` | `aad8d7622d6331a78ff8f0a6e57f3ca63c15e243ea7f7833dad98198ff448017` |
+| `dist-tgz/away_from-shared-1.5.0.tgz` | `324d2500d421225b4c19652487dd624488f246e217249ac33dc6851e07942baf` |
 | `dist-tgz/away_from-infra-1.5.0.tgz` | `0e3e1a94d32f6c5af7b9bc301c1d967318d8b228487977435b47a98078dba1e8` |
+
+> shared sha256 为 Phase 3 修复后的最终产物（package files 含 `docs`，exports 增加 `./tmux`）；infra 未变。
 
 ## 4. 发布状态
 
-GitHub ✅ 已推送：https://github.com/Phenol1145/pi-triple-deps（origin/main = `5a4ddd3`）
+GitHub ✅ 已推送：https://github.com/Phenol1145/pi-triple-deps（origin/main = `358bcc0`）
 
 npm ⏳ 待用户执行（需先在 npm 设置生成 Granular Access Token；当前 Web 登录 token 直接发布会被 npm 403 拒绝）：
 

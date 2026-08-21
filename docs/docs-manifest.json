@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T12:48:05.078Z",
+  "generatedAt": "2026-08-21T14:23:03.120Z",
   "taxonomy": {
     "docs": [
       "index",
@@ -549,6 +549,12 @@
     },
     {
       "path": "docs/pth/phase2-pth-split-report.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/phase3-ptl-split-report.md",
       "category": "reports",
       "product": "pth",
       "status": "historical"
