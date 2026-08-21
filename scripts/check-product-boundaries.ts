@@ -16,7 +16,6 @@ const PTH_CORE_PREFIXES = [
   "packages/pth-memory/src/",
   "packages/pth-sandbox/src/",
   "packages/pth-console/src/",
-  "packages/mailbox/src/",
 ];
 
 const PTL_ONLY_PREFIXES = [
@@ -27,14 +26,15 @@ const PTL_ONLY_PREFIXES = [
   "packages/framework/src/stack/",
   "packages/framework/src/session/",
   "packages/framework/src/tui-",
+  "packages/mailbox/src/",
+  "packages/dev-container/src/",
 ];
 
-const PTL_PACKAGE_TARGETS = ["@away_from/framework"];
+const PTL_PACKAGE_TARGETS = ["@away_from/framework", "@away_from/mailbox", "@away_from/dev-container"];
 const PTH_PACKAGE_TARGETS = [
   "@away_from/pth-console",
   "@away_from/pth-memory",
   "@away_from/pth-sandbox",
-  "@away_from/mailbox",
 ];
 
 const PTL_ONLY_FILES = new Set([
