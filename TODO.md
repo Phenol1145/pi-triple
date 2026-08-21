@@ -33,6 +33,7 @@
 - [x] **S3 Phase 1 deps 拆仓（本地）**：filter-repo 拆出 `pi-triple-deps`（HEAD `358bcc0`）；shared/infra@1.5.0；73 tests 全绿；本地 pack + sha256；发布命令见 `docs/pth/phase1-deps-split-report.md`；`ec9771d`；
 - [x] **S3 Phase 2 pth 拆仓（本地）**：filter-repo 拆出 `pi-triple-pth`（HEAD `5e12d9c`）；依赖切 npm `@away_from/{shared,infra}@^1.5.0`；根 bin 编译化；PTH-only Dockerfile/compose；lint/build 全绿、full 283 files/2572 tests/0 fail/9 skip、Playwright 4/4、`pth up` 全栈+任务回归通过；报告 `docs/pth/phase2-pth-split-report.md`；
 - [x] **S3 Phase 3 ptl 拆仓（本地 + GitHub）**：filter-repo 两轮拆出 `pi-triple-ptl`（HEAD `2dd04da`）；依赖切 npm 版本；framework bin wrapper（`npm ci` 后 `node_modules/.bin/ptl` 即用）；lint/build 全绿、full 64 files/464 tests/0 fail；PTL 安装不触发 PTH 源码下载；测试归属矩阵修正（bridge-client 归 pth、shared-barrel 归 deps）；报告 `docs/pth/phase3-ptl-split-report.md`；
+- [x] **S3 Phase 4 收尾**：三仓 README/CI/文档索引独立化（含 deps CI 新增、pth CI professional 排除、`ptl hub`/旧包名文档去残留、mailbox/dev-container 边界归 PTL）；旧仓 `Phenol1145/pi-triple` GitHub archive；报告 `docs/pth/phase4-final-report.md`；
 - [x] **S1 PTL/PTH 三仓拆分设计**：ptl/pth/deps + archive；`ptl hub` 退役、PTH 交互面收敛 pth-console；filter-repo 路径清单与命令迁移映射（未执行拆仓）；`c361c79`；
 - [ ] **R4 Docker/OrbStack adapter 归一化**：当前 docker-api.js 改造为契约实现；
 - [ ] **R5 Podman adapter 验证抽象**：作为第二实现跑同一 contract 测试；

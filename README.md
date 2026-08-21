@@ -3,12 +3,20 @@
 </p>
 
 <p align="center">
-  <a href="https://img.shields.io/badge/version-1.1.3-blue"><img alt="version" src="https://img.shields.io/badge/version-1.1.3-blue?style=flat-square" /></a>
-  <a href="https://img.shields.io/badge/tests-2300%20passed-green"><img alt="tests" src="https://img.shields.io/badge/tests-2300%20passed-green?style=flat-square" /></a>
+  <a href="https://img.shields.io/badge/version-1.5.0-blue"><img alt="version" src="https://img.shields.io/badge/version-1.5.0-blue?style=flat-square" /></a>
+  <a href="https://img.shields.io/badge/tests-3113%20passed-green"><img alt="tests" src="https://img.shields.io/badge/tests-3113%20passed-green?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/node-%3E%3D22-green"><img alt="node" src="https://img.shields.io/badge/node-%3E%3D22-green?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/typescript-5.7-blue"><img alt="ts" src="https://img.shields.io/badge/typescript-5.7-blue?style=flat-square" /></a>
-  <a href="https://img.shields.io/badge/license-MIT-green"><img alt="license" src="https://img.shields.io/badge/license-MIT-green?style=flat-square" /></a>
 </p>
+
+> ## ⚠️ 本仓已于 v1.5 拆分为三仓并归档（archived）
+>
+> 继续开发请前往：
+> - **PTL（宿主机/本地执行）**：https://github.com/Phenol1145/pi-triple-ptl
+> - **PTH（容器内执行/任务宿主）**：https://github.com/Phenol1145/pi-triple-pth
+> - **公用依赖（npm 包）**：https://github.com/Phenol1145/pi-triple-deps
+>
+> 本仓保留完整历史、设计文档与拆分报告，仅供查阅。
 
 <p align="center">
   <strong>基于 <a href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent">pi SDK</a> 的两个独立产品——多环境共存平台（PTL）+ 自耦自然语言解释器（PTH）。PTL 可通过 PTH CLI 调用 PTH。</strong>
