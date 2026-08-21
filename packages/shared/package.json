@@ -8,9 +8,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./tmux": {
+      "types": "./dist/tmux.d.ts",
+      "default": "./dist/tmux.js"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "docs"
   ]
 }

@@ -72,7 +72,13 @@ function relOf(file: string): string {
 }
 
 function walk(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
+  let entries;
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return out; // 拆仓后某仓库可能没有 src/（如 pi-triple-ptl）——扫描根缺省跳过
+  }
+  for (const name of entries) {
     if (IGNORE_DIRS.has(name)) continue;
     const full = join(dir, name);
     let stat;
