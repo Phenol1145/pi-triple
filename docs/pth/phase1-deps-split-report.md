@@ -1,6 +1,6 @@
 # Phase 1 拆仓报告：pi-triple-deps
 
-> 日期：2026-08-21 · 状态：✅ 本地拆仓 + 打包完成（未 npm publish / 未创建 GitHub 远端）
+> 日期：2026-08-21 · 状态：✅ 本地拆仓 + 打包完成 + GitHub 已推送；⏳ npm publish 待用户执行
 > 设计依据：[repo-split-v15-design.md](./repo-split-v15-design.md)
 
 ## 1. 产物
@@ -35,18 +35,16 @@ pi-triple-deps
 | `dist-tgz/away_from-shared-1.5.0.tgz` | `aad8d7622d6331a78ff8f0a6e57f3ca63c15e243ea7f7833dad98198ff448017` |
 | `dist-tgz/away_from-infra-1.5.0.tgz` | `0e3e1a94d32f6c5af7b9bc301c1d967318d8b228487977435b47a98078dba1e8` |
 
-## 4. 发布命令（待用户执行）
+## 4. 发布状态
+
+GitHub ✅ 已推送：https://github.com/Phenol1145/pi-triple-deps（origin/main = `5a4ddd3`）
+
+npm ⏳ 待用户执行（需先在 npm 设置生成 Granular Access Token；当前 Web 登录 token 直接发布会被 npm 403 拒绝）：
 
 ```bash
 cd /Users/anzhize/pi-triple-deps
-
-# GitHub（需先在 github.com 创建 pi-triple-deps 空仓库）
-git remote add origin git@github.com:Phenol1145/pi-triple-deps.git
-git push -u origin main
-
-# npm（需 npm login；registry 目前未登录）
-npm publish packages/shared --access public
-npm publish packages/infra --access public
+npm publish ./packages/shared --access public
+npm publish ./packages/infra --access public
 ```
 
 ## 5. 拆分时修正
