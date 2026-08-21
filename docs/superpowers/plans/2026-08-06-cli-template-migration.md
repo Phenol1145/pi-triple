@@ -492,13 +492,13 @@ head -4 $T/skills/ptl-agent/SKILL.md
 把此前加的警示行：
 
 ```
-> ⚠️ 注意：`ensureTemplateLinks` 在每次启动时补链——共享层条目 = 全模板全局，删 symlink 会复活，按模板排除需移出共享层。新建/挂载/卸载技能与扩展的操作规范见 [创作指南](./authoring.md)。
+> ⚠️ 注意：`ensureTemplateLinks` 在每次启动时补链——共享层条目 = 全模板全局，删 symlink 会复活，按模板排除需移出共享层。新建/挂载/卸载技能与扩展的操作规范见 [创作指南](../../ptl/authoring.md)。
 ```
 
 改为：
 
 ```
-> ⚠️ 注意：`ensureTemplateLinks` 在每次启动时补链——共享层条目默认全模板全局，删 symlink 会复活。按模板排除用 `.ptl-shared-exclude` 排除文件（启动时强制生效），或移出共享层做物理隔离。操作规范见 [创作指南](./authoring.md)。
+> ⚠️ 注意：`ensureTemplateLinks` 在每次启动时补链——共享层条目默认全模板全局，删 symlink 会复活。按模板排除用 `.ptl-shared-exclude` 排除文件（启动时强制生效），或移出共享层做物理隔离。操作规范见 [创作指南](../../ptl/authoring.md)。
 ```
 
 「关键函数」列表追加一行：

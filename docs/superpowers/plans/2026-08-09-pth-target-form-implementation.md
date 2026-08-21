@@ -1,6 +1,6 @@
 # PTH Kernel 目标形态实施计划（agent/PTC → sandbox → environment）
 
-> 日期：2026-08-09 · 依据：[agent 执行 SPEC](./2026-08-08-pth-llm-agent-execution-design.md)、[kernel sandbox SPEC](./2026-08-08-pth-kernel-sandbox-design.md)、[environment 生命周期 SPEC](./2026-08-08-pth-environment-lifecycle-design.md)、[synthesis 总览](./2026-08-09-pth-kernel-design-synthesis.md)
+> 日期：2026-08-09 · 依据：[agent 执行 SPEC](../specs/2026-08-08-pth-llm-agent-execution-design.md)、[kernel sandbox SPEC](../specs/2026-08-08-pth-kernel-sandbox-design.md)、[environment 生命周期 SPEC](../specs/2026-08-08-pth-environment-lifecycle-design.md)、[synthesis 总览](../specs/2026-08-09-pth-kernel-design-synthesis.md)
 > 原则：TDD（先测试后实现）、每个任务独立 commit、端到端验证收尾、不回退已绿测试
 
 ## 0. 目标形态（三个 SPEC 的落地全景）

@@ -1,7 +1,7 @@
 # PTC 模式三方对比：DSH × Prime Agent × PTH（参考文档）
 
 > 日期：2026-08-14 · 类型：exploration（外部参考）· 来源：DSH npx 编译产物（dsh-code-runtime / dsh presets）+ 本仓 2026-08-08 PrimeAgent 参考文档 + PTH 代码事实
-> 关联：[Prime Agent 调研与 PTH 对照](./2026-08-08-prime-agent-reference.md)、[Kernel 设计综合总览](../specs/2026-09-09-pth-kernel-design-synthesis.md)
+> 关联：[Prime Agent 调研与 PTH 对照](./2026-08-08-prime-agent-reference.md)、[Kernel 设计综合总览](../specs/2026-08-09-pth-kernel-design-synthesis.md)
 
 > **性质说明**：外部参考 exploration，不是 PTH 的规范性设计。"可借鉴"条目为候选方向，落地须走概念先行（concepts.md 词表/原则更新）+ 用户裁决。
 

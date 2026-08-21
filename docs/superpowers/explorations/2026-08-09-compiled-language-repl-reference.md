@@ -3,7 +3,7 @@
 > 日期：2026-08-09 · 类型：exploration（仅记录，非设计来源）
 > 来源：https://chatgpt.com/share/6a77a434-e6c8-83e8-b214-167f8bb79646（gpt-5-5-mini，2026-08-08）
 > 定位：编译类语言统一协议的参考坐标系——会话中的关键结论（REPL 不适用/编译型 PTC/
-> 静态分析优势/Agent DSL）已并入设计讨论（见 [编译核协议 SPEC](./2026-08-09-pth-compiled-kernel-design.md)）。
+> 静态分析优势/Agent DSL）已并入设计讨论（见 [编译核协议 SPEC](../specs/2026-08-09-pth-compiled-kernel-design.md)）。
 
 ## 1. 会话核心内容
 

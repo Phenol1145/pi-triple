@@ -1,0 +1,1614 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-21T10:03:38.932Z",
+  "taxonomy": {
+    "docs": [
+      "index",
+      "guides",
+      "designs",
+      "contracts",
+      "reports",
+      "envelopes",
+      "decisions",
+      "operations",
+      "releases",
+      "archive",
+      "assets",
+      "artifacts"
+    ],
+    "runtime": [
+      "deps",
+      "host",
+      "container",
+      "dual",
+      "config"
+    ]
+  },
+  "docs": [
+    {
+      "path": "docs/adr/0001-pth-ptl-scope-redefinition.md",
+      "category": "decisions",
+      "product": "shared",
+      "status": "active"
+    },
+    {
+      "path": "docs/adr/0002-pth-modularization-re-review.md",
+      "category": "decisions",
+      "product": "shared",
+      "status": "active"
+    },
+    {
+      "path": "docs/adr/0003-repo-split-monorepo-decision.md",
+      "category": "decisions",
+      "product": "shared",
+      "status": "active"
+    },
+    {
+      "path": "docs/adr/0004-pth-frontend-and-nocontainer-scope.md",
+      "category": "decisions",
+      "product": "shared",
+      "status": "active"
+    },
+    {
+      "path": "docs/adr/0005-pth-human-interaction-boundary.md",
+      "category": "decisions",
+      "product": "shared",
+      "status": "active"
+    },
+    {
+      "path": "docs/adr/0006-ptl-human-interface-role-boundary.md",
+      "category": "decisions",
+      "product": "shared",
+      "status": "active"
+    },
+    {
+      "path": "docs/code-organization-plan.md",
+      "category": "guides",
+      "product": "shared",
+      "status": "active"
+    },
+    {
+      "path": "docs/container-dev-skill.md",
+      "category": "guides",
+      "product": "shared",
+      "status": "active"
+    },
+    {
+      "path": "docs/product-shape.md",
+      "category": "guides",
+      "product": "shared",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/agent-construction.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/api.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/architecture.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/backlog-priority.md",
+      "category": "operations",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/concepts.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/configuration.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/console-protocol.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/container-runtime-adapter-protocol.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/deployment.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/design-tensions-adjudication.md",
+      "category": "operations",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/development.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/extensions-dev.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/framework-contracts.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/k5-eval-report.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/k5-pilot-report.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/kernel.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/modularity-reuse-audit.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/module-ownership.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/n14-sensor-controller-four-dims.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n15-lane-b1-b2-a4-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n16-v1.2-role-domain-composition-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n16-v1.2-role-expansion-review.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n16-v1.2-role-expansion.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n17-lane-a5-d1-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n18-v12-phase0-1a-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n19-v12-phase1b-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n20-v12-phase2-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n21-v12-phase3-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n22-v12-phase4-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n23-k5-eval-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n24-f1-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n24-f2-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n24-f3-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n24-f4-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n24-f5-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n24-v12-acceptance-fix-plan.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n25-human-interaction-protocol-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n26-autonomous-knowledge-intake-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n27-r1-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n27-r1-r6-fix-plan.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n27-r2-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n27-r3-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n27-r4-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n27-r5-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n27-r6-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n28-feasibility-acceptance-review.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n28-feasibility-envelope.json",
+      "category": "envelopes",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/n28-feasibility-reacceptance-feedback.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n28-feasibility-report.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n28-lane-contract-rulings.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n28-role-memory-orchestration-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n28-role-memory-orchestration-implementation-plan.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n28-structure-baseline.json",
+      "category": "artifacts",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n28-structure-baseline.md",
+      "category": "artifacts",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n28-task1-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n28-task2-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n28-task3-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n28-task4-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n28-task5-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n28-task6-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n28-task7-contract.md",
+      "category": "contracts",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n29-canary-evidence.json",
+      "category": "artifacts",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n29-minimal-intake-acceptance.json",
+      "category": "envelopes",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/n29-minimal-intake-reacceptance-feedback.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n29-minimal-intake-report.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n29-minimal-knowledge-intake-loop-feedback-plan.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n30-runtime-observatory-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n30-runtime-observatory-envelope.json",
+      "category": "envelopes",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/n30-runtime-observatory-report.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n31-unified-workflow-dag-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n32-v13-professional-computing-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/n33-operator-console-envelope.json",
+      "category": "envelopes",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/n33-operator-console-reacceptance-feedback.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n33-operator-console-report.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/n33-v13-ptl-operator-console-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/orchestration.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/parallel-lanes.md",
+      "category": "operations",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/pth-api-protocol.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/pth-console-openapi.json",
+      "category": "artifacts",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/sandbox-security-operations.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/split-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/storage-backend-analysis.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/tension-decisions.json",
+      "category": "decisions",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/pth/trigger-runtime.md",
+      "category": "guides",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/v1.2-acceptance-evaluation-report.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/v1.2-acceptance-fix-completion.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/v1.2-acceptance-fix-revalidation-final.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/v1.2-acceptance-fix-revalidation.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/v13-professional-computing-envelope.json",
+      "category": "envelopes",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/v13-professional-computing-report.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/v14-operator-console-ux-envelope.json",
+      "category": "envelopes",
+      "product": "pth",
+      "status": "active"
+    },
+    {
+      "path": "docs/pth/v14-operator-console-ux-report.md",
+      "category": "reports",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/pth/w8-task-dispatch-design.md",
+      "category": "designs",
+      "product": "pth",
+      "status": "reference"
+    },
+    {
+      "path": "docs/ptl/architecture.md",
+      "category": "guides",
+      "product": "ptl",
+      "status": "active"
+    },
+    {
+      "path": "docs/ptl/authoring.md",
+      "category": "guides",
+      "product": "ptl",
+      "status": "active"
+    },
+    {
+      "path": "docs/ptl/dev-loop.md",
+      "category": "guides",
+      "product": "ptl",
+      "status": "active"
+    },
+    {
+      "path": "docs/ptl/pth-task-submission.md",
+      "category": "guides",
+      "product": "ptl",
+      "status": "active"
+    },
+    {
+      "path": "docs/ptl/pth-usage.md",
+      "category": "guides",
+      "product": "ptl",
+      "status": "active"
+    },
+    {
+      "path": "docs/README.md",
+      "category": "index",
+      "product": "shared",
+      "status": "active"
+    },
+    {
+      "path": "docs/releases/v1.1.0.md",
+      "category": "releases",
+      "product": "shared",
+      "status": "historical"
+    },
+    {
+      "path": "docs/releases/v1.1.1.md",
+      "category": "releases",
+      "product": "shared",
+      "status": "historical"
+    },
+    {
+      "path": "docs/releases/v1.1.2.md",
+      "category": "releases",
+      "product": "shared",
+      "status": "historical"
+    },
+    {
+      "path": "docs/releases/v1.1.3.md",
+      "category": "releases",
+      "product": "shared",
+      "status": "historical"
+    },
+    {
+      "path": "docs/releases/v1.2.0.md",
+      "category": "releases",
+      "product": "shared",
+      "status": "historical"
+    },
+    {
+      "path": "docs/research/arena-benchmark-datasets.md",
+      "category": "archive",
+      "product": "shared",
+      "status": "historical"
+    },
+    {
+      "path": "docs/research/lab-pit-integration-scout.md",
+      "category": "archive",
+      "product": "shared",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/2026-08-03-market-economy-overview.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/2026-08-06-ptl-agent-lab-polish-summary.md",
+      "category": "archive",
+      "product": "ptl",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/dev-container-tool-guide.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-05-trust-chain-panel/proposal-deepseek-v4-flash.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-05-trust-chain-panel/proposal-deepseek-v4-pro.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-05-trust-chain-panel/proposal-kimi-k3.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-05-trust-chain-panel/proposal-minimax-m3.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-adversarial-review/adversarial-review-1-architecture.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-adversarial-review/adversarial-review-2-storage.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-adversarial-review/adversarial-review-3-execution.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-framework-split-draft.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-framework-ux-audit.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-pi-ecosystem-research.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-prime-agent-panel/adjudication.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-prime-agent-panel/alignment.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-prime-agent-panel/context.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-prime-agent-panel/cross-flash-on-pro-qwen.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-prime-agent-panel/cross-pro-on-flash-qwen.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-prime-agent-panel/cross-qwen-on-flash-pro.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-prime-agent-panel/proposal-deepseek-v4-flash.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-prime-agent-panel/proposal-deepseek-v4-pro.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-prime-agent-panel/proposal-qwen3.8-max.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-pth-kernel-draft.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/architecture-overview.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/scout-1-duplicate-pairs.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/scout-2-agentlab-module-map.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/scout-3-src-and-docs-intent.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/scout-4-assembly-path.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/scout-5-runtime-path.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/scout-6-pth-execution.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/scout-7-ptl-side.md",
+      "category": "archive",
+      "product": "ptl",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/scout-8-pth-rest.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/scout-9-extensions-and-arch.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-07-structure-recon/structure-audit.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-08-prime-agent-reference.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-08-taskpool-ops-experiment.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-09-compiled-language-repl-reference.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-09-debugging-tools-research-reference.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-09-ptc-openai-api-reference.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-09-pth-batch-architecture-discussion.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-09-roadmap-v07-v09.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-09-session-service-audit.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-10-code-audit.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-10-pth-kernel-update-strategy.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-13-code-audit.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-14-hermes-prime-memory-reference.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-14-ptc-comparison-dsh-prime.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-15-llm-call-chain-audit.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/explorations/2026-08-15-pth-sandbox-security-audit.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-01-pit-communicate-control-consolidation.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-01-pit-update-release.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-02-agent-assembly.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-02-memory-system.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-02-workflow-runtime-extension.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-03-economy-infrastructure.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-03-session-reuse-fixes.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-04-economy-convergence.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-04-economy-hardening.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-04-economy-market-closure.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-05-code-quality.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-05-containerization.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-06-cli-template-migration.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-06-federation-runtime-restore.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-06-info-ingestion-loop.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-06-ptl-agent-lab-polish.md",
+      "category": "archive",
+      "product": "ptl",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-06-task-pool-sorter.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-07-framework-split-a.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-07-framework-split-b.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-07-framework-split-c.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-07-pth-assembly-and-rename.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-07-pth-kernel-execution.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-07-pth-kernel-interpreters.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-07-pth-kernel-storage.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-07-release.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-08-pth-task-chain.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-08-pth-task-tools.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-09-pth-batch-worker-control.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-09-pth-target-form-implementation.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-10-pth-dev-loop-speedup.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-15-pth-catalog-profiles.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-15-pth-contracts-boundaries.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-15-pth-execution-isolation.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-15-pth-modularization-program.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-15-pth-modularization-v2.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-15-pth-tasking-runner.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-15-remaining-work-program.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-16-pth-config-centralization.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-16-pth-sandbox-hardening.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-16-pth-task-template-unification.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-16-pth-trigger-unification.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-19-n30-runtime-observatory.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-19-v13-professional-computing.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-19-v13-ptl-operator-console.md",
+      "category": "archive",
+      "product": "ptl",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-21-v14-operator-console-ux.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/runbooks/2026-08-04-market-smoke.md",
+      "category": "operations",
+      "product": "shared",
+      "status": "reference"
+    },
+    {
+      "path": "docs/superpowers/runbooks/2026-08-05-containerized-federation.md",
+      "category": "operations",
+      "product": "shared",
+      "status": "reference"
+    },
+    {
+      "path": "docs/superpowers/sdd-execution-sop.md",
+      "category": "operations",
+      "product": "shared",
+      "status": "reference"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-01-pit-communicate-control-consolidation-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-01-pit-update-release-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-02-agent-assembly-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-02-memory-system-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-02-workflow-runtime-extension-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-03-economy-layer-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-05-containerization-architecture-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-05-dev-container-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-05-federation-skeleton-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-06-cli-template-migration-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-06-info-ingestion-loop-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-06-ptl-agent-lab-polish-design.md",
+      "category": "archive",
+      "product": "ptl",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-06-task-pool-sorter-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-07-framework-split-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-07-pth-kernel-architecture.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-07-pth-kernel-execution.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-07-pth-kernel-interpreters.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-07-pth-kernel-storage.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-08-pth-environment-lifecycle-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-08-pth-interpreter-persistence-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-08-pth-kernel-sandbox-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-08-pth-llm-agent-execution-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-08-pth-logging-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-08-pth-multilang-repl-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-08-pth-perf-metrics-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-08-pth-task-resolver-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-08-repo-split-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-09-pth-agent-tool-convergence-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-09-pth-autopilot-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-09-pth-compiled-kernel-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-09-pth-debug-protocol-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-09-pth-extension-compat-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-09-pth-kernel-design-synthesis.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-09-pth-ts-repl-extensions-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-15-pth-modular-profiles-design.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    },
+    {
+      "path": "docs/superpowers/specs/README.md",
+      "category": "archive",
+      "product": "pth",
+      "status": "historical"
+    }
+  ],
+  "codeRuntime": [
+    {
+      "path": "packages/shared/",
+      "runtime": "deps",
+      "note": "共享配置/路径/版本等基础能力（PTL/PTH 共用）"
+    },
+    {
+      "path": "packages/infra/",
+      "runtime": "deps",
+      "note": "模型路由/日志/平台/sdk 适配/容器运行时协议（共用基础包）"
+    },
+    {
+      "path": "packages/pth-memory/",
+      "runtime": "deps",
+      "note": "PTH 记忆库（进程内使用，非独立服务）"
+    },
+    {
+      "path": "packages/mailbox/",
+      "runtime": "deps",
+      "note": "跨会话邮箱（库，非独立服务）"
+    },
+    {
+      "path": "packages/framework/",
+      "runtime": "host",
+      "note": "PTL CLI/TUI/容器运维命令，宿主机执行"
+    },
+    {
+      "path": "scripts/",
+      "runtime": "host",
+      "note": "宿主机工具脚本（pth/pth CLI 入口、验收/维护脚本）"
+    },
+    {
+      "path": "packages/dev-container/",
+      "runtime": "host",
+      "note": "宿主机控制 dev 容器（start/mount/verify）"
+    },
+    {
+      "path": "src/pth/",
+      "runtime": "dual",
+      "note": "PTH 主服务：容器内生产运行；宿主机 node dist/pth/main.js 试运行/tsx dev"
+    },
+    {
+      "path": "packages/pth-console/",
+      "runtime": "dual",
+      "note": "PTH CLI/loopback Web：宿主机交互为主；server 组件可随部署进容器"
+    },
+    {
+      "path": "deploy/docker-monitor/",
+      "runtime": "dual",
+      "note": "本机监控服务：宿主机 MONITOR_HOST 直跑，也可入容器采集"
+    },
+    {
+      "path": "packages/pth-sandbox/",
+      "runtime": "container",
+      "note": "隔离执行容器（kernel 池 + exec API）"
+    },
+    {
+      "path": "toolstore/",
+      "runtime": "container",
+      "note": "PTH 容器内扩展代码库/策略/命名编译单元"
+    },
+    {
+      "path": "extensions/",
+      "runtime": "container",
+      "note": "PTH 容器内扩展源码"
+    },
+    {
+      "path": "deploy/Dockerfile*",
+      "runtime": "container",
+      "note": "容器镜像构建（主服务/sandbox/dev/jupyter）"
+    },
+    {
+      "path": "deploy/docker-compose*.yaml",
+      "runtime": "config",
+      "note": "compose 拓扑"
+    },
+    {
+      "path": "deploy/*.json",
+      "runtime": "config",
+      "note": "runtime lock 与部署描述"
+    },
+    {
+      "path": "deploy/.env.pth.secrets*",
+      "runtime": "config",
+      "note": "密钥（gitignore 的 secrets + 提交的 example）"
+    },
+    {
+      "path": "config/",
+      "runtime": "config",
+      "note": "pi 模板/配置面"
+    },
+    {
+      "path": "tsconfig*.json · package.json · package-lock.json",
+      "runtime": "config",
+      "note": "workspace/构建配置"
+    }
+  ]
+}

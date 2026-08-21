@@ -28,13 +28,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify:sandbox-build": "bash scripts/verify-clean-sandbox-build.sh",
-    "lint": "tsc -p packages/shared && tsc -p packages/infra && tsc -p packages/pth-memory && tsc -p packages/pth-sandbox && tsc -p packages/pth-console && tsc --noEmit && tsc -p packages/shared --noEmit && tsc -p packages/framework --noEmit && npm run check:pth-boundaries && npm run check:pth-config && npm run check:product-boundaries",
+    "lint": "tsc -p packages/shared && tsc -p packages/infra && tsc -p packages/pth-memory && tsc -p packages/pth-sandbox && tsc -p packages/pth-console && tsc --noEmit && tsc -p packages/shared --noEmit && tsc -p packages/framework --noEmit && npm run check:pth-boundaries && npm run check:pth-config && npm run check:product-boundaries && npm run check:docs-links",
     "monitor": "node deploy/docker-monitor/server.js",
     "ptl:dev": "tsx packages/framework/src/pit.ts",
     "ext:check": "tsx scripts/ext-check.ts",
     "check:pth-boundaries": "tsx scripts/check-pth-boundaries.ts",
     "check:pth-config": "tsx scripts/check-pth-config.ts",
     "check:product-boundaries": "tsx scripts/check-product-boundaries.ts",
+    "docs:manifest": "tsx scripts/build-docs-manifest.ts",
+    "check:docs-links": "tsx scripts/check-doc-links.ts",
     "pth": "tsx scripts/pth-cli.ts"
   },
   "dependencies": {

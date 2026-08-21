@@ -1,7 +1,7 @@
 # Hermes Agent × Prime Agent 记忆与 Skill 进化结构参考（PTH 对照）
 
 > 日期：2026-08-14 · 类型：exploration（外部参考）· 来源：agent-reach（Exa 搜索 + Jina Reader 读 hermes-agent.nousresearch.com 官方文档 + GitHub repo）+ 本仓 2026-08-08 Prime Agent 参考文档
-> 关联：[B4 skill 记忆类型方案](../pth/backlog-priority.md 附录 E)、[PTC 模式三方对比](./2026-08-14-ptc-comparison-dsh-prime.md)
+> 关联：[B4 skill 记忆类型方案](../../pth/backlog-priority.md)、[PTC 模式三方对比](./2026-08-14-ptc-comparison-dsh-prime.md)
 > **性质说明**：外部参考 exploration，不是 PTH 的规范性设计。「可借鉴」条目为候选方向，落地须走概念先行（concepts.md 词表/原则更新）+ 用户裁决。
 
 ## 1. 为什么参考这两个
